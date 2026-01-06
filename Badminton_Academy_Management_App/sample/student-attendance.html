@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Attendance - Student</title>
+    <link rel="stylesheet" href="student-styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="student-dashboard.html">📊 Dashboard</a>
+            <a href="student-invitations.html">📨 Invitations</a>
+            <a href="student-batches.html">📚 Batches</a>
+            <a href="student-attendance.html" class="active">📋 Attendance</a>
+            <a href="student-fees.html">💰 Fees</a>
+            <a href="student-performance.html">⭐ Performance</a>
+            <a href="student-bmi.html">📏 BMI</a>
+            <a href="student-schedule.html">📅 Schedule</a>
+            <a href="student-tournaments.html">🏆 Tournaments</a>
+            <a href="student-videos.html">🎥 Videos</a>
+            <a href="student-profile.html">👤 Profile</a>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+        
+        <h1>📋 My Attendance</h1>
+        
+        <div class="stats-grid" id="statsContainer"></div>
+        
+        <div id="dataContainer"></div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        let currentStudent = null;
+
+        const loggedInStudent = sessionStorage.getItem('loggedInStudent');
+        if (!loggedInStudent) {
+            window.location.href = 'student.html';
+        } else {
+            currentStudent = JSON.parse(loggedInStudent);
+            loadData();
+        }
+
+        async function loadData() {
+            try {
+                const response = await fetch(`${API_URL}/attendance/student/${currentStudent.id}`);
+                const attendance = await response.json();
+                
+                const container = document.getElementById('dataContainer');
+                const statsContainer = document.getElementById('statsContainer');
+                
+                if (attendance.length === 0) {
+                    container.innerHTML = '<div class="empty-state">📋 No attendance records yet</div>';
+                    statsContainer.innerHTML = '';
+                    return;
+                }
+
+                // Calculate stats
+                const totalDays = attendance.length;
+                const presentDays = attendance.filter(a => a.status === 'Present').length;
+                const absentDays = attendance.filter(a => a.status === 'Absent').length;
+                const attendancePercentage = ((presentDays / totalDays) * 100).toFixed(1);
+
+                statsContainer.innerHTML = `
+                    <div class="stat-card">
+                        <div class="stat-value">${totalDays}</div>
+                        <div class="stat-label">Total Classes</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${presentDays}</div>
+                        <div class="stat-label">Present</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${absentDays}</div>
+                        <div class="stat-label">Absent</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${attendancePercentage}%</div>
+                        <div class="stat-label">Attendance Rate</div>
+                    </div>
+                `;
+
+                container.innerHTML = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Status</th>
+                                <th>Remarks</th>
+                                <th>Marked By</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${attendance.map(record => `
+                                <tr>
+                                    <td><strong>${formatDate(record.date)}</strong></td>
+                                    <td>
+                                        <span class="status-badge status-${record.status.toLowerCase()}">
+                                            ${record.status === 'Present' ? '✅' : record.status === 'Absent' ? '❌' : '⏰'} ${record.status}
+                                        </span>
+                                    </td>
+                                    <td>${record.remarks || '-'}</td>
+                                    <td>${record.marked_by || 'N/A'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                `;
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('dataContainer').innerHTML = '<div class="empty-state">⚠️ Error loading attendance</div>';
+            }
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        }
+
+        function logout() {
+            sessionStorage.removeItem('loggedInStudent');
+            window.location.href = 'student.html';
+        }
+
+        setInterval(loadData, 30000);
+    </script>
+</body>
+</html>

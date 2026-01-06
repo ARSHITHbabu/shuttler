@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Fees - Coach Portal</title>
+    <link rel="stylesheet" href="coach-styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="coach-dashboard.html">📊 Dashboard</a>
+            <a href="coach-batches.html">📚 Batches</a>
+            <a href="coach-attendance.html">📋 Attendance</a>
+            <a href="coach-fees.html" class="active">💰 Fees</a>
+            <a href="coach-performance.html">⭐ Performance</a>
+            <a href="coach-bmi.html">📏 BMI</a>
+            <a href="coach-schedule.html">📅 Schedule</a>
+            <a href="coach-invite.html">✉️ Invite</a>
+            <a href="coach-enquiries.html">📞 Enquiries</a>
+            <a href="coach-students.html">🎓 Students</a>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+        <h1>💰 Manage Fees</h1>
+        <div class="controls">
+            <div class="form-group">
+                <label>Select Your Batch</label>
+                <select id="batchSelect"><option value="">-- Select Batch --</option></select>
+            </div>
+            <button class="btn" onclick="loadFees()">Load Fees</button>
+        </div>
+        <div id="feesTableContainer"></div>
+    </div>
+    <div id="paymentModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2>Mark Fee as Paid</h2>
+            <form id="paymentForm">
+                <input type="hidden" id="feeId">
+                <div class="form-group">
+                    <label>Payment Method</label>
+                    <select id="paymentMethod" required>
+                        <option value="Cash">Cash</option>
+                        <option value="UPI">UPI</option>
+                        <option value="Card">Card</option>
+                        <option value="Bank Transfer">Bank Transfer</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn" style="width: 100%;">Confirm Payment</button>
+            </form>
+        </div>
+    </div>
+    <script>
+        const API_URL = 'http://localhost:8000';
+        let currentCoach = null, currentBatchId = null;
+        const loggedInCoach = sessionStorage.getItem('loggedInCoach');
+        if (!loggedInCoach) { window.location.href = 'coach.html'; }
+        else { currentCoach = JSON.parse(loggedInCoach); loadBatches(); }
+        async function loadBatches() {
+            const response = await fetch(`${API_URL}/batches/coach/${currentCoach.id}`);
+            const batches = await response.json();
+            const select = document.getElementById('batchSelect');
+            batches.forEach(batch => {
+                const option = document.createElement('option');
+                option.value = batch.id;
+                option.textContent = batch.batch_name;
+                select.appendChild(option);
+            });
+        }
+        async function loadFees() {
+            const batchId = document.getElementById('batchSelect').value;
+            if (!batchId) { alert('Please select a batch'); return; }
+            currentBatchId = batchId;
+            const [feesRes, studentsRes] = await Promise.all([fetch(`${API_URL}/fees/batch/${batchId}`), fetch(`${API_URL}/batch-students/${batchId}`)]);
+            const fees = await feesRes.json();
+            const students = await studentsRes.json();
+            const container = document.getElementById('feesTableContainer');
+            if (fees.length === 0) { container.innerHTML = '<div style="text-align:center;padding:60px;color:#999;">No fee records for this batch</div>'; return; }
+            const studentMap = {};
+            students.forEach(s => studentMap[s.id] = s.name);
+            container.innerHTML = '<table><thead><tr><th>Student</th><th>Amount</th><th>Due Date</th><th>Status</th><th>Payment Method</th><th>Paid Date</th><th>Action</th></tr></thead><tbody>' +
+            fees.map(fee => `
+                <tr>
+                    <td><strong>${studentMap[fee.student_id] || 'Unknown'}</strong></td>
+                    <td>₹${fee.amount.toFixed(2)}</td>
+                    <td>${new Date(fee.due_date).toLocaleDateString()}</td>
+                    <td><span class="status-badge status-${fee.status.toLowerCase()}">${fee.status}</span></td>
+                    <td>${fee.payment_method || '-'}</td>
+                    <td>${fee.paid_date ? new Date(fee.paid_date).toLocaleDateString() : '-'}</td>
+                    <td>${fee.status !== 'Paid' ? `<button class="btn btn-success" onclick="openPaymentModal(${fee.id})">Mark Paid</button>` : '-'}</td>
+                </tr>
+            `).join('') + '</tbody></table>';
+        }
+        function openPaymentModal(feeId) { document.getElementById('feeId').value = feeId; document.getElementById('paymentModal').style.display = 'block'; }
+        function closeModal() { document.getElementById('paymentModal').style.display = 'none'; document.getElementById('paymentForm').reset(); }
+        document.getElementById('paymentForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const feeId = document.getElementById('feeId').value;
+            const paymentMethod = document.getElementById('paymentMethod').value;
+            const today = new Date().toISOString().split('T')[0];
+            const response = await fetch(`${API_URL}/fees/${feeId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'Paid', payment_method: paymentMethod, paid_date: today, collected_by: `Coach: ${currentCoach.name}` })
+            });
+            if (response.ok) { alert('Fee marked as paid!'); closeModal(); loadFees(); } else { alert('Failed to update fee'); }
+        });
+        function logout() { sessionStorage.removeItem('loggedInCoach'); window.location.href = 'coach.html'; }
+    </script>
+</body>
+</html>

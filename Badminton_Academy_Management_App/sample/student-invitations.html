@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Batch Invitations - Student</title>
+    <link rel="stylesheet" href="student-styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="student-dashboard.html" >📊 Dashboard</a>
+            <a href="student-invitations.html" class="active">📨 Invitations</a>
+            <a href="student-batches.html" >📚 Batches</a>
+            <a href="student-attendance.html" >📋 Attendance</a>
+            <a href="student-fees.html" >💰 Fees</a>
+            <a href="student-performance.html" >⭐ Performance</a>
+            <a href="student-bmi.html" >📏 BMI</a>
+            <a href="student-schedule.html" >📅 Schedule</a>
+            <a href="student-tournaments.html" >🏆 Tournaments</a>
+            <a href="student-videos.html" >🎥 Videos</a>
+            <a href="student-profile.html" >👤 Profile</a>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+        
+        <h1>📨 Batch Invitations</h1>
+        
+        <div class="alert-box" id="alertBox" style="display: none;">
+            <h3>⚠️ Action Required!</h3>
+            <p>You have pending invitations from coaches. Approve them to access your batch features and start training!</p>
+        </div>
+        
+        <div class="invitation-grid" id="invitationsList"></div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        let currentStudent = null;
+
+        const loggedInStudent = sessionStorage.getItem('loggedInStudent');
+        if (!loggedInStudent) {
+            window.location.href = 'student.html';
+        } else {
+            currentStudent = JSON.parse(loggedInStudent);
+            loadInvitations();
+        }
+
+        async function loadInvitations() {
+            try {
+                const response = await fetch(`${API_URL}/invitations/student/${currentStudent.email}`);
+                const invitations = await response.json();
+                
+                const invitationsList = document.getElementById('invitationsList');
+                
+                if (invitations.length === 0) {
+                    invitationsList.innerHTML = '<div class="empty-state">📭 No invitations yet.<br>Your coach will send you an invitation to join a batch.</div>';
+                    return;
+                }
+                
+                // Check for pending invitations
+                const pendingCount = invitations.filter(inv => inv.status === 'pending').length;
+                const alertBox = document.getElementById('alertBox');
+                if (pendingCount > 0) {
+                    alertBox.style.display = 'block';
+                }
+                
+                // Get batch details
+                const batchIds = [...new Set(invitations.map(inv => inv.batch_id))];
+                const batchesPromises = batchIds.map(id => fetch(`${API_URL}/batches/`).then(r => r.json()));
+                const batchesArrays = await Promise.all(batchesPromises);
+                const batches = batchesArrays.flat();
+                
+                invitationsList.innerHTML = invitations.reverse().map(invitation => {
+                    const batch = batches.find(b => b.id === invitation.batch_id);
+                    
+                    return `
+                        <div class="invitation-card">
+                            <span class="status-badge status-${invitation.status}">${invitation.status.toUpperCase()}</span>
+                            
+                            <div class="invitation-header">Batch Invitation</div>
+                            
+                            <div class="invitation-info">
+                                <div class="info-row">
+                                    <span class="icon">👨‍🏫</span>
+                                    <strong>Coach:</strong> ${invitation.coach_name}
+                                </div>
+                                <div class="info-row">
+                                    <span class="icon">📚</span>
+                                    <strong>Batch:</strong> ${batch ? batch.batch_name : 'N/A'}
+                                </div>
+                                ${batch ? `
+                                    <div class="info-row">
+                                        <span class="icon">⏰</span>
+                                        <strong>Timing:</strong> ${batch.timing}
+                                    </div>
+                                    <div class="info-row">
+                                        <span class="icon">${batch.period === 'Morning' ? '🌅' : '🌆'}</span>
+                                        <strong>Period:</strong> ${batch.period}
+                                    </div>
+                                    <div class="info-row">
+                                        <span class="icon">📍</span>
+                                        <strong>Location:</strong> ${batch.location || 'N/A'}
+                                    </div>
+                                    <div class="info-row">
+                                        <span class="icon">💰</span>
+                                        <strong>Fees:</strong> ${batch.fees}
+                                    </div>
+                                ` : ''}
+                                <div class="info-row">
+                                    <span class="icon">📅</span>
+                                    <strong>Invited On:</strong> ${formatDateTime(invitation.created_at)}
+                                </div>
+                            </div>
+                            
+                            ${invitation.status === 'pending' ? `
+                                <div class="action-buttons">
+                                    <button class="btn btn-approve" onclick="respondToInvitation(${invitation.id}, 'approved')">
+                                        ✅ Accept
+                                    </button>
+                                    <button class="btn btn-reject" onclick="respondToInvitation(${invitation.id}, 'rejected')">
+                                        ❌ Decline
+                                    </button>
+                                </div>
+                            ` : `
+                                <div style="text-align: center; margin-top: 20px; font-weight: bold; color: ${invitation.status === 'approved' ? '#155724' : '#721c24'};">
+                                    ${invitation.status === 'approved' ? '✅ You accepted this invitation' : '❌ You declined this invitation'}
+                                </div>
+                            `}
+                        </div>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Error loading invitations:', error);
+            }
+        }
+
+        async function respondToInvitation(invitationId, status) {
+            const action = status === 'approved' ? 'accept' : 'decline';
+            if (!confirm(`Are you sure you want to ${action} this invitation?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/invitations/${invitationId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: status })
+                });
+
+                if (response.ok) {
+                    if (status === 'approved') {
+                        alert('🎉 Invitation accepted! You can now access your batch features.');
+                        // Reload student data to update is_linked status
+                        window.location.reload();
+                    } else {
+                        alert('Invitation declined.');
+                        loadInvitations();
+                    }
+                } else {
+                    alert('Failed to respond to invitation');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        function formatDateTime(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleString('en-US', { 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric', 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+        }
+
+        function logout() {
+            sessionStorage.removeItem('loggedInStudent');
+            window.location.href = 'student.html';
+        }
+
+        // Auto-refresh every 10 seconds
+        setInterval(loadInvitations, 10000);
+    </script>
+</body>
+</html>

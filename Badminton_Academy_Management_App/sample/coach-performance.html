@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Performance Management - Coach</title>
+    <link rel="stylesheet" href="coach-styles.css">
+    <style>
+        .performance-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .performance-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+            background: rgba(255, 255, 255, 0.08);
+        }
+        .performance-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .performance-date {
+            font-size: 14px;
+            color: #999;
+        }
+        .view-details-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            color: white;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .skills-preview {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        .skill-badge {
+            background: rgba(102, 126, 234, 0.2);
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-size: 12px;
+            color: #667eea;
+        }
+        .detail-modal .modal-content {
+            max-width: 600px;
+        }
+        .detail-row {
+            display: flex;
+            padding: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .detail-label {
+            font-weight: bold;
+            width: 150px;
+            color: #999;
+        }
+        .detail-value {
+            flex: 1;
+        }
+        .skill-detail {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 4px solid #667eea;
+        }
+        .rating-stars {
+            color: #ffc107;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="coach-dashboard.html">📊 Dashboard</a>
+            <a href="coach-batches.html">📚 Batches</a>
+            <a href="coach-students.html">🎓 Students</a>
+            <a href="coach-attendance.html">📋 Attendance</a>
+            <a href="coach-fees.html">💰 Fees</a>
+            <a href="coach-performance.html" class="active">⭐ Performance</a>
+            <a href="coach-bmi.html">📏 BMI</a>
+            <a href="coach-schedule.html">📅 Schedule</a>
+            <a href="coach-profile.html">👤 Profile</a>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+        
+        <div class="header">
+            <h1>⭐ Performance Management</h1>
+            <button class="add-btn" onclick="openAddModal()">+ Add Performance Record</button>
+        </div>
+
+        <div id="performanceList"></div>
+    </div>
+
+    <!-- Add Performance Modal -->
+    <div id="addModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeAddModal()">&times;</span>
+            <h2>Add Performance Record</h2>
+            
+            <form id="addForm">
+                <div class="form-group">
+                    <label for="batchSelect">Select Batch *</label>
+                    <select id="batchSelect" required>
+                        <option value="">-- Select Batch --</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="studentSelect">Select Student *</label>
+                    <select id="studentSelect" required>
+                        <option value="">-- Select Student --</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="performanceDate">Date *</label>
+                    <input type="date" id="performanceDate" required>
+                </div>
+                
+                <div id="skillsContainer">
+                    <h3>Skills Assessment</h3>
+                    <div class="skill-entry" style="background: rgba(255,255,255,0.03); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                        <div class="form-group">
+                            <label>Skill *</label>
+                            <select class="skill-select" required>
+                                <option value="">-- Select Skill --</option>
+                                <option value="Forehand">Forehand</option>
+                                <option value="Backhand">Backhand</option>
+                                <option value="Serve">Serve</option>
+                                <option value="Smash">Smash</option>
+                                <option value="Drop Shot">Drop Shot</option>
+                                <option value="Net Play">Net Play</option>
+                                <option value="Footwork">Footwork</option>
+                                <option value="Stamina">Stamina</option>
+                                <option value="Defense">Defense</option>
+                                <option value="Court Coverage">Court Coverage</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Rating (1-5) *</label>
+                            <input type="number" class="rating-input" min="1" max="5" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Comments</label>
+                            <textarea class="comments-input" rows="2"></textarea>
+                        </div>
+                    </div>
+                </div>
+                
+                <button type="button" onclick="addSkillEntry()" style="width: 100%; margin-bottom: 10px; background: #28a745;">+ Add Another Skill</button>
+                <button type="submit" style="width: 100%;">Submit Performance Record</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Performance Detail Modal -->
+    <div id="detailModal" class="modal detail-modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeDetailModal()">&times;</span>
+            <h2>Performance Details</h2>
+            <div id="detailContent"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        let currentCoach = null;
+
+        const loggedInCoach = sessionStorage.getItem('loggedInCoach');
+        if (!loggedInCoach) {
+            window.location.href = 'coach.html';
+        } else {
+            currentCoach = JSON.parse(loggedInCoach);
+            loadPerformanceRecords();
+            loadBatches();
+        }
+
+        function openAddModal() {
+            document.getElementById('addModal').style.display = 'block';
+        }
+
+        function closeAddModal() {
+            document.getElementById('addModal').style.display = 'none';
+            document.getElementById('addForm').reset();
+            resetSkillsContainer();
+        }
+
+        function openDetailModal(record) {
+            const modal = document.getElementById('detailModal');
+            const content = document.getElementById('detailContent');
+            
+            // Calculate average rating
+            const avgRating = (record.skills.reduce((sum, s) => sum + s.rating, 0) / record.skills.length).toFixed(1);
+            
+            content.innerHTML = `
+                <div class="detail-row">
+                    <div class="detail-label">📅 Date:</div>
+                    <div class="detail-value">${formatDate(record.date)}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">🎓 Student:</div>
+                    <div class="detail-value">${record.student_name}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">📚 Batch:</div>
+                    <div class="detail-value">${record.batch_name}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">👨‍🏫 Evaluated By:</div>
+                    <div class="detail-value">${record.recorded_by}</div>
+                </div>
+                <div class="detail-row">
+                    <div class="detail-label">⭐ Average Rating:</div>
+                    <div class="detail-value">${generateStars(avgRating)} (${avgRating}/5)</div>
+                </div>
+                
+                <h3 style="margin-top: 20px; margin-bottom: 15px;">Skills Assessment</h3>
+                ${record.skills.map(skill => `
+                    <div class="skill-detail">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <strong style="font-size: 16px;">${skill.skill}</strong>
+                            <div class="rating-stars">${generateStars(skill.rating)}</div>
+                        </div>
+                        ${skill.comments ? `<div style="color: #ccc; font-size: 14px; margin-top: 8px;">💬 ${skill.comments}</div>` : ''}
+                    </div>
+                `).join('')}
+            `;
+            
+            modal.style.display = 'block';
+        }
+
+        function closeDetailModal() {
+            document.getElementById('detailModal').style.display = 'none';
+        }
+
+        function logout() {
+            sessionStorage.removeItem('loggedInCoach');
+            window.location.href = 'coach.html';
+        }
+
+        window.onclick = function(event) {
+            const addModal = document.getElementById('addModal');
+            const detailModal = document.getElementById('detailModal');
+            
+            if (event.target == addModal) {
+                closeAddModal();
+            } else if (event.target == detailModal) {
+                closeDetailModal();
+            }
+        }
+
+        async function loadBatches() {
+            try {
+                const response = await fetch(`${API_URL}/batches/coach/${currentCoach.id}`);
+                const batches = await response.json();
+                
+                const select = document.getElementById('batchSelect');
+                batches.forEach(batch => {
+                    const option = document.createElement('option');
+                    option.value = batch.id;
+                    option.textContent = batch.batch_name;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading batches:', error);
+            }
+        }
+
+        document.getElementById('batchSelect').addEventListener('change', async (e) => {
+            const batchId = e.target.value;
+            const studentSelect = document.getElementById('studentSelect');
+            
+            studentSelect.innerHTML = '<option value="">-- Select Student --</option>';
+            
+            if (!batchId) return;
+            
+            try {
+                const response = await fetch(`${API_URL}/batches/${batchId}/students`);
+                const students = await response.json();
+                
+                students.forEach(student => {
+                    const option = document.createElement('option');
+                    option.value = student.id;
+                    option.textContent = student.name;
+                    studentSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading students:', error);
+            }
+        });
+
+        function addSkillEntry() {
+            const container = document.getElementById('skillsContainer');
+            const newEntry = document.createElement('div');
+            newEntry.className = 'skill-entry';
+            newEntry.style.cssText = 'background: rgba(255,255,255,0.03); padding: 15px; border-radius: 8px; margin-bottom: 15px; position: relative;';
+            newEntry.innerHTML = `
+                <button type="button" onclick="this.parentElement.remove()" style="position: absolute; top: 10px; right: 10px; background: #dc3545; padding: 5px 10px; border: none; border-radius: 4px; color: white; cursor: pointer;">Remove</button>
+                <div class="form-group">
+                    <label>Skill *</label>
+                    <select class="skill-select" required>
+                        <option value="">-- Select Skill --</option>
+                        <option value="Forehand">Forehand</option>
+                        <option value="Backhand">Backhand</option>
+                        <option value="Serve">Serve</option>
+                        <option value="Smash">Smash</option>
+                        <option value="Drop Shot">Drop Shot</option>
+                        <option value="Net Play">Net Play</option>
+                        <option value="Footwork">Footwork</option>
+                        <option value="Stamina">Stamina</option>
+                        <option value="Defense">Defense</option>
+                        <option value="Court Coverage">Court Coverage</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Rating (1-5) *</label>
+                    <input type="number" class="rating-input" min="1" max="5" required>
+                </div>
+                <div class="form-group">
+                    <label>Comments</label>
+                    <textarea class="comments-input" rows="2"></textarea>
+                </div>
+            `;
+            container.appendChild(newEntry);
+        }
+
+        function resetSkillsContainer() {
+            const container = document.getElementById('skillsContainer');
+            container.innerHTML = `
+                <h3>Skills Assessment</h3>
+                <div class="skill-entry" style="background: rgba(255,255,255,0.03); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <div class="form-group">
+                        <label>Skill *</label>
+                        <select class="skill-select" required>
+                            <option value="">-- Select Skill --</option>
+                            <option value="Forehand">Forehand</option>
+                            <option value="Backhand">Backhand</option>
+                            <option value="Serve">Serve</option>
+                            <option value="Smash">Smash</option>
+                            <option value="Drop Shot">Drop Shot</option>
+                            <option value="Net Play">Net Play</option>
+                            <option value="Footwork">Footwork</option>
+                            <option value="Stamina">Stamina</option>
+                            <option value="Defense">Defense</option>
+                            <option value="Court Coverage">Court Coverage</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Rating (1-5) *</label>
+                        <input type="number" class="rating-input" min="1" max="5" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Comments</label>
+                        <textarea class="comments-input" rows="2"></textarea>
+                    </div>
+                </div>
+            `;
+        }
+
+        document.getElementById('addForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const batchId = parseInt(document.getElementById('batchSelect').value);
+            const studentId = parseInt(document.getElementById('studentSelect').value);
+            const date = document.getElementById('performanceDate').value;
+            
+            const skillEntries = document.querySelectorAll('.skill-entry');
+            const performances = [];
+            
+            skillEntries.forEach(entry => {
+                const skill = entry.querySelector('.skill-select').value;
+                const rating = parseInt(entry.querySelector('.rating-input').value);
+                const comments = entry.querySelector('.comments-input').value;
+                
+                if (skill && rating) {
+                    performances.push({
+                        student_id: studentId,
+                        batch_id: batchId,
+                        date: date,
+                        skill: skill,
+                        rating: rating,
+                        comments: comments || null,
+                        recorded_by: currentCoach.name
+                    });
+                }
+            });
+            
+            if (performances.length === 0) {
+                alert('Please add at least one skill assessment');
+                return;
+            }
+            
+            try {
+                for (const perf of performances) {
+                    const response = await fetch(`${API_URL}/performance/`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(perf)
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error('Failed to submit performance record');
+                    }
+                }
+                
+                alert('Performance records submitted successfully!');
+                closeAddModal();
+                loadPerformanceRecords();
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        });
+
+        async function loadPerformanceRecords() {
+            try {
+                const response = await fetch(`${API_URL}/performance/grouped/coach/${encodeURIComponent(currentCoach.name)}`);
+                const records = await response.json();
+                
+                const container = document.getElementById('performanceList');
+                
+                if (records.length === 0) {
+                    container.innerHTML = '<div class="empty-state">⭐ No performance records yet. Click "Add Performance Record" to get started!</div>';
+                    return;
+                }
+                
+                container.innerHTML = records.map(record => {
+                    const avgRating = (record.skills.reduce((sum, s) => sum + s.rating, 0) / record.skills.length).toFixed(1);
+                    return `
+                        <div class="performance-card" onclick='openDetailModal(${JSON.stringify(record).replace(/'/g, "&#39;")})'>
+                            <div class="performance-header">
+                                <div>
+                                    <h3 style="margin: 0 0 5px 0;">🎓 ${record.student_name}</h3>
+                                    <div style="font-size: 14px; color: #999;">📚 ${record.batch_name}</div>
+                                </div>
+                                <button class="view-details-btn" onclick="event.stopPropagation(); openDetailModal(${JSON.stringify(record).replace(/'/g, "&#39;")})">View Details</button>
+                            </div>
+                            <div class="performance-date">
+                                📅 ${formatDate(record.date)}
+                            </div>
+                            <div style="margin-top: 10px;">
+                                <strong>Average Rating:</strong> ${generateStars(avgRating)} (${avgRating}/5)
+                            </div>
+                            <div class="skills-preview">
+                                ${record.skills.map(skill => `
+                                    <span class="skill-badge">${skill.skill}: ${skill.rating}★</span>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Error loading performance records:', error);
+            }
+        }
+
+        function generateStars(rating) {
+            const fullStars = Math.floor(rating);
+            const hasHalfStar = rating % 1 >= 0.5;
+            let stars = '★'.repeat(fullStars);
+            if (hasHalfStar) stars += '½';
+            stars += '☆'.repeat(5 - Math.ceil(rating));
+            return stars;
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+        }
+
+        // Set today's date as default
+        document.getElementById('performanceDate').valueAsDate = new Date();
+
+        setInterval(loadPerformanceRecords, 30000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fee Management - Owner</title>
+    <link rel="stylesheet" href="owner-styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="owner-dashboard.html" >📊 Dashboard</a>
+            <a href="owner.html" >👨‍🏫 Coaches</a>
+            <a href="owner-batches.html" >📚 Batches</a>
+            <a href="owner-students.html" >🎓 Students</a>
+            <a href="owner-attendance.html" >📋 Attendance</a>
+            <a href="owner-coach-attendance.html" >👔 Coach Attendance</a>
+            <a href="owner-fees.html" class="active">💰 Fees</a>
+            <a href="owner-performance.html" >⭐ Performance</a>
+            <a href="owner-bmi.html" >📏 BMI</a>
+            <a href="owner-schedule.html" >📅 Schedule</a>
+            <a href="owner-enquiries.html" >📞 Enquiries</a>
+            <a href="owner-analytics.html" >📈 Analytics</a>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+
+        <div class="header">
+            <h1>💰 Fee Management</h1>
+            <button class="btn btn-primary" onclick="openModal()">+ Add Fee Record</button>
+        </div>
+
+        <table id="feesTable">
+            <thead>
+                <tr>
+                    <th>Student</th>
+                    <th>Batch</th>
+                    <th>Amount</th>
+                    <th>Due Date</th>
+                    <th>Paid Date</th>
+                    <th>Status</th>
+                    <th>Payment Method</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <div id="feeModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2 style="color: #667eea; margin-bottom: 20px;">Add Fee Record</h2>
+            <form id="feeForm">
+                <div class="form-group">
+                    <label>Student *</label>
+                    <select id="studentSelect" required></select>
+                </div>
+                <div class="form-group">
+                    <label>Batch *</label>
+                    <select id="batchSelect" required></select>
+                </div>
+                <div class="form-group">
+                    <label>Amount *</label>
+                    <input type="number" id="amount" required step="0.01">
+                </div>
+                <div class="form-group">
+                    <label>Due Date *</label>
+                    <input type="date" id="dueDate" required>
+                </div>
+                <div class="form-group">
+                    <label>Status *</label>
+                    <select id="status" required>
+                        <option value="Pending">Pending</option>
+                        <option value="Paid">Paid</option>
+                        <option value="Overdue">Overdue</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Payment Method</label>
+                    <select id="paymentMethod">
+                        <option value="">Not Paid</option>
+                        <option value="Cash">Cash</option>
+                        <option value="UPI">UPI</option>
+                        <option value="Card">Card</option>
+                        <option value="Bank Transfer">Bank Transfer</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">Create Fee Record</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+
+        loadFees();
+        loadStudents();
+        loadBatches();
+
+        function openModal() {
+            document.getElementById('feeModal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('feeModal').style.display = 'none';
+            document.getElementById('feeForm').reset();
+        }
+
+        async function loadStudents() {
+            const response = await fetch(`${API_URL}/students/`);
+            const students = await response.json();
+            const select = document.getElementById('studentSelect');
+            select.innerHTML = students.map(s => 
+                `<option value="${s.id}">${s.name} - ${s.email}</option>`
+            ).join('');
+        }
+
+        async function loadBatches() {
+            const response = await fetch(`${API_URL}/batches/`);
+            const batches = await response.json();
+            const select = document.getElementById('batchSelect');
+            select.innerHTML = batches.map(b => 
+                `<option value="${b.id}">${b.batch_name}</option>`
+            ).join('');
+        }
+
+        async function loadFees() {
+            try {
+                const [studentsRes, batchesRes] = await Promise.all([
+                    fetch(`${API_URL}/students/`),
+                    fetch(`${API_URL}/batches/`)
+                ]);
+                
+                const students = await studentsRes.json();
+                const batches = await batchesRes.json();
+
+                const allFees = [];
+                for (const student of students) {
+                    const feesRes = await fetch(`${API_URL}/fees/student/${student.id}`);
+                    const fees = await feesRes.json();
+                    allFees.push(...fees.map(f => ({...f, studentName: student.name})));
+                }
+
+                const tbody = document.querySelector('#feesTable tbody');
+                
+                if (allFees.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #999;">No fee records yet</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = allFees.map(fee => {
+                    const batch = batches.find(b => b.id === fee.batch_id);
+                    return `
+                        <tr>
+                            <td><strong>${fee.studentName}</strong></td>
+                            <td>${batch ? batch.batch_name : 'N/A'}</td>
+                            <td>₹${fee.amount.toFixed(2)}</td>
+                            <td>${formatDate(fee.due_date)}</td>
+                            <td>${fee.paid_date ? formatDate(fee.paid_date) : 'Not Paid'}</td>
+                            <td><span class="status-badge status-${fee.status.toLowerCase()}">${fee.status}</span></td>
+                            <td>${fee.payment_method || 'N/A'}</td>
+                            <td>
+                                <button class="btn btn-primary" onclick="markAsPaid(${fee.id})" style="padding: 6px 12px; font-size: 12px;">Mark Paid</button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Error loading fees:', error);
+            }
+        }
+
+        document.getElementById('feeForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const feeData = {
+                student_id: parseInt(document.getElementById('studentSelect').value),
+                batch_id: parseInt(document.getElementById('batchSelect').value),
+                amount: parseFloat(document.getElementById('amount').value),
+                due_date: document.getElementById('dueDate').value,
+                status: document.getElementById('status').value,
+                payment_method: document.getElementById('paymentMethod').value || null
+            };
+
+            try {
+                const response = await fetch(`${API_URL}/fees/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(feeData)
+                });
+
+                if (response.ok) {
+                    alert('Fee record created!');
+                    closeModal();
+                    loadFees();
+                } else {
+                    alert('Failed to create fee record');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        });
+
+        async function markAsPaid(feeId) {
+            const paymentMethod = prompt('Enter payment method (Cash/UPI/Card/Bank Transfer):');
+            if (!paymentMethod) return;
+
+            const updateData = {
+                status: 'Paid',
+                paid_date: new Date().toISOString().split('T')[0],
+                payment_method: paymentMethod
+            };
+
+            try {
+                const response = await fetch(`${API_URL}/fees/${feeId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(updateData)
+                });
+
+                if (response.ok) {
+                    alert('Fee marked as paid!');
+                    loadFees();
+                } else {
+                    alert('Failed to update fee');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        }
+
+        setInterval(loadFees, 30000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Batch Management - Coach Portal</title>
+    <link rel="stylesheet" href="coach-styles.css">
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <div class="nav">
+        <a href="coach-dashboard.html">📊 Dashboard</a>
+        <a href="coach-batches.html" class="active">📚 Batches</a>
+        <a href="coach-attendance.html">📋 Attendance</a>
+        <a href="coach-fees.html">💰 Fees</a>
+        <a href="coach-performance.html">⭐ Performance</a>
+        <a href="coach-bmi.html">📏 BMI</a>
+        <a href="coach-schedule.html">📅 Schedule</a>
+        <a href="coach-invite.html">✉️ Invite</a>
+        <a href="coach-enquiries.html">📞 Enquiries</a>
+        <a href="coach-students.html">🎓 Students</a>
+        <button class="logout-btn" onclick="logout()">Logout</button>
+    </div>
+
+    <!-- Main Container -->
+    <div class="main-content">
+        <!-- Header with Add Button -->
+        <div class="page-header">
+            <h1>📚 Batch Management</h1>
+            <button class="add-btn" onclick="openModal()">+ Add New Batch</button>
+        </div>
+
+        <!-- Batches Grid -->
+        <div class="batches-grid" id="batchesList"></div>
+    </div>
+
+    <!-- Add Batch Modal -->
+    <div id="batchModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2>Add New Batch</h2>
+            
+            <form id="addBatchForm">
+                <div class="form-group">
+                    <label for="batchName">Batch Name *</label>
+                    <input type="text" id="batchName" required placeholder="e.g., Advanced Morning Batch">
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="capacity">Capacity *</label>
+                        <input type="number" id="capacity" required min="1" placeholder="e.g., 20">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="fees">Fees *</label>
+                        <input type="text" id="fees" required placeholder="e.g., ₹5000/month">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="startDate">📅 Start Date *</label>
+                    <input type="date" id="startDate" required>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="period">Period *</label>
+                        <select id="period" required>
+                            <option value="">Select Period</option>
+                            <option value="Morning">Morning</option>
+                            <option value="Evening">Evening</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="timing">Timing *</label>
+                        <input type="text" id="timing" required placeholder="e.g., 6:00 AM - 7:00 AM">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="location">Location</label>
+                    <input type="text" id="location" placeholder="e.g., Court 1">
+                </div>
+                
+                <button type="submit">Create Batch</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        let currentCoach = null;
+
+        const loggedInCoach = sessionStorage.getItem('loggedInCoach');
+        if (loggedInCoach) {
+            currentCoach = JSON.parse(loggedInCoach);
+        } else {
+            window.location.href = 'coach.html';
+        }
+
+        loadBatches();
+
+        function openModal() {
+            document.getElementById('batchModal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('batchModal').style.display = 'none';
+            document.getElementById('addBatchForm').reset();
+        }
+
+        function logout() {
+            sessionStorage.removeItem('loggedInCoach');
+            window.location.href = 'coach.html';
+        }
+
+        window.onclick = function(event) {
+            const modal = document.getElementById('batchModal');
+            if (event.target == modal) {
+                closeModal();
+            }
+        }
+
+        document.getElementById('addBatchForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const batchData = {
+                batch_name: document.getElementById('batchName').value,
+                capacity: parseInt(document.getElementById('capacity').value),
+                fees: document.getElementById('fees').value,
+                start_date: document.getElementById('startDate').value,
+                period: document.getElementById('period').value,
+                timing: document.getElementById('timing').value,
+                location: document.getElementById('location').value || null,
+                created_by: `Coach: ${currentCoach.name}`,
+                assigned_coach_id: currentCoach.id,
+                assigned_coach_name: currentCoach.name
+            };
+
+            try {
+                const response = await fetch(`${API_URL}/batches/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(batchData)
+                });
+
+                if (response.ok) {
+                    alert('Batch created successfully!');
+                    closeModal();
+                    loadBatches();
+                } else {
+                    alert('Failed to create batch');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        });
+
+        async function loadBatches() {
+            try {
+                const response = await fetch(`${API_URL}/batches/coach/${currentCoach.id}`);
+                const batches = await response.json();
+                
+                const batchesList = document.getElementById('batchesList');
+                
+                if (batches.length === 0) {
+                    batchesList.innerHTML = '<div class="empty-state">📚 No batches created yet. Click "Add New Batch" to get started!</div>';
+                    return;
+                }
+
+                batchesList.innerHTML = batches.map(batch => `
+                    <div class="batch-card">
+                        <button class="delete-batch-btn" onclick="deleteBatch(${batch.id})">Delete</button>
+                        <div class="batch-header">📚 ${batch.batch_name}</div>
+                        <div class="batch-info">
+                            <div class="info-item">
+                                <span class="info-icon">👥</span>
+                                <strong>Capacity:</strong> ${batch.capacity}
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">💰</span>
+                                <strong>Fees:</strong> ${batch.fees}
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">📅</span>
+                                <strong>Start Date:</strong> ${formatDate(batch.start_date)}
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">⏰</span>
+                                <strong>Timing:</strong> ${batch.timing}
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">${batch.period === 'Morning' ? '🌅' : '🌆'}</span>
+                                <strong>Period:</strong> ${batch.period}
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">📍</span>
+                                <strong>Location:</strong> ${batch.location || 'N/A'}
+                            </div>
+                        </div>
+                        <div class="created-by">Created by: ${batch.created_by}</div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading batches:', error);
+            }
+        }
+
+        async function deleteBatch(id) {
+            if (!confirm('Are you sure you want to delete this batch?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/batches/${id}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    alert('Batch deleted successfully!');
+                    loadBatches();
+                } else {
+                    alert('Failed to delete batch');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+        }
+
+        setInterval(loadBatches, 30000);
+    </script>
+</body>
+</html>
