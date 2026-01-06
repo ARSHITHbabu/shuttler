@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Profile - Student</title>
+    <link rel="stylesheet" href="student-styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="student-dashboard.html">📊 Dashboard</a>
+            <a href="student-invitations.html">📨 Invitations</a>
+            <a href="student-batches.html">📚 Batches</a>
+            <a href="student-attendance.html">📋 Attendance</a>
+            <a href="student-fees.html">💰 Fees</a>
+            <a href="student-performance.html">⭐ Performance</a>
+            <a href="student-bmi.html">📏 BMI</a>
+            <a href="student-schedule.html">📅 Schedule</a>
+            <a href="student-tournaments.html">🏆 Tournaments</a>
+            <a href="student-videos.html">🎥 Videos</a>
+            <a href="student-profile.html" class="active">👤 Profile</a>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+        
+        <h1>👤 My Profile</h1>
+        
+        <div id="dataContainer"></div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        let currentStudent = null;
+
+        const loggedInStudent = sessionStorage.getItem('loggedInStudent');
+        if (!loggedInStudent) {
+            window.location.href = 'student.html';
+        } else {
+            currentStudent = JSON.parse(loggedInStudent);
+            loadData();
+        }
+
+        async function loadData() {
+            try {
+                const response = await fetch(`${API_URL}/students/${currentStudent.id}`);
+                const student = await response.json();
+                
+                const container = document.getElementById('dataContainer');
+                
+                if (!student) {
+                    container.innerHTML = '<div class="empty-state">⚠️ Profile not found</div>';
+                    return;
+                }
+
+                const initials = student.name ? student.name.split(' ').map(n => n[0]).join('').toUpperCase() : '👤';
+
+                container.innerHTML = `
+                    <div class="profile-header">
+                        <div class="profile-avatar">${initials}</div>
+                        <div class="profile-name">${student.name}</div>
+                        <div class="profile-email">📧 ${student.email}</div>
+                    </div>
+
+                    <div class="profile-grid">
+                        <!-- Personal Information -->
+                        <div class="profile-section">
+                            <div class="section-title">👤 Personal Information</div>
+                            <div class="info-row">
+                                <div class="info-label">
+                                    <span class="info-icon">📱</span>
+                                    Phone:
+                                </div>
+                                <div class="info-value">${student.phone || 'Not provided'}</div>
+                            </div>
+                            <div class="info-row">
+                                <div class="info-label">
+                                    <span class="info-icon">📅</span>
+                                    Date of Birth:
+                                </div>
+                                <div class="info-value">${student.date_of_birth ? formatDate(student.date_of_birth) : 'Not provided'}</div>
+                            </div>
+                            <div class="info-row">
+                                <div class="info-label">
+                                    <span class="info-icon">⚧️</span>
+                                    Gender:
+                                </div>
+                                <div class="info-value">${student.gender || 'Not specified'}</div>
+                            </div>
+                            <div class="info-row">
+                                <div class="info-label">
+                                    <span class="info-icon">🩸</span>
+                                    Blood Group:
+                                </div>
+                                <div class="info-value">${student.blood_group || 'Not specified'}</div>
+                            </div>
+                        </div>
+
+                        <!-- Guardian Information -->
+                        <div class="profile-section">
+                            <div class="section-title">👨‍👩‍👦 Guardian Information</div>
+                            <div class="info-row">
+                                <div class="info-label">
+                                    <span class="info-icon">👤</span>
+                                    Name:
+                                </div>
+                                <div class="info-value">${student.guardian_name || 'Not provided'}</div>
+                            </div>
+                            <div class="info-row">
+                                <div class="info-label">
+                                    <span class="info-icon">📞</span>
+                                    Phone:
+                                </div>
+                                <div class="info-value">${student.guardian_phone || 'Not provided'}</div>
+                            </div>
+                            <div class="info-row">
+                                <div class="info-label">
+                                    <span class="info-icon">🔗</span>
+                                    Relationship:
+                                </div>
+                                <div class="info-value">${student.guardian_relationship || 'Not specified'}</div>
+                            </div>
+                        </div>
+
+                        <!-- Address Information -->
+                        <div class="profile-section">
+                            <div class="section-title">📍 Address Information</div>
+                            <div class="info-row">
+                                <div class="info-label">
+                                    <span class="info-icon">🏠</span>
+                                    Address:
+                                </div>
+                                <div class="info-value">${student.address || 'Not provided'}</div>
+                            </div>
+                        </div>
+
+                        <!-- Account Status -->
+                        <div class="profile-section">
+                            <div class="section-title">ℹ️ Account Status</div>
+                            <div class="info-row">
+                                <div class="info-label">
+                                    <span class="info-icon">✅</span>
+                                    Status:
+                                </div>
+                                <div class="info-value">
+                                    <span class="status-badge status-${student.is_active ? 'active' : 'inactive'}">
+                                        ${student.is_active ? '✅ Active' : '❌ Inactive'}
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="info-row">
+                                <div class="info-label">
+                                    <span class="info-icon">🔗</span>
+                                    Batch Linked:
+                                </div>
+                                <div class="info-value">
+                                    <span class="status-badge status-${student.is_linked ? 'active' : 'inactive'}">
+                                        ${student.is_linked ? '✅ Yes' : '❌ No'}
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="info-row">
+                                <div class="info-label">
+                                    <span class="info-icon">📅</span>
+                                    Joined:
+                                </div>
+                                <div class="info-value">${student.created_at ? formatDateTime(student.created_at) : 'N/A'}</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('dataContainer').innerHTML = '<div class="empty-state">⚠️ Error loading profile</div>';
+            }
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return 'Not provided';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+        }
+
+        function formatDateTime(dateString) {
+            if (!dateString) return 'N/A';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function logout() {
+            sessionStorage.removeItem('loggedInStudent');
+            window.location.href = 'student.html';
+        }
+
+        setInterval(loadData, 30000);
+    </script>
+</body>
+</html>

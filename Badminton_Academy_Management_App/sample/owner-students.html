@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Management - Owner</title>
+    <link rel="stylesheet" href="owner-styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="owner-dashboard.html" >📊 Dashboard</a>
+            <a href="owner.html" >👨‍🏫 Coaches</a>
+            <a href="owner-batches.html" >📚 Batches</a>
+            <a href="owner-students.html" class="active">🎓 Students</a>
+            <a href="owner-attendance.html" >📋 Attendance</a>
+            <a href="owner-coach-attendance.html" >👔 Coach Attendance</a>
+            <a href="owner-fees.html" >💰 Fees</a>
+            <a href="owner-performance.html" >⭐ Performance</a>
+            <a href="owner-bmi.html" >📏 BMI</a>
+            <a href="owner-schedule.html" >📅 Schedule</a>
+            <a href="owner-enquiries.html" >📞 Enquiries</a>
+            <a href="owner-analytics.html" >📈 Analytics</a>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+        
+        <div class="header">
+            <h1>🎓 Student Management</h1>
+            <button class="add-btn" onclick="openModal()">+ Add Student</button>
+        </div>
+
+        <div class="students-grid" id="studentsList"></div>
+    </div>
+
+    <!-- Add Student Modal -->
+    <div id="studentModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2 style="color: #667eea; margin-bottom: 20px;">Add New Student</h2>
+            
+            <form id="addStudentForm">
+                <div class="form-group">
+                    <label for="name">Student Name *</label>
+                    <input type="text" id="name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="phone">Phone Number *</label>
+                    <input type="tel" id="phone" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="email">Email Address *</label>
+                    <input type="email" id="email" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="guardianName">Guardian Name *</label>
+                    <input type="text" id="guardianName" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="guardianPhone">Guardian Phone *</label>
+                    <input type="tel" id="guardianPhone" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">Password *</label>
+                    <input type="password" id="password" required>
+                </div>
+                
+                <button type="submit">Add Student</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+
+        loadStudents();
+
+        function openModal() {
+            document.getElementById('studentModal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('studentModal').style.display = 'none';
+            document.getElementById('addStudentForm').reset();
+        }
+
+        window.onclick = function(event) {
+            const modal = document.getElementById('studentModal');
+            if (event.target == modal) {
+                closeModal();
+            }
+        }
+
+        document.getElementById('addStudentForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const studentData = {
+                name: document.getElementById('name').value,
+                phone: document.getElementById('phone').value,
+                email: document.getElementById('email').value,
+                guardian_name: document.getElementById('guardianName').value,
+                guardian_phone: document.getElementById('guardianPhone').value,
+                password: document.getElementById('password').value,
+                added_by: "Owner"
+            };
+
+            try {
+                const response = await fetch(`${API_URL}/students/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(studentData)
+                });
+
+                if (response.ok) {
+                    alert('Student added successfully!');
+                    closeModal();
+                    loadStudents();
+                } else {
+                    alert('Failed to add student');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        });
+
+        async function loadStudents() {
+            try {
+                const response = await fetch(`${API_URL}/students/`);
+                const students = await response.json();
+                
+                const studentsList = document.getElementById('studentsList');
+                
+                if (students.length === 0) {
+                    studentsList.innerHTML = '<div class="empty-state">🎓 No students added yet. Click "Add Student" to get started!</div>';
+                    return;
+                }
+
+                studentsList.innerHTML = students.map(student => `
+                    <div class="student-card">
+                        <div class="student-header">👨‍🎓 ${student.name}</div>
+                        <div class="student-info">
+                            <div class="info-item">📧 <strong>Email:</strong> ${student.email}</div>
+                            <div class="info-item">📱 <strong>Phone:</strong> ${student.phone}</div>
+                            <div class="info-item">👤 <strong>Guardian:</strong> ${student.guardian_name}</div>
+                            <div class="info-item">📞 <strong>Guardian Phone:</strong> ${student.guardian_phone}</div>
+                        </div>
+                        <div class="added-by">Added by: ${student.added_by}</div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading students:', error);
+            }
+        }
+
+        setInterval(loadStudents, 3000);
+    </script>
+</body>
+</html>

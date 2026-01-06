@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance Management - Owner</title>
+    <link rel="stylesheet" href="owner-styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="owner-dashboard.html" >📊 Dashboard</a>
+            <a href="owner.html" >👨‍🏫 Coaches</a>
+            <a href="owner-batches.html" >📚 Batches</a>
+            <a href="owner-students.html" >🎓 Students</a>
+            <a href="owner-attendance.html" class="active">📋 Attendance</a>
+            <a href="owner-coach-attendance.html" >👔 Coach Attendance</a>
+            <a href="owner-fees.html" >💰 Fees</a>
+            <a href="owner-performance.html" >⭐ Performance</a>
+            <a href="owner-bmi.html" >📏 BMI</a>
+            <a href="owner-schedule.html" >📅 Schedule</a>
+            <a href="owner-enquiries.html" >📞 Enquiries</a>
+            <a href="owner-analytics.html" >📈 Analytics</a>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+
+        <h1>📋 Attendance Management</h1>
+
+        <div class="controls">
+            <div class="form-group">
+                <label for="batchSelect">Select Batch</label>
+                <select id="batchSelect">
+                    <option value="">-- Select Batch --</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="dateSelect">Date</label>
+                <input type="date" id="dateSelect">
+            </div>
+            <div class="form-group" style="align-items: flex-end;">
+                <button class="btn btn-primary" onclick="loadAttendance()">Load Attendance</button>
+            </div>
+            <div class="form-group" style="align-items: flex-end;">
+                <button class="btn btn-success" onclick="saveAllAttendance()">💾 Save All</button>
+            </div>
+        </div>
+
+        <div id="attendanceTableContainer"></div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        let currentStudents = [];
+        let currentBatchId = null;
+        let currentDate = null;
+
+        // Initialize
+        document.getElementById('dateSelect').valueAsDate = new Date();
+        loadBatches();
+
+        async function loadBatches() {
+            try {
+                const response = await fetch(`${API_URL}/batches/`);
+                const batches = await response.json();
+                
+                const select = document.getElementById('batchSelect');
+                select.innerHTML = '<option value="">-- Select Batch --</option>';
+                batches.forEach(batch => {
+                    const option = document.createElement('option');
+                    option.value = batch.id;
+                    option.textContent = batch.batch_name;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading batches:', error);
+            }
+        }
+
+        async function loadAttendance() {
+            const batchId = document.getElementById('batchSelect').value;
+            const date = document.getElementById('dateSelect').value;
+
+            if (!batchId || !date) {
+                alert('Please select both batch and date');
+                return;
+            }
+
+            currentBatchId = batchId;
+            currentDate = date;
+
+            try {
+                // Get students in batch
+                const studentsResponse = await fetch(`${API_URL}/batch-students/${batchId}`);
+                const students = await studentsResponse.json();
+
+                if (students.length === 0) {
+                    document.getElementById('attendanceTableContainer').innerHTML = 
+                        '<div class="empty-state">No students found in this batch</div>';
+                    return;
+                }
+
+                // Get existing attendance
+                const attendanceResponse = await fetch(`${API_URL}/attendance/batch/${batchId}/date/${date}`);
+                const attendanceRecords = await attendanceResponse.json();
+
+                const attendanceMap = {};
+                attendanceRecords.forEach(record => {
+                    attendanceMap[record.student_id] = record;
+                });
+
+                currentStudents = students.map(student => ({
+                    ...student,
+                    attendance: attendanceMap[student.id] || {
+                        status: 'Present',
+                        remarks: ''
+                    }
+                }));
+
+                displayAttendanceTable();
+            } catch (error) {
+                console.error('Error loading attendance:', error);
+                alert('Error loading attendance data');
+            }
+        }
+
+        function displayAttendanceTable() {
+            const container = document.getElementById('attendanceTableContainer');
+            
+            const tableHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Student Name</th>
+                            <th>Email</th>
+                            <th>Phone</th>
+                            <th>Status</th>
+                            <th>Remarks</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${currentStudents.map((student, index) => `
+                            <tr>
+                                <td>${index + 1}</td>
+                                <td><strong>${student.name}</strong></td>
+                                <td>${student.email}</td>
+                                <td>${student.phone}</td>
+                                <td>
+                                    <select class="status-select" id="status_${student.id}">
+                                        <option value="Present" ${student.attendance.status === 'Present' ? 'selected' : ''}>✅ Present</option>
+                                        <option value="Absent" ${student.attendance.status === 'Absent' ? 'selected' : ''}>❌ Absent</option>
+                                        <option value="Leave" ${student.attendance.status === 'Leave' ? 'selected' : ''}>🏠 Leave</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <input type="text" class="remarks-input" id="remarks_${student.id}" 
+                                           value="${student.attendance.remarks || ''}" placeholder="Add remarks...">
+                                </td>
+                                <td>
+                                    <button class="save-row-btn" onclick="saveAttendance(${student.id})">Save</button>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+            
+            container.innerHTML = tableHTML;
+        }
+
+        async function saveAttendance(studentId) {
+            const status = document.getElementById(`status_${studentId}`).value;
+            const remarks = document.getElementById(`remarks_${studentId}`).value;
+
+            const attendanceData = {
+                batch_id: parseInt(currentBatchId),
+                student_id: studentId,
+                date: currentDate,
+                status: status,
+                marked_by: 'Owner',
+                remarks: remarks
+            };
+
+            try {
+                const response = await fetch(`${API_URL}/attendance/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(attendanceData)
+                });
+
+                if (response.ok) {
+                    alert('Attendance saved!');
+                } else {
+                    alert('Failed to save attendance');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        async function saveAllAttendance() {
+            if (!currentBatchId || !currentDate) {
+                alert('Please load attendance first');
+                return;
+            }
+
+            let saved = 0;
+            for (const student of currentStudents) {
+                const status = document.getElementById(`status_${student.id}`).value;
+                const remarks = document.getElementById(`remarks_${student.id}`).value;
+
+                const attendanceData = {
+                    batch_id: parseInt(currentBatchId),
+                    student_id: student.id,
+                    date: currentDate,
+                    status: status,
+                    marked_by: 'Owner',
+                    remarks: remarks
+                };
+
+                try {
+                    await fetch(`${API_URL}/attendance/`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(attendanceData)
+                    });
+                    saved++;
+                } catch (error) {
+                    console.error(`Error saving for student ${student.id}:`, error);
+                }
+            }
+
+            alert(`Saved attendance for ${saved} students!`);
+            loadAttendance();
+        }
+    </script>
+</body>
+</html>

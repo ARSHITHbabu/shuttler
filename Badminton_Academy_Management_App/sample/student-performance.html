@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Performance - Student</title>
+    <link rel="stylesheet" href="student-styles.css">
+    <style>
+        .performance-card {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 25px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            border: 2px solid #e2e8f0;
+        }
+        .performance-card:hover {
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="student-dashboard.html">📊 Dashboard</a>
+            <a href="student-invitations.html">📨 Invitations</a>
+            <a href="student-batches.html">📚 Batches</a>
+            <a href="student-attendance.html">📋 Attendance</a>
+            <a href="student-fees.html">💰 Fees</a>
+            <a href="student-performance.html" class="active">⭐ Performance</a>
+            <a href="student-bmi.html">📏 BMI</a>
+            <a href="student-schedule.html">📅 Schedule</a>
+            <a href="student-tournaments.html">🏆 Tournaments</a>
+            <a href="student-videos.html">🎥 Videos</a>
+            <a href="student-profile.html">👤 Profile</a>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+        
+        <h1>⭐ My Performance</h1>
+        
+        <div id="performanceList"></div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        let currentStudent = null;
+
+        // Debug logging
+        console.log('Checking session storage...');
+        const loggedInStudent = sessionStorage.getItem('loggedInStudent');
+        console.log('Session storage value:', loggedInStudent);
+        
+        if (!loggedInStudent) {
+            console.error('No student found in session storage - redirecting to login');
+            alert('Please login as a student first!');
+            window.location.href = 'student.html';
+        } else {
+            try {
+                currentStudent = JSON.parse(loggedInStudent);
+                console.log('Current student:', currentStudent);
+                
+                if (!currentStudent || !currentStudent.id) {
+                    console.error('Invalid student data:', currentStudent);
+                    alert('Invalid student session. Please login again.');
+                    window.location.href = 'student.html';
+                } else {
+                    console.log('Student ID:', currentStudent.id);
+                    loadPerformanceRecords();
+                }
+            } catch (e) {
+                console.error('Error parsing student data:', e);
+                alert('Session data corrupted. Please login again.');
+                window.location.href = 'student.html';
+            }
+        }
+
+        function logout() {
+            sessionStorage.removeItem('loggedInStudent');
+            window.location.href = 'student.html';
+        }
+
+        async function loadPerformanceRecords() {
+            try {
+                console.log('Fetching performance for student:', currentStudent.id);
+                const response = await fetch(`${API_URL}/performance/grouped/student/${currentStudent.id}`);
+                
+                console.log('Response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const records = await response.json();
+                console.log('Received records:', records);
+                
+                const container = document.getElementById('performanceList');
+                
+                if (!records || records.length === 0) {
+                    container.innerHTML = '<div class="empty-state">⭐ No performance records yet. Your coach will evaluate your skills soon!</div>';
+                    return;
+                }
+                
+                let cardsHTML = '';
+                
+                for (let i = 0; i < records.length; i++) {
+                    const record = records[i];
+                    
+                    // Validate record has skills
+                    if (!record.skills || !Array.isArray(record.skills) || record.skills.length === 0) {
+                        console.warn('Record has no skills:', record);
+                        continue;
+                    }
+                    
+                    // Calculate average rating (normalize to 5-point scale)
+                    let totalRating = 0;
+                    for (let j = 0; j < record.skills.length; j++) {
+                        let skillRating = parseFloat(record.skills[j].rating) || 0;
+                        // If rating is on 10-point scale, convert to 5-point
+                        if (skillRating > 5) {
+                            skillRating = (skillRating / 10) * 5;
+                        }
+                        totalRating += skillRating;
+                    }
+                    const avgRating = (totalRating / record.skills.length).toFixed(1);
+                    
+                    // Build skills rows
+                    let skillsRows = '';
+                    for (let k = 0; k < record.skills.length; k++) {
+                        const skill = record.skills[k];
+                        let skillRating = parseFloat(skill.rating) || 0;
+                        let displayRating = skillRating;
+                        
+                        // If rating is on 10-point scale, convert to 5-point for stars
+                        let starsRating = skillRating;
+                        if (skillRating > 5) {
+                            starsRating = (skillRating / 10) * 5;
+                        }
+                        
+                        const stars = generateStars(starsRating);
+                        const comment = skill.comments || '';
+                        
+                        skillsRows += `
+                            <tr>
+                                <td style="padding: 1rem; border-bottom: 1px solid #e2e8f0;">
+                                    <strong style="color: #06b6d4;">${skill.skill || 'Unknown'}</strong>
+                                </td>
+                                <td style="padding: 1rem; border-bottom: 1px solid #e2e8f0; text-align: center;">
+                                    <span style="color: #ffc107; font-size: 1.1rem;">${stars}</span>
+                                    <div style="margin-top: 0.25rem; font-size: 0.9rem; color: #64748b;">${displayRating}/10</div>
+                                </td>
+                                <td style="padding: 1rem; border-bottom: 1px solid #e2e8f0;">
+                                    <div style="color: #1e293b; line-height: 1.6;">
+                                        ${comment ? comment : '<span style="color: #94a3b8; font-style: italic;">No feedback provided</span>'}
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    }
+                    
+                    cardsHTML += `
+                        <div class="performance-card" style="cursor: default;">
+                            <div style="background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%); padding: 1.5rem; border-radius: 12px 12px 0 0; margin: -20px -20px 20px -20px; color: white;">
+                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                                    <div>
+                                        <div style="font-size: 1.3rem; font-weight: bold; margin-bottom: 0.5rem;">
+                                            📅 ${formatDate(record.date || new Date().toISOString())}
+                                        </div>
+                                        <div style="font-size: 0.95rem; opacity: 0.95;">
+                                            📚 Batch: <strong>${record.batch_name || 'N/A'}</strong>
+                                        </div>
+                                        <div style="font-size: 0.95rem; opacity: 0.95; margin-top: 0.25rem;">
+                                            👨‍🏫 Evaluated by: <strong>${record.recorded_by || 'N/A'}</strong>
+                                        </div>
+                                    </div>
+                                    <div style="text-align: center; background: rgba(255,255,255,0.2); padding: 1rem 1.5rem; border-radius: 12px;">
+                                        <div style="font-size: 0.9rem; margin-bottom: 0.5rem;">Overall Score</div>
+                                        <div style="font-size: 1.5rem; font-weight: bold;">
+                                            ${generateStars(avgRating)}
+                                        </div>
+                                        <div style="font-size: 1.2rem; font-weight: bold; margin-top: 0.25rem;">
+                                            ${avgRating}/5.0
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div style="overflow-x: auto;">
+                                <table style="width: 100%; background: white; border-radius: 8px; overflow: hidden;">
+                                    <thead>
+                                        <tr style="background: linear-gradient(135deg, #f0f9ff, #e0f2fe);">
+                                            <th style="padding: 1rem; text-align: left; color: #0891b2; font-weight: 600; border-bottom: 2px solid #06b6d4; width: 25%;">
+                                                Skill
+                                            </th>
+                                            <th style="padding: 1rem; text-align: center; color: #0891b2; font-weight: 600; border-bottom: 2px solid #06b6d4; width: 15%;">
+                                                Rating
+                                            </th>
+                                            <th style="padding: 1rem; text-align: left; color: #0891b2; font-weight: 600; border-bottom: 2px solid #06b6d4; width: 60%;">
+                                                💬 Coach's Feedback / Comments
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${skillsRows}
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <div style="margin-top: 1.5rem; padding: 1.25rem; background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(5, 150, 105, 0.05)); border-radius: 12px; border-left: 4px solid #10b981; text-align: center;">
+                                <div style="color: #059669; font-size: 1rem; font-weight: 600;">
+                                    ${getOverallFeedback(parseFloat(avgRating))}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                if (cardsHTML === '') {
+                    container.innerHTML = '<div class="empty-state">⭐ No valid performance records found.</div>';
+                } else {
+                    container.innerHTML = cardsHTML;
+                }
+                
+            } catch (error) {
+                console.error('Error loading performance records:', error);
+                const container = document.getElementById('performanceList');
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div style="margin-bottom: 1rem;">⚠️ Error loading performance records</div>
+                        <div style="font-size: 0.9rem; color: rgba(255,255,255,0.8);">
+                            ${error.message}
+                        </div>
+                        <div style="margin-top: 1rem; font-size: 0.85rem; color: rgba(255,255,255,0.7);">
+                            Please make sure:
+                            <br>• The backend server is running at ${API_URL}
+                            <br>• You are logged in as a student
+                            <br>• There are performance records for this student
+                        </div>
+                        <button onclick="loadPerformanceRecords()" style="margin-top: 1rem; padding: 0.75rem 1.5rem; background: #06b6d4; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+                            Retry
+                        </button>
+                    </div>
+                `;
+            }
+        }
+        
+        function getOverallFeedback(avgRating) {
+            if (avgRating >= 4.5) return '🎉 Outstanding performance! Keep up the excellent work!';
+            if (avgRating >= 3.5) return '👍 Good job! You\'re making great progress!';
+            if (avgRating >= 2.5) return '💪 Keep practicing! You\'re improving steadily!';
+            return '📚 Focus on fundamentals. Practice makes perfect!';
+        }
+
+        function generateStars(rating) {
+            // Ensure rating is a valid number between 0 and 10
+            rating = parseFloat(rating) || 0;
+            
+            // Clamp rating between 0 and 5 (convert if needed)
+            if (rating > 5) {
+                rating = 5; // Cap at 5 stars
+            }
+            if (rating < 0) {
+                rating = 0;
+            }
+            
+            const fullStars = Math.floor(rating);
+            const hasHalfStar = (rating % 1) >= 0.5;
+            
+            let stars = '★'.repeat(fullStars);
+            if (hasHalfStar && fullStars < 5) {
+                stars += '½';
+            }
+            const emptyStars = 5 - Math.ceil(rating);
+            if (emptyStars > 0) {
+                stars += '☆'.repeat(emptyStars);
+            }
+            
+            return stars;
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+            } catch (e) {
+                return dateString;
+            }
+        }
+
+        function getOverallFeedback(avgRating) {
+            avgRating = parseFloat(avgRating) || 0;
+            if (avgRating >= 4.5) return '🎉 Outstanding performance! Keep up the excellent work!';
+            if (avgRating >= 3.5) return '👍 Good job! You\'re making great progress!';
+            if (avgRating >= 2.5) return '💪 Keep practicing! You\'re improving steadily!';
+            return '📚 Focus on fundamentals. Practice makes perfect!';
+        }
+
+        setInterval(loadPerformanceRecords, 30000);
+    </script>
+</body>
+</html>

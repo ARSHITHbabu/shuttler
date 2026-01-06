@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invite Students - Coach Portal</title>
+    <link rel="stylesheet" href="coach-styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="coach-dashboard.html">📊 Dashboard</a>
+            <a href="coach-batches.html">📚 Batches</a>
+            <a href="coach-attendance.html">📋 Attendance</a>
+            <a href="coach-fees.html">💰 Fees</a>
+            <a href="coach-performance.html">⭐ Performance</a>
+            <a href="coach-bmi.html">📏 BMI</a>
+            <a href="coach-schedule.html">📅 Schedule</a>
+            <a href="coach-invite.html" class="active">✉️ Invite</a>
+            <a href="coach-enquiries.html">📞 Enquiries</a>
+            <a href="coach-students.html">🎓 Students</a>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+        
+        <h1>✉️ Invite Students to Batch</h1>
+        
+        <div class="form-card">
+            <h2 style="margin-bottom: 20px;">Send New Invitation</h2>
+            <form id="inviteForm">
+                <div class="form-group">
+                    <label>Select Your Batch *</label>
+                    <select id="batchSelect" required>
+                        <option value="">-- Select Batch --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Student Email *</label>
+                    <input type="email" id="studentEmail" required placeholder="student@example.com">
+                </div>
+                <div class="form-group">
+                    <label>Student Phone *</label>
+                    <input type="tel" id="studentPhone" required placeholder="1234567890">
+                </div>
+                <button type="submit" class="btn">Send Invitation</button>
+            </form>
+        </div>
+        
+        <h2>📋 Sent Invitations</h2>
+        <table id="invitationsTable">
+            <thead>
+                <tr>
+                    <th>Student Email</th>
+                    <th>Student Phone</th>
+                    <th>Batch</th>
+                    <th>Status</th>
+                    <th>Sent On</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        let currentCoach = null;
+
+        const loggedInCoach = sessionStorage.getItem('loggedInCoach');
+        if (!loggedInCoach) {
+            window.location.href = 'coach.html';
+        } else {
+            currentCoach = JSON.parse(loggedInCoach);
+            loadBatches();
+            loadInvitations();
+        }
+
+        async function loadBatches() {
+            try {
+                const response = await fetch(`${API_URL}/batches/coach/${currentCoach.id}`);
+                const batches = await response.json();
+                
+                const select = document.getElementById('batchSelect');
+                select.innerHTML = '<option value="">-- Select Batch --</option>';
+                batches.forEach(batch => {
+                    const option = document.createElement('option');
+                    option.value = batch.id;
+                    option.textContent = batch.batch_name;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading batches:', error);
+            }
+        }
+
+        document.getElementById('inviteForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const invitationData = {
+                coach_id: currentCoach.id,
+                coach_name: currentCoach.name,
+                student_email: document.getElementById('studentEmail').value,
+                student_phone: document.getElementById('studentPhone').value,
+                batch_id: parseInt(document.getElementById('batchSelect').value)
+            };
+
+            try {
+                const response = await fetch(`${API_URL}/invitations/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(invitationData)
+                });
+
+                if (response.ok) {
+                    alert('Invitation sent successfully! Student will receive it in their portal.');
+                    document.getElementById('inviteForm').reset();
+                    loadInvitations();
+                } else {
+                    alert('Failed to send invitation');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        });
+
+        async function loadInvitations() {
+            try {
+                const response = await fetch(`${API_URL}/invitations/coach/${currentCoach.id}`);
+                const invitations = await response.json();
+                
+                const [batchesRes] = await Promise.all([
+                    fetch(`${API_URL}/batches/coach/${currentCoach.id}`)
+                ]);
+                const batches = await batchesRes.json();
+                
+                const tbody = document.querySelector('#invitationsTable tbody');
+                
+                if (invitations.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #999;">No invitations sent yet</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = invitations.reverse().map(inv => {
+                    const batch = batches.find(b => b.id === inv.batch_id);
+                    return `
+                        <tr>
+                            <td>${inv.student_email}</td>
+                            <td>${inv.student_phone}</td>
+                            <td>${batch ? batch.batch_name : 'N/A'}</td>
+                            <td><span class="status-${inv.status}">${inv.status.toUpperCase()}</span></td>
+                            <td>${formatDateTime(inv.created_at)}</td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Error loading invitations:', error);
+            }
+        }
+
+        function formatDateTime(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        }
+
+        function logout() {
+            sessionStorage.removeItem('loggedInCoach');
+            window.location.href = 'coach.html';
+        }
+
+        setInterval(loadInvitations, 5000);
+    </script>
+</body>
+</html>

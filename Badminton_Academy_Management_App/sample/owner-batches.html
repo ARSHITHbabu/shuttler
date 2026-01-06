@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Batch Management - Owner</title>
+    <link rel="stylesheet" href="owner-styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="owner-dashboard.html">📊 Dashboard</a>
+            <a href="owner.html">👨‍🏫 Coaches</a>
+            <a href="owner-batches.html" class="active">📚 Batches</a>
+            <a href="owner-students.html">🎓 Students</a>
+            <a href="owner-attendance.html">📋 Attendance</a>
+            <a href="owner-coach-attendance.html">👔 Coach Attendance</a>
+            <a href="owner-fees.html">💰 Fees</a>
+            <a href="owner-performance.html">⭐ Performance</a>
+            <a href="owner-bmi.html">📏 BMI</a>
+            <a href="owner-schedule.html">📅 Schedule</a>
+            <a href="owner-enquiries.html">📞 Enquiries</a>
+            <a href="owner-analytics.html">📈 Analytics</a>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+        
+        <div class="header">
+            <h1>📚 Batch Management</h1>
+            <button class="add-btn" onclick="openModal()">+ Add New Batch</button>
+        </div>
+
+        <div class="batches-grid" id="batchesList"></div>
+    </div>
+
+    <!-- Add Batch Modal -->
+    <div id="batchModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2>Add New Batch</h2>
+            
+            <form id="addBatchForm">
+                <div class="form-group">
+                    <label for="batchName">Batch Name *</label>
+                    <input type="text" id="batchName" required placeholder="e.g., Advanced Morning Batch">
+                </div>
+                
+                <div class="form-group">
+                    <label for="capacity">Capacity (Number of Students) *</label>
+                    <input type="number" id="capacity" required min="1" placeholder="e.g., 20">
+                </div>
+                
+                <div class="form-group">
+                    <label for="fees">Fees *</label>
+                    <input type="text" id="fees" required placeholder="e.g., ₹5000/month">
+                </div>
+                
+                <div class="form-group">
+                    <label for="startDate">📅 Start Date *</label>
+                    <input type="date" id="startDate" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="period">Period *</label>
+                    <select id="period" required>
+                        <option value="">Select Period</option>
+                        <option value="Morning">Morning</option>
+                        <option value="Evening">Evening</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="timing">Timing *</label>
+                    <input type="text" id="timing" required placeholder="e.g., 6:00 AM - 7:00 AM">
+                </div>
+                
+                <div class="form-group">
+                    <label for="location">Location</label>
+                    <input type="text" id="location" placeholder="e.g., Court 1">
+                </div>
+                
+                <div class="form-group">
+                    <label for="assignedCoach">Assign Coach (Optional)</label>
+                    <select id="assignedCoach">
+                        <option value="">-- No Coach Assigned --</option>
+                    </select>
+                </div>
+                
+                <button type="submit" style="width: 100%;">Create Batch</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Coach Modal -->
+    <div id="editCoachModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeEditCoachModal()">&times;</span>
+            <h2>Edit Assigned Coach</h2>
+            
+            <form id="editCoachForm">
+                <input type="hidden" id="editBatchId">
+                
+                <div class="form-group">
+                    <label for="editCoach">Select Coach *</label>
+                    <select id="editCoach" required>
+                        <option value="">-- Select Coach --</option>
+                    </select>
+                </div>
+                
+                <button type="submit" style="width: 100%;">Update Coach</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Assign Students Modal -->
+    <div id="assignStudentsModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <span class="close" onclick="closeAssignStudentsModal()">&times;</span>
+            <h2 id="assignModalTitle">Manage Students</h2>
+            
+            <input type="hidden" id="assignBatchId">
+            
+            <div style="margin-bottom: 20px;">
+                <h3>Currently Assigned Students</h3>
+                <div id="assignedStudentsList" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.05);">
+                    <!-- Assigned students will be listed here -->
+                </div>
+            </div>
+            
+            <div>
+                <h3>Available Students</h3>
+                <div id="availableStudentsList" style="max-height: 300px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.05);">
+                    <!-- Available students will be listed here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+
+        loadBatches();
+        loadCoaches();
+
+        function openModal() {
+            document.getElementById('batchModal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('batchModal').style.display = 'none';
+            document.getElementById('addBatchForm').reset();
+        }
+
+        function openEditCoachModal(batchId, currentCoachId) {
+            document.getElementById('editBatchId').value = batchId;
+            
+            // Set current coach as selected
+            const coachSelect = document.getElementById('editCoach');
+            coachSelect.value = currentCoachId || '';
+            
+            document.getElementById('editCoachModal').style.display = 'block';
+        }
+
+        function closeEditCoachModal() {
+            document.getElementById('editCoachModal').style.display = 'none';
+            document.getElementById('editCoachForm').reset();
+        }
+
+        async function openAssignStudentsModal(batchId, batchName) {
+            document.getElementById('assignBatchId').value = batchId;
+            document.getElementById('assignModalTitle').textContent = `Manage Students - ${batchName}`;
+            
+            await loadAssignedStudents(batchId);
+            await loadAvailableStudents(batchId);
+            
+            document.getElementById('assignStudentsModal').style.display = 'block';
+        }
+
+        function closeAssignStudentsModal() {
+            document.getElementById('assignStudentsModal').style.display = 'none';
+        }
+
+        function logout() {
+            window.location.href = 'owner.html';
+        }
+
+        window.onclick = function(event) {
+            const batchModal = document.getElementById('batchModal');
+            const editCoachModal = document.getElementById('editCoachModal');
+            const assignStudentsModal = document.getElementById('assignStudentsModal');
+            
+            if (event.target == batchModal) {
+                closeModal();
+            } else if (event.target == editCoachModal) {
+                closeEditCoachModal();
+            } else if (event.target == assignStudentsModal) {
+                closeAssignStudentsModal();
+            }
+        }
+
+        async function loadCoaches() {
+            try {
+                const response = await fetch(`${API_URL}/coaches/`);
+                const coaches = await response.json();
+                
+                // Populate both coach selects
+                const addSelect = document.getElementById('assignedCoach');
+                const editSelect = document.getElementById('editCoach');
+                
+                coaches.forEach(coach => {
+                    // For add modal
+                    const addOption = document.createElement('option');
+                    addOption.value = coach.id;
+                    addOption.textContent = coach.name;
+                    addOption.dataset.coachName = coach.name;
+                    addSelect.appendChild(addOption);
+                    
+                    // For edit modal
+                    const editOption = document.createElement('option');
+                    editOption.value = coach.id;
+                    editOption.textContent = coach.name;
+                    editOption.dataset.coachName = coach.name;
+                    editSelect.appendChild(editOption);
+                });
+            } catch (error) {
+                console.error('Error loading coaches:', error);
+            }
+        }
+
+        document.getElementById('addBatchForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const coachSelect = document.getElementById('assignedCoach');
+            const selectedOption = coachSelect.options[coachSelect.selectedIndex];
+            
+            const batchData = {
+                batch_name: document.getElementById('batchName').value,
+                capacity: parseInt(document.getElementById('capacity').value),
+                fees: document.getElementById('fees').value,
+                start_date: document.getElementById('startDate').value,
+                period: document.getElementById('period').value,
+                timing: document.getElementById('timing').value,
+                location: document.getElementById('location').value || null,
+                created_by: "Owner",
+                assigned_coach_id: coachSelect.value ? parseInt(coachSelect.value) : null,
+                assigned_coach_name: coachSelect.value ? selectedOption.dataset.coachName : null
+            };
+
+            try {
+                const response = await fetch(`${API_URL}/batches/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(batchData)
+                });
+
+                if (response.ok) {
+                    alert('Batch created successfully!');
+                    closeModal();
+                    loadBatches();
+                } else {
+                    const errorData = await response.json();
+                    alert('Failed to create batch: ' + (errorData.detail || JSON.stringify(errorData)));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        });
+
+        document.getElementById('editCoachForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const batchId = document.getElementById('editBatchId').value;
+            const coachSelect = document.getElementById('editCoach');
+            const selectedOption = coachSelect.options[coachSelect.selectedIndex];
+            
+            const updateData = {
+                assigned_coach_id: coachSelect.value ? parseInt(coachSelect.value) : null,
+                assigned_coach_name: coachSelect.value ? selectedOption.dataset.coachName : null
+            };
+
+            try {
+                const response = await fetch(`${API_URL}/batches/${batchId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(updateData)
+                });
+
+                if (response.ok) {
+                    alert('Coach updated successfully!');
+                    closeEditCoachModal();
+                    loadBatches();
+                } else {
+                    const errorData = await response.json();
+                    alert('Failed to update coach: ' + (errorData.detail || JSON.stringify(errorData)));
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        });
+
+        async function loadAssignedStudents(batchId) {
+            try {
+                const response = await fetch(`${API_URL}/batches/${batchId}/students`);
+                const students = await response.json();
+                
+                const container = document.getElementById('assignedStudentsList');
+                
+                if (students.length === 0) {
+                    container.innerHTML = '<p style="text-align: center; color: #999;">No students assigned yet</p>';
+                    return;
+                }
+                
+                container.innerHTML = students.map(student => `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #333; background: rgba(255,255,255,0.02); border-radius: 4px; margin-bottom: 5px;">
+                        <div>
+                            <strong>${student.name}</strong>
+                            <div style="font-size: 12px; color: #999;">
+                                ${student.email} | ${student.phone}
+                            </div>
+                        </div>
+                        <button onclick="removeStudent(${batchId}, ${student.id}, '${student.name}')" style="background: #dc3545; padding: 5px 15px; border: none; border-radius: 4px; color: white; cursor: pointer;">
+                            Remove
+                        </button>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading assigned students:', error);
+            }
+        }
+
+        async function loadAvailableStudents(batchId) {
+            try {
+                const response = await fetch(`${API_URL}/batches/${batchId}/available-students`);
+                const students = await response.json();
+                
+                const container = document.getElementById('availableStudentsList');
+                
+                if (students.length === 0) {
+                    container.innerHTML = '<p style="text-align: center; color: #999;">No available students to assign</p>';
+                    return;
+                }
+                
+                container.innerHTML = students.map(student => `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #333; background: rgba(255,255,255,0.02); border-radius: 4px; margin-bottom: 5px;">
+                        <div>
+                            <strong>${student.name}</strong>
+                            <div style="font-size: 12px; color: #999;">
+                                ${student.email} | ${student.phone}
+                            </div>
+                        </div>
+                        <button onclick="assignStudent(${batchId}, ${student.id}, '${student.name}')" style="background: #28a745; padding: 5px 15px; border: none; border-radius: 4px; color: white; cursor: pointer;">
+                            Assign
+                        </button>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading available students:', error);
+            }
+        }
+
+        async function assignStudent(batchId, studentId, studentName) {
+            if (!confirm(`Assign ${studentName} to this batch?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/batches/${batchId}/students/${studentId}`, {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    alert('Student assigned successfully!');
+                    await loadAssignedStudents(batchId);
+                    await loadAvailableStudents(batchId);
+                } else {
+                    const errorData = await response.json();
+                    alert('Failed to assign student: ' + errorData.detail);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        async function removeStudent(batchId, studentId, studentName) {
+            if (!confirm(`Remove ${studentName} from this batch?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/batches/${batchId}/students/${studentId}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    alert('Student removed successfully!');
+                    await loadAssignedStudents(batchId);
+                    await loadAvailableStudents(batchId);
+                } else {
+                    const errorData = await response.json();
+                    alert('Failed to remove student: ' + errorData.detail);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        async function loadBatches() {
+            try {
+                const response = await fetch(`${API_URL}/batches/`);
+                const batches = await response.json();
+                
+                const batchesList = document.getElementById('batchesList');
+                
+                if (batches.length === 0) {
+                    batchesList.innerHTML = '<div class="empty-state">📚 No batches created yet. Click "Add New Batch" to get started!</div>';
+                    return;
+                }
+
+                batchesList.innerHTML = batches.map(batch => `
+                    <div class="batch-card">
+                        <div style="float: right;">
+                            <button class="delete-btn" onclick="deleteBatch(${batch.id})" style="margin-left: 5px;">Delete</button>
+                        </div>
+                        <div class="batch-name">📚 ${batch.batch_name}</div>
+                        <div class="batch-info">
+                            <div class="info-item">
+                                <strong>👥 Capacity:</strong> ${batch.capacity}
+                            </div>
+                            <div class="info-item">
+                                <strong>💰 Fees:</strong> ${batch.fees}
+                            </div>
+                            <div class="info-item">
+                                <strong>📅 Start Date:</strong> ${formatDate(batch.start_date)}
+                            </div>
+                            <div class="info-item">
+                                <strong>⏰ Timing:</strong> ${batch.timing}
+                            </div>
+                            <div class="info-item">
+                                <strong>${batch.period === 'Morning' ? '🌅' : '🌆'} Period:</strong> ${batch.period}
+                            </div>
+                            <div class="info-item">
+                                <strong>📍 Location:</strong> ${batch.location || 'N/A'}
+                            </div>
+                            <div class="info-item">
+                                <strong>👨‍🏫 Coach:</strong> ${batch.assigned_coach_name || 'Not Assigned'}
+                            </div>
+                        </div>
+                        <div class="added-by">Created by: ${batch.created_by}</div>
+                        <div style="margin-top: 15px; display: flex; gap: 10px;">
+                            <button onclick="openEditCoachModal(${batch.id}, ${batch.assigned_coach_id || 'null'})" style="flex: 1; padding: 10px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; border-radius: 8px; color: white; cursor: pointer; font-weight: bold;">
+                                Edit Coach
+                            </button>
+                            <button onclick="openAssignStudentsModal(${batch.id}, '${batch.batch_name}')" style="flex: 1; padding: 10px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); border: none; border-radius: 8px; color: white; cursor: pointer; font-weight: bold;">
+                                Manage Students
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading batches:', error);
+            }
+        }
+
+        async function deleteBatch(id) {
+            if (!confirm('Are you sure you want to delete this batch?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/batches/${id}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    alert('Batch deleted successfully!');
+                    loadBatches();
+                } else {
+                    alert('Failed to delete batch');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+        }
+
+        setInterval(loadBatches, 30000);
+    </script>
+</body>
+</html>

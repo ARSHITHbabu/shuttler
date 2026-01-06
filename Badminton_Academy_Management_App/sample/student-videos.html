@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Learning Videos - Student</title>
+    <link rel="stylesheet" href="student-styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="student-dashboard.html">📊 Dashboard</a>
+            <a href="student-invitations.html">📨 Invitations</a>
+            <a href="student-batches.html">📚 Batches</a>
+            <a href="student-attendance.html">📋 Attendance</a>
+            <a href="student-fees.html">💰 Fees</a>
+            <a href="student-performance.html">⭐ Performance</a>
+            <a href="student-bmi.html">📏 BMI</a>
+            <a href="student-schedule.html">📅 Schedule</a>
+            <a href="student-tournaments.html">🏆 Tournaments</a>
+            <a href="student-videos.html" class="active">🎥 Videos</a>
+            <a href="student-profile.html">👤 Profile</a>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+        
+        <h1>🎥 Learning Videos</h1>
+        
+        <div class="video-grid" id="dataContainer"></div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        let currentStudent = null;
+
+        const loggedInStudent = sessionStorage.getItem('loggedInStudent');
+        if (!loggedInStudent) {
+            window.location.href = 'student.html';
+        } else {
+            currentStudent = JSON.parse(loggedInStudent);
+            loadData();
+        }
+
+        async function loadData() {
+            try {
+                const response = await fetch(`${API_URL}/videos/`);
+                const videos = await response.json();
+                
+                const container = document.getElementById('dataContainer');
+                
+                if (videos.length === 0) {
+                    container.innerHTML = '<div class="empty-state">🎥 No learning videos available yet</div>';
+                    return;
+                }
+
+                container.innerHTML = videos.map(video => `
+                    <div class="video-card">
+                        <div class="video-thumbnail">
+                            <div class="play-icon">▶️</div>
+                            ${video.duration ? `
+                                <div class="video-duration">${video.duration}</div>
+                            ` : ''}
+                        </div>
+                        <div class="video-content">
+                            ${video.category ? `
+                                <span class="category-badge">${video.category}</span>
+                            ` : ''}
+                            <div class="video-title">${video.title}</div>
+                            ${video.description ? `
+                                <div class="video-description">${video.description}</div>
+                            ` : ''}
+                            <div class="video-meta">
+                                <span>👁️ ${video.views || 0} views</span>
+                                ${video.uploaded_date ? `
+                                    <span>📅 ${formatDate(video.uploaded_date)}</span>
+                                ` : ''}
+                            </div>
+                            ${video.url ? `
+                                <a href="${video.url}" target="_blank" class="video-link">
+                                    ▶️ Watch Video
+                                </a>
+                            ` : ''}
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('dataContainer').innerHTML = '<div class="empty-state">⚠️ Error loading videos</div>';
+            }
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric' 
+            });
+        }
+
+        function logout() {
+            sessionStorage.removeItem('loggedInStudent');
+            window.location.href = 'student.html';
+        }
+
+        setInterval(loadData, 30000);
+    </script>
+</body>
+</html>
