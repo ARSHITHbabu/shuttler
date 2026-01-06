@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Analytics Dashboard - Owner</title>
+    <link rel="stylesheet" href="owner-styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="owner-dashboard.html" >📊 Dashboard</a>
+            <a href="owner.html" >👨‍🏫 Coaches</a>
+            <a href="owner-batches.html" >📚 Batches</a>
+            <a href="owner-students.html" >🎓 Students</a>
+            <a href="owner-attendance.html" >📋 Attendance</a>
+            <a href="owner-coach-attendance.html" >👔 Coach Attendance</a>
+            <a href="owner-fees.html" >💰 Fees</a>
+            <a href="owner-performance.html" >⭐ Performance</a>
+            <a href="owner-bmi.html" >📏 BMI</a>
+            <a href="owner-schedule.html" >📅 Schedule</a>
+            <a href="owner-enquiries.html" >📞 Enquiries</a>
+            <a href="owner-analytics.html" class="active">📈 Analytics</a>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+        <h1>📈 Business Analytics</h1>
+        <div class="stats-grid" id="statsContainer"></div>
+        <h2>💰 Financial Overview</h2>
+        <div class="info-grid" id="financialContainer"></div>
+        <h2>📊 Attendance Analysis</h2>
+        <div class="info-grid" id="attendanceContainer"></div>
+        <h2>👨‍🏫 Top Performing Coaches</h2>
+        <div id="topCoachesContainer"></div>
+    </div>
+    <script>
+        const API_URL = 'http://localhost:8000';
+        loadAnalytics();
+        async function loadAnalytics() {
+            try {
+                const response = await fetch(`${API_URL}/analytics/dashboard`);
+                const data = await response.json();
+                document.getElementById('statsContainer').innerHTML = `
+                    <div class="stat-card"><div class="stat-value">${data.total_coaches}</div><div class="stat-label">Total Coaches</div></div>
+                    <div class="stat-card"><div class="stat-value">${data.total_batches}</div><div class="stat-label">Total Batches</div></div>
+                    <div class="stat-card"><div class="stat-value">${data.total_students}</div><div class="stat-label">Total Students</div></div>
+                    <div class="stat-card"><div class="stat-value">${data.avg_attendance_rate}%</div><div class="stat-label">Avg Attendance Rate</div></div>
+                `;
+                document.getElementById('financialContainer').innerHTML = `
+                    <div class="info-card">
+                        <h3 style="margin-bottom: 15px;">💵 Total Revenue</h3>
+                        <div style="font-size: 32px; font-weight: bold; color: #667eea;">₹${data.total_fees_collected.toLocaleString()}</div>
+                    </div>
+                    <div class="info-card">
+                        <h3 style="margin-bottom: 15px;">⏳ Pending Fees</h3>
+                        <div style="font-size: 32px; font-weight: bold; color: #f39c12;">₹${data.total_fees_pending.toLocaleString()}</div>
+                    </div>
+                    <div class="info-card">
+                        <h3 style="margin-bottom: 15px;">🎯 Collection Rate</h3>
+                        <div style="font-size: 32px; font-weight: bold; color: #28a745;">${((data.total_fees_collected / (data.total_fees_collected + data.total_fees_pending)) * 100).toFixed(1)}%</div>
+                    </div>
+                `;
+                document.getElementById('attendanceContainer').innerHTML = `
+                    <div class="info-card">
+                        <h3 style="margin-bottom: 15px;">📋 Total Classes Held</h3>
+                        <div style="font-size: 32px; font-weight: bold; color: #667eea;">${data.total_classes_conducted || 0}</div>
+                    </div>
+                    <div class="info-card">
+                        <h3 style="margin-bottom: 15px;">✅ Students Present</h3>
+                        <div style="font-size: 32px; font-weight: bold; color: #28a745;">${data.total_present || 0}</div>
+                    </div>
+                    <div class="info-card">
+                        <h3 style="margin-bottom: 15px;">❌ Students Absent</h3>
+                        <div style="font-size: 32px; font-weight: bold; color: #dc3545;">${data.total_absent || 0}</div>
+                    </div>
+                `;
+                // Load coach performance
+                const coachesRes = await fetch(`${API_URL}/coaches/`);
+                const coaches = await coachesRes.json();
+                const batchesRes = await fetch(`${API_URL}/batches/`);
+                const batches = await batchesRes.json();
+                const coachBatchCount = {};
+                batches.forEach(b => {
+                    if (b.assigned_coach_id) {
+                        coachBatchCount[b.assigned_coach_id] = (coachBatchCount[b.assigned_coach_id] || 0) + 1;
+                    }
+                });
+                const topCoaches = coaches.map(c => ({
+                    name: c.name,
+                    batches: coachBatchCount[c.id] || 0,
+                    specialization: c.specialization,
+                    experience: c.experience
+                })).sort((a, b) => b.batches - a.batches).slice(0, 5);
+                document.getElementById('topCoachesContainer').innerHTML = '<table><thead><tr><th>Coach Name</th><th>Batches Assigned</th><th>Specialization</th><th>Experience</th></tr></thead><tbody>' +
+                topCoaches.map(c => `
+                    <tr>
+                        <td><strong>${c.name}</strong></td>
+                        <td>${c.batches}</td>
+                        <td>${c.specialization || '-'}</td>
+                        <td>${c.experience || '-'}</td>
+                    </tr>
+                `).join('') + '</tbody></table>';
+            } catch (error) { console.error('Error loading analytics:', error); }
+        }
+        function logout() { window.location.href = 'owner.html'; }
+        setInterval(loadAnalytics, 30000);
+    </script>
+</body>
+</html>

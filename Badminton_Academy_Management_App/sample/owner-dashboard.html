@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Owner Dashboard</title>
+    <link rel="stylesheet" href="owner-styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="owner-dashboard.html" class="active">📊 Dashboard</a>
+            <a href="owner.html" >👨‍🏫 Coaches</a>
+            <a href="owner-batches.html" >📚 Batches</a>
+            <a href="owner-students.html" >🎓 Students</a>
+            <a href="owner-attendance.html" >📋 Attendance</a>
+            <a href="owner-coach-attendance.html" >👔 Coach Attendance</a>
+            <a href="owner-fees.html" >💰 Fees</a>
+            <a href="owner-performance.html" >⭐ Performance</a>
+            <a href="owner-bmi.html" >📏 BMI</a>
+            <a href="owner-schedule.html" >📅 Schedule</a>
+            <a href="owner-enquiries.html" >📞 Enquiries</a>
+            <a href="owner-analytics.html" >📈 Analytics</a>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+
+        <h1>📊 Owner Dashboard</h1>
+
+        <!-- Stats Cards -->
+        <div class="stats-grid" id="statsGrid"></div>
+
+        <!-- Recent Enquiries -->
+        <div class="section">
+            <div class="section-title">📞 Recent Enquiries</div>
+            <table id="enquiriesTable">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Phone</th>
+                        <th>Email</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <!-- Pending Fees -->
+        <div class="section">
+            <div class="section-title">💰 Pending Fees</div>
+            <table id="feesTable">
+                <thead>
+                    <tr>
+                        <th>Student</th>
+                        <th>Batch</th>
+                        <th>Amount</th>
+                        <th>Due Date</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+
+        // Load dashboard data
+        loadDashboard();
+
+        async function loadDashboard() {
+            await Promise.all([
+                loadAnalytics(),
+                loadRecentEnquiries(),
+                loadPendingFees()
+            ]);
+        }
+
+        async function loadAnalytics() {
+            try {
+                const response = await fetch(`${API_URL}/analytics/dashboard`);
+                const data = await response.json();
+
+                const statsGrid = document.getElementById('statsGrid');
+                statsGrid.innerHTML = `
+                    <div class="stat-card">
+                        <div class="stat-value">${data.total_students}</div>
+                        <div class="stat-label">Total Students</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${data.total_batches}</div>
+                        <div class="stat-label">Total Batches</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${data.total_coaches}</div>
+                        <div class="stat-label">Total Coaches</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">₹${data.total_revenue.toFixed(2)}</div>
+                        <div class="stat-label">Total Revenue</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">₹${data.pending_fees.toFixed(2)}</div>
+                        <div class="stat-label">Pending Fees</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${data.present_today}</div>
+                        <div class="stat-label">Present Today</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${data.new_enquiries}</div>
+                        <div class="stat-label">New Enquiries</div>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error loading analytics:', error);
+            }
+        }
+
+        async function loadRecentEnquiries() {
+            try {
+                const response = await fetch(`${API_URL}/enquiries/`);
+                const enquiries = await response.json();
+
+                const tbody = document.querySelector('#enquiriesTable tbody');
+                
+                if (enquiries.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #999;">No enquiries yet</td></tr>';
+                    return;
+                }
+
+                // Show only recent 5
+                const recentEnquiries = enquiries.slice(-5).reverse();
+                
+                tbody.innerHTML = recentEnquiries.map(enq => `
+                    <tr>
+                        <td>${enq.name}</td>
+                        <td>${enq.phone}</td>
+                        <td>${enq.email || 'N/A'}</td>
+                        <td><span class="status-badge status-${enq.status.toLowerCase()}">${enq.status}</span></td>
+                        <td>${formatDateTime(enq.created_at)}</td>
+                        <td>
+                            <button class="action-btn btn-primary" onclick="window.location.href='owner-enquiries.html'">View</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading enquiries:', error);
+            }
+        }
+
+        async function loadPendingFees() {
+            try {
+                // Get all students and fees
+                const [studentsRes, batchesRes] = await Promise.all([
+                    fetch(`${API_URL}/students/`),
+                    fetch(`${API_URL}/batches/`)
+                ]);
+                
+                const students = await studentsRes.json();
+                const batches = await batchesRes.json();
+
+                // Get all fees for all students
+                const allFees = [];
+                for (const student of students) {
+                    const feesRes = await fetch(`${API_URL}/fees/student/${student.id}`);
+                    const fees = await feesRes.json();
+                    allFees.push(...fees.map(f => ({...f, studentName: student.name})));
+                }
+
+                const pendingFees = allFees.filter(f => f.status === 'Pending' || f.status === 'Overdue');
+
+                const tbody = document.querySelector('#feesTable tbody');
+                
+                if (pendingFees.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #999;">No pending fees</td></tr>';
+                    return;
+                }
+
+                // Show only first 10
+                const displayFees = pendingFees.slice(0, 10);
+                
+                tbody.innerHTML = displayFees.map(fee => {
+                    const batch = batches.find(b => b.id === fee.batch_id);
+                    return `
+                        <tr>
+                            <td>${fee.studentName}</td>
+                            <td>${batch ? batch.batch_name : 'N/A'}</td>
+                            <td>₹${fee.amount.toFixed(2)}</td>
+                            <td>${formatDate(fee.due_date)}</td>
+                            <td><span class="status-badge status-${fee.status.toLowerCase()}">${fee.status}</span></td>
+                            <td>
+                                <button class="action-btn btn-primary" onclick="window.location.href='owner-fees.html'">Manage</button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Error loading fees:', error);
+            }
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        }
+
+        function formatDateTime(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        }
+
+        // Auto-refresh every 30 seconds
+        setInterval(loadDashboard, 30000);
+    </script>
+</body>
+</html>

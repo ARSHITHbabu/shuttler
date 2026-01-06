@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coach Dashboard - Badminton Academy</title>
+    <link rel="stylesheet" href="coach-styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="coach-dashboard.html" class="active">📊 Dashboard</a>
+            <a href="coach-batches.html">📚 Batches</a>
+            <a href="coach-attendance.html">📋 Attendance</a>
+            <a href="coach-fees.html">💰 Fees</a>
+            <a href="coach-performance.html">⭐ Performance</a>
+            <a href="coach-bmi.html">📏 BMI</a>
+            <a href="coach-schedule.html">📅 Schedule</a>
+            <a href="coach-invite.html">✉️ Invite</a>
+            <a href="coach-enquiries.html">📞 Enquiries</a>
+            <a href="coach-students.html">🎓 Students</a>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+        
+        <h1>📊 Coach Dashboard</h1>
+        
+        <div id="coachInfo" class="coach-info-bar"></div>
+        
+        <div class="stats-grid" id="statsGrid"></div>
+        
+        <h2 style="margin-top: 30px; margin-bottom: 15px; color: #333;">⚡ Quick Actions</h2>
+        <div class="quick-actions">
+            <div class="action-card" onclick="window.location.href='coach-attendance.html'">
+                <div style="font-size: 40px;">📋</div>
+                <div style="margin-top: 10px; font-weight: bold;">Mark Attendance</div>
+            </div>
+            <div class="action-card" onclick="window.location.href='coach-invite.html'">
+                <div style="font-size: 40px;">✉️</div>
+                <div style="margin-top: 10px; font-weight: bold;">Invite Student</div>
+            </div>
+            <div class="action-card" onclick="window.location.href='coach-fees.html'">
+                <div style="font-size: 40px;">💰</div>
+                <div style="margin-top: 10px; font-weight: bold;">Manage Fees</div>
+            </div>
+            <div class="action-card" onclick="window.location.href='coach-performance.html'">
+                <div style="font-size: 40px;">⭐</div>
+                <div style="margin-top: 10px; font-weight: bold;">Record Performance</div>
+            </div>
+        </div>
+        
+        <h2 style="margin-top: 30px; margin-bottom: 15px; color: #333;">📚 My Batches</h2>
+        <div id="batchesList"></div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        let currentCoach = null;
+
+        const loggedInCoach = sessionStorage.getItem('loggedInCoach');
+        if (!loggedInCoach) {
+            window.location.href = 'coach.html';
+        } else {
+            currentCoach = JSON.parse(loggedInCoach);
+            loadDashboard();
+        }
+
+        async function loadDashboard() {
+            document.getElementById('coachInfo').innerHTML = `
+                <strong>Welcome, ${currentCoach.name}!</strong><br>
+                📧 ${currentCoach.email} | 📱 ${currentCoach.phone}
+            `;
+            
+            await Promise.all([loadStats(), loadBatches()]);
+        }
+
+        async function loadStats() {
+            try {
+                const response = await fetch(`${API_URL}/analytics/coach/${currentCoach.id}`);
+                const data = await response.json();
+
+                document.getElementById('statsGrid').innerHTML = `
+                    <div class="stat-card">
+                        <div class="stat-value">${data.total_batches}</div>
+                        <div class="stat-label">My Batches</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${data.total_students}</div>
+                        <div class="stat-label">Total Students</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${data.attendance_percentage}%</div>
+                        <div class="stat-label">Attendance Rate</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">₹${data.pending_fees.toFixed(2)}</div>
+                        <div class="stat-label">Pending Fees</div>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        async function loadBatches() {
+            try {
+                const response = await fetch(`${API_URL}/batches/coach/${currentCoach.id}`);
+                const batches = await response.json();
+                
+                const batchesList = document.getElementById('batchesList');
+                
+                if (batches.length === 0) {
+                    batchesList.innerHTML = '<p style="color: #999; text-align: center; padding: 40px;">No batches assigned yet</p>';
+                    return;
+                }
+
+                batchesList.innerHTML = '<table><thead><tr><th>Batch Name</th><th>Timing</th><th>Location</th><th>Capacity</th><th>Actions</th></tr></thead><tbody>' +
+                batches.map(batch => `
+                    <tr>
+                        <td><strong>${batch.batch_name}</strong></td>
+                        <td>${batch.timing} (${batch.period})</td>
+                        <td>${batch.location || 'N/A'}</td>
+                        <td>${batch.capacity}</td>
+                        <td>
+                            <button class="btn" onclick="window.location.href='coach-attendance.html?batch=${batch.id}'">Mark Attendance</button>
+                        </td>
+                    </tr>
+                `).join('') + '</tbody></table>';
+            } catch (error) {
+                console.error('Error loading batches:', error);
+            }
+        }
+
+        function logout() {
+            sessionStorage.removeItem('loggedInCoach');
+            window.location.href = 'coach.html';
+        }
+
+        setInterval(() => {
+            loadStats();
+            loadBatches();
+        }, 30000);
+    </script>
+</body>
+</html>

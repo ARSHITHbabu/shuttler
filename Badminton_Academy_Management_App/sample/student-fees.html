@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fee Status - Student</title>
+    <link rel="stylesheet" href="student-styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="student-dashboard.html">📊 Dashboard</a>
+            <a href="student-invitations.html">📨 Invitations</a>
+            <a href="student-batches.html">📚 Batches</a>
+            <a href="student-attendance.html">📋 Attendance</a>
+            <a href="student-fees.html" class="active">💰 Fees</a>
+            <a href="student-performance.html">⭐ Performance</a>
+            <a href="student-bmi.html">📏 BMI</a>
+            <a href="student-schedule.html">📅 Schedule</a>
+            <a href="student-tournaments.html">🏆 Tournaments</a>
+            <a href="student-videos.html">🎥 Videos</a>
+            <a href="student-profile.html">👤 Profile</a>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+        
+        <h1>💰 Fee Status</h1>
+        
+        <div class="stats-grid" id="statsContainer"></div>
+        
+        <div id="dataContainer"></div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        let currentStudent = null;
+
+        const loggedInStudent = sessionStorage.getItem('loggedInStudent');
+        if (!loggedInStudent) {
+            window.location.href = 'student.html';
+        } else {
+            currentStudent = JSON.parse(loggedInStudent);
+            loadData();
+        }
+
+        async function loadData() {
+            try {
+                const response = await fetch(`${API_URL}/fees/student/${currentStudent.id}`);
+                const fees = await response.json();
+                
+                const container = document.getElementById('dataContainer');
+                const statsContainer = document.getElementById('statsContainer');
+                
+                if (fees.length === 0) {
+                    container.innerHTML = '<div class="empty-state">💰 No fee records yet</div>';
+                    statsContainer.innerHTML = '';
+                    return;
+                }
+
+                // Calculate stats
+                const totalFees = fees.reduce((sum, fee) => sum + fee.amount, 0);
+                const paidFees = fees.filter(f => f.status === 'Paid').reduce((sum, fee) => sum + fee.amount, 0);
+                const pendingFees = totalFees - paidFees;
+                const paidCount = fees.filter(f => f.status === 'Paid').length;
+
+                statsContainer.innerHTML = `
+                    <div class="stat-card">
+                        <div class="stat-value">₹${totalFees}</div>
+                        <div class="stat-label">Total Fees</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">₹${paidFees}</div>
+                        <div class="stat-label">Paid</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">₹${pendingFees}</div>
+                        <div class="stat-label">Pending</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value">${paidCount}/${fees.length}</div>
+                        <div class="stat-label">Payments</div>
+                    </div>
+                `;
+
+                container.innerHTML = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Amount</th>
+                                <th>Status</th>
+                                <th>Due Date</th>
+                                <th>Paid Date</th>
+                                <th>Payment Method</th>
+                                <th>Collected By</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${fees.map(fee => {
+                                const isOverdue = fee.status !== 'Paid' && new Date(fee.due_date) < new Date();
+                                const statusClass = fee.status === 'Paid' ? 'paid' : (isOverdue ? 'overdue' : 'pending');
+                                const statusText = fee.status === 'Paid' ? '✅ Paid' : (isOverdue ? '⚠️ Overdue' : '⏳ Pending');
+                                
+                                return `
+                                    <tr>
+                                        <td><strong>₹${fee.amount}</strong></td>
+                                        <td>
+                                            <span class="status-badge status-${statusClass}">
+                                                ${statusText}
+                                            </span>
+                                        </td>
+                                        <td>${formatDate(fee.due_date)}</td>
+                                        <td>${fee.paid_date ? formatDate(fee.paid_date) : '-'}</td>
+                                        <td>${fee.payment_method || '-'}</td>
+                                        <td>${fee.collected_by || '-'}</td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                `;
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('dataContainer').innerHTML = '<div class="empty-state">⚠️ Error loading fees</div>';
+            }
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return '-';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        }
+
+        function logout() {
+            sessionStorage.removeItem('loggedInStudent');
+            window.location.href = 'student.html';
+        }
+
+        setInterval(loadData, 30000);
+    </script>
+</body>
+</html>

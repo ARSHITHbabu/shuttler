@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>BMI Management - Owner</title>
+    <link rel="stylesheet" href="owner-styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="owner-dashboard.html">📊 Dashboard</a>
+            <a href="owner.html">👨‍🏫 Coaches</a>
+            <a href="owner-batches.html">📚 Batches</a>
+            <a href="owner-students.html">🎓 Students</a>
+            <a href="owner-attendance.html">📋 Attendance</a>
+            <a href="owner-coach-attendance.html">👔 Coach Attendance</a>
+            <a href="owner-fees.html">💰 Fees</a>
+            <a href="owner-performance.html">⭐ Performance</a>
+            <a href="owner-bmi.html" class="active">📏 BMI</a>
+            <a href="owner-schedule.html">📅 Schedule</a>
+            <a href="owner-enquiries.html">📞 Enquiries</a>
+            <a href="owner-analytics.html">📈 Analytics</a>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+
+        <div class="header">
+            <h1>📏 BMI Management</h1>
+            <button class="add-btn" onclick="openModal()">+ Add BMI Record</button>
+        </div>
+
+        <div id="bmiContainer"></div>
+    </div>
+
+    <!-- Add BMI Modal -->
+    <div id="bmiModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal()">&times;</span>
+            <h2>Calculate & Record BMI</h2>
+            
+            <form id="bmiForm">
+                <div class="form-group">
+                    <label for="batchSelect">Select Batch *</label>
+                    <select id="batchSelect" required>
+                        <option value="">-- Select Batch --</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="studentSelect">Select Student *</label>
+                    <select id="studentSelect" required>
+                        <option value="">-- Select Student --</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="height">Height (cm) *</label>
+                    <input type="number" id="height" step="0.1" required placeholder="e.g., 170">
+                </div>
+
+                <div class="form-group">
+                    <label for="weight">Weight (kg) *</label>
+                    <input type="number" id="weight" step="0.1" required placeholder="e.g., 65">
+                </div>
+
+                <button type="submit" style="width: 100%;">Calculate & Save BMI</button>
+            </form>
+
+            <div id="bmiResult" style="margin-top: 1.5rem;"></div>
+        </div>
+    </div>
+
+    <style>
+        .bmi-result {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            padding: 2rem;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .bmi-value {
+            font-size: 3rem;
+            font-weight: bold;
+            margin: 1rem 0;
+        }
+    </style>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+
+        loadBMIRecords();
+        loadBatches();
+
+        function openModal() {
+            document.getElementById('bmiModal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('bmiModal').style.display = 'none';
+            document.getElementById('bmiForm').reset();
+            document.getElementById('bmiResult').innerHTML = '';
+        }
+
+        async function loadBatches() {
+            try {
+                const response = await fetch(`${API_URL}/batches/`);
+                const batches = await response.json();
+                
+                const select = document.getElementById('batchSelect');
+                batches.forEach(batch => {
+                    const option = document.createElement('option');
+                    option.value = batch.id;
+                    option.textContent = batch.batch_name;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading batches:', error);
+            }
+        }
+
+        document.getElementById('batchSelect').addEventListener('change', async (e) => {
+            const batchId = e.target.value;
+            const studentSelect = document.getElementById('studentSelect');
+            studentSelect.innerHTML = '<option value="">-- Select Student --</option>';
+
+            if (batchId) {
+                try {
+                    const response = await fetch(`${API_URL}/batch-students/${batchId}`);
+                    const students = await response.json();
+                    
+                    students.forEach(student => {
+                        const option = document.createElement('option');
+                        option.value = student.id;
+                        option.textContent = student.name;
+                        studentSelect.appendChild(option);
+                    });
+                } catch (error) {
+                    console.error('Error loading students:', error);
+                }
+            }
+        });
+
+        document.getElementById('bmiForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const height = parseFloat(document.getElementById('height').value);
+            const weight = parseFloat(document.getElementById('weight').value);
+            const studentId = parseInt(document.getElementById('studentSelect').value);
+
+            const bmiData = {
+                student_id: studentId,
+                height: height,
+                weight: weight,
+                date: new Date().toISOString().split('T')[0],
+                recorded_by: 'Owner'
+            };
+
+            try {
+                const response = await fetch(`${API_URL}/bmi/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(bmiData)
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    displayBMIResult(result.bmi);
+                    alert('BMI recorded successfully!');
+                    setTimeout(() => {
+                        closeModal();
+                        loadBMIRecords();
+                    }, 2000);
+                } else {
+                    alert('Failed to record BMI');
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        });
+
+        function displayBMIResult(bmi) {
+            let category = '';
+            let color = '';
+            
+            if (bmi < 18.5) {
+                category = 'Underweight';
+                color = 'linear-gradient(135deg, #3b82f6, #2563eb)';
+            } else if (bmi < 25) {
+                category = 'Normal';
+                color = 'linear-gradient(135deg, #10b981, #059669)';
+            } else if (bmi < 30) {
+                category = 'Overweight';
+                color = 'linear-gradient(135deg, #f59e0b, #d97706)';
+            } else {
+                category = 'Obese';
+                color = 'linear-gradient(135deg, #ef4444, #dc2626)';
+            }
+
+            document.getElementById('bmiResult').innerHTML = `
+                <div class="bmi-result" style="background: ${color};">
+                    <div style="font-size: 1rem; opacity: 0.9;">Calculated BMI</div>
+                    <div class="bmi-value">${bmi}</div>
+                    <div style="font-size: 1.25rem; font-weight: bold;">${category}</div>
+                </div>
+            `;
+        }
+
+        async function loadBMIRecords() {
+            try {
+                const [studentsRes, bmiRes] = await Promise.all([
+                    fetch(`${API_URL}/students/`),
+                    fetch(`${API_URL}/bmi/`)
+                ]);
+                const students = await studentsRes.json();
+                const allBMI = await bmiRes.json();
+                const container = document.getElementById('bmiContainer');
+                
+                if (allBMI.length === 0) {
+                    container.innerHTML = '<div class="empty-state">No BMI records yet. Click "Add BMI Record" to get started!</div>';
+                    return;
+                }
+                
+                const studentMap = {};
+                students.forEach(s => studentMap[s.id] = s.name);
+                
+                function getCategory(bmi) {
+                    if (bmi < 18.5) return { label: 'Underweight', class: 'cat-underweight' };
+                    if (bmi < 25) return { label: 'Normal', class: 'cat-normal' };
+                    if (bmi < 30) return { label: 'Overweight', class: 'cat-overweight' };
+                    return { label: 'Obese', class: 'cat-obese' };
+                }
+                
+                container.innerHTML = '<table><thead><tr><th>Date</th><th>Student</th><th>Height (cm)</th><th>Weight (kg)</th><th>BMI</th><th>Category</th><th>Recorded By</th></tr></thead><tbody>' +
+                allBMI.sort((a, b) => new Date(b.date) - new Date(a.date)).map(record => {
+                    const cat = getCategory(record.bmi);
+                    return `
+                        <tr>
+                            <td>${new Date(record.date).toLocaleDateString()}</td>
+                            <td><strong>${studentMap[record.student_id] || 'Unknown'}</strong></td>
+                            <td>${record.height}</td>
+                            <td>${record.weight}</td>
+                            <td><strong>${record.bmi}</strong></td>
+                            <td><span class="category-badge ${cat.class}">${cat.label}</span></td>
+                            <td>${record.recorded_by || '-'}</td>
+                        </tr>
+                    `;
+                }).join('') + '</tbody></table>';
+            } catch (error) { 
+                console.error('Error loading BMI records:', error);
+            }
+        }
+
+        function logout() { 
+            window.location.href = 'owner.html';
+        }
+
+        setInterval(loadBMIRecords, 30000);
+    </script>
+</body>
+</html>

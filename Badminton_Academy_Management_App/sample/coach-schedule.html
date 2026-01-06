@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>My Schedule - Coach Portal</title>
+    <link rel="stylesheet" href="coach-styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="coach-dashboard.html">📊 Dashboard</a>
+            <a href="coach-batches.html">📚 Batches</a>
+            <a href="coach-attendance.html">📋 Attendance</a>
+            <a href="coach-fees.html">💰 Fees</a>
+            <a href="coach-performance.html">⭐ Performance</a>
+            <a href="coach-bmi.html">📏 BMI</a>
+            <a href="coach-schedule.html" class="active">📅 Schedule</a>
+            <a href="coach-invite.html">✉️ Invite</a>
+            <a href="coach-enquiries.html">📞 Enquiries</a>
+            <a href="coach-students.html">🎓 Students</a>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+        <h1>📅 My Schedule</h1>
+        <div id="scheduleList"></div>
+    </div>
+    <script>
+        const API_URL = 'http://localhost:8000';
+        let currentCoach = null;
+        const loggedInCoach = sessionStorage.getItem('loggedInCoach');
+        if (!loggedInCoach) { window.location.href = 'coach.html'; }
+        else { currentCoach = JSON.parse(loggedInCoach); loadSchedule(); }
+        async function loadSchedule() {
+            try {
+                const response = await fetch(`${API_URL}/batches/coach/${currentCoach.id}`);
+                const batches = await response.json();
+                const container = document.getElementById('scheduleList');
+                if (batches.length === 0) {
+                    container.innerHTML = '<div style="text-align: center; padding: 60px; color: #999;">No batches assigned yet</div>';
+                    return;
+                }
+                container.innerHTML = batches.map(batch => `
+                    <div class="schedule-card">
+                        <h3>${batch.batch_name}</h3>
+                        <p><strong>⏰ Timing:</strong> ${batch.timing}</p>
+                        <p><strong>${batch.period === 'Morning' ? '🌅' : '🌆'} Period:</strong> ${batch.period}</p>
+                        <p><strong>📍 Location:</strong> ${batch.location || 'N/A'}</p>
+                    </div>
+                `).join('');
+            } catch (error) { console.error('Error loading schedule:', error); }
+        }
+        function logout() { sessionStorage.removeItem('loggedInCoach'); window.location.href = 'coach.html'; }
+    </script>
+</body>
+</html>

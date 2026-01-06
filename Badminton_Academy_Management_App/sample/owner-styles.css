@@ -1,0 +1,854 @@
+/* ========================================
+   OWNER PORTAL - COMPLETE STYLES
+   Based on Student Structure
+   Blue-Purple Gradient Theme
+   ======================================== */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    padding: 20px;
+}
+
+body.login-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+/* ========================================
+   CONTAINER
+   ======================================== */
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 12px;
+    padding: 30px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+}
+
+.container.login-container {
+    max-width: 500px;
+    width: 100%;
+    padding: 40px;
+}
+
+/* ========================================
+   NAVIGATION
+   ======================================== */
+.nav {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid #e0e0e0;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.nav a {
+    color: #6366f1;
+    text-decoration: none;
+    font-weight: 600;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: all 0.3s;
+    border: 2px solid transparent;
+}
+
+.nav a:hover {
+    background: #f0f4ff;
+    border-color: #6366f1;
+}
+
+.nav a.active {
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    color: white;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.logout-btn {
+    padding: 10px 20px;
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    margin-left: auto;
+    width: auto;
+    margin-top: 0;
+    transition: all 0.3s;
+}
+
+.logout-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+}
+
+/* ========================================
+   HEADINGS
+   ======================================== */
+h1 {
+    color: #6366f1;
+    margin-bottom: 30px;
+    font-size: 2.5rem;
+    font-weight: bold;
+}
+
+h1.text-center {
+    text-align: center;
+}
+
+h2 {
+    color: #6366f1;
+    margin-bottom: 20px;
+    font-size: 1.75rem;
+    font-weight: bold;
+}
+
+h3 {
+    color: #333;
+    margin-bottom: 15px;
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+.section-title {
+    font-size: 1.5rem;
+    color: #333;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #e0e0e0;
+    font-weight: bold;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+}
+
+.header h1 {
+    margin: 0;
+}
+
+/* ========================================
+   FORMS
+   ======================================== */
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label,
+label {
+    display: block;
+    margin-bottom: 8px;
+    color: #333;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+input,
+select,
+textarea {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: inherit;
+    transition: all 0.3s;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    outline: none;
+    border-color: #6366f1;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+textarea {
+    resize: vertical;
+    min-height: 100px;
+}
+
+.controls,
+.filters {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+}
+
+.controls .form-group,
+.filters .form-group {
+    flex: 1;
+    min-width: 200px;
+    margin-bottom: 0;
+}
+
+/* ========================================
+   BUTTONS
+   ======================================== */
+button,
+.btn,
+.add-btn {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 10px;
+    transition: all 0.3s;
+}
+
+button:hover,
+.btn:hover,
+.add-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+}
+
+.btn {
+    flex: 1;
+    padding: 12px 24px;
+    display: inline-block;
+    width: auto;
+    margin-top: 0;
+}
+
+.btn-success,
+.save-row-btn {
+    background: linear-gradient(135deg, #10b981, #059669);
+}
+
+.btn-success:hover,
+.save-row-btn:hover {
+    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+}
+
+.delete-btn,
+.btn-danger {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    padding: 10px 20px;
+    width: auto;
+    margin-top: 0;
+}
+
+.delete-btn:hover,
+.btn-danger:hover {
+    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+}
+
+.btn-small,
+.action-btn {
+    padding: 8px 16px;
+    font-size: 14px;
+}
+
+/* ========================================
+   TABLES
+   ======================================== */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+th,
+td {
+    padding: 16px;
+    text-align: left;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+th {
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    font-weight: 600;
+    color: white;
+    border-bottom: none;
+}
+
+tbody tr {
+    transition: all 0.2s;
+}
+
+tbody tr:hover {
+    background: #f0f4ff;
+}
+
+tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* ========================================
+   STATS CARDS
+   ======================================== */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.stat-card {
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    color: white;
+    padding: 24px;
+    border-radius: 12px;
+    text-align: center;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    transition: all 0.3s;
+}
+
+.stat-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
+}
+
+.stat-value {
+    font-size: 42px;
+    font-weight: bold;
+    margin-bottom: 8px;
+}
+
+.stat-label {
+    font-size: 14px;
+    opacity: 0.95;
+    font-weight: 500;
+}
+
+/* ========================================
+   INFO GRID
+   ======================================== */
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.info-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+/* ========================================
+   COACH CARDS
+   ======================================== */
+.coaches-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 20px;
+    margin-top: 30px;
+}
+
+.coach-card {
+    background: linear-gradient(135deg, #ddd6fe, #c4b5fd);
+    padding: 24px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transition: all 0.3s;
+}
+
+.coach-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+}
+
+.coach-name {
+    font-size: 20px;
+    font-weight: bold;
+    color: #5b21b6;
+    margin-bottom: 15px;
+}
+
+.coach-details,
+.coach-info {
+    font-size: 14px;
+    color: #334155;
+    line-height: 1.8;
+}
+
+/* ========================================
+   STUDENT CARDS
+   ======================================== */
+.students-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 20px;
+    margin-top: 30px;
+}
+
+.student-card {
+    background: white;
+    padding: 24px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transition: all 0.3s;
+}
+
+.student-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+}
+
+.student-header {
+    font-size: 20px;
+    font-weight: bold;
+    color: #6366f1;
+    margin-bottom: 15px;
+}
+
+.student-info {
+    font-size: 14px;
+    color: #334155;
+    line-height: 1.8;
+}
+
+/* ========================================
+   BATCH CARDS
+   ======================================== */
+.batches-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 20px;
+    margin-top: 30px;
+}
+
+.batch-card {
+    background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+    padding: 24px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transition: all 0.3s;
+}
+
+.batch-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+}
+
+.batch-name {
+    font-size: 20px;
+    font-weight: bold;
+    color: #1e40af;
+    margin-bottom: 15px;
+    border-bottom: 3px solid #3b82f6;
+    padding-bottom: 12px;
+}
+
+.batch-info {
+    font-size: 14px;
+    color: #334155;
+    line-height: 1.8;
+}
+
+/* ========================================
+   ENQUIRY CARDS
+   ======================================== */
+.enquiry-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: 20px;
+    margin-top: 30px;
+}
+
+.enquiry-card {
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    padding: 24px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transition: all 0.3s;
+}
+
+.enquiry-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+}
+
+.enquiry-header {
+    font-size: 20px;
+    font-weight: bold;
+    color: #92400e;
+    margin-bottom: 15px;
+}
+
+.enquiry-info {
+    font-size: 14px;
+    color: #334155;
+    line-height: 1.8;
+}
+
+/* ========================================
+   BADGES
+   ======================================== */
+.status-badge {
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    display: inline-block;
+}
+
+.status-new {
+    background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+    color: #1e40af;
+}
+
+.status-contacted {
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    color: #92400e;
+}
+
+.status-converted {
+    background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+    color: #065f46;
+}
+
+.status-closed {
+    background: linear-gradient(135deg, #e2e8f0, #cbd5e1);
+    color: #475569;
+}
+
+.status-pending {
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    color: #92400e;
+}
+
+.status-paid {
+    background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+    color: #065f46;
+}
+
+.status-overdue {
+    background: linear-gradient(135deg, #fee2e2, #fecaca);
+    color: #991b1b;
+}
+
+.status-present {
+    background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+    color: #065f46;
+}
+
+.status-absent {
+    background: linear-gradient(135deg, #fee2e2, #fecaca);
+    color: #991b1b;
+}
+
+.rating-badge {
+    background: linear-gradient(135deg, #ec4899, #db2777);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 600;
+    display: inline-block;
+}
+
+.category-badge {
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-weight: 600;
+    color: white;
+    display: inline-block;
+    font-size: 13px;
+}
+
+.cat-underweight {
+    background: linear-gradient(135deg, #dbeafe, #bfdbfe);
+    color: #1e40af;
+}
+
+.cat-normal {
+    background: linear-gradient(135deg, #d1fae5, #a7f3d0);
+    color: #065f46;
+}
+
+.cat-overweight {
+    background: linear-gradient(135deg, #fef3c7, #fde68a);
+    color: #92400e;
+}
+
+.cat-obese {
+    background: linear-gradient(135deg, #fee2e2, #fecaca);
+    color: #991b1b;
+}
+
+/* ========================================
+   MODALS
+   ======================================== */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 2000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+}
+
+.modal-content {
+    background: white;
+    margin: 3% auto;
+    padding: 2.5rem;
+    border-radius: 16px;
+    max-width: 600px;
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        transform: translateY(-50px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.modal-content h2 {
+    color: #6366f1;
+    margin-bottom: 1.5rem;
+}
+
+.close {
+    color: #64748b;
+    float: right;
+    font-size: 2rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s;
+    line-height: 1;
+}
+
+.close:hover {
+    color: #ef4444;
+}
+
+/* ========================================
+   INFO ITEMS
+   ======================================== */
+.info-item {
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+}
+
+.info-item.start {
+    align-items: flex-start;
+}
+
+.info-icon {
+    margin-right: 10px;
+    font-size: 16px;
+    color: #6366f1;
+}
+
+.added-by {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #f1f5f9;
+    color: #64748b;
+    font-size: 0.875rem;
+}
+
+/* ========================================
+   SECTIONS
+   ======================================== */
+.section {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    margin-bottom: 30px;
+}
+
+/* ========================================
+   EMPTY STATE
+   ======================================== */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #94a3b8;
+    font-size: 18px;
+    background: #f8fafc;
+    border-radius: 12px;
+    margin: 20px 0;
+}
+
+/* ========================================
+   ACTION BUTTONS
+   ======================================== */
+.action-buttons {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+}
+
+/* ========================================
+   FORM INPUTS IN TABLES
+   ======================================== */
+.status-select,
+.remarks-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 2px solid #e0e0e0;
+    border-radius: 6px;
+    font-size: 14px;
+    transition: all 0.3s;
+}
+
+.status-select:focus,
+.remarks-input:focus {
+    outline: none;
+    border-color: #6366f1;
+}
+
+/* ========================================
+   RESPONSIVE
+   ======================================== */
+@media (max-width: 768px) {
+    body {
+        padding: 10px;
+    }
+
+    .container {
+        padding: 20px;
+    }
+
+    h1 {
+        font-size: 1.75rem;
+    }
+
+    h2 {
+        font-size: 1.5rem;
+    }
+
+    .nav {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .nav a {
+        text-align: center;
+    }
+
+    .logout-btn {
+        margin-left: 0;
+        margin-top: 10px;
+    }
+
+    .header {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: stretch;
+    }
+
+    .coaches-list,
+    .students-grid,
+    .batches-grid,
+    .enquiry-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .stats-grid,
+    .info-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .controls,
+    .filters {
+        flex-direction: column;
+    }
+
+    table {
+        font-size: 13px;
+    }
+
+    th,
+    td {
+        padding: 12px 8px;
+    }
+
+    .action-buttons {
+        flex-direction: column;
+    }
+
+    .coach-card {
+        flex-direction: column;
+        gap: 1rem;
+    }
+}
+
+/* ========================================
+   SCROLLBAR
+   ======================================== */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(135deg, #6366f1, #ec4899);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(135deg, #4f46e5, #db2777);
+}
+
+/* ========================================
+   ANIMATIONS
+   ======================================== */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.coach-card,
+.student-card,
+.batch-card,
+.stat-card {
+    animation: fadeIn 0.3s ease-out;
+}
