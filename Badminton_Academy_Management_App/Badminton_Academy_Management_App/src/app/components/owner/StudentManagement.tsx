@@ -1,23 +1,31 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Plus, Search, Phone, Mail, User, Calendar, TrendingUp, Activity, MoreVertical } from 'lucide-react';
+import { ArrowLeft, Plus, Search, Phone, Mail, User, Calendar, TrendingUp, Activity, MoreVertical, DollarSign } from 'lucide-react';
 import PerformanceTracking from './PerformanceTracking';
 import BMITracking from './BMITracking';
 
 interface StudentManagementProps {
   onBack: () => void;
   initialShowAddForm?: boolean;
+  initialSelectedStudent?: any;
+  onNavigateToFees?: (student: any) => void;
 }
 
-export default function StudentManagement({ onBack, initialShowAddForm = false }: StudentManagementProps) {
+export default function StudentManagement({ onBack, initialShowAddForm = false, initialSelectedStudent, onNavigateToFees }: StudentManagementProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(initialShowAddForm);
-  const [selectedStudent, setSelectedStudent] = useState<any>(null);
+  const [selectedStudent, setSelectedStudent] = useState<any>(initialSelectedStudent || null);
   const [showPerformance, setShowPerformance] = useState(false);
   const [showBMI, setShowBMI] = useState(false);
 
   useEffect(() => {
     setShowAddForm(initialShowAddForm);
   }, [initialShowAddForm]);
+
+  useEffect(() => {
+    if (initialSelectedStudent) {
+      setSelectedStudent(initialSelectedStudent);
+    }
+  }, [initialSelectedStudent]);
 
   const students = [
     { id: 1, name: 'Arjun Mehta', guardianName: 'Mr. Vijay Mehta', phone: '+91 98765 43210', email: 'arjun@example.com', batch: 'Morning Batch A', feePending: 2500, status: 'active' },
@@ -121,9 +129,12 @@ export default function StudentManagement({ onBack, initialShowAddForm = false }
                 <p className="text-xs text-[#e8e8e8]">BMI</p>
               </div>
             </button>
-            <button className="p-4 rounded-xl bg-[#242424] shadow-[8px_8px_16px_rgba(0,0,0,0.5),-8px_-8px_16px_rgba(40,40,40,0.1)] active:shadow-[inset_4px_4px_8px_rgba(0,0,0,0.5),inset_-4px_-4px_8px_rgba(40,40,40,0.1)] transition-all duration-200">
+            <button
+              onClick={() => onNavigateToFees?.(selectedStudent)}
+              className="p-4 rounded-xl bg-[#242424] shadow-[8px_8px_16px_rgba(0,0,0,0.5),-8px_-8px_16px_rgba(40,40,40,0.1)] active:shadow-[inset_4px_4px_8px_rgba(0,0,0,0.5),inset_-4px_-4px_8px_rgba(40,40,40,0.1)] transition-all duration-200"
+            >
               <div className="flex flex-col items-center gap-2">
-                <span className="text-xl">💰</span>
+                <DollarSign className="w-6 h-6 text-[#a0a0a0]" />
                 <p className="text-xs text-[#e8e8e8]">Fee Details</p>
               </div>
             </button>

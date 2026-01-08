@@ -1,8 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { ArrowLeft, Search, DollarSign, Check, Clock, AlertCircle, ChevronDown, ChevronUp, Users } from 'lucide-react';
 
 interface FeeManagementProps {
   onBack: () => void;
+  selectedStudentId?: number;
+  selectedStudentName?: string;
 }
 
 interface FeeData {
@@ -22,7 +24,7 @@ interface BatchGroup {
   students: FeeData[];
 }
 
-export default function FeeManagement({ onBack }: FeeManagementProps) {
+export default function FeeManagement({ onBack, selectedStudentId, selectedStudentName }: FeeManagementProps) {
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'paid' | 'overdue'>('all');
   const [expandedBatches, setExpandedBatches] = useState<Set<number>>(new Set([1])); // Expand first batch by default
@@ -36,6 +38,21 @@ export default function FeeManagement({ onBack }: FeeManagementProps) {
     { id: 5, studentName: 'Amit Kumar', batchId: 3, batchName: 'Weekend Batch', totalAmount: 5000, paidAmount: 5000, status: 'paid', dueDate: '2026-01-05' },
     { id: 6, studentName: 'Sneha Reddy', batchId: 3, batchName: 'Weekend Batch', totalAmount: 5000, paidAmount: 0, status: 'overdue', dueDate: '2025-12-28' },
   ];
+
+  // Auto-select student fee when navigating from student detail view
+  useEffect(() => {
+    if ((selectedStudentId || selectedStudentName) && feeData.length > 0) {
+      const studentFee = feeData.find(f => 
+        (selectedStudentId && f.id === selectedStudentId) || 
+        (selectedStudentName && f.studentName === selectedStudentName)
+      );
+      if (studentFee) {
+        setSelectedStudent(studentFee);
+        // Expand the batch containing this student
+        setExpandedBatches(new Set([studentFee.batchId]));
+      }
+    }
+  }, [selectedStudentId, selectedStudentName]);
 
   // Calculate stats dynamically
   const stats = useMemo(() => {
@@ -92,8 +109,14 @@ export default function FeeManagement({ onBack }: FeeManagementProps) {
         <div className="sticky top-0 bg-[#1a1a1a] border-b border-[#2a2a2a] px-6 py-4 flex items-center gap-4 shadow-[0_4px_16px_rgba(0,0,0,0.5)]">
           <button
             onClick={() => {
-              setSelectedStudent(null);
-              setShowPaymentForm(false);
+              // Check if we navigated here from student details (has selectedStudentId/Name)
+              // If yes, go back to student details, otherwise just close the detail view
+              if (selectedStudentId || selectedStudentName) {
+                onBack();
+              } else {
+                setSelectedStudent(null);
+                setShowPaymentForm(false);
+              }
             }}
             className="w-10 h-10 rounded-xl bg-[#242424] shadow-[8px_8px_16px_rgba(0,0,0,0.5),-8px_-8px_16px_rgba(40,40,40,0.1)] active:shadow-[inset_4px_4px_8px_rgba(0,0,0,0.5),inset_-4px_-4px_8px_rgba(40,40,40,0.1)] flex items-center justify-center"
           >
