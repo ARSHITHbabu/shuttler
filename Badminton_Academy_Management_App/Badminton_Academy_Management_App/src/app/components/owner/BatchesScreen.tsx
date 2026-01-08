@@ -237,6 +237,12 @@ export default function BatchesScreen() {
       <div className="px-6 mb-6">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl text-[#e8e8e8]">Batches</h1>
+          <button
+            onClick={() => setShowAddForm(true)}
+            className="w-10 h-10 rounded-xl bg-[#2a2a2a] shadow-[8px_8px_16px_rgba(0,0,0,0.5),-8px_-8px_16px_rgba(40,40,40,0.1)] active:shadow-[inset_4px_4px_8px_rgba(0,0,0,0.5),inset_-4px_-4px_8px_rgba(40,40,40,0.1)] flex items-center justify-center"
+          >
+            <Plus className="w-5 h-5 text-[#c0c0c0]" />
+          </button>
         </div>
 
         {/* Search Bar */}
@@ -289,14 +295,6 @@ export default function BatchesScreen() {
           </button>
         ))}
       </div>
-
-      {/* FAB */}
-      <button
-        onClick={() => setShowAddForm(true)}
-        className="fixed bottom-24 right-6 w-14 h-14 rounded-full bg-[#2a2a2a] shadow-[8px_8px_16px_rgba(0,0,0,0.6),-4px_-4px_12px_rgba(50,50,50,0.1)] active:shadow-[inset_4px_4px_8px_rgba(0,0,0,0.5),inset_-4px_-4px_8px_rgba(40,40,40,0.1)] transition-all duration-200 flex items-center justify-center"
-      >
-        <Plus className="w-6 h-6 text-[#c0c0c0]" />
-      </button>
     </div>
   );
 }
