@@ -8,17 +8,64 @@ type SubScreen = 'main' | 'coaches' | 'students' | 'fees';
 
 export default function HomeScreen() {
   const [currentScreen, setCurrentScreen] = useState<SubScreen>('main');
+  const [showAddCoachForm, setShowAddCoachForm] = useState(false);
+  const [showAddStudentForm, setShowAddStudentForm] = useState(false);
+  const [selectedStudentForFee, setSelectedStudentForFee] = useState<any>(null);
+  const [selectedStudentForRestore, setSelectedStudentForRestore] = useState<any>(null);
 
   if (currentScreen === 'coaches') {
-    return <CoachManagement onBack={() => setCurrentScreen('main')} />;
+    return (
+      <CoachManagement
+        onBack={() => {
+          setCurrentScreen('main');
+          setShowAddCoachForm(false);
+        }}
+        initialShowAddForm={showAddCoachForm}
+      />
+    );
   }
 
   if (currentScreen === 'students') {
-    return <StudentManagement onBack={() => setCurrentScreen('main')} />;
+    return (
+      <StudentManagement
+        onBack={() => {
+          setCurrentScreen('main');
+          setShowAddStudentForm(false);
+          setSelectedStudentForRestore(null);
+        }}
+        initialShowAddForm={showAddStudentForm}
+        initialSelectedStudent={selectedStudentForRestore}
+        onNavigateToFees={(student) => {
+          setSelectedStudentForFee(student);
+          setSelectedStudentForRestore(student);
+          setCurrentScreen('fees');
+        }}
+      />
+    );
   }
 
   if (currentScreen === 'fees') {
-    return <FeeManagement onBack={() => setCurrentScreen('main')} />;
+    // Determine if we came from student details or main screen
+    const cameFromStudentDetails = selectedStudentForRestore !== null;
+    
+    return (
+      <FeeManagement
+        onBack={() => {
+          if (cameFromStudentDetails) {
+            // Go back to student details
+            setCurrentScreen('students');
+            setSelectedStudentForFee(null);
+          } else {
+            // Go back to main screen
+            setCurrentScreen('main');
+            setSelectedStudentForFee(null);
+            setSelectedStudentForRestore(null);
+          }
+        }}
+        selectedStudentId={selectedStudentForFee?.id}
+        selectedStudentName={selectedStudentForFee?.name}
+      />
+    );
   }
 
   return (
@@ -74,7 +121,10 @@ export default function HomeScreen() {
           </div>
 
           <button
-            onClick={() => setCurrentScreen('fees')}
+            onClick={() => {
+              setSelectedStudentForRestore(null); // Clear restore state when navigating from main
+              setCurrentScreen('fees');
+            }}
             className="p-5 rounded-2xl bg-[#242424] shadow-[8px_8px_16px_rgba(0,0,0,0.5),-8px_-8px_16px_rgba(40,40,40,0.1)] active:shadow-[inset_4px_4px_8px_rgba(0,0,0,0.5),inset_-4px_-4px_8px_rgba(40,40,40,0.1)] transition-all duration-200"
           >
             <div className="flex items-start justify-between mb-3">
@@ -132,13 +182,25 @@ export default function HomeScreen() {
       <div className="px-6 mb-6">
         <h2 className="text-lg text-[#e8e8e8] mb-4">Quick Actions</h2>
         <div className="grid grid-cols-2 gap-3">
-          <button className="p-4 rounded-xl bg-[#242424] shadow-[8px_8px_16px_rgba(0,0,0,0.5),-8px_-8px_16px_rgba(40,40,40,0.1)] active:shadow-[inset_4px_4px_8px_rgba(0,0,0,0.5),inset_-4px_-4px_8px_rgba(40,40,40,0.1)] transition-all duration-200">
+          <button
+            onClick={() => {
+              setShowAddStudentForm(true);
+              setCurrentScreen('students');
+            }}
+            className="p-4 rounded-xl bg-[#242424] shadow-[8px_8px_16px_rgba(0,0,0,0.5),-8px_-8px_16px_rgba(40,40,40,0.1)] active:shadow-[inset_4px_4px_8px_rgba(0,0,0,0.5),inset_-4px_-4px_8px_rgba(40,40,40,0.1)] transition-all duration-200"
+          >
             <div className="flex flex-col items-center gap-2">
               <Plus className="w-6 h-6 text-[#a0a0a0]" />
               <p className="text-sm text-[#e8e8e8]">Add Student</p>
             </div>
           </button>
-          <button className="p-4 rounded-xl bg-[#242424] shadow-[8px_8px_16px_rgba(0,0,0,0.5),-8px_-8px_16px_rgba(40,40,40,0.1)] active:shadow-[inset_4px_4px_8px_rgba(0,0,0,0.5),inset_-4px_-4px_8px_rgba(40,40,40,0.1)] transition-all duration-200">
+          <button
+            onClick={() => {
+              setShowAddCoachForm(true);
+              setCurrentScreen('coaches');
+            }}
+            className="p-4 rounded-xl bg-[#242424] shadow-[8px_8px_16px_rgba(0,0,0,0.5),-8px_-8px_16px_rgba(40,40,40,0.1)] active:shadow-[inset_4px_4px_8px_rgba(0,0,0,0.5),inset_-4px_-4px_8px_rgba(40,40,40,0.1)] transition-all duration-200"
+          >
             <div className="flex flex-col items-center gap-2">
               <Plus className="w-6 h-6 text-[#a0a0a0]" />
               <p className="text-sm text-[#e8e8e8]">Add Coach</p>

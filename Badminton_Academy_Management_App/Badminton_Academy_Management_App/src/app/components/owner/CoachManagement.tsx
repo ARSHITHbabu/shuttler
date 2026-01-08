@@ -1,14 +1,19 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowLeft, Plus, Search, Phone, Mail, Users, MoreVertical } from 'lucide-react';
 
 interface CoachManagementProps {
   onBack: () => void;
+  initialShowAddForm?: boolean;
 }
 
-export default function CoachManagement({ onBack }: CoachManagementProps) {
+export default function CoachManagement({ onBack, initialShowAddForm = false }: CoachManagementProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [showAddForm, setShowAddForm] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(initialShowAddForm);
   const [selectedCoach, setSelectedCoach] = useState<any>(null);
+
+  useEffect(() => {
+    setShowAddForm(initialShowAddForm);
+  }, [initialShowAddForm]);
 
   const coaches = [
     { id: 1, name: 'Rajesh Kumar', phone: '+91 98765 43210', email: 'rajesh@academy.com', specialization: 'Singles', batches: 3, status: 'active' },
