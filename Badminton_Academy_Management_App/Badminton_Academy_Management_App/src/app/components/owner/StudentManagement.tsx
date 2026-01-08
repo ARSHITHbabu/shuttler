@@ -1,18 +1,23 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowLeft, Plus, Search, Phone, Mail, User, Calendar, TrendingUp, Activity, MoreVertical } from 'lucide-react';
 import PerformanceTracking from './PerformanceTracking';
 import BMITracking from './BMITracking';
 
 interface StudentManagementProps {
   onBack: () => void;
+  initialShowAddForm?: boolean;
 }
 
-export default function StudentManagement({ onBack }: StudentManagementProps) {
+export default function StudentManagement({ onBack, initialShowAddForm = false }: StudentManagementProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const [showAddForm, setShowAddForm] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(initialShowAddForm);
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [showPerformance, setShowPerformance] = useState(false);
   const [showBMI, setShowBMI] = useState(false);
+
+  useEffect(() => {
+    setShowAddForm(initialShowAddForm);
+  }, [initialShowAddForm]);
 
   const students = [
     { id: 1, name: 'Arjun Mehta', guardianName: 'Mr. Vijay Mehta', phone: '+91 98765 43210', email: 'arjun@example.com', batch: 'Morning Batch A', feePending: 2500, status: 'active' },
