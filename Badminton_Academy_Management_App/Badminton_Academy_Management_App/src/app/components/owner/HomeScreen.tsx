@@ -10,6 +10,8 @@ export default function HomeScreen() {
   const [currentScreen, setCurrentScreen] = useState<SubScreen>('main');
   const [showAddCoachForm, setShowAddCoachForm] = useState(false);
   const [showAddStudentForm, setShowAddStudentForm] = useState(false);
+  const [selectedStudentForFee, setSelectedStudentForFee] = useState<any>(null);
+  const [selectedStudentForRestore, setSelectedStudentForRestore] = useState<any>(null);
 
   if (currentScreen === 'coaches') {
     return (
@@ -29,14 +31,41 @@ export default function HomeScreen() {
         onBack={() => {
           setCurrentScreen('main');
           setShowAddStudentForm(false);
+          setSelectedStudentForRestore(null);
         }}
         initialShowAddForm={showAddStudentForm}
+        initialSelectedStudent={selectedStudentForRestore}
+        onNavigateToFees={(student) => {
+          setSelectedStudentForFee(student);
+          setSelectedStudentForRestore(student);
+          setCurrentScreen('fees');
+        }}
       />
     );
   }
 
   if (currentScreen === 'fees') {
-    return <FeeManagement onBack={() => setCurrentScreen('main')} />;
+    // Determine if we came from student details or main screen
+    const cameFromStudentDetails = selectedStudentForRestore !== null;
+    
+    return (
+      <FeeManagement
+        onBack={() => {
+          if (cameFromStudentDetails) {
+            // Go back to student details
+            setCurrentScreen('students');
+            setSelectedStudentForFee(null);
+          } else {
+            // Go back to main screen
+            setCurrentScreen('main');
+            setSelectedStudentForFee(null);
+            setSelectedStudentForRestore(null);
+          }
+        }}
+        selectedStudentId={selectedStudentForFee?.id}
+        selectedStudentName={selectedStudentForFee?.name}
+      />
+    );
   }
 
   return (
@@ -92,7 +121,10 @@ export default function HomeScreen() {
           </div>
 
           <button
-            onClick={() => setCurrentScreen('fees')}
+            onClick={() => {
+              setSelectedStudentForRestore(null); // Clear restore state when navigating from main
+              setCurrentScreen('fees');
+            }}
             className="p-5 rounded-2xl bg-[#242424] shadow-[8px_8px_16px_rgba(0,0,0,0.5),-8px_-8px_16px_rgba(40,40,40,0.1)] active:shadow-[inset_4px_4px_8px_rgba(0,0,0,0.5),inset_-4px_-4px_8px_rgba(40,40,40,0.1)] transition-all duration-200"
           >
             <div className="flex items-start justify-between mb-3">
