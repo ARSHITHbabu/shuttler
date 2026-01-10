@@ -1003,12 +1003,217 @@ class CalendarEvent(Base):
 
 ### Phase 0: Backend Enhancements (NEW - Do this first!)
 
-**Duration**: 1 week
+**Duration**: 1-2 weeks
+
+#### 0.0 Database Migration to PostgreSQL (CRITICAL - Do this FIRST!)
+
+**Problem**: SQLite is NOT suitable for production with 10k+ users:
+- ❌ No concurrent write support (single writer at a time)
+- ❌ Limited scalability and performance
+- ❌ File-based (not cloud-ready)
+- ❌ No connection pooling
+- ❌ Limited query optimization
+
+**Solution**: Migrate to **PostgreSQL**
+
+**Why PostgreSQL?**
+- ✅ Production-ready for 10k+ concurrent users
+- ✅ ACID compliant with full transaction support
+- ✅ Excellent performance and scalability
+- ✅ Cloud-ready (AWS RDS, Google Cloud SQL, Azure Database)
+- ✅ Connection pooling and query optimization
+- ✅ JSON support for flexible data
+- ✅ Free and open-source
+
+**Migration Steps**:
+
+1. **Install PostgreSQL locally** (for development):
+   - Download from https://www.postgresql.org/download/windows/
+   - Install PostgreSQL 15+ on Windows
+   - During installation, set postgres user password (remember it!)
+   - Create database:
+     ```sql
+     -- Open pgAdmin or psql
+     CREATE DATABASE badminton_academy;
+     ```
+
+2. **Update Python dependencies** in `Reference/sample/requirements.txt`:
+   ```txt
+   fastapi==0.104.1
+   uvicorn[standard]==0.24.0
+   sqlalchemy==2.0.23
+   psycopg2-binary==2.9.9  # PostgreSQL adapter (NEW)
+   pydantic==2.5.0
+   python-jose[cryptography]==3.3.0
+   passlib[bcrypt]==1.7.4
+   python-multipart==0.0.6  # For file uploads (NEW)
+   firebase-admin==6.3.0  # For FCM (NEW - optional for Phase 0)
+   alembic==1.13.0  # For database migrations (NEW)
+   python-dotenv==1.0.0  # For environment variables (NEW)
+   ```
+
+3. **Create environment configuration** `Reference/sample/.env`:
+   ```env
+   # Database Configuration (Development)
+   DATABASE_URL=postgresql://postgres:your_password@localhost:5432/badminton_academy
+
+   # For production (cloud deployment):
+   # DATABASE_URL=postgresql://user:password@host:5432/dbname
+
+   # JWT Configuration
+   SECRET_KEY=your-secret-key-here-generate-a-secure-one-minimum-32-characters
+   ALGORITHM=HS256
+   ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+   # File Upload Configuration
+   UPLOAD_DIR=./uploads
+   MAX_FILE_SIZE=5242880  # 5MB in bytes
+   ALLOWED_EXTENSIONS=jpg,jpeg,png,gif
+
+   # Firebase Configuration (optional for Phase 0)
+   FIREBASE_CREDENTIALS_PATH=./firebase-credentials.json
+   ```
+
+4. **Create `.env.example`** template for others:
+   ```env
+   DATABASE_URL=postgresql://postgres:password@localhost:5432/badminton_academy
+   SECRET_KEY=generate-a-secure-key-here
+   ALGORITHM=HS256
+   ACCESS_TOKEN_EXPIRE_MINUTES=30
+   UPLOAD_DIR=./uploads
+   MAX_FILE_SIZE=5242880
+   ALLOWED_EXTENSIONS=jpg,jpeg,png,gif
+   ```
+
+5. **Update database connection** in `Reference/sample/main.py`:
+   ```python
+   # Add at the top of main.py:
+   import os
+   from dotenv import load_dotenv
+
+   load_dotenv()  # Load environment variables
+
+   # OLD (SQLite) - REMOVE THIS:
+   # SQLALCHEMY_DATABASE_URL = "sqlite:///./academy_portal.db"
+   # engine = create_engine(
+   #     SQLALCHEMY_DATABASE_URL,
+   #     connect_args={"check_same_thread": False}
+   # )
+
+   # NEW (PostgreSQL) - ADD THIS:
+   SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
+
+   engine = create_engine(
+       SQLALCHEMY_DATABASE_URL,
+       pool_size=20,  # Connection pool for concurrent connections
+       max_overflow=40,  # Allow up to 60 total connections
+       pool_pre_ping=True,  # Verify connections before using
+       echo=False  # Set to True for SQL query logging during development
+   )
+   ```
+
+6. **Set up Alembic** for database migrations:
+   ```bash
+   cd Reference/sample
+   pip install -r requirements.txt
+   alembic init alembic
+   ```
+
+   **Configure** `alembic.ini` (change the sqlalchemy.url line):
+   ```ini
+   # Line ~60 in alembic.ini - replace with:
+   # sqlalchemy.url = driver://user:pass@localhost/dbname
+   # Use python-dotenv to load from .env instead
+   sqlalchemy.url =
+   ```
+
+   **Configure** `alembic/env.py` to use our models:
+   ```python
+   # Near the top, add:
+   import sys
+   from pathlib import Path
+   sys.path.append(str(Path(__file__).parent.parent))
+
+   from main import Base
+   from dotenv import load_dotenv
+   import os
+
+   load_dotenv()
+
+   # Near line 20-30, modify config.set_main_option:
+   config.set_main_option('sqlalchemy.url', os.getenv('DATABASE_URL'))
+
+   # Near line 40, set target_metadata:
+   target_metadata = Base.metadata
+   ```
+
+7. **Create initial migration**:
+   ```bash
+   # Generate migration from existing models
+   alembic revision --autogenerate -m "Initial schema with all existing tables"
+
+   # Review the generated migration file in alembic/versions/
+   # It should create all existing tables (students, coaches, batches, etc.)
+
+   # Apply migration to create tables in PostgreSQL
+   alembic upgrade head
+   ```
+
+8. **Verify database setup**:
+   ```bash
+   # Start the FastAPI server
+   python main.py
+
+   # Should connect to PostgreSQL successfully
+   # Check PostgreSQL using pgAdmin to verify tables were created
+   ```
+
+**PostgreSQL Cloud Deployment Options** (for production):
+- **AWS RDS PostgreSQL**: Fully managed, auto-scaling, automated backups
+- **Google Cloud SQL**: Easy setup, high availability, automatic replication
+- **Azure Database for PostgreSQL**: Microsoft ecosystem integration
+- **Heroku PostgreSQL**: Simple deployment, free tier available (10k rows limit on free tier)
+- **Railway.app**: Modern platform, easy PostgreSQL setup, $5/month
+- **Supabase**: PostgreSQL + real-time + auth, generous free tier
+
+**Files to create**:
+- `Reference/sample/.env` - Environment variables (DO NOT commit to git!)
+- `Reference/sample/.env.example` - Template for others (commit this)
+- `Reference/sample/.gitignore` - Add `.env`, `*.db`, `__pycache__`, `uploads/`
+
+---
 
 #### 0.1 Add Announcements API
 - Create Announcement model in SQLAlchemy
 - Add CRUD endpoints
 - Test with Postman/curl
+
+**New Database Table** (add to `Reference/sample/main.py`):
+```python
+from sqlalchemy import func  # Import for server_default
+
+class Announcement(Base):
+    __tablename__ = "announcements"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(255), nullable=False)
+    message = Column(Text, nullable=False)
+    target_audience = Column(String(50), default="all")  # "all", "students", "coaches"
+    priority = Column(String(20), default="normal")  # "normal", "high", "urgent"
+    created_by = Column(Integer, ForeignKey("coaches.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    scheduled_at = Column(DateTime(timezone=True), nullable=True)
+    is_sent = Column(Boolean, default=False)
+
+    # Relationship
+    creator = relationship("Coach", back_populates="announcements")
+```
+
+**Update Coach model** to add relationship:
+```python
+# In Coach class, add:
+announcements = relationship("Announcement", back_populates="creator")
+```
 
 #### 0.2 Add Image Upload API
 - Install `python-multipart` for file uploads
@@ -1017,32 +1222,121 @@ class CalendarEvent(Base):
 - Create upload and serve endpoints
 - Test with sample image
 
+**Database Schema Changes** (modify existing models):
+```python
+# In Student class, add column:
+profile_photo = Column(String(500), nullable=True)  # Store relative URL/path
+
+# In Coach class, add column:
+profile_photo = Column(String(500), nullable=True)
+```
+
+**Image Storage**:
+- **Development**: Local filesystem in `Reference/sample/uploads/`
+- **Production**: Use cloud storage (AWS S3, Google Cloud Storage, Cloudinary)
+
 #### 0.3 Add Notifications API
 - Create Notification model
-- Add fcm_token columns
+- Add fcm_token columns to students and coaches
 - Create notification CRUD endpoints
-- Set up Firebase project for FCM
-- Add FCM integration (optional for MVP, can use local notifications first)
+- Set up Firebase project for FCM (optional for Phase 0)
+- Add FCM integration (can defer to later phase)
+
+**New Database Table**:
+```python
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False)
+    user_type = Column(String(20), nullable=False)  # "student", "coach", "owner"
+    title = Column(String(255), nullable=False)
+    body = Column(Text, nullable=False)
+    type = Column(String(50), default="general")  # "fee_due", "attendance", "announcement", "general"
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    data = Column(JSON, nullable=True)  # Extra metadata as JSON
+```
+
+**Database Schema Changes**:
+```python
+# In Student class, add:
+fcm_token = Column(String(500), nullable=True)  # Firebase Cloud Messaging token
+
+# In Coach class, add:
+fcm_token = Column(String(500), nullable=True)
+```
 
 #### 0.4 Add Calendar Events API
 - Create CalendarEvent model
 - Add CRUD endpoints
 - Test with sample events
 
-#### 0.5 Database Migration
-- Run Alembic migration or drop/recreate database with new schema
-- Add sample data for testing
+**New Database Table**:
+```python
+class CalendarEvent(Base):
+    __tablename__ = "calendar_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(255), nullable=False)
+    event_type = Column(String(50), nullable=False)  # "holiday", "tournament", "event"
+    date = Column(Date, nullable=False)
+    description = Column(Text, nullable=True)
+    created_by = Column(Integer, ForeignKey("coaches.id"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationship
+    creator = relationship("Coach", back_populates="calendar_events")
+```
+
+**Update Coach model**:
+```python
+# In Coach class, add:
+calendar_events = relationship("CalendarEvent", back_populates="creator")
+```
+
+#### 0.5 Create Alembic Migrations for New Tables
+After adding all new models, create migration:
+```bash
+cd Reference/sample
+alembic revision --autogenerate -m "Add announcements, notifications, calendar_events, and profile photos"
+
+# Review the generated migration file
+# Apply migration
+alembic upgrade head
+```
+
+#### 0.6 Add Sample Test Data
+Create `Reference/sample/seed_data.py` to populate database:
+```python
+# Script to create 20-30 students, 5 coaches, 10 batches
+# Add sample attendance, fees, announcements, events
+# Run with: python seed_data.py
+```
+
+#### 0.7 Test All API Endpoints
+- Test with Postman/Thunder Client/Swagger UI
+- Verify all CRUD operations work
+- Test concurrent requests (simulate multiple users)
 
 **Files to modify**:
-- [Reference/sample/main.py](Reference/sample/main.py) - Add all new models and endpoints
-- [Reference/sample/requirements.txt](Reference/sample/requirements.txt) - Add python-multipart, firebase-admin (if using FCM)
-- Create: `Reference/sample/uploads/` directory
+- `Reference/sample/main.py` - Database connection, all new models and endpoints
+- `Reference/sample/requirements.txt` - Add all new dependencies
+- `Reference/sample/.env` - Environment variables
+- `Reference/sample/.env.example` - Template
+- `Reference/sample/.gitignore` - Ignore sensitive files
+- `Reference/sample/alembic/` - Migration scripts (auto-generated)
+- `Reference/sample/uploads/` - Image storage directory (create it)
+- `Reference/sample/seed_data.py` - Test data script (create it)
 
 **Testing**:
-- Test all new endpoints with Postman
-- Verify database tables created
-- Test image upload and retrieval
-- Verify foreign key relationships
+- ✅ PostgreSQL connection works
+- ✅ All existing endpoints still work
+- ✅ All new endpoints functional
+- ✅ Image upload and retrieval works
+- ✅ Foreign key relationships intact
+- ✅ Concurrent requests handled correctly
+- ✅ Test with 100+ records for performance
 
 ---
 
