@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
 import 'core/services/storage_service.dart';
+import 'routes/app_router.dart';
 
 void main() async {
   // Ensure Flutter is initialized
@@ -28,11 +29,13 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    final router = AppRouter.createRouter();
+
+    return MaterialApp.router(
       title: 'Badminton Academy',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
-      home: const PlaceholderScreen(),
+      routerConfig: router,
     );
   }
 }

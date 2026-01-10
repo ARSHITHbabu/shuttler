@@ -19,27 +19,38 @@ class AuthService {
     bool rememberMe = false,
   }) async {
     try {
+      // Determine endpoint based on user type
+      // Owner uses coach login endpoint (owner is admin coach)
+      String endpoint;
+      if (userType == 'coach' || userType == 'owner') {
+        endpoint = '/coaches/login';
+      } else {
+        endpoint = '/students/login';
+      }
+
       final response = await _apiService.post(
-        ApiEndpoints.login,
+        endpoint,
         data: {
           'email': email,
           'password': password,
-          'user_type': userType,
         },
       );
 
       if (response.statusCode == 200) {
         final data = response.data;
 
+        // Backend returns user data directly, create session token
+        final sessionToken = 'session-${data['id']}';
+
         // Save auth data
-        await _storageService.saveAuthToken(data['access_token']);
-        await _storageService.saveUserId(data['user']['id']);
+        await _storageService.saveAuthToken(sessionToken);
+        await _storageService.saveUserId(data['id']);
         await _storageService.saveUserType(userType);
         await _storageService.saveUserEmail(email);
-        await _storageService.saveUserName(data['user']['name']);
+        await _storageService.saveUserName(data['name']);
         await _storageService.saveRememberMe(rememberMe);
 
-        return data;
+        return {'user': data};
       } else {
         throw Exception('Login failed with status: ${response.statusCode}');
       }
@@ -60,20 +71,50 @@ class AuthService {
     Map<String, dynamic>? additionalData,
   }) async {
     try {
+      // Determine endpoint based on user type
+      String endpoint;
+      if (userType == 'coach' || userType == 'owner') {
+        endpoint = ApiEndpoints.coaches;
+      } else {
+        endpoint = ApiEndpoints.students;
+      }
+
+      // Prepare data based on user type
+      final Map<String, dynamic> requestData = {
+        'name': name,
+        'email': email,
+        'phone': phone,
+        'password': password,
+      };
+
+      // Add role field for coaches/owners
+      if (userType == 'coach' || userType == 'owner') {
+        requestData['role'] = userType;  // Set role to "owner" or "coach"
+      }
+
+      // Add any additional data
+      if (additionalData != null) {
+        requestData.addAll(additionalData);
+      }
+
       final response = await _apiService.post(
-        ApiEndpoints.register,
-        data: {
-          'name': name,
-          'email': email,
-          'phone': phone,
-          'password': password,
-          'user_type': userType,
-          ...?additionalData,
-        },
+        endpoint,
+        data: requestData,
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        return response.data;
+        final data = response.data;
+
+        // Auto-login after successful registration
+        final sessionToken = 'session-${data['id']}';
+        await _storageService.saveAuthToken(sessionToken);
+        await _storageService.saveUserId(data['id']);
+        await _storageService.saveUserType(userType);
+        await _storageService.saveUserEmail(email);
+        await _storageService.saveUserName(data['name']);
+        await _storageService.saveRememberMe(false);
+
+        return {'user': data};
       } else {
         throw Exception('Registration failed with status: ${response.statusCode}');
       }
