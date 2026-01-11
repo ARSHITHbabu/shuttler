@@ -10,103 +10,131 @@ class StorageService {
   static const String _keyRememberMe = 'remember_me';
   static const String _keyFcmToken = 'fcm_token';
 
-  late SharedPreferences _prefs;
+  SharedPreferences? _prefs;
 
   /// Initialize the storage service
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
   }
 
+  /// Ensure storage is initialized (lazy initialization)
+  Future<void> _ensureInitialized() async {
+    if (_prefs == null) {
+      _prefs = await SharedPreferences.getInstance();
+    }
+  }
+
   // Auth Token
   Future<bool> saveAuthToken(String token) async {
-    return await _prefs.setString(_keyAuthToken, token);
+    await _ensureInitialized();
+    return await _prefs!.setString(_keyAuthToken, token);
   }
 
   String? getAuthToken() {
-    return _prefs.getString(_keyAuthToken);
+    if (_prefs == null) return null;
+    return _prefs!.getString(_keyAuthToken);
   }
 
   Future<bool> removeAuthToken() async {
-    return await _prefs.remove(_keyAuthToken);
+    if (_prefs == null) return false;
+    return await _prefs!.remove(_keyAuthToken);
   }
 
   // User ID
   Future<bool> saveUserId(int userId) async {
-    return await _prefs.setInt(_keyUserId, userId);
+    await _ensureInitialized();
+    return await _prefs!.setInt(_keyUserId, userId);
   }
 
   int? getUserId() {
-    return _prefs.getInt(_keyUserId);
+    if (_prefs == null) return null;
+    return _prefs!.getInt(_keyUserId);
   }
 
   Future<bool> removeUserId() async {
-    return await _prefs.remove(_keyUserId);
+    if (_prefs == null) return false;
+    return await _prefs!.remove(_keyUserId);
   }
 
   // User Type (owner/coach/student)
   Future<bool> saveUserType(String userType) async {
-    return await _prefs.setString(_keyUserType, userType);
+    await _ensureInitialized();
+    return await _prefs!.setString(_keyUserType, userType);
   }
 
   String? getUserType() {
-    return _prefs.getString(_keyUserType);
+    if (_prefs == null) return null;
+    return _prefs!.getString(_keyUserType);
   }
 
   Future<bool> removeUserType() async {
-    return await _prefs.remove(_keyUserType);
+    if (_prefs == null) return false;
+    return await _prefs!.remove(_keyUserType);
   }
 
   // User Email
   Future<bool> saveUserEmail(String email) async {
-    return await _prefs.setString(_keyUserEmail, email);
+    await _ensureInitialized();
+    return await _prefs!.setString(_keyUserEmail, email);
   }
 
   String? getUserEmail() {
-    return _prefs.getString(_keyUserEmail);
+    if (_prefs == null) return null;
+    return _prefs!.getString(_keyUserEmail);
   }
 
   Future<bool> removeUserEmail() async {
-    return await _prefs.remove(_keyUserEmail);
+    if (_prefs == null) return false;
+    return await _prefs!.remove(_keyUserEmail);
   }
 
   // User Name
   Future<bool> saveUserName(String name) async {
-    return await _prefs.setString(_keyUserName, name);
+    await _ensureInitialized();
+    return await _prefs!.setString(_keyUserName, name);
   }
 
   String? getUserName() {
-    return _prefs.getString(_keyUserName);
+    if (_prefs == null) return null;
+    return _prefs!.getString(_keyUserName);
   }
 
   Future<bool> removeUserName() async {
-    return await _prefs.remove(_keyUserName);
+    if (_prefs == null) return false;
+    return await _prefs!.remove(_keyUserName);
   }
 
   // Remember Me
   Future<bool> saveRememberMe(bool value) async {
-    return await _prefs.setBool(_keyRememberMe, value);
+    await _ensureInitialized();
+    return await _prefs!.setBool(_keyRememberMe, value);
   }
 
   bool getRememberMe() {
-    return _prefs.getBool(_keyRememberMe) ?? false;
+    if (_prefs == null) return false;
+    return _prefs!.getBool(_keyRememberMe) ?? false;
   }
 
   // FCM Token (for push notifications)
   Future<bool> saveFcmToken(String token) async {
-    return await _prefs.setString(_keyFcmToken, token);
+    await _ensureInitialized();
+    return await _prefs!.setString(_keyFcmToken, token);
   }
 
   String? getFcmToken() {
-    return _prefs.getString(_keyFcmToken);
+    if (_prefs == null) return null;
+    return _prefs!.getString(_keyFcmToken);
   }
 
   Future<bool> removeFcmToken() async {
-    return await _prefs.remove(_keyFcmToken);
+    if (_prefs == null) return false;
+    return await _prefs!.remove(_keyFcmToken);
   }
 
   // Clear all user data (logout)
   Future<bool> clearAll() async {
-    return await _prefs.clear();
+    if (_prefs == null) return false;
+    return await _prefs!.clear();
   }
 
   // Clear only auth data (keep app preferences)

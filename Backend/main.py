@@ -4,9 +4,11 @@ from fastapi.responses import FileResponse
 from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, Text, Date, DateTime, ForeignKey, JSON, func
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
+import json
 import os
 import shutil
 import uuid
@@ -793,6 +795,15 @@ def create_coach(coach: CoachCreate):
         db.commit()
         db.refresh(db_coach)
         return db_coach
+    except IntegrityError as e:
+        db.rollback()
+        error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
+        if 'email' in error_msg.lower() or 'unique' in error_msg.lower():
+            raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=400, detail=f"Database constraint violation: {error_msg}")
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error creating coach: {str(e)}")
     finally:
         db.close()
 

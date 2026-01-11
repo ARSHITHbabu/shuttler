@@ -8,7 +8,10 @@ part 'service_providers.g.dart';
 /// Provider for StorageService singleton
 @riverpod
 StorageService storageService(StorageServiceRef ref) {
-  return StorageService();
+  final service = StorageService();
+  // Note: init() must be called before use, but we can't do async in sync provider
+  // The service will be initialized in main.dart
+  return service;
 }
 
 /// Provider for ApiService singleton

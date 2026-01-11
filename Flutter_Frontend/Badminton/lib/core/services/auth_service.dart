@@ -39,18 +39,35 @@ class AuthService {
       if (response.statusCode == 200) {
         final data = response.data;
 
-        // Backend returns user data directly, create session token
-        final sessionToken = 'session-${data['id']}';
+        // Backend returns nested structure: { "success": true, "coach": {...} } or { "success": true, "student": {...} }
+        // Extract the user data from the nested structure
+        Map<String, dynamic> userData;
+        if (data.containsKey('coach')) {
+          userData = data['coach'] as Map<String, dynamic>;
+        } else if (data.containsKey('student')) {
+          userData = data['student'] as Map<String, dynamic>;
+        } else {
+          // Fallback: assume data is already the user object (for backward compatibility)
+          userData = data as Map<String, dynamic>;
+        }
+
+        // Check if login was successful
+        if (data['success'] == false) {
+          throw Exception(data['message'] ?? 'Login failed');
+        }
+
+        // Create session token from user ID
+        final sessionToken = 'session-${userData['id']}';
 
         // Save auth data
         await _storageService.saveAuthToken(sessionToken);
-        await _storageService.saveUserId(data['id']);
+        await _storageService.saveUserId(userData['id']);
         await _storageService.saveUserType(userType);
         await _storageService.saveUserEmail(email);
-        await _storageService.saveUserName(data['name']);
+        await _storageService.saveUserName(userData['name']);
         await _storageService.saveRememberMe(rememberMe);
 
-        return {'user': data};
+        return {'user': userData};
       } else {
         throw Exception('Login failed with status: ${response.statusCode}');
       }
