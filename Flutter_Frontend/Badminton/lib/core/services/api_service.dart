@@ -44,22 +44,31 @@ class ApiService {
   Interceptor _loggingInterceptor() {
     return InterceptorsWrapper(
       onRequest: (options, handler) {
-        print('🌐 REQUEST[${options.method}] => ${options.path}');
+        final fullUrl = '${options.baseUrl}${options.path}';
+        print('🌐 REQUEST[${options.method}] => $fullUrl');
+        print('🌐 Base URL: ${options.baseUrl}');
+        print('🌐 Path: ${options.path}');
         if (options.data != null) {
           print('📤 Data: ${options.data}');
         }
         if (options.queryParameters.isNotEmpty) {
           print('🔍 Params: ${options.queryParameters}');
         }
+        print('🔍 Headers: ${options.headers}');
         handler.next(options);
       },
       onResponse: (response, handler) {
         print('✅ RESPONSE[${response.statusCode}] => ${response.requestOptions.path}');
+        print('✅ Response Data: ${response.data}');
         handler.next(response);
       },
       onError: (error, handler) {
         print('❌ ERROR[${error.response?.statusCode}] => ${error.requestOptions.path}');
         print('💥 Message: ${error.message}');
+        print('💥 Error Type: ${error.type}');
+        print('💥 Full URL: ${error.requestOptions.baseUrl}${error.requestOptions.path}');
+        print('💥 Response Data: ${error.response?.data}');
+        print('💥 Response Headers: ${error.response?.headers}');
         handler.next(error);
       },
     );
@@ -84,6 +93,8 @@ class ApiService {
 
         if (error.type == DioExceptionType.unknown) {
           print('📡 Network error - check connection');
+          print('📡 Error details: ${error.error}');
+          print('📡 Request URL: ${error.requestOptions.baseUrl}${error.requestOptions.path}');
         }
 
         handler.next(error);
