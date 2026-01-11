@@ -50,6 +50,7 @@ class CoachDB(Base):
     email = Column(String, nullable=False, unique=True)
     phone = Column(String, nullable=False)
     password = Column(String, nullable=False)
+    role = Column(String, default="coach")  # "coach" or "owner"
     specialization = Column(String, nullable=True)
     experience_years = Column(Integer, nullable=True)
     status = Column(String, default="active")  # active, inactive
@@ -264,6 +265,7 @@ class CoachCreate(BaseModel):
     email: str
     phone: str
     password: str
+    role: Optional[str] = "coach"  # "coach" or "owner"
     specialization: Optional[str] = None
     experience_years: Optional[int] = None
 
@@ -273,10 +275,13 @@ class Coach(BaseModel):
     email: str
     phone: str
     password: str
+    role: str = "coach"
     specialization: Optional[str] = None
     experience_years: Optional[int] = None
     status: str = "active"
-    
+    profile_photo: Optional[str] = None
+    fcm_token: Optional[str] = None
+
     class Config:
         from_attributes = True
 
@@ -357,7 +362,9 @@ class Student(BaseModel):
     date_of_birth: Optional[str] = None
     address: Optional[str] = None
     status: str = "active"
-    
+    profile_photo: Optional[str] = None
+    fcm_token: Optional[str] = None
+
     class Config:
         from_attributes = True
 
