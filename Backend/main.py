@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, Text, Date, DateTime, ForeignKey, JSON, func
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from pydantic import BaseModel
 from typing import List, Optional
@@ -253,8 +253,67 @@ class CalendarEventDB(Base):
     # Relationship
     creator = relationship("CoachDB", back_populates="calendar_events")
 
+# ==================== Database Migration Functions ====================
+
+def check_and_add_column(engine, table_name: str, column_name: str, column_type: str, nullable: bool = True, default_value: str = None):
+    """Check if a column exists in a table, and add it if missing"""
+    from sqlalchemy import inspect, text
+    
+    try:
+        inspector = inspect(engine)
+        columns = [col['name'] for col in inspector.get_columns(table_name)]
+        
+        if column_name not in columns:
+            print(f"⚠️  Column '{column_name}' missing in '{table_name}' table. Adding...")
+            try:
+                with engine.begin() as conn:
+                    alter_sql = f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"
+                    if not nullable:
+                        alter_sql += " NOT NULL"
+                    if default_value:
+                        alter_sql += f" DEFAULT {default_value}"
+                    conn.execute(text(alter_sql))
+                print(f"✅ Added column '{column_name}' to '{table_name}' table")
+                return True
+            except Exception as e:
+                print(f"❌ Error adding column '{column_name}': {e}")
+                return False
+        return False
+    except Exception as e:
+        print(f"⚠️  Could not check columns for '{table_name}': {e}")
+        return False
+
+def migrate_database_schema(engine):
+    """Migrate database schema to match current models"""
+    from sqlalchemy import inspect
+    
+    try:
+        inspector = inspect(engine)
+        
+        # Check if tables exist
+        tables = inspector.get_table_names()
+        
+        # Migrate coaches table
+        if 'coaches' in tables:
+            check_and_add_column(engine, 'coaches', 'role', 'VARCHAR', nullable=True, default_value="'coach'")
+            check_and_add_column(engine, 'coaches', 'profile_photo', 'VARCHAR(500)', nullable=True)
+            check_and_add_column(engine, 'coaches', 'fcm_token', 'VARCHAR(500)', nullable=True)
+        
+        # Migrate students table
+        if 'students' in tables:
+            check_and_add_column(engine, 'students', 'profile_photo', 'VARCHAR(500)', nullable=True)
+            check_and_add_column(engine, 'students', 'fcm_token', 'VARCHAR(500)', nullable=True)
+        
+        print("✅ Database schema migration completed!")
+    except Exception as e:
+        print(f"⚠️  Migration error: {e}")
+
 # Create tables
 Base.metadata.create_all(bind=engine)
+
+# Run migration to add missing columns
+migrate_database_schema(engine)
+
 print("✅ Database tables created/verified!")
 
 # ==================== Pydantic Models ====================
