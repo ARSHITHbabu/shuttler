@@ -1,7 +1,14 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 /// API endpoint constants for backend integration
 class ApiEndpoints {
-  // Base URL - Change for production
-  static const String baseUrl = 'http://127.0.0.1:8000';
+  // Base URL - Use localhost for web, 127.0.0.1 for mobile/desktop
+  static String get baseUrl {
+    if (kIsWeb) {
+      return 'http://localhost:8000';
+    }
+    return 'http://127.0.0.1:8000';
+  }
 
   // Authentication
   static const String login = '/api/auth/login';

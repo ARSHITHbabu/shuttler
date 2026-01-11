@@ -39,24 +39,21 @@ class AuthService {
       if (response.statusCode == 200) {
         final data = response.data;
 
-        // Backend returns nested structure: { "success": true, "coach": {...} } or { "success": true, "student": {...} }
-        // Extract the user data from the nested structure
-        Map<String, dynamic> userData;
-        if (data.containsKey('coach')) {
-          userData = data['coach'] as Map<String, dynamic>;
-        } else if (data.containsKey('student')) {
-          userData = data['student'] as Map<String, dynamic>;
-        } else {
-          // Fallback: assume data is already the user object (for backward compatibility)
-          userData = data as Map<String, dynamic>;
-        }
-
         // Check if login was successful
         if (data['success'] == false) {
           throw Exception(data['message'] ?? 'Login failed');
         }
 
-        // Create session token from user ID
+        // Extract user data from nested object
+        final userData = userType == 'student' 
+            ? data['student'] 
+            : data['coach'];
+
+        if (userData == null) {
+          throw Exception('Invalid response format');
+        }
+
+        // Create session token
         final sessionToken = 'session-${userData['id']}';
 
         // Save auth data
@@ -122,16 +119,24 @@ class AuthService {
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = response.data;
 
+        // Registration returns user data directly (not nested like login)
+        // But handle both cases just in case
+        final userData = data['coach'] ?? data['student'] ?? data;
+
+        if (userData['id'] == null) {
+          throw Exception('Invalid response format');
+        }
+
         // Auto-login after successful registration
-        final sessionToken = 'session-${data['id']}';
+        final sessionToken = 'session-${userData['id']}';
         await _storageService.saveAuthToken(sessionToken);
-        await _storageService.saveUserId(data['id']);
+        await _storageService.saveUserId(userData['id']);
         await _storageService.saveUserType(userType);
         await _storageService.saveUserEmail(email);
-        await _storageService.saveUserName(data['name']);
+        await _storageService.saveUserName(userData['name']);
         await _storageService.saveRememberMe(false);
 
-        return {'user': data};
+        return {'user': userData};
       } else {
         throw Exception('Registration failed with status: ${response.statusCode}');
       }

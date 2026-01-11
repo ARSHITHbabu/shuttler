@@ -11,16 +11,18 @@ class StorageService {
   static const String _keyFcmToken = 'fcm_token';
 
   SharedPreferences? _prefs;
+  bool _isInitialized = false;
 
   /// Initialize the storage service
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
+    _isInitialized = true;
   }
 
-  /// Ensure storage is initialized (lazy initialization)
+  /// Ensure storage is initialized (for web compatibility)
   Future<void> _ensureInitialized() async {
-    if (_prefs == null) {
-      _prefs = await SharedPreferences.getInstance();
+    if (!_isInitialized) {
+      await init();
     }
   }
 
@@ -31,12 +33,15 @@ class StorageService {
   }
 
   String? getAuthToken() {
-    if (_prefs == null) return null;
+    if (!_isInitialized) {
+      // Return null if not initialized (safe for read operations)
+      return null;
+    }
     return _prefs!.getString(_keyAuthToken);
   }
 
   Future<bool> removeAuthToken() async {
-    if (_prefs == null) return false;
+    await _ensureInitialized();
     return await _prefs!.remove(_keyAuthToken);
   }
 
@@ -47,12 +52,12 @@ class StorageService {
   }
 
   int? getUserId() {
-    if (_prefs == null) return null;
+    if (!_isInitialized) return null;
     return _prefs!.getInt(_keyUserId);
   }
 
   Future<bool> removeUserId() async {
-    if (_prefs == null) return false;
+    await _ensureInitialized();
     return await _prefs!.remove(_keyUserId);
   }
 
@@ -63,12 +68,12 @@ class StorageService {
   }
 
   String? getUserType() {
-    if (_prefs == null) return null;
+    if (!_isInitialized) return null;
     return _prefs!.getString(_keyUserType);
   }
 
   Future<bool> removeUserType() async {
-    if (_prefs == null) return false;
+    await _ensureInitialized();
     return await _prefs!.remove(_keyUserType);
   }
 
@@ -79,12 +84,12 @@ class StorageService {
   }
 
   String? getUserEmail() {
-    if (_prefs == null) return null;
+    if (!_isInitialized) return null;
     return _prefs!.getString(_keyUserEmail);
   }
 
   Future<bool> removeUserEmail() async {
-    if (_prefs == null) return false;
+    await _ensureInitialized();
     return await _prefs!.remove(_keyUserEmail);
   }
 
@@ -95,12 +100,12 @@ class StorageService {
   }
 
   String? getUserName() {
-    if (_prefs == null) return null;
+    if (!_isInitialized) return null;
     return _prefs!.getString(_keyUserName);
   }
 
   Future<bool> removeUserName() async {
-    if (_prefs == null) return false;
+    await _ensureInitialized();
     return await _prefs!.remove(_keyUserName);
   }
 
@@ -111,7 +116,7 @@ class StorageService {
   }
 
   bool getRememberMe() {
-    if (_prefs == null) return false;
+    if (!_isInitialized) return false;
     return _prefs!.getBool(_keyRememberMe) ?? false;
   }
 
@@ -122,18 +127,18 @@ class StorageService {
   }
 
   String? getFcmToken() {
-    if (_prefs == null) return null;
+    if (!_isInitialized) return null;
     return _prefs!.getString(_keyFcmToken);
   }
 
   Future<bool> removeFcmToken() async {
-    if (_prefs == null) return false;
+    await _ensureInitialized();
     return await _prefs!.remove(_keyFcmToken);
   }
 
   // Clear all user data (logout)
   Future<bool> clearAll() async {
-    if (_prefs == null) return false;
+    await _ensureInitialized();
     return await _prefs!.clear();
   }
 
