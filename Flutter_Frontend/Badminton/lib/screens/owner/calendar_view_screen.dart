@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:table_calendar/table_calendar.dart';
-import 'dart:convert';
-import 'dart:developer' as developer;
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
@@ -98,34 +96,9 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
     try {
       final calendarService = ref.read(calendarServiceProvider);
       
-      // #region agent log
-      try {
-        final logData = {"id":"log_${DateTime.now().millisecondsSinceEpoch}","timestamp":DateTime.now().millisecondsSinceEpoch,"location":"calendar_view_screen.dart:97","message":"_saveEvent entry","data":{},"sessionId":"debug-session","runId":"run1","hypothesisId":"A,B,C,D,E"};
-        developer.log(jsonEncode(logData), name: 'DEBUG');
-        print('DEBUG: ${jsonEncode(logData)}');
-      } catch (_) {}
-      // #endregion
-      
       // Get current auth state from AsyncValue instead of waiting for future
       final authAsync = ref.read(authProvider);
-      
-      // #region agent log
-      try {
-        final logData = {"id":"log_${DateTime.now().millisecondsSinceEpoch}","timestamp":DateTime.now().millisecondsSinceEpoch,"location":"calendar_view_screen.dart:100","message":"AsyncValue state check","data":{"hasValue":authAsync.hasValue,"isLoading":authAsync.isLoading,"hasError":authAsync.hasError,"valueType":authAsync.value?.runtimeType.toString()},"sessionId":"debug-session","runId":"run1","hypothesisId":"A,B"};
-        developer.log(jsonEncode(logData), name: 'DEBUG');
-        print('DEBUG: ${jsonEncode(logData)}');
-      } catch (_) {}
-      // #endregion
-      
       AuthState? authState = authAsync.value;
-      
-      // #region agent log
-      try {
-        final logData = {"id":"log_${DateTime.now().millisecondsSinceEpoch}","timestamp":DateTime.now().millisecondsSinceEpoch,"location":"calendar_view_screen.dart:101","message":"authState from AsyncValue","data":{"isNull":authState==null,"isAuthenticated":authState is Authenticated,"userId":authState is Authenticated?(authState as Authenticated).userId:null},"sessionId":"debug-session","runId":"run1","hypothesisId":"A,B"};
-        developer.log(jsonEncode(logData), name: 'DEBUG');
-        print('DEBUG: ${jsonEncode(logData)}');
-      } catch (_) {}
-      // #endregion
       
       // Fallback: If provider state is not available, try reading from authService directly
       if (authState == null) {
@@ -139,27 +112,11 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
         
         final isLoggedIn = authService.isLoggedIn();
         
-        // #region agent log
-        try {
-          final logData = {"id":"log_${DateTime.now().millisecondsSinceEpoch}","timestamp":DateTime.now().millisecondsSinceEpoch,"location":"calendar_view_screen.dart:105","message":"Fallback: authService check","data":{"isLoggedIn":isLoggedIn,"storageInitialized":storageService.isInitialized},"sessionId":"debug-session","runId":"run1","hypothesisId":"C,D"};
-          developer.log(jsonEncode(logData), name: 'DEBUG');
-          print('DEBUG: ${jsonEncode(logData)}');
-        } catch (_) {}
-        // #endregion
-        
         if (isLoggedIn) {
           final userId = authService.getCurrentUserId();
           final userType = authService.getCurrentUserType();
           final userName = authService.getCurrentUserName();
           final userEmail = authService.getCurrentUserEmail();
-          
-          // #region agent log
-          try {
-            final logData = {"id":"log_${DateTime.now().millisecondsSinceEpoch}","timestamp":DateTime.now().millisecondsSinceEpoch,"location":"calendar_view_screen.dart:107","message":"Fallback: storage values","data":{"userId":userId,"userType":userType,"userName":userName,"userEmail":userEmail,"allNotNull":userId!=null&&userType!=null&&userName!=null&&userEmail!=null},"sessionId":"debug-session","runId":"run1","hypothesisId":"C,D"};
-            developer.log(jsonEncode(logData), name: 'DEBUG');
-            print('DEBUG: ${jsonEncode(logData)}');
-          } catch (_) {}
-          // #endregion
           
           if (userId != null && userType != null && userName != null && userEmail != null) {
             authState = Authenticated(
@@ -168,28 +125,12 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
               userName: userName,
               userEmail: userEmail,
             );
-            
-            // #region agent log
-            try {
-              final logData = {"id":"log_${DateTime.now().millisecondsSinceEpoch}","timestamp":DateTime.now().millisecondsSinceEpoch,"location":"calendar_view_screen.dart:113","message":"Fallback: created Authenticated state","data":{"userId":userId,"userType":userType},"sessionId":"debug-session","runId":"run1","hypothesisId":"C,D"};
-              developer.log(jsonEncode(logData), name: 'DEBUG');
-              print('DEBUG: ${jsonEncode(logData)}');
-            } catch (_) {}
-            // #endregion
           }
         }
       }
       
       // Validate authentication - created_by is required by backend
       if (authState == null) {
-        // #region agent log
-        try {
-          final logData = {"id":"log_${DateTime.now().millisecondsSinceEpoch}","timestamp":DateTime.now().millisecondsSinceEpoch,"location":"calendar_view_screen.dart:124","message":"authState is null - returning error","data":{"authAsyncHasValue":authAsync.hasValue,"authAsyncIsLoading":authAsync.isLoading,"authAsyncHasError":authAsync.hasError},"sessionId":"debug-session","runId":"run1","hypothesisId":"A,B,C,D,E"};
-          developer.log(jsonEncode(logData), name: 'DEBUG');
-          print('DEBUG: ${jsonEncode(logData)}');
-        } catch (_) {}
-        // #endregion
-        
         // Auth state is still loading or not available
         setState(() => _isLoading = false);
         if (mounted) {
@@ -212,15 +153,6 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
 
       // Validate userId is a valid positive integer
       final userId = authState.userId;
-      
-      // #region agent log
-      try {
-        final logData = {"id":"log_${DateTime.now().millisecondsSinceEpoch}","timestamp":DateTime.now().millisecondsSinceEpoch,"location":"calendar_view_screen.dart:145","message":"Auth validated successfully","data":{"userId":userId,"userType":authState.userType},"sessionId":"debug-session","runId":"run1","hypothesisId":"A,B,C,D,E"};
-        developer.log(jsonEncode(logData), name: 'DEBUG');
-        print('DEBUG: ${jsonEncode(logData)}');
-      } catch (_) {}
-      // #endregion
-      
       if (userId <= 0) {
         setState(() => _isLoading = false);
         if (mounted) {
