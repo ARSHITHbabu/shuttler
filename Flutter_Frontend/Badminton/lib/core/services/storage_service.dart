@@ -1,6 +1,4 @@
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
-import 'dart:developer' as developer;
 
 /// Local storage service for persisting user data
 class StorageService {
@@ -90,26 +88,9 @@ class StorageService {
     }
     
     if (!_isInitialized) {
-      // #region agent log
-      try {
-        final logData = {"id":"log_${DateTime.now().millisecondsSinceEpoch}","timestamp":DateTime.now().millisecondsSinceEpoch,"location":"storage_service.dart:getUserId","message":"Storage not initialized","data":{"_isInitialized":_isInitialized},"sessionId":"debug-session","runId":"run1","hypothesisId":"C,D"};
-        developer.log(jsonEncode(logData), name: 'DEBUG');
-        print('DEBUG: ${jsonEncode(logData)}');
-      } catch (_) {}
-      // #endregion
       return null;
     }
-    final userId = _prefs!.getInt(_keyUserId);
-    
-    // #region agent log
-    try {
-      final logData = {"id":"log_${DateTime.now().millisecondsSinceEpoch}","timestamp":DateTime.now().millisecondsSinceEpoch,"location":"storage_service.dart:getUserId","message":"getUserId result","data":{"userId":userId},"sessionId":"debug-session","runId":"run1","hypothesisId":"C,D"};
-      developer.log(jsonEncode(logData), name: 'DEBUG');
-      print('DEBUG: ${jsonEncode(logData)}');
-    } catch (_) {}
-    // #endregion
-    
-    return userId;
+    return _prefs!.getInt(_keyUserId);
   }
 
   Future<bool> removeUserId() async {
@@ -209,31 +190,13 @@ class StorageService {
 
   // Check if user is logged in
   bool isLoggedIn() {
-    // #region agent log
-    try {
-      final logData = {"id":"log_${DateTime.now().millisecondsSinceEpoch}","timestamp":DateTime.now().millisecondsSinceEpoch,"location":"storage_service.dart:isLoggedIn","message":"isLoggedIn check","data":{"_isInitialized":_isInitialized},"sessionId":"debug-session","runId":"run1","hypothesisId":"C,D"};
-      developer.log(jsonEncode(logData), name: 'DEBUG');
-      print('DEBUG: ${jsonEncode(logData)}');
-    } catch (_) {}
-    // #endregion
-    
     // Try to initialize if not already initialized (best effort for sync method)
     if (!_isInitialized) {
       _tryInitSync();
     }
     
     final token = getAuthToken();
-    final result = token != null && token.isNotEmpty;
-    
-    // #region agent log
-    try {
-      final logData = {"id":"log_${DateTime.now().millisecondsSinceEpoch}","timestamp":DateTime.now().millisecondsSinceEpoch,"location":"storage_service.dart:isLoggedIn","message":"isLoggedIn result","data":{"tokenExists":token!=null,"tokenLength":token?.length??0,"result":result,"_isInitialized":_isInitialized},"sessionId":"debug-session","runId":"run1","hypothesisId":"C,D"};
-      developer.log(jsonEncode(logData), name: 'DEBUG');
-      print('DEBUG: ${jsonEncode(logData)}');
-    } catch (_) {}
-    // #endregion
-    
-    return result;
+    return token != null && token.isNotEmpty;
   }
 
   // Get all user data as map
