@@ -1329,6 +1329,42 @@ def remove_student_from_batch(batch_id: int, student_id: int):
 
 # ==================== Attendance Routes ====================
 
+@app.get("/attendance/", response_model=List[Attendance])
+def get_attendance(
+    date: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    batch_id: Optional[int] = None,
+    student_id: Optional[int] = None,
+):
+    """Get attendance records with optional filters"""
+    db = SessionLocal()
+    try:
+        query = db.query(AttendanceDB)
+        
+        # Filter by exact date
+        if date:
+            query = query.filter(AttendanceDB.date == date)
+        
+        # Filter by date range
+        if start_date:
+            query = query.filter(AttendanceDB.date >= start_date)
+        if end_date:
+            query = query.filter(AttendanceDB.date <= end_date)
+        
+        # Filter by batch_id
+        if batch_id:
+            query = query.filter(AttendanceDB.batch_id == batch_id)
+        
+        # Filter by student_id
+        if student_id:
+            query = query.filter(AttendanceDB.student_id == student_id)
+        
+        attendance = query.order_by(AttendanceDB.date.desc()).all()
+        return attendance
+    finally:
+        db.close()
+
 @app.post("/attendance/", response_model=Attendance)
 def mark_attendance(attendance: AttendanceCreate):
     db = SessionLocal()
