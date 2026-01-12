@@ -83,16 +83,17 @@ class StudentDB(Base):
     name = Column(String, nullable=False)
     phone = Column(String, nullable=False)
     email = Column(String, nullable=False, unique=True)
-    guardian_name = Column(String, nullable=False)
-    guardian_phone = Column(String, nullable=False)
+    guardian_name = Column(String, nullable=True)  # Optional for signup, required for profile completion
+    guardian_phone = Column(String, nullable=True)  # Optional for signup, required for profile completion
     password = Column(String, nullable=False)
-    added_by = Column(String, nullable=False)
-    date_of_birth = Column(String, nullable=True)
-    address = Column(Text, nullable=True)
+    added_by = Column(String, nullable=True)  # Optional for signup
+    date_of_birth = Column(String, nullable=True)  # Required for profile completion
+    address = Column(Text, nullable=True)  # Required for profile completion
     status = Column(String, default="active")
+    t_shirt_size = Column(String, nullable=True)  # Required for profile completion
 
     # NEW COLUMNS for Phase 0 enhancements:
-    profile_photo = Column(String(500), nullable=True)  # Profile photo URL/path
+    profile_photo = Column(String(500), nullable=True)  # Profile photo URL/path, required for profile completion
     fcm_token = Column(String(500), nullable=True)  # Firebase Cloud Messaging token for push notifications
 
 class BatchStudentDB(Base):
@@ -285,7 +286,7 @@ def check_and_add_column(engine, table_name: str, column_name: str, column_type:
 
 def migrate_database_schema(engine):
     """Migrate database schema to match current models"""
-    from sqlalchemy import inspect
+    from sqlalchemy import inspect, text
     
     try:
         inspector = inspect(engine)
@@ -301,8 +302,36 @@ def migrate_database_schema(engine):
         
         # Migrate students table
         if 'students' in tables:
+            # Check existing columns
+            columns = [col['name'] for col in inspector.get_columns('students')]
+            
+            # Add new columns
             check_and_add_column(engine, 'students', 'profile_photo', 'VARCHAR(500)', nullable=True)
             check_and_add_column(engine, 'students', 'fcm_token', 'VARCHAR(500)', nullable=True)
+            check_and_add_column(engine, 'students', 't_shirt_size', 'VARCHAR', nullable=True)
+            
+            # Make existing columns nullable if they aren't already
+            try:
+                with engine.begin() as conn:
+                    # Check and alter guardian_name
+                    if 'guardian_name' in columns:
+                        col_info = next((col for col in inspector.get_columns('students') if col['name'] == 'guardian_name'), None)
+                        if col_info and not col_info.get('nullable', True):
+                            conn.execute(text("ALTER TABLE students ALTER COLUMN guardian_name DROP NOT NULL"))
+                    
+                    # Check and alter guardian_phone
+                    if 'guardian_phone' in columns:
+                        col_info = next((col for col in inspector.get_columns('students') if col['name'] == 'guardian_phone'), None)
+                        if col_info and not col_info.get('nullable', True):
+                            conn.execute(text("ALTER TABLE students ALTER COLUMN guardian_phone DROP NOT NULL"))
+                    
+                    # Check and alter added_by
+                    if 'added_by' in columns:
+                        col_info = next((col for col in inspector.get_columns('students') if col['name'] == 'added_by'), None)
+                        if col_info and not col_info.get('nullable', True):
+                            conn.execute(text("ALTER TABLE students ALTER COLUMN added_by DROP NOT NULL"))
+            except Exception as alter_error:
+                print(f"⚠️  Warning: Could not alter column constraints: {alter_error}")
         
         print("✅ Database schema migration completed!")
     except Exception as e:
@@ -402,25 +431,27 @@ class StudentCreate(BaseModel):
     name: str
     phone: str
     email: str
-    guardian_name: str
-    guardian_phone: str
+    guardian_name: Optional[str] = None  # Optional for signup, required for profile completion
+    guardian_phone: Optional[str] = None  # Optional for signup, required for profile completion
     password: str
-    added_by: str
-    date_of_birth: Optional[str] = None
-    address: Optional[str] = None
+    added_by: Optional[str] = None  # Optional for signup
+    date_of_birth: Optional[str] = None  # Required for profile completion
+    address: Optional[str] = None  # Required for profile completion
+    t_shirt_size: Optional[str] = None  # Required for profile completion
 
 class Student(BaseModel):
     id: int
     name: str
     phone: str
     email: str
-    guardian_name: str
-    guardian_phone: str
+    guardian_name: Optional[str] = None
+    guardian_phone: Optional[str] = None
     password: str
-    added_by: str
+    added_by: Optional[str] = None
     date_of_birth: Optional[str] = None
     address: Optional[str] = None
     status: str = "active"
+    t_shirt_size: Optional[str] = None
     profile_photo: Optional[str] = None
     fcm_token: Optional[str] = None
 
@@ -440,7 +471,9 @@ class StudentUpdate(BaseModel):
     password: Optional[str] = None
     date_of_birth: Optional[str] = None
     address: Optional[str] = None
+    t_shirt_size: Optional[str] = None
     status: Optional[str] = None
+    profile_photo: Optional[str] = None
 
 # Attendance Models
 class AttendanceCreate(BaseModel):
@@ -1049,7 +1082,17 @@ def remove_student_from_batch(batch_id: int, student_id: int):
 def create_student(student: StudentCreate):
     db = SessionLocal()
     try:
-        db_student = StudentDB(**student.dict())
+        # Prepare student data with defaults
+        student_data = student.model_dump()
+        
+        # Set default values for optional fields
+        if not student_data.get('added_by'):
+            student_data['added_by'] = 'self'
+        
+        if not student_data.get('status'):
+            student_data['status'] = 'active'
+        
+        db_student = StudentDB(**student_data)
         db.add(db_student)
         db.commit()
         db.refresh(db_student)
@@ -1108,6 +1151,46 @@ def delete_student(student_id: int):
     finally:
         db.close()
 
+@app.get("/students/{student_id}/profile-complete")
+def check_profile_complete(student_id: int):
+    """
+    Check if student profile is complete.
+    Returns True if all required profile fields are filled.
+    """
+    db = SessionLocal()
+    try:
+        student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found")
+        
+        # Required fields for profile completion
+        required_fields = {
+            'guardian_name': student.guardian_name,
+            'guardian_phone': student.guardian_phone,
+            'date_of_birth': student.date_of_birth,
+            'address': student.address,
+            'profile_photo': student.profile_photo,
+            't_shirt_size': student.t_shirt_size,
+        }
+        
+        # Check if all required fields are filled
+        is_complete = all(
+            value is not None and str(value).strip() != ''
+            for value in required_fields.values()
+        )
+        
+        missing_fields = [
+            field for field, value in required_fields.items()
+            if value is None or str(value).strip() == ''
+        ]
+        
+        return {
+            "is_complete": is_complete,
+            "missing_fields": missing_fields
+        }
+    finally:
+        db.close()
+
 @app.post("/students/login")
 def login_student(login_data: StudentLogin):
     db = SessionLocal()
@@ -1124,6 +1207,21 @@ def login_student(login_data: StudentLogin):
                 BatchStudentDB.status == "approved"
             ).all()
             
+            # Check profile completeness
+            required_profile_fields = {
+                'guardian_name': student.guardian_name,
+                'guardian_phone': student.guardian_phone,
+                'date_of_birth': student.date_of_birth,
+                'address': student.address,
+                'profile_photo': student.profile_photo,
+                't_shirt_size': student.t_shirt_size,
+            }
+            
+            profile_complete = all(
+                value is not None and str(value).strip() != ''
+                for value in required_profile_fields.values()
+            )
+            
             return {
                 "success": True,
                 "message": "Login successful",
@@ -1136,9 +1234,12 @@ def login_student(login_data: StudentLogin):
                     "guardian_phone": student.guardian_phone,
                     "date_of_birth": student.date_of_birth,
                     "address": student.address,
+                    "t_shirt_size": student.t_shirt_size,
                     "status": student.status,
+                    "profile_photo": student.profile_photo,
                     "is_linked": len(approved_batches) > 0
-                }
+                },
+                "profile_complete": profile_complete
             }
         else:
             return {

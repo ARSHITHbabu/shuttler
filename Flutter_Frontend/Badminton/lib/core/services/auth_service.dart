@@ -64,7 +64,12 @@ class AuthService {
         await _storageService.saveUserName(userData['name']);
         await _storageService.saveRememberMe(rememberMe);
 
-        return {'user': userData};
+        // Return user data with profile completeness for students
+        final result = {'user': userData};
+        if (userType == 'student' && data.containsKey('profile_complete')) {
+          result['profile_complete'] = data['profile_complete'];
+        }
+        return result;
       } else {
         throw Exception('Login failed with status: ${response.statusCode}');
       }

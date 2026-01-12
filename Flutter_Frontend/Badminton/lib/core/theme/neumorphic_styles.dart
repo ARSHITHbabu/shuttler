@@ -4,21 +4,21 @@ import '../constants/colors.dart';
 /// Neumorphic shadow and style definitions matching React UI
 class NeumorphicStyles {
   /// Elevated shadow effect (outset) - used for buttons and cards
-  /// Creates a raised, 3D effect
+  /// Creates a raised, 3D effect matching React: 8px 8px 16px rgba(0,0,0,0.5), -8px -8px 16px rgba(40,40,40,0.1)
   static List<BoxShadow> getElevatedShadow({
-    double blurRadius = 12.0,
-    double offset = 6.0,
+    double blurRadius = 16.0,
+    double offset = 8.0,
   }) {
     return [
-      // Dark shadow (bottom-right)
+      // Dark shadow (bottom-right) - 8px 8px 16px rgba(0,0,0,0.5)
       BoxShadow(
-        color: AppColors.shadowDark.withOpacity(0.4),
+        color: AppColors.shadowDark.withOpacity(0.5),
         offset: Offset(offset, offset),
         blurRadius: blurRadius,
       ),
-      // Light shadow (top-left)
+      // Light shadow (top-left) - -8px -8px 16px rgba(40,40,40,0.1)
       BoxShadow(
-        color: AppColors.shadowLight.withOpacity(0.05),
+        color: const Color(0xFF282828).withOpacity(0.1), // rgba(40,40,40,0.1)
         offset: Offset(-offset, -offset),
         blurRadius: blurRadius,
       ),
@@ -26,18 +26,38 @@ class NeumorphicStyles {
   }
 
   /// Inset shadow effect - used for text fields and pressed buttons
-  /// Creates a sunken, depressed effect
+  /// Creates a sunken, depressed effect matching React: inset 4px 4px 8px rgba(0,0,0,0.5)
   static List<BoxShadow> getInsetShadow({
     double blurRadius = 8.0,
     double offset = 4.0,
     double spreadRadius = -2.0,
   }) {
     return [
+      // Inset shadow - inset 4px 4px 8px rgba(0,0,0,0.5)
       BoxShadow(
-        color: AppColors.shadowDark.withOpacity(0.4),
+        color: AppColors.shadowDark.withOpacity(0.5),
         offset: Offset(offset, offset),
         blurRadius: blurRadius,
         spreadRadius: spreadRadius,
+      ),
+      // Light inset highlight - inset -4px -4px 8px rgba(40,40,40,0.1)
+      BoxShadow(
+        color: const Color(0xFF282828).withOpacity(0.1),
+        offset: Offset(-offset, -offset),
+        blurRadius: blurRadius,
+        spreadRadius: spreadRadius,
+      ),
+    ];
+  }
+  
+  /// Small inset shadow for input fields - inset 2px 2px 4px rgba(0,0,0,0.5)
+  static List<BoxShadow> getSmallInsetShadow() {
+    return [
+      BoxShadow(
+        color: AppColors.shadowDark.withOpacity(0.5),
+        offset: const Offset(2, 2),
+        blurRadius: 4.0,
+        spreadRadius: -1.0,
       ),
     ];
   }
@@ -53,14 +73,22 @@ class NeumorphicStyles {
     ];
   }
 
-  /// Pressed shadow - for active/pressed state
+  /// Pressed shadow - for active/pressed state matching React: inset 4px 4px 8px rgba(0,0,0,0.5), inset -4px -4px 8px rgba(40,40,40,0.1)
   static List<BoxShadow> getPressedShadow() {
     return [
+      // Inset dark shadow
       BoxShadow(
-        color: AppColors.shadowDark.withOpacity(0.3),
-        offset: const Offset(2, 2),
-        blurRadius: 6,
-        spreadRadius: -1,
+        color: AppColors.shadowDark.withOpacity(0.5),
+        offset: const Offset(4, 4),
+        blurRadius: 8.0,
+        spreadRadius: -2.0,
+      ),
+      // Inset light highlight
+      BoxShadow(
+        color: const Color(0xFF282828).withOpacity(0.1),
+        offset: const Offset(-4, -4),
+        blurRadius: 8.0,
+        spreadRadius: -2.0,
       ),
     ];
   }

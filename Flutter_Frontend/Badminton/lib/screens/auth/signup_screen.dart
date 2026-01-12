@@ -60,7 +60,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await ref.read(authProvider.notifier).register(
+      final result = await ref.read(authProvider.notifier).register(
         name: _nameController.text.trim(),
         email: _emailController.text.trim(),
         phone: _phoneController.text.trim(),
@@ -69,7 +69,13 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       );
 
       if (mounted) {
-        // Navigate to appropriate dashboard
+        // For students, always redirect to profile completion after signup
+        if (widget.userType == 'student') {
+          context.go('/student-profile-complete');
+          return;
+        }
+
+        // Navigate to appropriate dashboard for other user types
         String route;
         switch (widget.userType) {
           case 'owner':
@@ -77,9 +83,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             break;
           case 'coach':
             route = '/coach-dashboard';
-            break;
-          case 'student':
-            route = '/student-dashboard';
             break;
           default:
             route = '/';

@@ -8,8 +8,10 @@ class Student {
   final String? guardianName;
   final String? guardianPhone;
   final String? address;
+  final String? dateOfBirth;
   final String? medicalConditions;
   final String status;
+  final String? tShirtSize;
   final String? profilePhoto;
   final String? fcmToken;
 
@@ -22,8 +24,10 @@ class Student {
     this.guardianName,
     this.guardianPhone,
     this.address,
+    this.dateOfBirth,
     this.medicalConditions,
     required this.status,
+    this.tShirtSize,
     this.profilePhoto,
     this.fcmToken,
   });
@@ -39,8 +43,10 @@ class Student {
       guardianName: json['guardian_name'] as String?,
       guardianPhone: json['guardian_phone'] as String?,
       address: json['address'] as String?,
+      dateOfBirth: json['date_of_birth'] as String?,
       medicalConditions: json['medical_conditions'] as String?,
       status: json['status'] as String? ?? 'active',
+      tShirtSize: json['t_shirt_size'] as String?,
       profilePhoto: json['profile_photo'] as String?,
       fcmToken: json['fcm_token'] as String?,
     );
@@ -57,8 +63,10 @@ class Student {
       'guardian_name': guardianName,
       'guardian_phone': guardianPhone,
       'address': address,
+      'date_of_birth': dateOfBirth,
       'medical_conditions': medicalConditions,
       'status': status,
+      't_shirt_size': tShirtSize,
       'profile_photo': profilePhoto,
       'fcm_token': fcmToken,
     };
@@ -74,8 +82,10 @@ class Student {
     String? guardianName,
     String? guardianPhone,
     String? address,
+    String? dateOfBirth,
     String? medicalConditions,
     String? status,
+    String? tShirtSize,
     String? profilePhoto,
     String? fcmToken,
   }) {
@@ -88,8 +98,10 @@ class Student {
       guardianName: guardianName ?? this.guardianName,
       guardianPhone: guardianPhone ?? this.guardianPhone,
       address: address ?? this.address,
+      dateOfBirth: dateOfBirth ?? this.dateOfBirth,
       medicalConditions: medicalConditions ?? this.medicalConditions,
       status: status ?? this.status,
+      tShirtSize: tShirtSize ?? this.tShirtSize,
       profilePhoto: profilePhoto ?? this.profilePhoto,
       fcmToken: fcmToken ?? this.fcmToken,
     );
@@ -99,8 +111,8 @@ class Student {
   String toString() {
     return 'Student(id: $id, name: $name, email: $email, phone: $phone, '
         'age: $age, guardianName: $guardianName, guardianPhone: $guardianPhone, '
-        'address: $address, medicalConditions: $medicalConditions, '
-        'status: $status, profilePhoto: $profilePhoto, fcmToken: $fcmToken)';
+        'address: $address, dateOfBirth: $dateOfBirth, medicalConditions: $medicalConditions, '
+        'status: $status, tShirtSize: $tShirtSize, profilePhoto: $profilePhoto, fcmToken: $fcmToken)';
   }
 
   @override
@@ -116,8 +128,10 @@ class Student {
         other.guardianName == guardianName &&
         other.guardianPhone == guardianPhone &&
         other.address == address &&
+        other.dateOfBirth == dateOfBirth &&
         other.medicalConditions == medicalConditions &&
         other.status == status &&
+        other.tShirtSize == tShirtSize &&
         other.profilePhoto == profilePhoto &&
         other.fcmToken == fcmToken;
   }
@@ -133,8 +147,10 @@ class Student {
       guardianName,
       guardianPhone,
       address,
+      dateOfBirth,
       medicalConditions,
       status,
+      tShirtSize,
       profilePhoto,
       fcmToken,
     );
