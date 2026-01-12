@@ -10,6 +10,7 @@ import 'session_management_screen.dart';
 import 'announcement_management_screen.dart';
 import 'calendar_view_screen.dart';
 import 'reports_screen.dart';
+import 'bmi_tracking_screen.dart';
 import 'settings_screen.dart';
 
 /// More Screen - Settings and additional features
@@ -118,6 +119,18 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (context) => const ReportsScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.monitor_weight_outlined,
+              title: 'BMI Tracking',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const BMITrackingScreen(),
                   ),
                 );
               },

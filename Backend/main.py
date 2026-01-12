@@ -583,9 +583,17 @@ class BMI(BaseModel):
     bmi: float
     date: str
     recorded_by: str
+    health_status: Optional[str] = None  # Added for frontend compatibility
     
     class Config:
         from_attributes = True
+
+class BMIUpdate(BaseModel):
+    student_id: Optional[int] = None
+    height: Optional[float] = None
+    weight: Optional[float] = None
+    date: Optional[str] = None
+    recorded_by: Optional[str] = None
 
 # Enquiry Models
 class EnquiryCreate(BaseModel):
@@ -1644,6 +1652,30 @@ def get_coach_performance_grouped(coach_name: str):
 
 # ==================== BMI Routes ====================
 
+def calculate_health_status(bmi_value: float) -> str:
+    """Calculate health status based on BMI value"""
+    if bmi_value < 18.5:
+        return "underweight"
+    elif bmi_value < 25:
+        return "normal"
+    elif bmi_value < 30:
+        return "overweight"
+    else:
+        return "obese"
+
+def bmi_db_to_response(bmi_db: BMIDB) -> BMI:
+    """Convert BMIDB to BMI response model with health_status"""
+    return BMI(
+        id=bmi_db.id,
+        student_id=bmi_db.student_id,
+        height=bmi_db.height,
+        weight=bmi_db.weight,
+        bmi=bmi_db.bmi,
+        date=bmi_db.date,
+        recorded_by=bmi_db.recorded_by,
+        health_status=calculate_health_status(bmi_db.bmi)
+    )
+
 @app.post("/bmi/", response_model=BMI)
 def create_bmi_record(bmi_data: BMICreate):
     db = SessionLocal()
@@ -1659,7 +1691,7 @@ def create_bmi_record(bmi_data: BMICreate):
         db.add(db_bmi)
         db.commit()
         db.refresh(db_bmi)
-        return db_bmi
+        return bmi_db_to_response(db_bmi)
     finally:
         db.close()
 
@@ -1668,7 +1700,124 @@ def get_student_bmi(student_id: int):
     db = SessionLocal()
     try:
         bmi_records = db.query(BMIDB).filter(BMIDB.student_id == student_id).all()
-        return bmi_records
+        return [bmi_db_to_response(record) for record in bmi_records]
+    finally:
+        db.close()
+
+# ==================== BMI Records Routes (Frontend Compatible) ====================
+
+@app.get("/bmi-records/", response_model=List[BMI])
+def get_bmi_records(
+    student_id: Optional[int] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
+):
+    """Get BMI records with optional filtering"""
+    db = SessionLocal()
+    try:
+        query = db.query(BMIDB)
+        
+        if student_id is not None:
+            query = query.filter(BMIDB.student_id == student_id)
+        
+        if start_date:
+            query = query.filter(BMIDB.date >= start_date)
+        
+        if end_date:
+            query = query.filter(BMIDB.date <= end_date)
+        
+        bmi_records = query.order_by(BMIDB.date.desc()).all()
+        return [bmi_db_to_response(record) for record in bmi_records]
+    finally:
+        db.close()
+
+@app.get("/bmi-records/{record_id}", response_model=BMI)
+def get_bmi_record(record_id: int):
+    """Get a single BMI record by ID"""
+    db = SessionLocal()
+    try:
+        bmi_record = db.query(BMIDB).filter(BMIDB.id == record_id).first()
+        if not bmi_record:
+            raise HTTPException(status_code=404, detail="BMI record not found")
+        return bmi_db_to_response(bmi_record)
+    finally:
+        db.close()
+
+@app.post("/bmi-records/", response_model=BMI)
+def create_bmi_record_v2(bmi_data: BMICreate):
+    """Create a new BMI record (frontend compatible endpoint)"""
+    db = SessionLocal()
+    try:
+        # Calculate BMI
+        height_m = bmi_data.height / 100
+        bmi_value = bmi_data.weight / (height_m ** 2)
+        
+        db_bmi = BMIDB(
+            **bmi_data.dict(),
+            bmi=round(bmi_value, 2)
+        )
+        db.add(db_bmi)
+        db.commit()
+        db.refresh(db_bmi)
+        return bmi_db_to_response(db_bmi)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        db.close()
+
+@app.put("/bmi-records/{record_id}", response_model=BMI)
+def update_bmi_record(record_id: int, bmi_update: BMIUpdate):
+    """Update a BMI record"""
+    db = SessionLocal()
+    try:
+        db_bmi = db.query(BMIDB).filter(BMIDB.id == record_id).first()
+        if not db_bmi:
+            raise HTTPException(status_code=404, detail="BMI record not found")
+        
+        # Update fields if provided
+        update_data = bmi_update.dict(exclude_unset=True)
+        
+        # Recalculate BMI if height or weight changed
+        height = update_data.get('height', db_bmi.height)
+        weight = update_data.get('weight', db_bmi.weight)
+        
+        if 'height' in update_data or 'weight' in update_data:
+            height_m = height / 100
+            bmi_value = weight / (height_m ** 2)
+            update_data['bmi'] = round(bmi_value, 2)
+        
+        for key, value in update_data.items():
+            setattr(db_bmi, key, value)
+        
+        db.commit()
+        db.refresh(db_bmi)
+        return bmi_db_to_response(db_bmi)
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        db.close()
+
+@app.delete("/bmi-records/{record_id}")
+def delete_bmi_record(record_id: int):
+    """Delete a BMI record"""
+    db = SessionLocal()
+    try:
+        db_bmi = db.query(BMIDB).filter(BMIDB.id == record_id).first()
+        if not db_bmi:
+            raise HTTPException(status_code=404, detail="BMI record not found")
+        
+        db.delete(db_bmi)
+        db.commit()
+        return {"message": "BMI record deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
     finally:
         db.close()
 
