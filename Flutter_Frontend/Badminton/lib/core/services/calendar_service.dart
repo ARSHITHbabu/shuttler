@@ -55,9 +55,36 @@ class CalendarService {
   /// Create a new calendar event
   Future<CalendarEvent> createCalendarEvent(Map<String, dynamic> eventData) async {
     try {
+      // Clean the data: remove null values and ensure proper types
+      final cleanedData = <String, dynamic>{};
+      eventData.forEach((key, value) {
+        if (value != null) {
+          // Ensure created_by is an integer
+          if (key == 'created_by') {
+            cleanedData[key] = value is int ? value : int.tryParse(value.toString()) ?? value;
+          } else {
+            cleanedData[key] = value;
+          }
+        }
+      });
+
+      // Validate required fields
+      if (!cleanedData.containsKey('title') || cleanedData['title'] == null || cleanedData['title'].toString().trim().isEmpty) {
+        throw Exception('Event title is required');
+      }
+      if (!cleanedData.containsKey('event_type') || cleanedData['event_type'] == null) {
+        throw Exception('Event type is required');
+      }
+      if (!cleanedData.containsKey('date') || cleanedData['date'] == null) {
+        throw Exception('Event date is required');
+      }
+      if (!cleanedData.containsKey('created_by') || cleanedData['created_by'] == null) {
+        throw Exception('Created by user ID is required');
+      }
+
       final response = await _apiService.post(
         ApiEndpoints.calendarEvents,
-        data: eventData,
+        data: cleanedData,
       );
       return CalendarEvent.fromJson(response.data as Map<String, dynamic>);
     } catch (e) {
@@ -68,9 +95,22 @@ class CalendarService {
   /// Update a calendar event
   Future<CalendarEvent> updateCalendarEvent(int id, Map<String, dynamic> eventData) async {
     try {
+      // Clean the data: remove null values and ensure proper types
+      final cleanedData = <String, dynamic>{};
+      eventData.forEach((key, value) {
+        if (value != null) {
+          // Ensure created_by is an integer if present
+          if (key == 'created_by') {
+            cleanedData[key] = value is int ? value : int.tryParse(value.toString()) ?? value;
+          } else {
+            cleanedData[key] = value;
+          }
+        }
+      });
+
       final response = await _apiService.put(
         ApiEndpoints.calendarEventById(id),
-        data: eventData,
+        data: cleanedData,
       );
       return CalendarEvent.fromJson(response.data as Map<String, dynamic>);
     } catch (e) {

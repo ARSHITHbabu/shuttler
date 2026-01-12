@@ -36,10 +36,14 @@ class Schedule {
 
   /// Create Schedule instance from JSON
   factory Schedule.fromJson(Map<String, dynamic> json) {
+    // Backend returns 'activity' but Flutter model uses 'title'
+    // Map activity -> title for compatibility
+    final title = json['title'] as String? ?? json['activity'] as String? ?? '';
+    
     return Schedule(
       id: json['id'] as int,
       sessionType: json['session_type'] as String? ?? json['type'] as String? ?? 'practice',
-      title: json['title'] as String,
+      title: title,
       date: DateTime.parse(json['date'] as String),
       startTime: json['start_time'] as String?,
       endTime: json['end_time'] as String?,

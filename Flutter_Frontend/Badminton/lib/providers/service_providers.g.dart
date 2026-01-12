@@ -6,7 +6,7 @@ part of 'service_providers.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$storageServiceHash() => r'b9eb09cfea0c265efa80435bdffda55cb5e6d8ba';
+String _$storageServiceHash() => r'd6c99d445af47edd452685004c2fcbf8b6c58587';
 
 /// Provider for StorageService singleton
 ///

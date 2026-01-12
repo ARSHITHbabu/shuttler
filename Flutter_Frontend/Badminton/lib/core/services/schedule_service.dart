@@ -9,6 +9,9 @@ class ScheduleService {
   ScheduleService(this._apiService);
 
   /// Get all schedules
+  /// Backend doesn't have GET /schedules/, only:
+  /// - GET /schedules/batch/{batch_id}
+  /// - GET /schedules/date/{date}
   Future<List<Schedule>> getSchedules({
     String? sessionType,
     DateTime? startDate,
@@ -16,31 +19,57 @@ class ScheduleService {
     int? batchId,
   }) async {
     try {
-      final queryParams = <String, dynamic>{};
-      if (sessionType != null) {
-        queryParams['session_type'] = sessionType;
-      }
-      if (startDate != null) {
-        queryParams['start_date'] = startDate.toIso8601String().split('T')[0];
-      }
-      if (endDate != null) {
-        queryParams['end_date'] = endDate.toIso8601String().split('T')[0];
-      }
+      List<Schedule> allSchedules = [];
+      
+      // If batchId is provided, use batch endpoint
       if (batchId != null) {
-        queryParams['batch_id'] = batchId;
+        try {
+          final response = await _apiService.get(
+            '/schedules/batch/$batchId',
+          );
+          if (response.data is List) {
+            final batchSchedules = (response.data as List)
+                .map((json) => Schedule.fromJson(json as Map<String, dynamic>))
+                .toList();
+            allSchedules.addAll(batchSchedules);
+          }
+        } catch (e) {
+          // Silently fail for individual batch
+        }
       }
-
-      final response = await _apiService.get(
-        ApiEndpoints.schedules,
-        queryParameters: queryParams.isNotEmpty ? queryParams : null,
-      );
-
-      if (response.data is List) {
-        return (response.data as List)
-            .map((json) => Schedule.fromJson(json as Map<String, dynamic>))
-            .toList();
+      
+      // If date is provided, use date endpoint
+      if (startDate != null) {
+        try {
+          final dateStr = startDate.toIso8601String().split('T')[0];
+          final response = await _apiService.get(
+            '/schedules/date/$dateStr',
+          );
+          if (response.data is List) {
+            final dateSchedules = (response.data as List)
+                .map((json) => Schedule.fromJson(json as Map<String, dynamic>))
+                .toList();
+            // Merge with existing schedules, avoiding duplicates
+            for (var schedule in dateSchedules) {
+              if (!allSchedules.any((s) => s.id == schedule.id)) {
+                allSchedules.add(schedule);
+              }
+            }
+          }
+        } catch (e) {
+          // Silently fail for individual date
+        }
       }
-      return [];
+      
+      // If no filters provided, try to get schedules for all batches
+      // This is a workaround since backend doesn't have GET /schedules/
+      if (batchId == null && startDate == null) {
+        // Return empty list - caller should provide batchId or date
+        // Alternatively, we could fetch all batches and get their schedules
+        return [];
+      }
+      
+      return allSchedules;
     } catch (e) {
       throw Exception('Failed to fetch schedules: ${_apiService.getErrorMessage(e)}');
     }
@@ -70,6 +99,8 @@ class ScheduleService {
   }
 
   /// Update a schedule
+  /// NOTE: Backend currently doesn't have a PUT endpoint for schedules.
+  /// This will fail with a 405 Method Not Allowed error until backend adds the endpoint.
   Future<Schedule> updateSchedule(int id, Map<String, dynamic> scheduleData) async {
     try {
       final response = await _apiService.put(

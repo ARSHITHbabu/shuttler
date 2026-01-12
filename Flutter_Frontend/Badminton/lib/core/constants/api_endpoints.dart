@@ -84,21 +84,21 @@ class ApiEndpoints {
   static String invitationById(int id) => '/invitations/$id';
 
   // Announcements (NEW)
-  static const String announcements = '/announcements/';
-  static String announcementById(int id) => '/announcements/$id';
+  static const String announcements = '/api/announcements/';
+  static String announcementById(int id) => '/api/announcements/$id';
 
   // Notifications (NEW)
-  static const String notifications = '/notifications/';
-  static String notificationById(int id) => '/notifications/$id';
+  static const String notifications = '/api/notifications/';
+  static String notificationById(int id) => '/api/notifications/$id';
   static String userNotifications(int userId, String userType) =>
-      '/notifications/$userId?user_type=$userType';
-  static String markNotificationRead(int id) => '/notifications/$id/read';
+      '/api/notifications/$userId?user_type=$userType';
+  static String markNotificationRead(int id) => '/api/notifications/$id/read';
 
   // Calendar Events (NEW)
-  static const String calendarEvents = '/calendar-events/';
-  static String calendarEventById(int id) => '/calendar-events/$id';
+  static const String calendarEvents = '/api/calendar-events/';
+  static String calendarEventById(int id) => '/api/calendar-events/$id';
 
   // Image Upload (NEW)
-  static const String uploadImage = '/upload/image';
+  static const String uploadImage = '/api/upload/image';
   static String imageUrl(String filename) => '/uploads/$filename';
 }

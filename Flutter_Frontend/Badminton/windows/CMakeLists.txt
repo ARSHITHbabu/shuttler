@@ -2,6 +2,21 @@
 cmake_minimum_required(VERSION 3.14)
 project(badminton LANGUAGES CXX)
 
+# === Firebase/Visual Studio Compatibility Fix ===
+# Force Visual Studio 2022 toolset (v143) for Firebase C++ SDK compatibility
+if(MSVC)
+    # Explicitly set the toolset to v143 (Visual Studio 2022)
+    set(CMAKE_GENERATOR_TOOLSET "v143" CACHE STRING "Visual Studio toolset" FORCE)
+    
+    # Use dynamic runtime library to match Firebase SDK expectations
+    # This ensures compatibility with precompiled Firebase libraries
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL$<$<CONFIG:Debug>:Debug>")
+    
+    # Ensure we're using the correct Windows SDK
+    set(CMAKE_SYSTEM_VERSION "10.0")
+endif()
+# === End Compatibility Fix ===
+
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
 set(BINARY_NAME "badminton")
@@ -43,6 +58,11 @@ function(APPLY_STANDARD_SETTINGS TARGET)
   target_compile_options(${TARGET} PRIVATE /EHsc)
   target_compile_definitions(${TARGET} PRIVATE "_HAS_EXCEPTIONS=0")
   target_compile_definitions(${TARGET} PRIVATE "$<$<CONFIG:Debug>:_DEBUG>")
+  
+  # Ensure runtime library matches Firebase SDK
+  if(MSVC)
+    set_property(TARGET ${TARGET} PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreadedDLL$<$<CONFIG:Debug>:Debug>")
+  endif()
 endfunction()
 
 # Flutter library and tool build rules.
