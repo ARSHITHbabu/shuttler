@@ -1,6 +1,7 @@
 import '../constants/api_endpoints.dart';
 import 'api_service.dart';
 import '../../models/fee.dart';
+import '../../models/fee_payment.dart';
 
 /// Service for fee-related API operations
 class FeeService {
@@ -17,27 +18,34 @@ class FeeService {
     DateTime? endDate,
   }) async {
     try {
-      // Backend uses different endpoints: /fees/student/{student_id} or /fees/batch/{batch_id}
+      // Use the new unified endpoint with query parameters
+      final queryParams = <String, dynamic>{};
       if (studentId != null) {
-        final response = await _apiService.get('/fees/student/$studentId');
-        if (response.data is List) {
-          return (response.data as List)
-              .map((json) => Fee.fromJson(json as Map<String, dynamic>))
-              .toList();
-        }
-        return [];
-      } else if (batchId != null) {
-        final response = await _apiService.get('/fees/batch/$batchId');
-        if (response.data is List) {
-          return (response.data as List)
-              .map((json) => Fee.fromJson(json as Map<String, dynamic>))
-              .toList();
-        }
-        return [];
+        queryParams['student_id'] = studentId;
+      }
+      if (batchId != null) {
+        queryParams['batch_id'] = batchId;
+      }
+      if (status != null) {
+        queryParams['status'] = status;
+      }
+      if (startDate != null) {
+        queryParams['start_date'] = startDate.toIso8601String().split('T')[0];
+      }
+      if (endDate != null) {
+        queryParams['end_date'] = endDate.toIso8601String().split('T')[0];
       }
 
-      // If no filters, we can't get all fees from backend
-      // Return empty list or throw error
+      final response = await _apiService.get(
+        ApiEndpoints.fees,
+        queryParameters: queryParams.isNotEmpty ? queryParams : null,
+      );
+
+      if (response.data is List) {
+        return (response.data as List)
+            .map((json) => Fee.fromJson(json as Map<String, dynamic>))
+            .toList();
+      }
       return [];
     } catch (e) {
       throw Exception('Failed to fetch fees: ${_apiService.getErrorMessage(e)}');
@@ -96,6 +104,52 @@ class FeeService {
       });
     } catch (e) {
       throw Exception('Failed to record payment: ${_apiService.getErrorMessage(e)}');
+    }
+  }
+
+  /// Get all payments for a fee
+  Future<List<FeePayment>> getFeePayments(int feeId) async {
+    try {
+      final response = await _apiService.get('/fees/$feeId/payments/');
+      if (response.data is List) {
+        return (response.data as List)
+            .map((json) => FeePayment.fromJson(json as Map<String, dynamic>))
+            .toList();
+      }
+      return [];
+    } catch (e) {
+      throw Exception('Failed to fetch fee payments: ${_apiService.getErrorMessage(e)}');
+    }
+  }
+
+  /// Create a payment for a fee
+  Future<FeePayment> createFeePayment(int feeId, Map<String, dynamic> paymentData) async {
+    try {
+      final response = await _apiService.post(
+        '/fees/$feeId/payments/',
+        data: paymentData,
+      );
+      return FeePayment.fromJson(response.data as Map<String, dynamic>);
+    } catch (e) {
+      throw Exception('Failed to create payment: ${_apiService.getErrorMessage(e)}');
+    }
+  }
+
+  /// Delete a payment
+  Future<void> deleteFeePayment(int feeId, int paymentId) async {
+    try {
+      await _apiService.delete('/fees/$feeId/payments/$paymentId');
+    } catch (e) {
+      throw Exception('Failed to delete payment: ${_apiService.getErrorMessage(e)}');
+    }
+  }
+
+  /// Notify student about overdue fee
+  Future<void> notifyStudent(int feeId) async {
+    try {
+      await _apiService.post('/fees/$feeId/notify');
+    } catch (e) {
+      throw Exception('Failed to notify student: ${_apiService.getErrorMessage(e)}');
     }
   }
 

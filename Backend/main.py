@@ -130,10 +130,21 @@ class FeeDB(Base):
     batch_id = Column(Integer, nullable=False)
     amount = Column(Float, nullable=False)
     due_date = Column(String, nullable=False)
-    paid_date = Column(String, nullable=True)
-    status = Column(String, nullable=False)  
+    status = Column(String, nullable=False)
+    payee_student_id = Column(Integer, ForeignKey("students.id"), nullable=True)  # Student from batch who is payee
+    payments = relationship("FeePaymentDB", back_populates="fee", cascade="all, delete-orphan")
+
+class FeePaymentDB(Base):
+    __tablename__ = "fee_payments"
+    id = Column(Integer, primary_key=True, index=True)
+    fee_id = Column(Integer, ForeignKey("fees.id"), nullable=False)
+    amount = Column(Float, nullable=False)
+    paid_date = Column(String, nullable=False)
+    payee_student_id = Column(Integer, ForeignKey("students.id"), nullable=True)
     payment_method = Column(String, nullable=True)
     collected_by = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    fee = relationship("FeeDB", back_populates="payments")
 
 class PerformanceDB(Base):
     __tablename__ = "performance"
@@ -335,6 +346,41 @@ def migrate_database_schema(engine):
             except Exception as alter_error:
                 print(f"⚠️  Warning: Could not alter column constraints: {alter_error}")
         
+        # Migrate fees table - add payee_student_id column
+        if 'fees' in tables:
+            check_and_add_column(engine, 'fees', 'payee_student_id', 'INTEGER', nullable=True)
+            # Add foreign key constraint if column was just added
+            try:
+                with engine.begin() as conn:
+                    # Check if foreign key constraint exists
+                    fk_check = text("""
+                        SELECT COUNT(*) 
+                        FROM information_schema.table_constraints 
+                        WHERE table_name = 'fees' 
+                        AND constraint_name = 'fees_payee_student_id_fkey'
+                    """)
+                    result = conn.execute(fk_check).scalar()
+                    if result == 0:
+                        # Add foreign key constraint
+                        fk_sql = text("""
+                            ALTER TABLE fees 
+                            ADD CONSTRAINT fees_payee_student_id_fkey 
+                            FOREIGN KEY (payee_student_id) 
+                            REFERENCES students(id)
+                        """)
+                        conn.execute(fk_sql)
+                        print("✅ Added foreign key constraint for fees.payee_student_id")
+            except Exception as fk_error:
+                # Foreign key might already exist or constraint name might be different
+                print(f"⚠️  Note: Foreign key constraint check: {fk_error}")
+        
+        # Verify fee_payments table exists (should be created by Base.metadata.create_all)
+        if 'fee_payments' not in tables:
+            print("⚠️  fee_payments table not found. It should be created automatically.")
+            print("⚠️  If this persists, check that FeePaymentDB model is properly defined.")
+        else:
+            print("✅ fee_payments table exists")
+        
         print("✅ Database schema migration completed!")
     except Exception as e:
         print(f"⚠️  Migration error: {e}")
@@ -520,29 +566,54 @@ class FeeCreate(BaseModel):
     batch_id: int
     amount: float
     due_date: str
-    status: str
+    payee_student_id: Optional[int] = None
+    status: Optional[str] = None  # Will be calculated, optional on create
+
+class FeePaymentCreate(BaseModel):
+    fee_id: Optional[int] = None  # Optional - provided via path parameter
+    amount: float
+    paid_date: str
+    payee_student_id: Optional[int] = None
     payment_method: Optional[str] = None
     collected_by: Optional[str] = None
+
+class FeePayment(BaseModel):
+    id: int
+    fee_id: int
+    amount: float
+    paid_date: str
+    payee_student_id: Optional[int] = None
+    payee_student_name: Optional[str] = None
+    payment_method: Optional[str] = None
+    collected_by: Optional[str] = None
+    created_at: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
 
 class Fee(BaseModel):
     id: int
     student_id: int
+    student_name: Optional[str] = None
     batch_id: int
+    batch_name: Optional[str] = None
     amount: float
+    total_paid: float  # Calculated sum of payments
+    pending_amount: float  # Calculated: amount - total_paid
     due_date: str
-    paid_date: Optional[str] = None
     status: str
-    payment_method: Optional[str] = None
-    collected_by: Optional[str] = None
+    payee_student_id: Optional[int] = None
+    payee_student_name: Optional[str] = None
+    payments: Optional[List[FeePayment]] = None
     
     class Config:
         from_attributes = True
 
 class FeeUpdate(BaseModel):
-    paid_date: Optional[str] = None
-    status: Optional[str] = None
-    payment_method: Optional[str] = None
-    collected_by: Optional[str] = None
+    amount: Optional[float] = None
+    due_date: Optional[str] = None
+    payee_student_id: Optional[int] = None
+    status: Optional[str] = None  # Will be recalculated
 
 # Performance Models
 class PerformanceCreate(BaseModel):
@@ -1497,15 +1568,105 @@ def get_all_coach_attendance(date: str):
 
 # ==================== Fee Routes ====================
 
+# Helper functions for fee calculations
+def calculate_total_paid(fee_id: int, db) -> float:
+    """Calculate total amount paid for a fee"""
+    payments = db.query(FeePaymentDB).filter(FeePaymentDB.fee_id == fee_id).all()
+    return sum(payment.amount for payment in payments)
+
+def calculate_fee_status(amount: float, total_paid: float, due_date: str) -> str:
+    """Calculate fee status based on payments and due date"""
+    # Fully paid
+    if total_paid >= amount:
+        return 'paid'
+    
+    # Check if overdue (7 days after due_date)
+    try:
+        due_date_obj = datetime.fromisoformat(due_date)
+        days_overdue = (datetime.now() - due_date_obj).days
+        if days_overdue >= 7:
+            return 'overdue'
+    except:
+        pass
+    
+    # Default to pending
+    return 'pending'
+
+def enrich_fee_with_payments(fee: FeeDB, db) -> dict:
+    """Enrich fee with payment data and calculate totals"""
+    total_paid = calculate_total_paid(fee.id, db)
+    status = calculate_fee_status(fee.amount, total_paid, fee.due_date)
+    
+    # Update status in database if changed
+    if fee.status != status:
+        fee.status = status
+        db.commit()
+        db.refresh(fee)
+    
+    # Get payments
+    payments = db.query(FeePaymentDB).filter(FeePaymentDB.fee_id == fee.id).order_by(FeePaymentDB.created_at.desc()).all()
+    
+    # Enrich payments with student names
+    payment_list = []
+    for payment in payments:
+        payee_name = None
+        if payment.payee_student_id:
+            payee = db.query(StudentDB).filter(StudentDB.id == payment.payee_student_id).first()
+            payee_name = payee.name if payee else None
+        payment_list.append({
+            "id": payment.id,
+            "fee_id": payment.fee_id,
+            "amount": payment.amount,
+            "paid_date": payment.paid_date,
+            "payee_student_id": payment.payee_student_id,
+            "payee_student_name": payee_name,
+            "payment_method": payment.payment_method,
+            "collected_by": payment.collected_by,
+            "created_at": payment.created_at.isoformat() if payment.created_at else None,
+        })
+    
+    # Get student and batch names
+    student = db.query(StudentDB).filter(StudentDB.id == fee.student_id).first()
+    batch = db.query(BatchDB).filter(BatchDB.id == fee.batch_id).first()
+    payee_student = None
+    payee_name = None
+    if fee.payee_student_id:
+        payee_student = db.query(StudentDB).filter(StudentDB.id == fee.payee_student_id).first()
+        payee_name = payee_student.name if payee_student else None
+    
+    return {
+        "id": fee.id,
+        "student_id": fee.student_id,
+        "student_name": student.name if student else None,
+        "batch_id": fee.batch_id,
+        "batch_name": batch.batch_name if batch else None,
+        "amount": fee.amount,
+        "total_paid": total_paid,
+        "pending_amount": fee.amount - total_paid,
+        "due_date": fee.due_date,
+        "status": status,
+        "payee_student_id": fee.payee_student_id,
+        "payee_student_name": payee_name,
+        "payments": payment_list,
+    }
+
 @app.post("/fees/", response_model=Fee)
 def create_fee(fee: FeeCreate):
     db = SessionLocal()
     try:
-        db_fee = FeeDB(**fee.dict())
+        # Calculate initial status (pending if no payments)
+        initial_status = fee.status if fee.status else 'pending'
+        
+        # Create fee
+        fee_dict = fee.dict()
+        fee_dict['status'] = initial_status
+        db_fee = FeeDB(**fee_dict)
         db.add(db_fee)
         db.commit()
         db.refresh(db_fee)
-        return db_fee
+        
+        # Enrich with payments and calculate totals
+        return enrich_fee_with_payments(db_fee, db)
     finally:
         db.close()
 
@@ -1514,7 +1675,11 @@ def get_student_fees(student_id: int):
     db = SessionLocal()
     try:
         fees = db.query(FeeDB).filter(FeeDB.student_id == student_id).all()
-        return fees
+        # Enrich with payments and calculate totals
+        result = []
+        for fee in fees:
+            result.append(enrich_fee_with_payments(fee, db))
+        return result
     finally:
         db.close()
 
@@ -1523,7 +1688,69 @@ def get_batch_fees(batch_id: int):
     db = SessionLocal()
     try:
         fees = db.query(FeeDB).filter(FeeDB.batch_id == batch_id).all()
-        return fees
+        result = []
+        for fee in fees:
+            result.append(enrich_fee_with_payments(fee, db))
+        return result
+    finally:
+        db.close()
+
+@app.get("/fees/", response_model=List[Fee])
+def get_all_fees(
+    student_id: Optional[int] = None,
+    batch_id: Optional[int] = None,
+    status: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
+):
+    """Get all fees with optional filtering, enriched with student and batch names"""
+    # #region agent log
+    import json
+    with open(r'c:\Users\morch\Documents\Code\RallyOn\shuttler\.cursor\debug.log', 'a') as f:
+        f.write(json.dumps({"id":f"log_{int(datetime.now().timestamp()*1000)}","timestamp":int(datetime.now().timestamp()*1000),"location":"main.py:1592","message":"GET /fees/ entry","data":{"student_id":student_id,"batch_id":batch_id,"status":status},"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+'\n')
+    # #endregion
+    db = SessionLocal()
+    try:
+        query = db.query(FeeDB)
+        
+        if student_id is not None:
+            query = query.filter(FeeDB.student_id == student_id)
+        
+        if batch_id is not None:
+            query = query.filter(FeeDB.batch_id == batch_id)
+        
+        if status:
+            query = query.filter(FeeDB.status == status)
+        
+        if start_date:
+            query = query.filter(FeeDB.due_date >= start_date)
+        
+        if end_date:
+            query = query.filter(FeeDB.due_date <= end_date)
+        
+        fees = query.order_by(FeeDB.due_date.desc()).all()
+
+        # #region agent log
+        # Check total fees in database (diagnostic)
+        total_fees_in_db = db.query(FeeDB).count()
+        with open(r'c:\Users\morch\Documents\Code\RallyOn\shuttler\.cursor\debug.log', 'a') as f:
+            f.write(json.dumps({"id":f"log_{int(datetime.now().timestamp()*1000)}","timestamp":int(datetime.now().timestamp()*1000),"location":"main.py:1731","message":"Query result count","data":{"fee_count":len(fees),"total_fees_in_db":total_fees_in_db,"has_filters":student_id is not None or batch_id is not None or status is not None},"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+'\n')
+        # #endregion
+
+        # Enrich with payments and calculate totals using the helper function
+        result = []
+        for fee in fees:
+            # #region agent log
+            with open(r'c:\Users\morch\Documents\Code\RallyOn\shuttler\.cursor\debug.log', 'a') as f:
+                f.write(json.dumps({"id":f"log_{int(datetime.now().timestamp()*1000)}","timestamp":int(datetime.now().timestamp()*1000),"location":"main.py:1742","message":"Enriching fee","data":{"fee_id":fee.id,"student_id":fee.student_id},"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+'\n')
+            # #endregion
+            enriched_fee = enrich_fee_with_payments(fee, db)
+            result.append(enriched_fee)
+        # #region agent log
+        with open(r'c:\Users\morch\Documents\Code\RallyOn\shuttler\.cursor\debug.log', 'a') as f:
+            f.write(json.dumps({"id":f"log_{int(datetime.now().timestamp()*1000)}","timestamp":int(datetime.now().timestamp()*1000),"location":"main.py:1750","message":"Returning result","data":{"result_count":len(result),"first_fee_student_name":result[0].get('student_name') if result else None},"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+'\n')
+        # #endregion
+        return result
     finally:
         db.close()
 
@@ -1536,12 +1763,182 @@ def update_fee(fee_id: int, fee_update: FeeUpdate):
             raise HTTPException(status_code=404, detail="Fee not found")
         
         update_data = fee_update.dict(exclude_unset=True)
+        # Don't update status directly, it will be recalculated
+        if 'status' in update_data:
+            del update_data['status']
+        
         for key, value in update_data.items():
             setattr(fee, key, value)
         
         db.commit()
         db.refresh(fee)
-        return fee
+        
+        # Recalculate status and enrich with payments
+        return enrich_fee_with_payments(fee, db)
+    finally:
+        db.close()
+
+# ==================== Fee Payment Routes ====================
+
+@app.post("/fees/{fee_id}/payments/", response_model=FeePayment)
+def create_fee_payment(fee_id: int, payment: FeePaymentCreate):
+    """Add a payment to a fee"""
+    db = SessionLocal()
+    try:
+        # Validate fee exists
+        fee = db.query(FeeDB).filter(FeeDB.id == fee_id).first()
+        if not fee:
+            raise HTTPException(status_code=404, detail="Fee not found")
+        
+        # Validate payment amount doesn't exceed pending amount
+        total_paid = calculate_total_paid(fee_id, db)
+        pending_amount = fee.amount - total_paid
+        if payment.amount > pending_amount:
+            raise HTTPException(status_code=400, detail=f"Payment amount (₹{payment.amount}) exceeds pending amount (₹{pending_amount})")
+        
+        # Create payment
+        payment_dict = payment.dict()
+        payment_dict['fee_id'] = fee_id
+        db_payment = FeePaymentDB(**payment_dict)
+        db.add(db_payment)
+        db.commit()
+        db.refresh(db_payment)
+        
+        # Recalculate fee status
+        new_total_paid = calculate_total_paid(fee_id, db)
+        new_status = calculate_fee_status(fee.amount, new_total_paid, fee.due_date)
+        fee.status = new_status
+        db.commit()
+        db.refresh(fee)
+        
+        # Enrich payment with payee name
+        payee_name = None
+        if db_payment.payee_student_id:
+            payee = db.query(StudentDB).filter(StudentDB.id == db_payment.payee_student_id).first()
+            payee_name = payee.name if payee else None
+        
+        return {
+            "id": db_payment.id,
+            "fee_id": db_payment.fee_id,
+            "amount": db_payment.amount,
+            "paid_date": db_payment.paid_date,
+            "payee_student_id": db_payment.payee_student_id,
+            "payee_student_name": payee_name,
+            "payment_method": db_payment.payment_method,
+            "collected_by": db_payment.collected_by,
+            "created_at": db_payment.created_at.isoformat() if db_payment.created_at else None,
+        }
+    finally:
+        db.close()
+
+@app.get("/fees/{fee_id}/payments/", response_model=List[FeePayment])
+def get_fee_payments(fee_id: int):
+    """Get all payments for a fee"""
+    db = SessionLocal()
+    try:
+        payments = db.query(FeePaymentDB).filter(FeePaymentDB.fee_id == fee_id).order_by(FeePaymentDB.created_at.desc()).all()
+        result = []
+        for payment in payments:
+            payee_name = None
+            if payment.payee_student_id:
+                payee = db.query(StudentDB).filter(StudentDB.id == payment.payee_student_id).first()
+                payee_name = payee.name if payee else None
+            result.append({
+                "id": payment.id,
+                "fee_id": payment.fee_id,
+                "amount": payment.amount,
+                "paid_date": payment.paid_date,
+                "payee_student_id": payment.payee_student_id,
+                "payee_student_name": payee_name,
+                "payment_method": payment.payment_method,
+                "collected_by": payment.collected_by,
+                "created_at": payment.created_at.isoformat() if payment.created_at else None,
+            })
+        return result
+    finally:
+        db.close()
+
+@app.delete("/fees/{fee_id}/payments/{payment_id}")
+def delete_fee_payment(fee_id: int, payment_id: int):
+    """Delete a payment and recalculate fee status"""
+    db = SessionLocal()
+    try:
+        payment = db.query(FeePaymentDB).filter(
+            FeePaymentDB.id == payment_id,
+            FeePaymentDB.fee_id == fee_id
+        ).first()
+        if not payment:
+            raise HTTPException(status_code=404, detail="Payment not found")
+        
+        db.delete(payment)
+        db.commit()
+        
+        # Recalculate fee status
+        fee = db.query(FeeDB).filter(FeeDB.id == fee_id).first()
+        if fee:
+            total_paid = calculate_total_paid(fee_id, db)
+            new_status = calculate_fee_status(fee.amount, total_paid, fee.due_date)
+            fee.status = new_status
+            db.commit()
+        
+        return {"message": "Payment deleted successfully"}
+    finally:
+        db.close()
+
+@app.get("/batches/{batch_id}/students", response_model=List[Student])
+def get_batch_students(batch_id: int):
+    """Get all students enrolled in a batch"""
+    db = SessionLocal()
+    try:
+        # Get student IDs from batch_students table
+        batch_students = db.query(BatchStudentDB).filter(BatchStudentDB.batch_id == batch_id).all()
+        student_ids = [bs.student_id for bs in batch_students]
+        
+        if not student_ids:
+            return []
+        
+        # Get student details
+        students = db.query(StudentDB).filter(StudentDB.id.in_(student_ids)).all()
+        return students
+    finally:
+        db.close()
+
+@app.post("/fees/{fee_id}/notify")
+def notify_student_about_fee(fee_id: int):
+    """Send notification to student about overdue fee"""
+    db = SessionLocal()
+    try:
+        fee = db.query(FeeDB).filter(FeeDB.id == fee_id).first()
+        if not fee:
+            raise HTTPException(status_code=404, detail="Fee not found")
+        
+        # Get student details
+        student = db.query(StudentDB).filter(StudentDB.id == fee.student_id).first()
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found")
+        
+        # Calculate pending amount
+        total_paid = calculate_total_paid(fee_id, db)
+        pending_amount = fee.amount - total_paid
+        
+        # Create notification
+        notification = NotificationDB(
+            user_id=fee.student_id,
+            user_type="student",
+            title="Fee Payment Reminder",
+            body=f"Your fee payment of ₹{pending_amount:.2f} is overdue. Please pay the pending amount.",
+            type="fee_due",
+            data={
+                "fee_id": fee_id,
+                "pending_amount": pending_amount,
+                "due_date": fee.due_date
+            }
+        )
+        db.add(notification)
+        db.commit()
+        db.refresh(notification)
+        
+        return {"message": "Notification sent successfully", "notification_id": notification.id}
     finally:
         db.close()
 

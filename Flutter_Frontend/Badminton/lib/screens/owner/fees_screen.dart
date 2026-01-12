@@ -11,6 +11,9 @@ import '../../core/services/fee_service.dart';
 import '../../core/services/student_service.dart';
 import '../../core/services/batch_service.dart';
 import '../../widgets/forms/record_payment_dialog.dart';
+import '../../widgets/forms/add_fee_dialog.dart';
+import '../../widgets/forms/add_payment_dialog.dart';
+import '../../models/fee_payment.dart';
 
 /// Fees Screen - Shows paid and unpaid fees
 class FeesScreen extends ConsumerStatefulWidget {
@@ -130,12 +133,27 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text(
-                                  'Student ID: ${fee.studentId}',
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.textPrimary,
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        fee.studentName ?? 'Student #${fee.studentId}',
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.textPrimary,
+                                        ),
+                                      ),
+                                      if (fee.studentName == null)
+                                        Text(
+                                          'ID: ${fee.studentId}',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: AppColors.textSecondary,
+                                          ),
+                                        ),
+                                    ],
                                   ),
                                 ),
                                 Container(
@@ -159,25 +177,79 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
                               ],
                             ),
                             const SizedBox(height: AppDimensions.spacingM),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text(
-                                  'Amount:',
-                                  style: TextStyle(
-                                    color: AppColors.textSecondary,
-                                    fontSize: 14,
+                            // Fee Summary: Total | Paid | Pending
+                            Container(
+                              padding: const EdgeInsets.all(AppDimensions.paddingM),
+                              decoration: BoxDecoration(
+                                color: AppColors.cardBackground,
+                                borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                              ),
+                              child: Column(
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text(
+                                        'Total:',
+                                        style: TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      Text(
+                                        '₹${fee.amount.toStringAsFixed(2)}',
+                                        style: const TextStyle(
+                                          color: AppColors.textPrimary,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ),
-                                Text(
-                                  '₹${fee.amount.toStringAsFixed(2)}',
-                                  style: const TextStyle(
-                                    color: AppColors.textPrimary,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
+                                  const SizedBox(height: AppDimensions.spacingS),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text(
+                                        'Paid:',
+                                        style: TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      Text(
+                                        '₹${fee.totalPaid.toStringAsFixed(2)}',
+                                        style: TextStyle(
+                                          color: AppColors.success,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(height: AppDimensions.spacingS),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text(
+                                        'Pending:',
+                                        style: TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      Text(
+                                        '₹${fee.pendingAmount.toStringAsFixed(2)}',
+                                        style: TextStyle(
+                                          color: fee.pendingAmount > 0 ? AppColors.error : AppColors.success,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
                             const SizedBox(height: AppDimensions.spacingS),
                             Row(
@@ -199,20 +271,20 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
                                 ),
                               ],
                             ),
-                            if (fee.paidDate != null) ...[
+                            if (fee.payeeStudentName != null) ...[
                               const SizedBox(height: AppDimensions.spacingS),
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   const Text(
-                                    'Paid Date:',
+                                    'Payee:',
                                     style: TextStyle(
                                       color: AppColors.textSecondary,
                                       fontSize: 14,
                                     ),
                                   ),
                                   Text(
-                                    _formatDate(fee.paidDate!),
+                                    fee.payeeStudentName!,
                                     style: const TextStyle(
                                       color: AppColors.textPrimary,
                                       fontSize: 14,
@@ -221,30 +293,70 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
                                 ],
                               ),
                             ],
-                            if (fee.status != 'paid') ...[
+                            // Payment History
+                            if (fee.payments != null && fee.payments!.isNotEmpty) ...[
                               const SizedBox(height: AppDimensions.spacingM),
+                              ExpansionTile(
+                                title: const Text(
+                                  'Payment History',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textPrimary,
+                                  ),
+                                ),
+                                children: fee.payments!.map((payment) {
+                                  return ListTile(
+                                    title: Text(
+                                      '₹${payment.amount.toStringAsFixed(2)}',
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    subtitle: Text(
+                                      '${_formatDate(payment.paidDate)}${payment.payeeStudentName != null ? ' • ${payment.payeeStudentName}' : ''}${payment.paymentMethod != null ? ' • ${payment.paymentMethod}' : ''}',
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                    trailing: IconButton(
+                                      icon: const Icon(Icons.delete_outline, size: 18),
+                                      onPressed: () => _showDeletePaymentDialog(context, fee, payment),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ],
+                            // Action Buttons
+                            const SizedBox(height: AppDimensions.spacingM),
+                            if (fee.status != 'paid') ...[
                               Row(
                                 children: [
                                   Expanded(
                                     child: ElevatedButton.icon(
-                                      onPressed: () => _showSendReminderDialog(context, fee),
-                                      icon: const Icon(Icons.notifications, size: 18),
-                                      label: const Text('Send Reminder'),
+                                      onPressed: () => _showAddPaymentDialog(context, fee),
+                                      icon: const Icon(Icons.add, size: 18),
+                                      label: const Text('Add Payment'),
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppColors.warning,
+                                        backgroundColor: AppColors.accent,
                                         foregroundColor: Colors.white,
                                         padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(width: AppDimensions.spacingS),
+                                ],
+                              ),
+                            ],
+                            if (fee.status == 'overdue') ...[
+                              const SizedBox(height: AppDimensions.spacingS),
+                              Row(
+                                children: [
                                   Expanded(
                                     child: ElevatedButton.icon(
-                                      onPressed: () => _showRecordPaymentDialog(context, fee),
-                                      icon: const Icon(Icons.payment, size: 18),
-                                      label: const Text('Record Payment'),
+                                      onPressed: () => _showNotifyStudentDialog(context, fee),
+                                      icon: const Icon(Icons.notifications, size: 18),
+                                      label: const Text('Notify Student'),
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppColors.accent,
+                                        backgroundColor: AppColors.error,
                                         foregroundColor: Colors.white,
                                         padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
                                       ),
@@ -264,62 +376,70 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
           ),
         ],
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _showAddFeeDialog(context),
+        backgroundColor: AppColors.accent,
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text(
+          'Add Fee',
+          style: TextStyle(color: Colors.white),
+        ),
+      ),
+    );
+  }
+
+  void _showAddFeeDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AddFeeDialog(
+        onSubmit: (feeData) async {
+          try {
+            final feeService = ref.read(feeServiceProvider);
+            await feeService.createFee(feeData);
+            if (mounted) {
+              setState(() {}); // Refresh the list
+            }
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Failed to create fee: $e')),
+              );
+            }
+            rethrow;
+          }
+        },
+      ),
     );
   }
 
   Future<List<Fee>> _loadFees() async {
     try {
       final feeService = ref.read(feeServiceProvider);
-      final studentService = ref.read(studentServiceProvider);
-      final batchService = ref.read(batchServiceProvider);
       
-      List<Fee> allFees = [];
-      
-      // Try to get fees by batch first (more efficient)
-      try {
-        final batches = await batchService.getBatches();
-        for (final batch in batches) {
-          try {
-            final batchFees = await feeService.getFees(batchId: batch.id);
-            allFees.addAll(batchFees);
-          } catch (e) {
-            // Skip if batch fees fail
-          }
-        }
-      } catch (e) {
-        // If batch approach fails, try student approach
-      }
-      
-      // If no fees found via batches, try getting fees for each student
-      if (allFees.isEmpty) {
-        try {
-          final students = await studentService.getStudents();
-          for (final student in students) {
-            try {
-              final studentFees = await feeService.getFees(studentId: student.id);
-              allFees.addAll(studentFees);
-            } catch (e) {
-              // Skip if student fees fail
-            }
-          }
-        } catch (e) {
-          // Return empty if both approaches fail
-        }
-      }
-      
-      // Filter by selected status
+      // Use unified endpoint with status filter
+      String? statusFilter;
       if (_selectedFilter != 'all') {
-        allFees = allFees.where((fee) {
-          if (_selectedFilter == 'overdue') {
-            return fee.isOverdue;
-          }
-          return fee.status.toLowerCase() == _selectedFilter.toLowerCase();
-        }).toList();
+        if (_selectedFilter == 'overdue') {
+          // For overdue, we'll filter after fetching
+          statusFilter = null;
+        } else {
+          statusFilter = _selectedFilter;
+        }
+      }
+      
+      List<Fee> allFees = await feeService.getFees(status: statusFilter);
+      
+      // Filter by overdue if needed
+      if (_selectedFilter == 'overdue') {
+        allFees = allFees.where((fee) => fee.isOverdue).toList();
       }
       
       return allFees;
     } catch (e) {
-      return [];
+      // Log error for debugging instead of silently failing
+      debugPrint('Error loading fees: $e');
+      // Re-throw to let FutureBuilder handle it properly
+      rethrow;
     }
   }
 
@@ -341,86 +461,23 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
   }
 
   void _showSendReminderDialog(BuildContext context, Fee fee) async {
-    try {
-      final studentService = ref.read(studentServiceProvider);
-      final student = await studentService.getStudentById(fee.studentId);
-      
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            backgroundColor: AppColors.cardBackground,
-            title: const Text('Send Payment Reminder', style: TextStyle(color: AppColors.textPrimary)),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Send reminder to ${student.name}',
-                  style: const TextStyle(color: AppColors.textSecondary),
-                ),
-                const SizedBox(height: AppDimensions.spacingM),
-                Text(
-                  'Amount: ₹${fee.amount.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  'Due Date: ${_formatDate(fee.dueDate)}',
-                  style: const TextStyle(color: AppColors.textSecondary),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton.icon(
-                onPressed: () async {
-                  // TODO: Implement actual reminder sending (SMS/Email/Push notification)
-                  // For now, just show a success message
-                  Navigator.of(context).pop();
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Payment reminder sent successfully')),
-                    );
-                  }
-                },
-                icon: const Icon(Icons.send),
-                label: const Text('Send'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.accent,
-                  foregroundColor: Colors.white,
-                ),
-              ),
-            ],
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load student: $e')),
-        );
-      }
-    }
+    // This is now handled by _showNotifyStudentDialog for overdue fees
+    // Keeping for backward compatibility if needed
+    _showNotifyStudentDialog(context, fee);
   }
 
-  void _showRecordPaymentDialog(BuildContext context, Fee fee) {
+  void _showAddPaymentDialog(BuildContext context, Fee fee) {
     showDialog(
       context: context,
-      builder: (context) => RecordPaymentDialog(
+      builder: (context) => AddPaymentDialog(
         fee: fee,
         onSubmit: (paymentData) async {
           try {
             final feeService = ref.read(feeServiceProvider);
-            await feeService.updateFee(fee.id, paymentData);
+            await feeService.createFeePayment(fee.id, paymentData);
             if (mounted) {
               Navigator.of(context).pop();
-              setState(() {});
+              setState(() {}); // Refresh the list
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Payment recorded successfully')),
               );
@@ -431,8 +488,102 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
                 SnackBar(content: Text('Failed to record payment: $e')),
               );
             }
+            rethrow;
           }
         },
+      ),
+    );
+  }
+
+  void _showDeletePaymentDialog(BuildContext context, Fee fee, FeePayment payment) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.cardBackground,
+        title: const Text('Delete Payment', style: TextStyle(color: AppColors.textPrimary)),
+        content: Text(
+          'Are you sure you want to delete this payment of ₹${payment.amount.toStringAsFixed(2)}?',
+          style: const TextStyle(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              try {
+                final feeService = ref.read(feeServiceProvider);
+                await feeService.deleteFeePayment(fee.id, payment.id);
+                if (mounted) {
+                  Navigator.of(context).pop();
+                  setState(() {}); // Refresh the list
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Payment deleted successfully')),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to delete payment: $e')),
+                  );
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showNotifyStudentDialog(BuildContext context, Fee fee) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.cardBackground,
+        title: const Text('Notify Student', style: TextStyle(color: AppColors.textPrimary)),
+        content: Text(
+          'Send payment reminder to ${fee.studentName ?? 'Student #${fee.studentId}'}?',
+          style: const TextStyle(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              try {
+                final feeService = ref.read(feeServiceProvider);
+                await feeService.notifyStudent(fee.id);
+                if (mounted) {
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Notification sent successfully')),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to send notification: $e')),
+                  );
+                }
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.accent,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Send'),
+          ),
+        ],
       ),
     );
   }
