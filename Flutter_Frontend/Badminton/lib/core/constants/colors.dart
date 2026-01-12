@@ -10,7 +10,12 @@ class AppColors {
   // Text colors
   static const Color textPrimary = Color(0xFFe8e8e8); // #e8e8e8
   static const Color textSecondary = Color(0xFF888888); // #888888
+  static const Color textTertiary = Color(0xFF707070); // #707070 (inactive text)
   static const Color textHint = Color(0xFF666666); // #666666
+  
+  // Icon colors
+  static const Color iconPrimary = Color(0xFFa0a0a0); // #a0a0a0
+  static const Color iconActive = Color(0xFFc0c0c0); // #c0c0c0 (active icon)
 
   // Accent colors
   static const Color accent = Color(0xFF4a9eff); // Blue accent
@@ -52,6 +57,13 @@ class AppColors {
 
   static const LinearGradient darkGradient = LinearGradient(
     colors: [Color(0xFF1a1a1a), Color(0xFF242424)],
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+  );
+  
+  // Background gradient matching React: from-[#1a1a1a] to-[#0f0f0f]
+  static const LinearGradient backgroundGradient = LinearGradient(
+    colors: [Color(0xFF1a1a1a), Color(0xFF0f0f0f)],
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
   );

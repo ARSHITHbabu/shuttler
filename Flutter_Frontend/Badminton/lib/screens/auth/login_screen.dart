@@ -45,7 +45,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await ref.read(authProvider.notifier).login(
+      final result = await ref.read(authProvider.notifier).login(
             email: _emailController.text.trim(),
             password: _passwordController.text,
             userType: widget.userType,
@@ -53,6 +53,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           );
 
       if (mounted) {
+        // Check profile completeness for students
+        if (widget.userType == 'student') {
+          final profileComplete = result['profile_complete'] ?? false;
+          if (!profileComplete) {
+            // Redirect to profile completion page
+            context.go('/student-profile-complete');
+            return;
+          }
+        }
+
         // Navigate to appropriate dashboard based on user type
         String route;
         switch (widget.userType) {

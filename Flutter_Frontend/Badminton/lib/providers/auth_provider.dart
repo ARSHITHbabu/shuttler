@@ -81,7 +81,8 @@ class Auth extends _$Auth {
   }
 
   /// Login with email and password
-  Future<void> login({
+  /// Returns the full result including profile_complete for students
+  Future<Map<String, dynamic>> login({
     required String email,
     required String password,
     required String userType,
@@ -109,6 +110,9 @@ class Auth extends _$Auth {
           userEmail: user['email'] as String,
         ),
       );
+      
+      // Return the full result including profile_complete
+      return result;
     } catch (e, stackTrace) {
       state = AsyncValue.error(e, stackTrace);
       // Rethrow to allow UI to handle the error
@@ -117,7 +121,8 @@ class Auth extends _$Auth {
   }
 
   /// Register new user
-  Future<void> register({
+  /// Returns the full result for profile completeness check
+  Future<Map<String, dynamic>> register({
     required String name,
     required String email,
     required String phone,
@@ -150,6 +155,9 @@ class Auth extends _$Auth {
           userEmail: user['email'] as String,
         ),
       );
+      
+      // Return the full result
+      return result;
     } catch (e, stackTrace) {
       state = AsyncValue.error(e, stackTrace);
       // Rethrow to allow UI to handle the error
