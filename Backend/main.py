@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, date
 import json
 import os
 import shutil
@@ -2170,19 +2170,69 @@ def delete_notification(notification_id: int):
 
 # ==================== Calendar Event Endpoints ====================
 
+def _db_event_to_pydantic(db_event: CalendarEventDB) -> CalendarEvent:
+    """Convert database event to Pydantic model with proper date/datetime serialization"""
+    return CalendarEvent(
+        id=db_event.id,
+        title=db_event.title,
+        event_type=db_event.event_type,
+        date=db_event.date.isoformat() if isinstance(db_event.date, date) else str(db_event.date),
+        description=db_event.description,
+        created_by=db_event.created_by,
+        created_at=db_event.created_at.isoformat() if hasattr(db_event.created_at, 'isoformat') else str(db_event.created_at),
+    )
+
 @app.post("/api/calendar-events/", response_model=CalendarEvent)
 def create_calendar_event(event: CalendarEventCreate):
     """Create a new calendar event"""
     db = SessionLocal()
     try:
-        db_event = CalendarEventDB(**event.dict())
+        # Validate that the creator (coach/owner) exists
+        coach = db.query(CoachDB).filter(CoachDB.id == event.created_by).first()
+        if not coach:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid created_by user ID. User with ID {event.created_by} does not exist in coaches table."
+            )
+        
+        # Convert date string to date object
+        event_date = datetime.strptime(event.date, "%Y-%m-%d").date()
+        
+        # Create database event with proper date conversion
+        db_event = CalendarEventDB(
+            title=event.title,
+            event_type=event.event_type,
+            date=event_date,
+            description=event.description,
+            created_by=event.created_by,
+        )
         db.add(db_event)
         db.commit()
         db.refresh(db_event)
-        return db_event
+        return _db_event_to_pydantic(db_event)
+    except HTTPException:
+        db.rollback()
+        raise
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
+    except IntegrityError as e:
+        db.rollback()
+        # Check if it's a foreign key constraint violation
+        error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
+        if 'foreign key' in error_msg.lower() or 'created_by' in error_msg.lower():
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid created_by user ID. User with ID {event.created_by} does not exist in coaches table."
+            )
+        raise HTTPException(status_code=400, detail=f"Database constraint violation: {error_msg}")
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        # Log the full error for debugging
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"❌ Error creating calendar event: {error_trace}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
     finally:
         db.close()
 
@@ -2194,14 +2244,19 @@ def get_calendar_events(start_date: Optional[str] = None, end_date: Optional[str
         query = db.query(CalendarEventDB)
 
         if start_date:
-            query = query.filter(CalendarEventDB.date >= start_date)
+            # Convert string to date object for comparison
+            start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
+            query = query.filter(CalendarEventDB.date >= start_date_obj)
         if end_date:
-            query = query.filter(CalendarEventDB.date <= end_date)
+            # Convert string to date object for comparison
+            end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
+            query = query.filter(CalendarEventDB.date <= end_date_obj)
         if event_type:
             query = query.filter(CalendarEventDB.event_type == event_type)
 
         events = query.order_by(CalendarEventDB.date).all()
-        return events
+        # Convert database objects to Pydantic models with proper date serialization
+        return [_db_event_to_pydantic(event) for event in events]
     finally:
         db.close()
 
@@ -2213,7 +2268,7 @@ def get_calendar_event(event_id: int):
         event = db.query(CalendarEventDB).filter(CalendarEventDB.id == event_id).first()
         if not event:
             raise HTTPException(status_code=404, detail="Calendar event not found")
-        return event
+        return _db_event_to_pydantic(event)
     finally:
         db.close()
 
@@ -2226,12 +2281,17 @@ def update_calendar_event(event_id: int, event: CalendarEventUpdate):
         if not db_event:
             raise HTTPException(status_code=404, detail="Calendar event not found")
 
-        for key, value in event.dict(exclude_unset=True).items():
+        # Handle date conversion if date is being updated
+        event_dict = event.dict(exclude_unset=True)
+        if 'date' in event_dict and isinstance(event_dict['date'], str):
+            event_dict['date'] = datetime.strptime(event_dict['date'], "%Y-%m-%d").date()
+        
+        for key, value in event_dict.items():
             setattr(db_event, key, value)
 
         db.commit()
         db.refresh(db_event)
-        return db_event
+        return _db_event_to_pydantic(db_event)
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))

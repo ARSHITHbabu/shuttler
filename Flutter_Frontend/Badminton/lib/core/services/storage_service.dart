@@ -1,4 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import 'dart:developer' as developer;
 
 /// Local storage service for persisting user data
 class StorageService {
@@ -12,9 +14,21 @@ class StorageService {
 
   SharedPreferences? _prefs;
   bool _isInitialized = false;
+  Future<void>? _initFuture;
+  
+  /// Check if storage is initialized (for external checks)
+  bool get isInitialized => _isInitialized;
 
   /// Initialize the storage service
   Future<void> init() async {
+    if (_isInitialized) return;
+    if (_initFuture != null) return _initFuture;
+    
+    _initFuture = _doInit();
+    await _initFuture;
+  }
+
+  Future<void> _doInit() async {
     _prefs = await SharedPreferences.getInstance();
     _isInitialized = true;
   }
@@ -23,6 +37,24 @@ class StorageService {
   Future<void> _ensureInitialized() async {
     if (!_isInitialized) {
       await init();
+    }
+  }
+
+  /// Synchronously check if initialized, and if not, try to initialize
+  /// This is a best-effort approach for sync methods
+  void _tryInitSync() {
+    if (!_isInitialized && _prefs == null) {
+      // For web, SharedPreferences.getInstance() might work synchronously
+      // This is a fallback - ideally storage should be initialized in main()
+      try {
+        // Try to get instance synchronously (may not work on all platforms)
+        SharedPreferences.getInstance().then((prefs) {
+          _prefs = prefs;
+          _isInitialized = true;
+        }).catchError((_) {});
+      } catch (_) {
+        // If sync init fails, we'll return null/false from getters
+      }
     }
   }
 
@@ -52,8 +84,32 @@ class StorageService {
   }
 
   int? getUserId() {
-    if (!_isInitialized) return null;
-    return _prefs!.getInt(_keyUserId);
+    // Try to initialize if not already initialized (best effort for sync method)
+    if (!_isInitialized) {
+      _tryInitSync();
+    }
+    
+    if (!_isInitialized) {
+      // #region agent log
+      try {
+        final logData = {"id":"log_${DateTime.now().millisecondsSinceEpoch}","timestamp":DateTime.now().millisecondsSinceEpoch,"location":"storage_service.dart:getUserId","message":"Storage not initialized","data":{"_isInitialized":_isInitialized},"sessionId":"debug-session","runId":"run1","hypothesisId":"C,D"};
+        developer.log(jsonEncode(logData), name: 'DEBUG');
+        print('DEBUG: ${jsonEncode(logData)}');
+      } catch (_) {}
+      // #endregion
+      return null;
+    }
+    final userId = _prefs!.getInt(_keyUserId);
+    
+    // #region agent log
+    try {
+      final logData = {"id":"log_${DateTime.now().millisecondsSinceEpoch}","timestamp":DateTime.now().millisecondsSinceEpoch,"location":"storage_service.dart:getUserId","message":"getUserId result","data":{"userId":userId},"sessionId":"debug-session","runId":"run1","hypothesisId":"C,D"};
+      developer.log(jsonEncode(logData), name: 'DEBUG');
+      print('DEBUG: ${jsonEncode(logData)}');
+    } catch (_) {}
+    // #endregion
+    
+    return userId;
   }
 
   Future<bool> removeUserId() async {
@@ -153,8 +209,31 @@ class StorageService {
 
   // Check if user is logged in
   bool isLoggedIn() {
+    // #region agent log
+    try {
+      final logData = {"id":"log_${DateTime.now().millisecondsSinceEpoch}","timestamp":DateTime.now().millisecondsSinceEpoch,"location":"storage_service.dart:isLoggedIn","message":"isLoggedIn check","data":{"_isInitialized":_isInitialized},"sessionId":"debug-session","runId":"run1","hypothesisId":"C,D"};
+      developer.log(jsonEncode(logData), name: 'DEBUG');
+      print('DEBUG: ${jsonEncode(logData)}');
+    } catch (_) {}
+    // #endregion
+    
+    // Try to initialize if not already initialized (best effort for sync method)
+    if (!_isInitialized) {
+      _tryInitSync();
+    }
+    
     final token = getAuthToken();
-    return token != null && token.isNotEmpty;
+    final result = token != null && token.isNotEmpty;
+    
+    // #region agent log
+    try {
+      final logData = {"id":"log_${DateTime.now().millisecondsSinceEpoch}","timestamp":DateTime.now().millisecondsSinceEpoch,"location":"storage_service.dart:isLoggedIn","message":"isLoggedIn result","data":{"tokenExists":token!=null,"tokenLength":token?.length??0,"result":result,"_isInitialized":_isInitialized},"sessionId":"debug-session","runId":"run1","hypothesisId":"C,D"};
+      developer.log(jsonEncode(logData), name: 'DEBUG');
+      print('DEBUG: ${jsonEncode(logData)}');
+    } catch (_) {}
+    // #endregion
+    
+    return result;
   }
 
   // Get all user data as map
