@@ -210,4 +210,15 @@ class StorageService {
       'fcmToken': getFcmToken(),
     };
   }
+
+  // Generic string getter/setter for app preferences (like theme)
+  Future<bool> setString(String key, String value) async {
+    await _ensureInitialized();
+    return await _prefs!.setString(key, value);
+  }
+
+  Future<String?> getString(String key) async {
+    await _ensureInitialized();
+    return _prefs!.getString(key);
+  }
 }

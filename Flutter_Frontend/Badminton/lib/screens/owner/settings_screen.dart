@@ -4,6 +4,8 @@ import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/theme_provider.dart';
+import '../../widgets/settings/shuttlecock_theme_toggle.dart';
 
 /// Settings Screen - App settings, academy settings, account settings
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -15,10 +17,11 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _notificationsEnabled = true;
-  bool _darkModeEnabled = true;
 
   @override
   Widget build(BuildContext context) {
+    final themeMode = ref.watch(themeNotifierProvider);
+    final isDarkMode = themeMode == ThemeMode.dark;
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -77,35 +80,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
               ),
 
-              NeumorphicContainer(
-                padding: const EdgeInsets.all(AppDimensions.paddingM),
-                margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.dark_mode_outlined, color: AppColors.textSecondary),
-                        SizedBox(width: AppDimensions.spacingM),
-                        Text(
-                          'Dark Mode',
-                          style: TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Switch(
-                      value: _darkModeEnabled,
-                      onChanged: (value) {
-                        setState(() => _darkModeEnabled = value);
-                        // TODO: Implement theme switching
-                      },
-                      activeColor: AppColors.accent,
-                    ),
-                  ],
+              // Theme Toggle Section
+              const Text(
+                'Theme',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
                 ),
+              ),
+              const SizedBox(height: AppDimensions.spacingM),
+
+              ShuttlecockThemeToggle(
+                isDarkMode: isDarkMode,
+                onToggle: () {
+                  ref.read(themeNotifierProvider.notifier).toggleTheme();
+                },
               ),
 
               const SizedBox(height: AppDimensions.spacingL),
