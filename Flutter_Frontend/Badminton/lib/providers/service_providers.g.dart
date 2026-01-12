@@ -199,7 +199,7 @@ final performanceServiceProvider =
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef PerformanceServiceRef = AutoDisposeProviderRef<PerformanceService>;
-String _$bmiServiceHash() => r'8ad22a8b146744ae11f575e03a68d77737bd52d6';
+String _$bmiServiceHash() => r'0106ead3130f5528eaea1d79f2ada753de80bee5';
 
 /// Provider for BMIService singleton
 ///

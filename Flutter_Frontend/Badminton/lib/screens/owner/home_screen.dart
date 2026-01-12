@@ -9,9 +9,8 @@ import '../../widgets/common/error_widget.dart';
 import '../../widgets/forms/add_student_dialog.dart';
 import '../../widgets/forms/add_coach_dialog.dart';
 import '../../providers/dashboard_provider.dart';
-import '../../providers/batch_provider.dart';
 import '../../providers/service_providers.dart';
-import '../../models/batch.dart';
+import '../../models/batch_attendance.dart';
 import 'students_screen.dart';
 import 'coaches_screen.dart';
 import 'fees_screen.dart';
@@ -26,15 +25,153 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
+  void _showAttendanceDetailsDialog(
+    BuildContext context,
+    AsyncValue<List<BatchAttendance>> finishedBatchesAsync,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.cardBackground,
+        title: const Text(
+          'Today\'s Batch Attendance',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: finishedBatchesAsync.when(
+            data: (batches) {
+              if (batches.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.all(AppDimensions.spacingM),
+                  child: Text(
+                    'No batches have finished today yet.',
+                    style: TextStyle(color: AppColors.textSecondary),
+                    textAlign: TextAlign.center,
+                  ),
+                );
+              }
+              return SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: batches.map((batch) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
+                      child: Container(
+                        padding: const EdgeInsets.all(AppDimensions.paddingM),
+                        decoration: BoxDecoration(
+                          color: AppColors.background,
+                          borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                          boxShadow: NeumorphicStyles.getSmallInsetShadow(),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              batch.batchName,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: AppDimensions.spacingS),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  batch.timing,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                                Text(
+                                  '${batch.attendanceRate.toStringAsFixed(1)}%',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: batch.attendanceRate >= 80
+                                        ? AppColors.success
+                                        : batch.attendanceRate >= 60
+                                            ? Colors.orange
+                                            : AppColors.error,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: AppDimensions.spacingS),
+                            Container(
+                              width: double.infinity,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: AppColors.cardBackground,
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                              child: FractionallySizedBox(
+                                alignment: Alignment.centerLeft,
+                                widthFactor: (batch.attendanceRate / 100).clamp(0.0, 1.0),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: batch.attendanceRate >= 80
+                                        ? AppColors.success
+                                        : batch.attendanceRate >= 60
+                                            ? Colors.orange
+                                            : AppColors.error,
+                                    borderRadius: BorderRadius.circular(3),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              );
+            },
+            loading: () => const Padding(
+              padding: EdgeInsets.all(AppDimensions.spacingL),
+              child: Center(child: LoadingSpinner()),
+            ),
+            error: (error, stack) => Padding(
+              padding: const EdgeInsets.all(AppDimensions.spacingM),
+              child: Text(
+                'Error loading attendance: ${error.toString()}',
+                style: const TextStyle(color: AppColors.error),
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text(
+              'Close',
+              style: TextStyle(color: AppColors.textPrimary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final statsAsync = ref.watch(dashboardStatsProvider);
     final upcomingBatchesAsync = ref.watch(upcomingBatchesProvider);
+    final finishedBatchesAsync = ref.watch(finishedBatchesWithAttendanceProvider);
 
     return RefreshIndicator(
       onRefresh: () async {
         await ref.read(dashboardStatsProvider.notifier).refresh();
         ref.invalidate(upcomingBatchesProvider);
+        ref.invalidate(finishedBatchesWithAttendanceProvider);
       },
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -163,72 +300,80 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
                 const SizedBox(height: AppDimensions.spacingM),
                 statsAsync.when(
-                  data: (stats) => NeumorphicContainer(
-                    padding: const EdgeInsets.all(AppDimensions.paddingM),
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: AppColors.background,
-                                borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-                                boxShadow: NeumorphicStyles.getInsetShadow(),
+                  data: (stats) => GestureDetector(
+                    onTap: () => _showAttendanceDetailsDialog(context, finishedBatchesAsync),
+                    child: NeumorphicContainer(
+                      padding: const EdgeInsets.all(AppDimensions.paddingM),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  color: AppColors.background,
+                                  borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                                  boxShadow: NeumorphicStyles.getInsetShadow(),
+                                ),
+                                child: const Icon(
+                                  Icons.trending_up,
+                                  size: 20,
+                                  color: AppColors.iconPrimary,
+                                ),
                               ),
-                              child: const Icon(
-                                Icons.trending_up,
-                                size: 20,
-                                color: AppColors.iconPrimary,
-                              ),
-                            ),
-                            const SizedBox(width: AppDimensions.spacingM),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Attendance Rate',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: AppColors.textSecondary,
+                              const SizedBox(width: AppDimensions.spacingM),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Attendance Rate',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: AppColors.textSecondary,
+                                      ),
                                     ),
-                                  ),
-                                  Text(
-                                    '${stats.todayAttendanceRate.toStringAsFixed(0)}%',
-                                    style: const TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.textPrimary,
+                                    Text(
+                                      '${stats.todayAttendanceRate.toStringAsFixed(0)}%',
+                                      style: const TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.textPrimary,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
+                              ),
+                              const Icon(
+                                Icons.arrow_forward_ios,
+                                size: 16,
+                                color: AppColors.textSecondary,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: AppDimensions.spacingM),
+                          Container(
+                            width: double.infinity,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: AppColors.background,
+                              borderRadius: BorderRadius.circular(4),
+                              boxShadow: NeumorphicStyles.getSmallInsetShadow(),
+                            ),
+                            child: FractionallySizedBox(
+                              alignment: Alignment.centerLeft,
+                              widthFactor: (stats.todayAttendanceRate / 100).clamp(0.0, 1.0),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF505050),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
                               ),
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: AppDimensions.spacingM),
-                        Container(
-                          width: double.infinity,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: AppColors.background,
-                            borderRadius: BorderRadius.circular(4),
-                            boxShadow: NeumorphicStyles.getSmallInsetShadow(),
                           ),
-                          child: FractionallySizedBox(
-                            alignment: Alignment.centerLeft,
-                            widthFactor: (stats.todayAttendanceRate / 100).clamp(0.0, 1.0),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF505050),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                   loading: () => const SizedBox(height: 80, child: Center(child: LoadingSpinner())),

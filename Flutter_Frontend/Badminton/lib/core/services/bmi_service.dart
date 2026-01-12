@@ -55,17 +55,21 @@ class BMIService {
   /// Create a new BMI record
   Future<BMIRecord> createBMIRecord(Map<String, dynamic> bmiData) async {
     try {
-      // Calculate BMI if not provided
-      if (!bmiData.containsKey('bmi') && bmiData.containsKey('height') && bmiData.containsKey('weight')) {
-        final height = (bmiData['height'] as num).toDouble();
-        final weight = (bmiData['weight'] as num).toDouble();
-        bmiData['bmi'] = BMIRecord.calculateBMI(height, weight);
-        bmiData['health_status'] = BMIRecord.getHealthStatus(bmiData['bmi']);
+      // Create a copy of bmiData to avoid mutating the original
+      final requestData = Map<String, dynamic>.from(bmiData);
+      
+      // Remove bmi and health_status - backend calculates these
+      requestData.remove('bmi');
+      requestData.remove('health_status');
+      
+      // Add recorded_by if not provided (required by backend)
+      if (!requestData.containsKey('recorded_by')) {
+        requestData['recorded_by'] = 'Owner'; // Default to Owner, can be overridden
       }
 
       final response = await _apiService.post(
         ApiEndpoints.bmiRecords,
-        data: bmiData,
+        data: requestData,
       );
       return BMIRecord.fromJson(response.data as Map<String, dynamic>);
     } catch (e) {

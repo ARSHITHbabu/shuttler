@@ -68,15 +68,19 @@ class AttendanceService {
     String? remarks,
   }) async {
     try {
+      // Create request data with marked_by field (required by backend)
+      final requestData = {
+        'student_id': studentId,
+        'batch_id': batchId,
+        'date': date.toIso8601String().split('T')[0],
+        'status': status,
+        'marked_by': 'Owner', // Required by backend, default to Owner
+        'remarks': remarks,
+      };
+
       final response = await _apiService.post(
         ApiEndpoints.attendance,
-        data: {
-          'student_id': studentId,
-          'batch_id': batchId,
-          'date': date.toIso8601String().split('T')[0],
-          'status': status,
-          'remarks': remarks,
-        },
+        data: requestData,
       );
       return Attendance.fromJson(response.data as Map<String, dynamic>);
     } catch (e) {
