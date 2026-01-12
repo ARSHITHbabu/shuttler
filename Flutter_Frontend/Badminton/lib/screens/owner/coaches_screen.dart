@@ -214,6 +214,66 @@ class _CoachesScreenState extends ConsumerState<CoachesScreen> {
     );
   }
 
+  void _showCoachBatches(BuildContext context, Coach coach) async {
+    try {
+      final batchService = ref.read(batchServiceProvider);
+      final allBatches = await batchService.getBatches();
+      final assignedBatches = allBatches
+          .where((batch) => batch.assignedCoachId == coach.id)
+          .toList();
+
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: AppColors.cardBackground,
+            title: Text(
+              'Batches Assigned to ${coach.name}',
+              style: const TextStyle(color: AppColors.textPrimary),
+            ),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: assignedBatches.isEmpty
+                  ? const Text(
+                      'No batches assigned',
+                      style: TextStyle(color: AppColors.textSecondary),
+                    )
+                  : ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: assignedBatches.length,
+                      itemBuilder: (context, index) {
+                        final batch = assignedBatches[index];
+                        return ListTile(
+                          title: Text(
+                            batch.batchName,
+                            style: const TextStyle(color: AppColors.textPrimary),
+                          ),
+                          subtitle: Text(
+                            '${batch.timing} • ${batch.period}',
+                            style: const TextStyle(color: AppColors.textSecondary),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load batches: $e')),
+        );
+      }
+    }
+  }
+
   void _toggleCoachStatus(BuildContext context, Coach coach) async {
     try {
       final coachService = ref.read(coachServiceProvider);

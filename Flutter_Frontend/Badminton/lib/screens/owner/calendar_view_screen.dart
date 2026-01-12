@@ -27,6 +27,7 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
   CalendarFormat _calendarFormat = CalendarFormat.month;
   bool _showAddForm = false;
   bool _isLoading = false;
+  CalendarEvent? _editingEvent; // Track if we're editing
 
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
@@ -65,6 +66,17 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
     return grouped;
   }
 
+  void _editEvent(CalendarEvent event) {
+    setState(() {
+      _showAddForm = true;
+      _editingEvent = event;
+      _titleController.text = event.title;
+      _descriptionController.text = event.description ?? '';
+      _eventDate = event.date;
+      _selectedEventType = event.eventType;
+    });
+  }
+
   Future<void> _saveEvent() async {
     if (_titleController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -90,7 +102,7 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
         createdBy = authState.userId;
       }
 
-      await calendarService.createCalendarEvent({
+      final eventData = {
         'title': _titleController.text.trim(),
         'event_type': _selectedEventType,
         'date': _eventDate!.toIso8601String().split('T')[0],
@@ -98,11 +110,19 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
             ? null
             : _descriptionController.text.trim(),
         'created_by': createdBy,
-      });
+      };
+
+      if (_editingEvent != null) {
+        await calendarService.updateCalendarEvent(_editingEvent!.id, eventData);
+      } else {
+        await calendarService.createCalendarEvent(eventData);
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Event created successfully')),
+          SnackBar(content: Text(_editingEvent != null
+              ? 'Event updated successfully'
+              : 'Event created successfully')),
         );
         setState(() {
           _showAddForm = false;
@@ -110,6 +130,7 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
           _descriptionController.clear();
           _eventDate = null;
           _selectedEventType = 'holiday';
+          _editingEvent = null;
         });
       }
     } catch (e) {
@@ -412,7 +433,27 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                       color: AppColors.cardBackground,
                       itemBuilder: (context) => [
                         PopupMenuItem(
-                          child: const Text('Delete', style: TextStyle(color: AppColors.error)),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.edit, size: 18, color: AppColors.textPrimary),
+                              SizedBox(width: 8),
+                              Text('Edit', style: TextStyle(color: AppColors.textPrimary)),
+                            ],
+                          ),
+                          onTap: () {
+                            Future.delayed(Duration.zero, () {
+                              _editEvent(event);
+                            });
+                          },
+                        ),
+                        PopupMenuItem(
+                          child: const Row(
+                            children: [
+                              Icon(Icons.delete, size: 18, color: AppColors.error),
+                              SizedBox(width: 8),
+                              Text('Delete', style: TextStyle(color: AppColors.error)),
+                            ],
+                          ),
                           onTap: () => _deleteEvent(event.id),
                         ),
                       ],
@@ -447,9 +488,9 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
           icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
           onPressed: () => setState(() => _showAddForm = false),
         ),
-        title: const Text(
-          'Add Event',
-          style: TextStyle(
+        title: Text(
+          _editingEvent != null ? 'Edit Event' : 'Add Event',
+          style: const TextStyle(
             color: AppColors.textPrimary,
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -575,9 +616,9 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                   ),
                   child: _isLoading
                       ? const LoadingSpinner()
-                      : const Text(
-                          'Add Event',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      : Text(
+                          _editingEvent != null ? 'Update Event' : 'Add Event',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                         ),
                 ),
               ),

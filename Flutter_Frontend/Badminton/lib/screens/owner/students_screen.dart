@@ -9,6 +9,10 @@ import '../../providers/service_providers.dart';
 import '../../models/student.dart';
 import '../../widgets/forms/add_student_dialog.dart';
 import '../../widgets/forms/edit_student_dialog.dart';
+import '../../models/batch.dart';
+import '../../models/fee.dart';
+import '../../core/services/batch_service.dart';
+import '../../core/services/fee_service.dart';
 import 'performance_tracking_screen.dart';
 import 'bmi_tracking_screen.dart';
 import 'fees_screen.dart';
@@ -247,6 +251,20 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                               PopupMenuItem(
                                 child: const Row(
                                   children: [
+                                    Icon(Icons.group_add, size: 18, color: AppColors.textPrimary),
+                                    SizedBox(width: 8),
+                                    Text('Assign Batch', style: TextStyle(color: AppColors.textPrimary)),
+                                  ],
+                                ),
+                                onTap: () {
+                                  Future.delayed(Duration.zero, () {
+                                    _showAssignBatchDialog(context, student);
+                                  });
+                                },
+                              ),
+                              PopupMenuItem(
+                                child: const Row(
+                                  children: [
                                     Icon(Icons.delete, size: 18, color: AppColors.error),
                                     SizedBox(width: 8),
                                     Text('Delete', style: TextStyle(color: AppColors.error)),
@@ -263,12 +281,73 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                         ],
                       ),
                       const SizedBox(height: AppDimensions.spacingM),
-                      if (student.email.isNotEmpty)
+                      // Batch and Fee Status (async loaded)
+                      FutureBuilder<Map<String, dynamic>>(
+                        future: _getStudentBatchAndFeeStatus(student.id),
+                        builder: (context, snapshot) {
+                          if (snapshot.hasData) {
+                            final data = snapshot.data!;
+                            final batchName = data['batchName'] as String?;
+                            final feeStatus = data['feeStatus'] as String?;
+                            
+                            return Column(
+                              children: [
+                                if (batchName != null) ...[
+                                  _InfoRow(
+                                    icon: Icons.group,
+                                    label: 'Batch',
+                                    value: batchName,
+                                  ),
+                                  const SizedBox(height: AppDimensions.spacingS),
+                                ],
+                                if (feeStatus != null) ...[
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.attach_money, size: 16, color: AppColors.textSecondary),
+                                      const SizedBox(width: AppDimensions.spacingS),
+                                      const Text(
+                                        'Fee Status: ',
+                                        style: TextStyle(
+                                          color: AppColors.textSecondary,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: AppDimensions.spacingS,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: _getFeeStatusColor(feeStatus),
+                                          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                                        ),
+                                        child: Text(
+                                          feeStatus.toUpperCase(),
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: AppDimensions.spacingS),
+                                ],
+                              ],
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        },
+                      ),
+                      if (student.email.isNotEmpty) ...[
+                        const SizedBox(height: AppDimensions.spacingS),
                         _InfoRow(
                           icon: Icons.email_outlined,
                           label: 'Email',
                           value: student.email,
                         ),
+                      ],
                       if (student.phone.isNotEmpty) ...[
                         const SizedBox(height: AppDimensions.spacingS),
                         _InfoRow(
@@ -384,6 +463,145 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
         },
       ),
     );
+  }
+
+  void _showAssignBatchDialog(BuildContext context, Student student) async {
+    try {
+      final batchService = ref.read(batchServiceProvider);
+      final batches = await batchService.getBatches();
+      
+      if (batches.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No batches available. Please create a batch first.')),
+          );
+        }
+        return;
+      }
+
+      int? selectedBatchId;
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: AppColors.cardBackground,
+          title: const Text('Assign to Batch', style: TextStyle(color: AppColors.textPrimary)),
+          content: StatefulBuilder(
+            builder: (context, setState) {
+              return DropdownButtonFormField<int>(
+                value: selectedBatchId,
+                decoration: const InputDecoration(
+                  labelText: 'Select Batch',
+                  labelStyle: TextStyle(color: AppColors.textSecondary),
+                ),
+                dropdownColor: AppColors.cardBackground,
+                style: const TextStyle(color: AppColors.textPrimary),
+                items: batches.map((batch) {
+                  return DropdownMenuItem<int>(
+                    value: batch.id,
+                    child: Text(batch.batchName),
+                  );
+                }).toList(),
+                onChanged: (value) => setState(() => selectedBatchId = value),
+              );
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: selectedBatchId == null
+                  ? null
+                  : () async {
+                      try {
+                        await batchService.enrollStudent(selectedBatchId!, student.id);
+                        if (mounted) {
+                          Navigator.of(context).pop();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Student assigned to batch successfully')),
+                          );
+                          setState(() {});
+                        }
+                      } catch (e) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Failed to assign batch: $e')),
+                          );
+                        }
+                      }
+                    },
+              child: const Text('Assign'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load batches: $e')),
+        );
+      }
+    }
+  }
+
+  Future<Map<String, dynamic>> _getStudentBatchAndFeeStatus(int studentId) async {
+    try {
+      final batchService = ref.read(batchServiceProvider);
+      final feeService = ref.read(feeServiceProvider);
+      
+      // Get all batches and find which one contains this student
+      final batches = await batchService.getBatches();
+      String? batchName;
+      for (final batch in batches) {
+        try {
+          final batchStudents = await batchService.getBatchStudents(batch.id);
+          if (batchStudents.any((s) => s.id == studentId)) {
+            batchName = batch.batchName;
+            break;
+          }
+        } catch (e) {
+          // Skip if batch students fetch fails
+        }
+      }
+      
+      // Get fee status
+      String? feeStatus;
+      try {
+        final fees = await feeService.getFees(studentId: studentId);
+        if (fees.isNotEmpty) {
+          final pendingFees = fees.where((f) => f.status != 'paid').toList();
+          if (pendingFees.isNotEmpty) {
+            final overdueFees = pendingFees.where((f) => f.isOverdue).toList();
+            feeStatus = overdueFees.isNotEmpty ? 'overdue' : 'pending';
+          } else {
+            feeStatus = 'paid';
+          }
+        }
+      } catch (e) {
+        // Skip if fees fetch fails
+      }
+      
+      return {
+        'batchName': batchName,
+        'feeStatus': feeStatus,
+      };
+    } catch (e) {
+      return {};
+    }
+  }
+
+  Color _getFeeStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'paid':
+        return AppColors.success;
+      case 'pending':
+        return AppColors.warning;
+      case 'overdue':
+        return AppColors.error;
+      default:
+        return AppColors.textSecondary;
+    }
   }
 
   void _showDeleteConfirmation(BuildContext context, Student student) {

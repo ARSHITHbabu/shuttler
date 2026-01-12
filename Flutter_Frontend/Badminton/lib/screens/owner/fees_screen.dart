@@ -221,6 +221,38 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
                                 ],
                               ),
                             ],
+                            if (fee.status != 'paid') ...[
+                              const SizedBox(height: AppDimensions.spacingM),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: ElevatedButton.icon(
+                                      onPressed: () => _showSendReminderDialog(context, fee),
+                                      icon: const Icon(Icons.notifications, size: 18),
+                                      label: const Text('Send Reminder'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppColors.warning,
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: AppDimensions.spacingS),
+                                  Expanded(
+                                    child: ElevatedButton.icon(
+                                      onPressed: () => _showRecordPaymentDialog(context, fee),
+                                      icon: const Icon(Icons.payment, size: 18),
+                                      label: const Text('Record Payment'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppColors.accent,
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ],
                         ),
                       );
@@ -306,6 +338,103 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
 
   String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year}';
+  }
+
+  void _showSendReminderDialog(BuildContext context, Fee fee) async {
+    try {
+      final studentService = ref.read(studentServiceProvider);
+      final student = await studentService.getStudentById(fee.studentId);
+      
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            backgroundColor: AppColors.cardBackground,
+            title: const Text('Send Payment Reminder', style: TextStyle(color: AppColors.textPrimary)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Send reminder to ${student.name}',
+                  style: const TextStyle(color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: AppDimensions.spacingM),
+                Text(
+                  'Amount: ₹${fee.amount.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  'Due Date: ${_formatDate(fee.dueDate)}',
+                  style: const TextStyle(color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton.icon(
+                onPressed: () async {
+                  // TODO: Implement actual reminder sending (SMS/Email/Push notification)
+                  // For now, just show a success message
+                  Navigator.of(context).pop();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Payment reminder sent successfully')),
+                    );
+                  }
+                },
+                icon: const Icon(Icons.send),
+                label: const Text('Send'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load student: $e')),
+        );
+      }
+    }
+  }
+
+  void _showRecordPaymentDialog(BuildContext context, Fee fee) {
+    showDialog(
+      context: context,
+      builder: (context) => RecordPaymentDialog(
+        fee: fee,
+        onSubmit: (paymentData) async {
+          try {
+            final feeService = ref.read(feeServiceProvider);
+            await feeService.updateFee(fee.id, paymentData);
+            if (mounted) {
+              Navigator.of(context).pop();
+              setState(() {});
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Payment recorded successfully')),
+              );
+            }
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Failed to record payment: $e')),
+              );
+            }
+          }
+        },
+      ),
+    );
   }
 }
 
