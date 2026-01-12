@@ -630,12 +630,39 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
           _buildSkillRow('Stamina', performance.stamina),
           if (performance.comments != null && performance.comments!.isNotEmpty) ...[
             const SizedBox(height: AppDimensions.spacingM),
-            Text(
-              performance.comments!,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 14,
-              ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.comment_outlined,
+                  size: 16,
+                  color: AppColors.textSecondary,
+                ),
+                const SizedBox(width: AppDimensions.spacingS),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Comment',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        performance.comments!,
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ],
         ],
