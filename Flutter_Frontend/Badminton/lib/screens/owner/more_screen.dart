@@ -12,6 +12,7 @@ import 'calendar_view_screen.dart';
 import 'reports_screen.dart';
 import 'bmi_tracking_screen.dart';
 import 'performance_tracking_screen.dart';
+import 'fees_screen.dart';
 import 'settings_screen.dart';
 
 /// More Screen - Settings and additional features
@@ -144,6 +145,18 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (context) => const PerformanceTrackingScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.payments_outlined,
+              title: 'Fee Management',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const FeesScreen(),
                   ),
                 );
               },
