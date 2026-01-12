@@ -72,7 +72,11 @@ class ApiService {
         // Handle 401 Unauthorized - token expired
         if (error.response?.statusCode == 401) {
           print('🔒 Unauthorized - clearing auth data');
-          await _storageService.clearAuthData();
+          try {
+            await _storageService.clearAuthData();
+          } catch (e) {
+            print('⚠️ Failed to clear auth data: $e');
+          }
           // TODO: Navigate to login screen
         }
 
