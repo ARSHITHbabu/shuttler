@@ -2,12 +2,15 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 
 /// API endpoint constants for backend integration
 class ApiEndpoints {
-  // Base URL - Use localhost for web, 127.0.0.1 for mobile/desktop
+  // Base URL - Use localhost for web, computer's local IP for mobile/desktop
+  // IMPORTANT: Change this IP to your computer's local IP address (run ipconfig on Windows)
   static String get baseUrl {
     if (kIsWeb) {
       return 'http://localhost:8000';
     }
-    return 'http://127.0.0.1:8000';
+    // Use your computer's local network IP address
+    // Your computer IP: 192.168.1.7 (as of Jan 12, 2026)
+    return 'http://192.168.1.7:8000';
   }
 
   // Authentication
