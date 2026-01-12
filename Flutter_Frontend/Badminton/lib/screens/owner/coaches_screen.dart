@@ -8,6 +8,7 @@ import '../../widgets/common/error_widget.dart';
 import '../../providers/service_providers.dart';
 import '../../models/coach.dart';
 import '../../widgets/forms/add_coach_dialog.dart';
+import '../../widgets/forms/edit_coach_dialog.dart';
 
 /// Coaches List Screen - Shows all coaches with add button
 class CoachesScreen extends ConsumerStatefulWidget {
@@ -192,6 +193,85 @@ class _CoachesScreenState extends ConsumerState<CoachesScreen> {
             setState(() {});
           }
         },
+      ),
+    );
+  }
+
+  void _showEditCoachDialog(BuildContext context, Coach coach) {
+    showDialog(
+      context: context,
+      builder: (context) => EditCoachDialog(
+        coach: coach,
+        onSubmit: (coachData) async {
+          final coachService = ref.read(coachServiceProvider);
+          await coachService.updateCoach(coach.id, coachData);
+          if (mounted) {
+            setState(() {});
+            Navigator.of(context).pop();
+          }
+        },
+      ),
+    );
+  }
+
+  void _toggleCoachStatus(BuildContext context, Coach coach) async {
+    try {
+      final coachService = ref.read(coachServiceProvider);
+      final newStatus = coach.status == 'active' ? 'inactive' : 'active';
+      await coachService.updateCoach(coach.id, {'status': newStatus});
+      if (mounted) {
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Coach ${newStatus == 'active' ? 'activated' : 'deactivated'} successfully')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update coach status: $e')),
+        );
+      }
+    }
+  }
+
+  void _showDeleteConfirmation(BuildContext context, Coach coach) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.cardBackground,
+        title: const Text('Delete Coach', style: TextStyle(color: AppColors.textPrimary)),
+        content: Text(
+          'Are you sure you want to delete ${coach.name}? This action cannot be undone.',
+          style: const TextStyle(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              try {
+                final coachService = ref.read(coachServiceProvider);
+                await coachService.deleteCoach(coach.id);
+                if (mounted) {
+                  Navigator.of(context).pop();
+                  setState(() {});
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Coach deleted successfully')),
+                  );
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Failed to delete coach: $e')),
+                  );
+                }
+              }
+            },
+            child: const Text('Delete', style: TextStyle(color: AppColors.error)),
+          ),
+        ],
       ),
     );
   }

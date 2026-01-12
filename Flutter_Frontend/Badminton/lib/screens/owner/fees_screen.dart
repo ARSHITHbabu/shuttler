@@ -6,6 +6,11 @@ import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../models/fee.dart';
+import '../../providers/service_providers.dart';
+import '../../core/services/fee_service.dart';
+import '../../core/services/student_service.dart';
+import '../../core/services/batch_service.dart';
+import '../../widgets/forms/record_payment_dialog.dart';
 
 /// Fees Screen - Shows paid and unpaid fees
 class FeesScreen extends ConsumerStatefulWidget {
@@ -232,10 +237,55 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
 
   Future<List<Fee>> _loadFees() async {
     try {
-      // Get fees for all students (we'll need to fetch by student or batch)
-      // For now, return empty list as backend doesn't have "get all fees" endpoint
-      // TODO: Implement proper fee fetching logic
-      return [];
+      final feeService = ref.read(feeServiceProvider);
+      final studentService = ref.read(studentServiceProvider);
+      final batchService = ref.read(batchServiceProvider);
+      
+      List<Fee> allFees = [];
+      
+      // Try to get fees by batch first (more efficient)
+      try {
+        final batches = await batchService.getBatches();
+        for (final batch in batches) {
+          try {
+            final batchFees = await feeService.getFees(batchId: batch.id);
+            allFees.addAll(batchFees);
+          } catch (e) {
+            // Skip if batch fees fail
+          }
+        }
+      } catch (e) {
+        // If batch approach fails, try student approach
+      }
+      
+      // If no fees found via batches, try getting fees for each student
+      if (allFees.isEmpty) {
+        try {
+          final students = await studentService.getStudents();
+          for (final student in students) {
+            try {
+              final studentFees = await feeService.getFees(studentId: student.id);
+              allFees.addAll(studentFees);
+            } catch (e) {
+              // Skip if student fees fail
+            }
+          }
+        } catch (e) {
+          // Return empty if both approaches fail
+        }
+      }
+      
+      // Filter by selected status
+      if (_selectedFilter != 'all') {
+        allFees = allFees.where((fee) {
+          if (_selectedFilter == 'overdue') {
+            return fee.isOverdue;
+          }
+          return fee.status.toLowerCase() == _selectedFilter.toLowerCase();
+        }).toList();
+      }
+      
+      return allFees;
     } catch (e) {
       return [];
     }

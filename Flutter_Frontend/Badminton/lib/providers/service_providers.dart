@@ -8,6 +8,11 @@ import '../core/services/fee_service.dart';
 import '../core/services/dashboard_service.dart';
 import '../core/services/student_service.dart';
 import '../core/services/coach_service.dart';
+import '../core/services/performance_service.dart';
+import '../core/services/bmi_service.dart';
+import '../core/services/schedule_service.dart';
+import '../core/services/announcement_service.dart';
+import '../core/services/calendar_service.dart';
 
 part 'service_providers.g.dart';
 
@@ -75,4 +80,39 @@ StudentService studentService(StudentServiceRef ref) {
 CoachService coachService(CoachServiceRef ref) {
   final apiService = ref.watch(apiServiceProvider);
   return CoachService(apiService);
+}
+
+/// Provider for PerformanceService singleton
+@riverpod
+PerformanceService performanceService(PerformanceServiceRef ref) {
+  final apiService = ref.watch(apiServiceProvider);
+  return PerformanceService(apiService);
+}
+
+/// Provider for BMIService singleton
+@riverpod
+BMIService bmiService(BmiServiceRef ref) {
+  final apiService = ref.watch(apiServiceProvider);
+  return BMIService(apiService);
+}
+
+/// Provider for ScheduleService singleton
+@riverpod
+ScheduleService scheduleService(ScheduleServiceRef ref) {
+  final apiService = ref.watch(apiServiceProvider);
+  return ScheduleService(apiService);
+}
+
+/// Provider for AnnouncementService singleton
+@riverpod
+AnnouncementService announcementService(AnnouncementServiceRef ref) {
+  final apiService = ref.watch(apiServiceProvider);
+  return AnnouncementService(apiService);
+}
+
+/// Provider for CalendarService singleton
+@riverpod
+CalendarService calendarService(CalendarServiceRef ref) {
+  final apiService = ref.watch(apiServiceProvider);
+  return CalendarService(apiService);
 }

@@ -178,5 +178,104 @@ final coachServiceProvider = AutoDisposeProvider<CoachService>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef CoachServiceRef = AutoDisposeProviderRef<CoachService>;
+String _$performanceServiceHash() =>
+    r'b092b9998588c68abb272ad6d6910a503a4e93b1';
+
+/// Provider for PerformanceService singleton
+///
+/// Copied from [performanceService].
+@ProviderFor(performanceService)
+final performanceServiceProvider =
+    AutoDisposeProvider<PerformanceService>.internal(
+      performanceService,
+      name: r'performanceServiceProvider',
+      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+          ? null
+          : _$performanceServiceHash,
+      dependencies: null,
+      allTransitiveDependencies: null,
+    );
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef PerformanceServiceRef = AutoDisposeProviderRef<PerformanceService>;
+String _$bmiServiceHash() => r'8ad22a8b146744ae11f575e03a68d77737bd52d6';
+
+/// Provider for BMIService singleton
+///
+/// Copied from [bmiService].
+@ProviderFor(bmiService)
+final bmiServiceProvider = AutoDisposeProvider<BMIService>.internal(
+  bmiService,
+  name: r'bmiServiceProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$bmiServiceHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef BmiServiceRef = AutoDisposeProviderRef<BMIService>;
+String _$scheduleServiceHash() => r'ad28f89b6fc2395b8fbfd0107371f4f69f5437fa';
+
+/// Provider for ScheduleService singleton
+///
+/// Copied from [scheduleService].
+@ProviderFor(scheduleService)
+final scheduleServiceProvider = AutoDisposeProvider<ScheduleService>.internal(
+  scheduleService,
+  name: r'scheduleServiceProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$scheduleServiceHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef ScheduleServiceRef = AutoDisposeProviderRef<ScheduleService>;
+String _$announcementServiceHash() =>
+    r'0feeb2b5744a32dd9565d3af430ed0eeb584c64a';
+
+/// Provider for AnnouncementService singleton
+///
+/// Copied from [announcementService].
+@ProviderFor(announcementService)
+final announcementServiceProvider =
+    AutoDisposeProvider<AnnouncementService>.internal(
+      announcementService,
+      name: r'announcementServiceProvider',
+      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+          ? null
+          : _$announcementServiceHash,
+      dependencies: null,
+      allTransitiveDependencies: null,
+    );
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef AnnouncementServiceRef = AutoDisposeProviderRef<AnnouncementService>;
+String _$calendarServiceHash() => r'87d5c298614b56e1d152a7d9e49803053a6c1544';
+
+/// Provider for CalendarService singleton
+///
+/// Copied from [calendarService].
+@ProviderFor(calendarService)
+final calendarServiceProvider = AutoDisposeProvider<CalendarService>.internal(
+  calendarService,
+  name: r'calendarServiceProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$calendarServiceHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef CalendarServiceRef = AutoDisposeProviderRef<CalendarService>;
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package

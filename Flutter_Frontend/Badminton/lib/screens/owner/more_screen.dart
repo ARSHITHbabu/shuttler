@@ -6,6 +6,10 @@ import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../providers/auth_provider.dart';
+import 'session_management_screen.dart';
+import 'announcement_management_screen.dart';
+import 'calendar_view_screen.dart';
+import 'settings_screen.dart';
 
 /// More Screen - Settings and additional features
 /// Matches React reference: MoreScreen.tsx
@@ -74,9 +78,11 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
               icon: Icons.access_time_outlined,
               title: 'Sessions',
               onTap: () {
-                setState(() {
-                  _currentView = 'sessions';
-                });
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const SessionManagementScreen(),
+                  ),
+                );
               },
             ),
             const SizedBox(height: AppDimensions.spacingS),
@@ -84,9 +90,11 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
               icon: Icons.campaign_outlined,
               title: 'Announcements',
               onTap: () {
-                setState(() {
-                  _currentView = 'announcements';
-                });
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const AnnouncementManagementScreen(),
+                  ),
+                );
               },
             ),
             const SizedBox(height: AppDimensions.spacingS),
@@ -94,9 +102,11 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
               icon: Icons.calendar_today_outlined,
               title: 'Calendar',
               onTap: () {
-                setState(() {
-                  _currentView = 'calendar';
-                });
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const CalendarViewScreen(),
+                  ),
+                );
               },
             ),
 
@@ -109,9 +119,11 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
               icon: Icons.settings_outlined,
               title: 'Settings',
               onTap: () {
-                setState(() {
-                  _currentView = 'settings';
-                });
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const SettingsScreen(),
+                  ),
+                );
               },
             ),
             const SizedBox(height: AppDimensions.spacingS),
@@ -152,6 +164,7 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
             });
           },
         );
+      // These are now handled via navigation, but keeping for backward compatibility
       case 'sessions':
       case 'announcements':
       case 'calendar':
