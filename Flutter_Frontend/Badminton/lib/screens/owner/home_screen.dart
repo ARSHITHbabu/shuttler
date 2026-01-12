@@ -4,6 +4,17 @@ import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
+import '../../widgets/common/loading_spinner.dart';
+import '../../widgets/common/error_widget.dart';
+import '../../widgets/forms/add_student_dialog.dart';
+import '../../widgets/forms/add_coach_dialog.dart';
+import '../../providers/dashboard_provider.dart';
+import '../../providers/batch_provider.dart';
+import '../../providers/service_providers.dart';
+import '../../models/batch.dart';
+import 'students_screen.dart';
+import 'coaches_screen.dart';
+import 'fees_screen.dart';
 
 /// Home Screen - Dashboard overview
 /// Matches React reference: HomeScreen.tsx
@@ -17,7 +28,16 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
+    final statsAsync = ref.watch(dashboardStatsProvider);
+    final upcomingBatchesAsync = ref.watch(upcomingBatchesProvider);
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        await ref.read(dashboardStatsProvider.notifier).refresh();
+        ref.invalidate(upcomingBatchesProvider);
+      },
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -56,47 +76,72 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
 
           // Stats Grid
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
-            child: GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisSpacing: AppDimensions.spacingM,
-              mainAxisSpacing: AppDimensions.spacingM,
-              childAspectRatio: 1.1,
-              children: [
-                _StatCard(
-                  icon: Icons.people_outline,
-                  value: '142',
-                  label: 'Total Students',
-                  onTap: () {
-                    // Navigate to students
-                  },
-                ),
-                _StatCard(
-                  icon: Icons.person_outline,
-                  value: '8',
-                  label: 'Total Coaches',
-                  onTap: () {
-                    // Navigate to coaches
-                  },
-                ),
-                _StatCard(
-                  icon: Icons.calendar_today_outlined,
-                  value: '12',
-                  label: 'Active Batches',
-                  onTap: null,
-                ),
-                _StatCard(
-                  icon: Icons.attach_money_outlined,
-                  value: '₹38,500',
-                  label: 'Pending Fees',
-                  onTap: () {
-                    // Navigate to fees
-                  },
-                ),
-              ],
+          statsAsync.when(
+            data: (stats) => Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+              child: GridView.count(
+                crossAxisCount: 2,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisSpacing: AppDimensions.spacingM,
+                mainAxisSpacing: AppDimensions.spacingM,
+                childAspectRatio: 1.1,
+                children: [
+                  _StatCard(
+                    icon: Icons.people_outline,
+                    value: stats.totalStudents.toString(),
+                    label: 'Total Students',
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => const StudentsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  _StatCard(
+                    icon: Icons.person_outline,
+                    value: stats.totalCoaches.toString(),
+                    label: 'Total Coaches',
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => const CoachesScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  _StatCard(
+                    icon: Icons.calendar_today_outlined,
+                    value: stats.activeBatches.toString(),
+                    label: 'Active Batches',
+                    onTap: null,
+                  ),
+                  _StatCard(
+                    icon: Icons.attach_money_outlined,
+                    value: '₹${_formatCurrency(stats.pendingFees)}',
+                    label: 'Pending Fees',
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => const FeesScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            loading: () => const Padding(
+              padding: EdgeInsets.all(AppDimensions.paddingL),
+              child: Center(child: LoadingSpinner()),
+            ),
+            error: (error, stack) => Padding(
+              padding: const EdgeInsets.all(AppDimensions.paddingL),
+              child: ErrorDisplay(
+                message: 'Failed to load statistics',
+                onRetry: () => ref.read(dashboardStatsProvider.notifier).refresh(),
+              ),
             ),
           ),
 
@@ -117,101 +162,127 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                 ),
                 const SizedBox(height: AppDimensions.spacingM),
-                NeumorphicContainer(
-                  padding: const EdgeInsets.all(AppDimensions.paddingM),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 40,
-                            height: 40,
-                            decoration: BoxDecoration(
-                              color: AppColors.background,
-                              borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-                              boxShadow: NeumorphicStyles.getInsetShadow(),
+                statsAsync.when(
+                  data: (stats) => NeumorphicContainer(
+                    padding: const EdgeInsets.all(AppDimensions.paddingM),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: AppColors.background,
+                                borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                                boxShadow: NeumorphicStyles.getInsetShadow(),
+                              ),
+                              child: const Icon(
+                                Icons.trending_up,
+                                size: 20,
+                                color: AppColors.iconPrimary,
+                              ),
                             ),
-                            child: const Icon(
-                              Icons.trending_up,
-                              size: 20,
-                              color: AppColors.iconPrimary,
-                            ),
-                          ),
-                          const SizedBox(width: AppDimensions.spacingM),
-                          const Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Attendance Rate',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: AppColors.textSecondary,
+                            const SizedBox(width: AppDimensions.spacingM),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Attendance Rate',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: AppColors.textSecondary,
+                                    ),
                                   ),
-                                ),
-                                Text(
-                                  '87%',
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.textPrimary,
+                                  Text(
+                                    '${stats.todayAttendanceRate.toStringAsFixed(0)}%',
+                                    style: const TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.textPrimary,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppDimensions.spacingM),
+                        Container(
+                          width: double.infinity,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: AppColors.background,
+                            borderRadius: BorderRadius.circular(4),
+                            boxShadow: NeumorphicStyles.getSmallInsetShadow(),
+                          ),
+                          child: FractionallySizedBox(
+                            alignment: Alignment.centerLeft,
+                            widthFactor: (stats.todayAttendanceRate / 100).clamp(0.0, 1.0),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF505050),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
                             ),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: AppDimensions.spacingM),
-                      Container(
-                        width: double.infinity,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: AppColors.background,
-                          borderRadius: BorderRadius.circular(4),
-                          boxShadow: NeumorphicStyles.getSmallInsetShadow(),
                         ),
-                        child: FractionallySizedBox(
-                          alignment: Alignment.centerLeft,
-                          widthFactor: 0.87,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF505050),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
+                  loading: () => const SizedBox(height: 80, child: Center(child: LoadingSpinner())),
+                  error: (error, stack) => const SizedBox.shrink(),
                 ),
                 const SizedBox(height: AppDimensions.spacingM),
-                NeumorphicContainer(
-                  padding: const EdgeInsets.all(AppDimensions.paddingM),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Upcoming Batches',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: AppColors.textSecondary,
+                upcomingBatchesAsync.when(
+                  data: (batches) => NeumorphicContainer(
+                    padding: const EdgeInsets.all(AppDimensions.paddingM),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Upcoming Batches',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: AppDimensions.spacingM),
-                      _UpcomingBatchItem(
-                        name: 'Morning Batch A',
-                        time: '6:00 AM - 7:30 AM',
-                        students: 18,
-                      ),
-                      const SizedBox(height: AppDimensions.spacingS),
-                      _UpcomingBatchItem(
-                        name: 'Evening Batch B',
-                        time: '5:00 PM - 6:30 PM',
-                        students: 22,
-                      ),
-                    ],
+                        const SizedBox(height: AppDimensions.spacingM),
+                        if (batches.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.all(AppDimensions.spacingM),
+                            child: Text(
+                              'No upcoming batches today',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          )
+                        else
+                          ...batches.asMap().entries.map((entry) {
+                            final batch = entry.value;
+                            final isLast = entry.key == batches.length - 1;
+                            return Column(
+                              children: [
+                                _UpcomingBatchItem(
+                                  name: batch.name,
+                                  time: batch.timeRange,
+                                  students: 0, // TODO: Get enrolled count from batch
+                                ),
+                                if (!isLast) const SizedBox(height: AppDimensions.spacingS),
+                              ],
+                            );
+                          }),
+                      ],
+                    ),
                   ),
+                  loading: () => const NeumorphicContainer(
+                    padding: EdgeInsets.all(AppDimensions.paddingM),
+                    child: Center(child: LoadingSpinner()),
+                  ),
+                  error: (error, stack) => const SizedBox.shrink(),
                 ),
               ],
             ),
@@ -240,9 +311,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       child: _QuickActionButton(
                         icon: Icons.add,
                         label: 'Add Student',
-                        onTap: () {
-                          // Navigate to add student
-                        },
+                        onTap: () => _showAddStudentDialog(context),
                       ),
                     ),
                     const SizedBox(width: AppDimensions.spacingM),
@@ -250,9 +319,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       child: _QuickActionButton(
                         icon: Icons.add,
                         label: 'Add Coach',
-                        onTap: () {
-                          // Navigate to add coach
-                        },
+                        onTap: () => _showAddCoachDialog(context),
                       ),
                     ),
                   ],
@@ -264,7 +331,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           const SizedBox(height: 100), // Space for FAB
         ],
       ),
+      ),
     );
+  }
+
+  String _formatCurrency(double amount) {
+    if (amount >= 100000) {
+      return '${(amount / 100000).toStringAsFixed(1)}L';
+    } else if (amount >= 1000) {
+      return '${(amount / 1000).toStringAsFixed(1)}K';
+    }
+    return amount.toStringAsFixed(0);
   }
 
   String _getFormattedDate() {
@@ -273,6 +350,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     
     return '${weekdays[now.weekday - 1]}, ${months[now.month - 1]} ${now.day}, ${now.year}';
+  }
+
+  void _showAddStudentDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => const AddStudentDialog(),
+    );
+  }
+
+  void _showAddCoachDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AddCoachDialog(
+        onSubmit: (coachData) async {
+          final coachService = ref.read(coachServiceProvider);
+          await coachService.createCoach(coachData);
+          // Refresh dashboard stats
+          ref.invalidate(dashboardStatsProvider);
+        },
+      ),
+    );
   }
 }
 

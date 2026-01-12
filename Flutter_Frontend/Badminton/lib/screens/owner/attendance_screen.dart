@@ -4,6 +4,13 @@ import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
+import '../../widgets/common/loading_spinner.dart';
+import '../../widgets/common/error_widget.dart';
+import '../../providers/batch_provider.dart';
+import '../../providers/attendance_provider.dart';
+import '../../providers/service_providers.dart';
+import '../../models/batch.dart';
+import '../../models/attendance.dart';
 
 /// Attendance Screen - Dual-mode attendance marking
 /// Matches React reference: AttendanceScreen.tsx
@@ -16,31 +23,10 @@ class AttendanceScreen extends ConsumerStatefulWidget {
 
 class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
   String _attendanceType = 'students'; // 'students' or 'coaches'
-  String? _selectedBatchId;
+  int? _selectedBatchId;
   DateTime _selectedDate = DateTime.now();
-  final Map<int, String> _attendance = {}; // studentId -> 'present' or 'absent'
-  final Map<int, String> _remarks = {}; // studentId -> remarks
-
-  final List<Map<String, dynamic>> _batches = [
-    {'id': '1', 'name': 'Morning Batch A', 'time': '6:00 AM - 7:30 AM'},
-    {'id': '2', 'name': 'Evening Batch B', 'time': '5:00 PM - 6:30 PM'},
-    {'id': '3', 'name': 'Weekend Batch', 'time': '8:00 AM - 9:30 AM'},
-  ];
-
-  final List<Map<String, dynamic>> _students = [
-    {'id': 1, 'name': 'Arjun Mehta'},
-    {'id': 2, 'name': 'Kavya Sharma'},
-    {'id': 3, 'name': 'Rohan Patel'},
-    {'id': 4, 'name': 'Priya Singh'},
-    {'id': 5, 'name': 'Amit Kumar'},
-  ];
-
-  final List<Map<String, dynamic>> _coaches = [
-    {'id': 1, 'name': 'Rajesh Kumar', 'specialization': 'Singles'},
-    {'id': 2, 'name': 'Priya Singh', 'specialization': 'Doubles'},
-    {'id': 3, 'name': 'Amit Sharma', 'specialization': 'Junior Training'},
-    {'id': 4, 'name': 'Sneha Patel', 'specialization': 'Advanced'},
-  ];
+  final Map<int, String> _attendance = {}; // studentId/coachId -> 'present' or 'absent'
+  final Map<int, String> _remarks = {}; // studentId/coachId -> remarks
 
   @override
   Widget build(BuildContext context) {
@@ -78,6 +64,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                           _attendance.clear();
                           _remarks.clear();
                         });
+                        ref.invalidate(batchStudentsForAttendanceProvider);
                       },
                     ),
                   ),
@@ -94,6 +81,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                           _attendance.clear();
                           _remarks.clear();
                         });
+                        ref.invalidate(coachesForAttendanceProvider);
                       },
                     ),
                   ),
@@ -137,7 +125,11 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                         if (date != null) {
                           setState(() {
                             _selectedDate = date;
+                            _attendance.clear();
+                            _remarks.clear();
                           });
+                          // Load existing attendance for the selected date
+                          _loadExistingAttendance();
                         }
                       },
                       child: Text(
@@ -158,124 +150,43 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
             // Batch Selector (for students)
             if (_attendanceType == 'students') ...[
               if (_selectedBatchId == null)
-                ..._batches.map((batch) => Padding(
-                      padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
-                      child: NeumorphicContainer(
-                        padding: const EdgeInsets.all(AppDimensions.paddingM),
-                        onTap: () {
-                          setState(() {
-                            _selectedBatchId = batch['id'];
-                          });
-                        },
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    batch['name'],
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.textPrimary,
-                                    ),
-                                  ),
-                                  Text(
-                                    batch['time'],
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.textSecondary,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const Icon(
-                              Icons.chevron_right,
-                              color: AppColors.textTertiary,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ))
+                _buildBatchSelector()
               else
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(
-                            Icons.arrow_back,
-                            color: AppColors.textSecondary,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _selectedBatchId = null;
-                              _attendance.clear();
-                              _remarks.clear();
-                            });
-                          },
-                        ),
-                        Expanded(
-                          child: Text(
-                            _batches.firstWhere((b) => b['id'] == _selectedBatchId)['name'],
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppDimensions.spacingM),
-                    ..._students.map((student) => _AttendanceItem(
-                          name: student['name'],
-                          isPresent: _attendance[student['id']] == 'present',
-                          remark: _remarks[student['id']] ?? '',
-                          onPresentChanged: (isPresent) {
-                            setState(() {
-                              if (isPresent) {
-                                _attendance[student['id']] = 'present';
-                              } else {
-                                _attendance[student['id']] = 'absent';
-                              }
-                            });
-                          },
-                          onRemarkChanged: (remark) {
-                            setState(() {
-                              _remarks[student['id']] = remark;
-                            });
-                          },
-                        )),
-                  ],
-                ),
+                _buildStudentAttendanceList(),
             ],
 
             // Coach List (for coaches)
             if (_attendanceType == 'coaches') ...[
-              ..._coaches.map((coach) => _AttendanceItem(
-                    name: '${coach['name']} - ${coach['specialization']}',
-                    isPresent: _attendance[coach['id']] == 'present',
-                    remark: _remarks[coach['id']] ?? '',
-                    onPresentChanged: (isPresent) {
-                      setState(() {
-                        if (isPresent) {
-                          _attendance[coach['id']] = 'present';
-                        } else {
-                          _attendance[coach['id']] = 'absent';
-                        }
-                      });
-                    },
-                    onRemarkChanged: (remark) {
-                      setState(() {
-                        _remarks[coach['id']] = remark;
-                      });
-                    },
-                  )),
+              _buildCoachAttendanceList(),
             ],
+
+            const SizedBox(height: AppDimensions.spacingL),
+
+            // View History Button
+            if ((_attendanceType == 'students' && _selectedBatchId != null) ||
+                _attendanceType == 'coaches')
+              NeumorphicContainer(
+                padding: const EdgeInsets.all(AppDimensions.paddingM),
+                onTap: () => _showAttendanceHistory(),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: const [
+                    Icon(
+                      Icons.history,
+                      color: AppColors.iconPrimary,
+                      size: 20,
+                    ),
+                    SizedBox(width: AppDimensions.spacingS),
+                    Text(
+                      'View History',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
 
             const SizedBox(height: AppDimensions.spacingL),
 
@@ -301,25 +212,22 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                         ),
                         _SummaryItem(
                           label: 'Total',
-                          value: (_attendanceType == 'students'
-                                  ? _students.length
-                                  : _coaches.length)
-                              .toString(),
+                          value: _attendance.length.toString(),
                           color: AppColors.textSecondary,
                         ),
+                        if (_attendance.isNotEmpty)
+                          _SummaryItem(
+                            label: 'Percentage',
+                            value: '${((_attendance.values.where((v) => v == 'present').length / _attendance.length) * 100).toStringAsFixed(0)}%',
+                            color: AppColors.iconPrimary,
+                          ),
                       ],
                     ),
                     const SizedBox(height: AppDimensions.spacingM),
                     ElevatedButton(
-                      onPressed: () {
-                        // Save attendance
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Attendance saved successfully'),
-                            backgroundColor: AppColors.success,
-                          ),
-                        );
-                      },
+                      onPressed: _attendance.isEmpty
+                          ? null
+                          : () => _saveAttendance(),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.accent,
                         foregroundColor: Colors.white,
@@ -334,6 +242,434 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
             const SizedBox(height: 100), // Space for bottom nav
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildBatchSelector() {
+    final batchesAsync = ref.watch(batchListProvider);
+
+    return batchesAsync.when(
+      data: (batches) {
+        if (batches.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.all(AppDimensions.paddingM),
+            child: Text(
+              'No batches available',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          );
+        }
+
+        return Column(
+          children: batches.map((batch) => Padding(
+                padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
+                child: NeumorphicContainer(
+                  padding: const EdgeInsets.all(AppDimensions.paddingM),
+                  onTap: () {
+                        setState(() {
+                          _selectedBatchId = batch.id;
+                          _attendance.clear();
+                          _remarks.clear();
+                        });
+                        // Load existing attendance for selected batch and date
+                        _loadExistingAttendance();
+                  },
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              batch.name,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            Text(
+                              batch.timeRange,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(
+                        Icons.chevron_right,
+                        color: AppColors.textTertiary,
+                      ),
+                    ],
+                  ),
+                ),
+              )).toList(),
+        );
+      },
+      loading: () => const Padding(
+        padding: EdgeInsets.all(AppDimensions.paddingM),
+        child: Center(child: LoadingSpinner()),
+      ),
+      error: (error, stack) => Padding(
+        padding: const EdgeInsets.all(AppDimensions.paddingM),
+        child: ErrorDisplay(
+          message: 'Failed to load batches',
+          onRetry: () => ref.read(batchListProvider.notifier).refresh(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStudentAttendanceList() {
+    if (_selectedBatchId == null) return const SizedBox.shrink();
+
+    final studentsAsync = ref.watch(
+      batchStudentsForAttendanceProvider(_selectedBatchId!),
+    );
+    final batchesAsync = ref.watch(batchListProvider);
+
+    return studentsAsync.when(
+      data: (students) {
+        final batch = batchesAsync.value?.firstWhere(
+          (b) => b.id == _selectedBatchId,
+          orElse: () => Batch(
+            id: _selectedBatchId!,
+            batchName: 'Unknown',
+            timing: '',
+            period: '',
+            capacity: 0,
+            fees: '0',
+            startDate: DateTime.now().toIso8601String().split('T')[0],
+            createdBy: '',
+          ),
+        );
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                IconButton(
+                  icon: const Icon(
+                    Icons.arrow_back,
+                    color: AppColors.textSecondary,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      _selectedBatchId = null;
+                      _attendance.clear();
+                      _remarks.clear();
+                    });
+                  },
+                ),
+                Expanded(
+                  child: Text(
+                    batch?.name ?? 'Unknown Batch',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppDimensions.spacingM),
+            if (students.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(AppDimensions.paddingM),
+                child: Text(
+                  'No students enrolled in this batch',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              )
+            else
+              ...students.map((student) {
+                    final attendanceStatus = _attendance[student.id];
+                    return _AttendanceItem(
+                      name: student.name,
+                      isPresent: attendanceStatus == 'present',
+                      hasSelection: attendanceStatus != null,
+                      remark: _remarks[student.id] ?? '',
+                      onPresentChanged: (isPresent) {
+                        setState(() {
+                          if (isPresent) {
+                            _attendance[student.id] = 'present';
+                          } else {
+                            _attendance[student.id] = 'absent';
+                          }
+                        });
+                      },
+                      onRemarkChanged: (remark) {
+                        setState(() {
+                          _remarks[student.id] = remark;
+                        });
+                      },
+                    );
+                  }),
+          ],
+        );
+      },
+      loading: () => const Padding(
+        padding: EdgeInsets.all(AppDimensions.paddingM),
+        child: Center(child: LoadingSpinner()),
+      ),
+      error: (error, stack) => Padding(
+        padding: const EdgeInsets.all(AppDimensions.paddingM),
+        child: ErrorDisplay(
+          message: 'Failed to load students',
+          onRetry: () => ref.invalidate(batchStudentsForAttendanceProvider(_selectedBatchId!)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCoachAttendanceList() {
+    final coachesAsync = ref.watch(coachesForAttendanceProvider);
+
+    return coachesAsync.when(
+      data: (coaches) {
+        if (coaches.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.all(AppDimensions.paddingM),
+            child: Text(
+              'No coaches available',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+              ),
+            ),
+          );
+        }
+
+        return Column(
+          children: coaches.map((coach) {
+                final attendanceStatus = _attendance[coach.id];
+                return _AttendanceItem(
+                  name: coach.specialization != null
+                      ? '${coach.name} - ${coach.specialization}'
+                      : coach.name,
+                  isPresent: attendanceStatus == 'present',
+                  hasSelection: attendanceStatus != null,
+                  remark: _remarks[coach.id] ?? '',
+                  onPresentChanged: (isPresent) {
+                    setState(() {
+                      if (isPresent) {
+                        _attendance[coach.id] = 'present';
+                      } else {
+                        _attendance[coach.id] = 'absent';
+                      }
+                    });
+                  },
+                  onRemarkChanged: (remark) {
+                    setState(() {
+                      _remarks[coach.id] = remark;
+                    });
+                  },
+                );
+              }).toList(),
+        );
+      },
+      loading: () => const Padding(
+        padding: EdgeInsets.all(AppDimensions.paddingM),
+        child: Center(child: LoadingSpinner()),
+      ),
+      error: (error, stack) => Padding(
+        padding: const EdgeInsets.all(AppDimensions.paddingM),
+        child: ErrorDisplay(
+          message: 'Failed to load coaches',
+          onRetry: () => ref.invalidate(coachesForAttendanceProvider),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _saveAttendance() async {
+    if (_attendance.isEmpty) return;
+
+    try {
+      final attendanceService = ref.read(attendanceServiceProvider);
+
+      if (_attendanceType == 'students' && _selectedBatchId != null) {
+        // Save student attendance
+        for (final entry in _attendance.entries) {
+          await attendanceService.markStudentAttendance(
+            studentId: entry.key,
+            batchId: _selectedBatchId!,
+            date: _selectedDate,
+            status: entry.value,
+            remarks: _remarks[entry.key],
+          );
+        }
+      } else if (_attendanceType == 'coaches') {
+        // Save coach attendance
+        for (final entry in _attendance.entries) {
+          await attendanceService.markCoachAttendance(
+            coachId: entry.key,
+            date: _selectedDate,
+            status: entry.value,
+            remarks: _remarks[entry.key],
+          );
+        }
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Attendance saved successfully'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+
+        // Clear attendance after saving
+        setState(() {
+          _attendance.clear();
+          _remarks.clear();
+        });
+
+        // Invalidate providers to refresh data
+        if (_attendanceType == 'students' && _selectedBatchId != null) {
+          ref.invalidate(
+            studentAttendanceProvider(_selectedDate, _selectedBatchId!),
+          );
+        } else if (_attendanceType == 'coaches') {
+          ref.invalidate(
+            coachAttendanceProvider(_selectedDate),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _loadExistingAttendance() async {
+    if (_selectedBatchId == null) return;
+
+    try {
+      final attendanceService = ref.read(attendanceServiceProvider);
+      final existingAttendance = await attendanceService.getAttendance(
+        date: _selectedDate,
+        batchId: _selectedBatchId,
+      );
+
+      setState(() {
+        for (final record in existingAttendance) {
+          _attendance[record.studentId] = record.status;
+          if (record.remarks != null) {
+            _remarks[record.studentId] = record.remarks!;
+          }
+        }
+      });
+    } catch (e) {
+      // Silently fail - user can mark attendance fresh
+    }
+  }
+
+  Future<void> _showAttendanceHistory() async {
+    try {
+      final attendanceService = ref.read(attendanceServiceProvider);
+
+      if (mounted) {
+        if (_attendanceType == 'students' && _selectedBatchId != null) {
+          final attendance = await attendanceService.getAttendance(
+            batchId: _selectedBatchId!,
+          );
+          _showHistoryDialog(attendance, isStudent: true);
+        } else if (_attendanceType == 'coaches') {
+          final attendance = await attendanceService.getCoachAttendance();
+          _showHistoryDialog(attendance, isStudent: false);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading history: ${e.toString()}'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showHistoryDialog(dynamic history, {required bool isStudent}) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.cardBackground,
+        title: const Text(
+          'Attendance History',
+          style: TextStyle(color: AppColors.textPrimary),
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: (history as List).isEmpty
+              ? const Text(
+                  'No attendance records found',
+                  style: TextStyle(color: AppColors.textSecondary),
+                )
+              : ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: history.length > 10 ? 10 : history.length,
+                  itemBuilder: (context, index) {
+                    final record = history[index];
+                    String name;
+                    DateTime date;
+                    String status;
+                    
+                    if (isStudent) {
+                      final att = record as Attendance;
+                      name = att.studentName ?? 'Student ${att.studentId}';
+                      date = att.date;
+                      status = att.status;
+                    } else {
+                      final att = record as CoachAttendance;
+                      name = att.coachName ?? 'Coach ${att.coachId}';
+                      date = att.date;
+                      status = att.status;
+                    }
+                    
+                    return ListTile(
+                      title: Text(
+                        name,
+                        style: const TextStyle(color: AppColors.textPrimary),
+                      ),
+                      subtitle: Text(
+                        '${date.day}/${date.month}/${date.year} - $status',
+                        style: const TextStyle(color: AppColors.textSecondary),
+                      ),
+                      trailing: Icon(
+                        status == 'present'
+                            ? Icons.check_circle
+                            : Icons.cancel,
+                        color: status == 'present'
+                            ? AppColors.success
+                            : AppColors.error,
+                      ),
+                    );
+                  },
+                ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
       ),
     );
   }
@@ -388,6 +724,7 @@ class _TypeSelectorButton extends StatelessWidget {
 class _AttendanceItem extends StatelessWidget {
   final String name;
   final bool isPresent;
+  final bool hasSelection;
   final String remark;
   final ValueChanged<bool> onPresentChanged;
   final ValueChanged<String> onRemarkChanged;
@@ -395,6 +732,7 @@ class _AttendanceItem extends StatelessWidget {
   const _AttendanceItem({
     required this.name,
     required this.isPresent,
+    this.hasSelection = false,
     required this.remark,
     required this.onPresentChanged,
     required this.onRemarkChanged,
@@ -419,19 +757,53 @@ class _AttendanceItem extends StatelessWidget {
                   ),
                 ),
               ),
+              const SizedBox(width: AppDimensions.spacingS),
+              // Present Button
               GestureDetector(
-                onTap: () => onPresentChanged(!isPresent),
+                onTap: () => onPresentChanged(true),
                 child: Container(
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: isPresent ? AppColors.success : AppColors.error,
+                    color: hasSelection && isPresent
+                        ? AppColors.success
+                        : AppColors.cardBackground,
                     borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-                    boxShadow: NeumorphicStyles.getInsetShadow(),
+                    boxShadow: hasSelection && isPresent
+                        ? NeumorphicStyles.getInsetShadow()
+                        : NeumorphicStyles.getElevatedShadow(),
                   ),
                   child: Icon(
-                    isPresent ? Icons.check : Icons.close,
-                    color: Colors.white,
+                    Icons.check,
+                    color: hasSelection && isPresent
+                        ? Colors.white
+                        : AppColors.textSecondary,
+                    size: 20,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppDimensions.spacingS),
+              // Absent Button
+              GestureDetector(
+                onTap: () => onPresentChanged(false),
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: hasSelection && !isPresent
+                        ? AppColors.error
+                        : AppColors.cardBackground,
+                    borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                    boxShadow: hasSelection && !isPresent
+                        ? NeumorphicStyles.getInsetShadow()
+                        : NeumorphicStyles.getElevatedShadow(),
+                  ),
+                  child: Icon(
+                    Icons.close,
+                    color: hasSelection && !isPresent
+                        ? Colors.white
+                        : AppColors.textSecondary,
+                    size: 20,
                   ),
                 ),
               ),
