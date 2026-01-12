@@ -10,6 +10,7 @@ import '../../widgets/common/custom_text_field.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/calendar_event.dart';
+import '../../core/utils/canadian_holidays.dart';
 import 'package:intl/intl.dart';
 
 /// Calendar View Screen - Visual calendar for events
@@ -294,6 +295,9 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
 
           final events = snapshot.data ?? [];
           final groupedEvents = _groupEventsByDate(events);
+          
+          // Get Canadian holidays for the focused year
+          final canadianHolidays = CanadianHolidays.getHolidaysForYear(_focusedDay.year);
 
           return Column(
             children: [
@@ -366,6 +370,70 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                     setState(() => _focusedDay = focusedDay);
                   },
                   calendarBuilders: CalendarBuilders(
+                    defaultBuilder: (context, date, focusedDay) {
+                      final dateKey = DateTime(date.year, date.month, date.day);
+                      final isHoliday = canadianHolidays.containsKey(dateKey);
+                      final isSelected = isSameDay(_selectedDay, date);
+                      final isToday = isSameDay(DateTime.now(), date);
+                      
+                      if (isHoliday && !isSelected && !isToday) {
+                        return Center(
+                          child: Text(
+                            '${date.day}',
+                            style: const TextStyle(
+                              color: Colors.red,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        );
+                      }
+                      return null;
+                    },
+                    selectedBuilder: (context, date, focusedDay) {
+                      final dateKey = DateTime(date.year, date.month, date.day);
+                      final isHoliday = canadianHolidays.containsKey(dateKey);
+                      
+                      return Container(
+                        margin: const EdgeInsets.all(4.0),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: isHoliday ? Colors.red : AppColors.accent,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          '${date.day}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      );
+                    },
+                    todayBuilder: (context, date, focusedDay) {
+                      final dateKey = DateTime(date.year, date.month, date.day);
+                      final isHoliday = canadianHolidays.containsKey(dateKey);
+                      final isSelected = isSameDay(_selectedDay, date);
+                      
+                      if (isSelected) return null; // Let selectedBuilder handle it
+                      
+                      return Container(
+                        margin: const EdgeInsets.all(4.0),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: isHoliday 
+                              ? Colors.red.withOpacity(0.5)
+                              : AppColors.accent.withOpacity(0.3),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          '${date.day}',
+                          style: TextStyle(
+                            color: isHoliday ? Colors.red : AppColors.textPrimary,
+                            fontWeight: isHoliday ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                      );
+                    },
                     markerBuilder: (context, date, events) {
                       if (events.isEmpty) return null;
                       
@@ -404,6 +472,10 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
   Widget _buildSelectedDayEvents(Map<DateTime, List<CalendarEvent>> groupedEvents) {
     final date = DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day);
     final dayEvents = groupedEvents[date] ?? [];
+    
+    // Check if this is a Canadian holiday
+    final holidayName = CanadianHolidays.getHolidayName(_selectedDay);
+    final hasHoliday = holidayName != null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -421,7 +493,7 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
         ),
         const SizedBox(height: AppDimensions.spacingM),
         Expanded(
-          child: dayEvents.isEmpty
+          child: (dayEvents.isEmpty && !hasHoliday)
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -448,15 +520,73 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                   },
                   child: ListView.builder(
                     padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
-                    itemCount: dayEvents.length,
+                    itemCount: (hasHoliday ? 1 : 0) + dayEvents.length,
                     itemBuilder: (context, index) {
-                      final event = dayEvents[index];
+                      // Show holiday first if it exists
+                      if (hasHoliday && index == 0) {
+                        return _buildHolidayCard(holidayName!);
+                      }
+                      // Then show regular events
+                      final eventIndex = hasHoliday ? index - 1 : index;
+                      final event = dayEvents[eventIndex];
                       return _buildEventCard(event);
                     },
                   ),
                 ),
         ),
       ],
+    );
+  }
+  
+  Widget _buildHolidayCard(String holidayName) {
+    return NeumorphicContainer(
+      padding: const EdgeInsets.all(AppDimensions.paddingM),
+      margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            height: 48,
+            decoration: BoxDecoration(
+              color: Colors.red,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: AppDimensions.spacingM),
+          Expanded(
+            child: Row(
+              children: [
+                const Icon(Icons.flag, size: 20, color: Colors.red),
+                const SizedBox(width: AppDimensions.spacingS),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        holidayName,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'Canadian Government Holiday',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
