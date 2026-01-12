@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import '../screens/auth/role_selection_screen.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/signup_screen.dart';
+import '../screens/student/profile_completion_screen.dart';
+import '../screens/owner/owner_dashboard.dart';
 
 /// App routing configuration with go_router
 class AppRouter {
@@ -38,14 +40,11 @@ class AppRouter {
           },
         ),
 
-        // Owner Dashboard route (placeholder)
+        // Owner Dashboard route
         GoRoute(
           path: '/owner-dashboard',
           name: 'owner-dashboard',
-          builder: (context, state) => const PlaceholderDashboard(
-            role: 'Owner',
-            icon: Icons.admin_panel_settings,
-          ),
+          builder: (context, state) => const OwnerDashboard(),
         ),
 
         // Coach Dashboard route (placeholder)
@@ -56,6 +55,13 @@ class AppRouter {
             role: 'Coach',
             icon: Icons.person_outline,
           ),
+        ),
+
+        // Student Profile Completion route
+        GoRoute(
+          path: '/student-profile-complete',
+          name: 'student-profile-complete',
+          builder: (context, state) => const ProfileCompletionScreen(),
         ),
 
         // Student Dashboard route (placeholder)
