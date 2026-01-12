@@ -7,6 +7,7 @@ import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../providers/service_providers.dart';
+import '../../providers/auth_provider.dart';
 import '../../models/schedule.dart';
 import '../../models/batch.dart';
 import '../../models/coach.dart';
@@ -72,8 +73,36 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
   Future<List<Schedule>> _loadSessions() async {
     try {
       final scheduleService = ref.read(scheduleServiceProvider);
-      final sessions = await scheduleService.getSchedules();
-      return sessions;
+      List<Schedule> allSessions = [];
+      
+      // Since backend doesn't have GET /schedules/, we need to fetch schedules for each batch
+      // or use date-based fetching. Let's fetch for all batches we have loaded.
+      if (_batches.isNotEmpty) {
+        for (final batch in _batches) {
+          try {
+            final batchSessions = await scheduleService.getSchedules(batchId: batch.id);
+            allSessions.addAll(batchSessions);
+          } catch (e) {
+            // Silently fail for individual batch
+            continue;
+          }
+        }
+      }
+      
+      // Also try to get today's schedules as a fallback
+      try {
+        final todaySessions = await scheduleService.getSchedules(startDate: DateTime.now());
+        // Merge with existing, avoiding duplicates
+        for (var session in todaySessions) {
+          if (!allSessions.any((s) => s.id == session.id)) {
+            allSessions.add(session);
+          }
+        }
+      } catch (e) {
+        // Silently fail for date-based fetch
+      }
+      
+      return allSessions;
     } catch (e) {
       return [];
     }
@@ -122,9 +151,10 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
       return;
     }
 
-    if (_startTime == null || _endTime == null) {
+    // Make batch_id required (backend requires it)
+    if (_selectedBatchId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select start and end time')),
+        const SnackBar(content: Text('Please select a batch')),
       );
       return;
     }
@@ -132,33 +162,25 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
     setState(() => _isLoading = true);
     try {
       final scheduleService = ref.read(scheduleServiceProvider);
-      final sessionDateTime = DateTime(
-        _selectedDate.year,
-        _selectedDate.month,
-        _selectedDate.day,
-        _startTime!.hour,
-        _startTime!.minute,
-      );
-      final endDateTime = DateTime(
-        _selectedDate.year,
-        _selectedDate.month,
-        _selectedDate.day,
-        _endTime!.hour,
-        _endTime!.minute,
-      );
-      final duration = endDateTime.difference(sessionDateTime).inMinutes;
+      final authState = await ref.read(authProvider.future);
+      
+      // Get created_by from auth (convert to string as backend expects string)
+      String? createdBy;
+      if (authState is Authenticated) {
+        createdBy = authState.userId.toString();
+      }
 
+      // Map Flutter format to backend format
+      // Backend expects: batch_id (int, required), date (str), activity (str, required), 
+      // created_by (str, required), description (str, optional)
       final sessionData = {
-        'session_type': _selectedSessionType,
-        'title': _titleController.text.trim(),
+        'batch_id': _selectedBatchId!, // Required, not nullable
         'date': _selectedDate.toIso8601String().split('T')[0],
-        'start_time': '${_startTime!.hour.toString().padLeft(2, '0')}:${_startTime!.minute.toString().padLeft(2, '0')}',
-        'end_time': '${_endTime!.hour.toString().padLeft(2, '0')}:${_endTime!.minute.toString().padLeft(2, '0')}',
-        'duration': duration,
-        'batch_id': _selectedBatchId,
-        'coach_id': _selectedCoachId,
-        'location': _locationController.text.trim().isEmpty ? null : _locationController.text.trim(),
-        'description': _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim(),
+        'activity': _titleController.text.trim(), // Map title to activity field
+        'created_by': createdBy ?? 'owner', // Required
+        'description': _descriptionController.text.trim().isEmpty 
+            ? null 
+            : _descriptionController.text.trim(),
       };
 
       if (_editingSession != null) {
@@ -191,7 +213,7 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to create session: $e')),
+          SnackBar(content: Text('Failed to ${_editingSession != null ? 'update' : 'create'} session: $e')),
         );
       }
     }
@@ -598,31 +620,26 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
 
               const SizedBox(height: AppDimensions.spacingM),
 
-              // Batch Selector
+              // Batch Selector (Required)
               NeumorphicContainer(
                 padding: const EdgeInsets.all(AppDimensions.paddingM),
                 child: DropdownButtonFormField<int>(
                   value: _selectedBatchId,
                   decoration: const InputDecoration(
-                    labelText: 'Batch (Optional)',
+                    labelText: 'Batch *',
                     labelStyle: TextStyle(color: AppColors.textSecondary),
                     border: InputBorder.none,
                   ),
                   dropdownColor: AppColors.cardBackground,
                   style: const TextStyle(color: AppColors.textPrimary),
-                  items: [
-                    const DropdownMenuItem<int>(
-                      value: null,
-                      child: Text('None'),
-                    ),
-                    ..._batches.map((batch) {
-                      return DropdownMenuItem<int>(
-                        value: batch.id,
-                        child: Text(batch.name),
-                      );
-                    }),
-                  ],
+                  items: _batches.map((batch) {
+                    return DropdownMenuItem<int>(
+                      value: batch.id,
+                      child: Text(batch.name),
+                    );
+                  }).toList(),
                   onChanged: (value) => setState(() => _selectedBatchId = value),
+                  validator: (value) => value == null ? 'Batch is required' : null,
                 ),
               ),
 
