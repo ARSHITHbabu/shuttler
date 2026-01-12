@@ -23,6 +23,7 @@ class AnnouncementManagementScreen extends ConsumerStatefulWidget {
 class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManagementScreen> {
   bool _showAddForm = false;
   bool _isLoading = false;
+  Announcement? _editingAnnouncement; // Track if we're editing
 
   final _titleController = TextEditingController();
   final _messageController = TextEditingController();
@@ -45,6 +46,18 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
     } catch (e) {
       return <Announcement>[];
     }
+  }
+
+  void _editAnnouncement(Announcement announcement) {
+    setState(() {
+      _showAddForm = true;
+      _editingAnnouncement = announcement;
+      _titleController.text = announcement.title;
+      _messageController.text = announcement.message;
+      _selectedPriority = announcement.priority;
+      _selectedTargetAudience = announcement.targetAudience;
+      _scheduledAt = announcement.scheduledAt;
+    });
   }
 
   Future<void> _saveAnnouncement() async {
@@ -72,18 +85,26 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
         createdBy = authState.userId;
       }
 
-      await announcementService.createAnnouncement({
+      final announcementData = {
         'title': _titleController.text.trim(),
         'message': _messageController.text.trim(),
         'target_audience': _selectedTargetAudience,
         'priority': _selectedPriority,
         'created_by': createdBy,
         'scheduled_at': _scheduledAt?.toIso8601String(),
-      });
+      };
+
+      if (_editingAnnouncement != null) {
+        await announcementService.updateAnnouncement(_editingAnnouncement!.id, announcementData);
+      } else {
+        await announcementService.createAnnouncement(announcementData);
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Announcement created successfully')),
+          SnackBar(content: Text(_editingAnnouncement != null
+              ? 'Announcement updated successfully'
+              : 'Announcement created successfully')),
         );
         setState(() {
           _showAddForm = false;
@@ -92,6 +113,7 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
           _selectedPriority = 'normal';
           _selectedTargetAudience = 'all';
           _scheduledAt = null;
+          _editingAnnouncement = null;
         });
       }
     } catch (e) {
@@ -425,9 +447,9 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
                   ),
                   child: _isLoading
                       ? const LoadingSpinner()
-                      : const Text(
-                          'Publish Announcement',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      : Text(
+                          _editingAnnouncement != null ? 'Update Announcement' : 'Publish Announcement',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                         ),
                 ),
               ),
@@ -484,16 +506,36 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
                   ],
                 ),
               ),
-              PopupMenuButton(
-                icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
-                color: AppColors.cardBackground,
-                itemBuilder: (context) => [
-                  PopupMenuItem(
-                    child: const Text('Delete', style: TextStyle(color: AppColors.error)),
-                    onTap: () => _deleteAnnouncement(announcement.id),
-                  ),
-                ],
-              ),
+                      PopupMenuButton(
+                        icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+                        color: AppColors.cardBackground,
+                        itemBuilder: (context) => [
+                          PopupMenuItem(
+                            child: const Row(
+                              children: [
+                                Icon(Icons.edit, size: 18, color: AppColors.textPrimary),
+                                SizedBox(width: 8),
+                                Text('Edit', style: TextStyle(color: AppColors.textPrimary)),
+                              ],
+                            ),
+                            onTap: () {
+                              Future.delayed(Duration.zero, () {
+                                _editAnnouncement(announcement);
+                              });
+                            },
+                          ),
+                          PopupMenuItem(
+                            child: const Row(
+                              children: [
+                                Icon(Icons.delete, size: 18, color: AppColors.error),
+                                SizedBox(width: 8),
+                                Text('Delete', style: TextStyle(color: AppColors.error)),
+                              ],
+                            ),
+                            onTap: () => _deleteAnnouncement(announcement.id),
+                          ),
+                        ],
+                      ),
             ],
           ),
           const SizedBox(height: AppDimensions.spacingM),

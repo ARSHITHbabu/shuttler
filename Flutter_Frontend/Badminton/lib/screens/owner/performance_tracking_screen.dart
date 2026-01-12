@@ -36,6 +36,7 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
   final _commentsController = TextEditingController();
   List<Performance> _performanceHistory = [];
   bool _isLoading = false;
+  int? _editingPerformanceId; // Track if we're editing an existing record
 
   final List<Map<String, dynamic>> _skills = [
     {'key': 'serve', 'label': 'Serve', 'icon': Icons.sports_tennis},
@@ -74,6 +75,62 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
     }
   }
 
+  void _editPerformance(Performance performance) {
+    setState(() {
+      _showAddForm = true;
+      _selectedDate = performance.date;
+      _skillRatings['serve'] = performance.serve;
+      _skillRatings['smash'] = performance.smash;
+      _skillRatings['footwork'] = performance.footwork;
+      _skillRatings['defense'] = performance.defense;
+      _skillRatings['stamina'] = performance.stamina;
+      _commentsController.text = performance.comments ?? '';
+      _editingPerformanceId = performance.id;
+    });
+  }
+
+  Future<void> _deletePerformance(Performance performance) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.cardBackground,
+        title: const Text('Delete Performance Record', style: TextStyle(color: AppColors.textPrimary)),
+        content: const Text('Are you sure you want to delete this performance record?', style: TextStyle(color: AppColors.textSecondary)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      setState(() => _isLoading = true);
+      try {
+        final performanceService = ref.read(performanceServiceProvider);
+        await performanceService.deletePerformance(performance.id);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Performance record deleted successfully')),
+          );
+          _loadPerformanceHistory();
+        }
+      } catch (e) {
+        setState(() => _isLoading = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to delete performance: $e')),
+          );
+        }
+      }
+    }
+  }
+
   Future<void> _savePerformance() async {
     if (_selectedStudentId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -101,7 +158,7 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
     setState(() => _isLoading = true);
     try {
       final performanceService = ref.read(performanceServiceProvider);
-      await performanceService.createPerformance({
+      final performanceData = {
         'student_id': _selectedStudentId,
         'date': _selectedDate.toIso8601String().split('T')[0],
         'serve': _skillRatings['serve'] ?? 0,
@@ -112,17 +169,26 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
         'comments': _commentsController.text.trim().isEmpty
             ? null
             : _commentsController.text.trim(),
-      });
+      };
+
+      if (_editingPerformanceId != null) {
+        await performanceService.updatePerformance(_editingPerformanceId!, performanceData);
+      } else {
+        await performanceService.createPerformance(performanceData);
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Performance record saved successfully')),
+          SnackBar(content: Text(_editingPerformanceId != null
+              ? 'Performance record updated successfully'
+              : 'Performance record saved successfully')),
         );
         setState(() {
           _showAddForm = false;
           _skillRatings.updateAll((key, value) => 0);
           _commentsController.clear();
           _selectedDate = DateTime.now();
+          _editingPerformanceId = null;
         });
         _loadPerformanceHistory();
       }
@@ -307,9 +373,9 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
           icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
           onPressed: () => setState(() => _showAddForm = false),
         ),
-        title: const Text(
-          'Add Performance',
-          style: TextStyle(
+        title: Text(
+          _editingPerformanceId != null ? 'Edit Performance' : 'Add Performance',
+          style: const TextStyle(
             color: AppColors.textPrimary,
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -405,9 +471,9 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
                   ),
                   child: _isLoading
                       ? const LoadingSpinner()
-                      : const Text(
-                          'Save Performance',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      : Text(
+                          _editingPerformanceId != null ? 'Update Performance' : 'Save Performance',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                         ),
                 ),
               ),
@@ -498,23 +564,61 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
                   color: AppColors.textPrimary,
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppDimensions.spacingM,
-                  vertical: AppDimensions.spacingS,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.accent.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                ),
-                child: Text(
-                  'Avg: ${performance.averageRating.toStringAsFixed(1)}',
-                  style: const TextStyle(
-                    color: AppColors.accent,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppDimensions.spacingM,
+                      vertical: AppDimensions.spacingS,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                    ),
+                    child: Text(
+                      'Avg: ${performance.averageRating.toStringAsFixed(1)}',
+                      style: const TextStyle(
+                        color: AppColors.accent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                ),
+                  PopupMenuButton(
+                    icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+                    color: AppColors.cardBackground,
+                    itemBuilder: (context) => [
+                      PopupMenuItem(
+                        child: const Row(
+                          children: [
+                            Icon(Icons.edit, size: 18, color: AppColors.textPrimary),
+                            SizedBox(width: 8),
+                            Text('Edit', style: TextStyle(color: AppColors.textPrimary)),
+                          ],
+                        ),
+                        onTap: () {
+                          Future.delayed(Duration.zero, () {
+                            _editPerformance(performance);
+                          });
+                        },
+                      ),
+                      PopupMenuItem(
+                        child: const Row(
+                          children: [
+                            Icon(Icons.delete, size: 18, color: AppColors.error),
+                            SizedBox(width: 8),
+                            Text('Delete', style: TextStyle(color: AppColors.error)),
+                          ],
+                        ),
+                        onTap: () {
+                          Future.delayed(Duration.zero, () {
+                            _deletePerformance(performance);
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ],
           ),

@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../models/student.dart';
+import '../../providers/service_providers.dart';
+import '../../models/batch.dart';
 
 /// Dialog for editing student details
-class EditStudentDialog extends StatefulWidget {
+class EditStudentDialog extends ConsumerStatefulWidget {
   final Student student;
   final Function(Map<String, dynamic>)? onSubmit;
 
@@ -17,16 +20,18 @@ class EditStudentDialog extends StatefulWidget {
   });
 
   @override
-  State<EditStudentDialog> createState() => _EditStudentDialogState();
+  ConsumerState<EditStudentDialog> createState() => _EditStudentDialogState();
 }
 
-class _EditStudentDialogState extends State<EditStudentDialog> {
+class _EditStudentDialogState extends ConsumerState<EditStudentDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
   late final TextEditingController _phoneController;
   late final TextEditingController _emailController;
   late final TextEditingController _guardianNameController;
   late final TextEditingController _guardianPhoneController;
+  int? _selectedBatchId;
+  List<Batch> _batches = [];
   bool _isLoading = false;
 
   @override
@@ -69,6 +74,21 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
 
       if (widget.onSubmit != null) {
         await widget.onSubmit!(studentData);
+      }
+
+      // Assign to batch if selected
+      if (_selectedBatchId != null && mounted) {
+        try {
+          final batchService = ref.read(batchServiceProvider);
+          await batchService.enrollStudent(_selectedBatchId!, widget.student.id);
+        } catch (e) {
+          // Log error but don't fail the update
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Student updated but batch assignment failed: $e')),
+            );
+          }
+        }
       }
 
       if (mounted) {
@@ -154,6 +174,34 @@ class _EditStudentDialogState extends State<EditStudentDialog> {
                   label: 'Guardian Phone (Optional)',
                   hint: 'Enter guardian phone',
                   keyboardType: TextInputType.phone,
+                ),
+                const SizedBox(height: AppDimensions.spacingM),
+                // Batch Selection
+                NeumorphicContainer(
+                  padding: const EdgeInsets.all(AppDimensions.paddingM),
+                  child: DropdownButtonFormField<int>(
+                    value: _selectedBatchId,
+                    decoration: const InputDecoration(
+                      labelText: 'Assign to Batch (Optional)',
+                      labelStyle: TextStyle(color: AppColors.textSecondary),
+                      border: InputBorder.none,
+                    ),
+                    dropdownColor: AppColors.cardBackground,
+                    style: const TextStyle(color: AppColors.textPrimary),
+                    items: [
+                      const DropdownMenuItem<int>(
+                        value: null,
+                        child: Text('None'),
+                      ),
+                      ..._batches.map((batch) {
+                        return DropdownMenuItem<int>(
+                          value: batch.id,
+                          child: Text(batch.batchName),
+                        );
+                      }),
+                    ],
+                    onChanged: (value) => setState(() => _selectedBatchId = value),
+                  ),
                 ),
                 const SizedBox(height: AppDimensions.spacingL),
                 Row(

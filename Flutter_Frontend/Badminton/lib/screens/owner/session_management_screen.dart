@@ -26,6 +26,7 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
   Schedule? _selectedSession;
   String _selectedTab = 'upcoming'; // 'upcoming' or 'past'
   bool _isLoading = false;
+  Schedule? _editingSession; // Track if we're editing an existing session
 
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
@@ -78,6 +79,41 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
     }
   }
 
+  void _editSession(Schedule session) {
+    setState(() {
+      _selectedSession = null;
+      _showAddForm = true;
+      _editingSession = session;
+      _titleController.text = session.title;
+      _descriptionController.text = session.description ?? '';
+      _locationController.text = session.location ?? '';
+      _selectedSessionType = session.sessionType;
+      _selectedDate = session.date;
+      _selectedBatchId = session.batchId;
+      _selectedCoachId = session.coachId;
+      
+      // Parse time strings
+      if (session.startTime != null) {
+        final parts = session.startTime!.split(':');
+        if (parts.length == 2) {
+          _startTime = TimeOfDay(
+            hour: int.parse(parts[0]),
+            minute: int.parse(parts[1]),
+          );
+        }
+      }
+      if (session.endTime != null) {
+        final parts = session.endTime!.split(':');
+        if (parts.length == 2) {
+          _endTime = TimeOfDay(
+            hour: int.parse(parts[0]),
+            minute: int.parse(parts[1]),
+          );
+        }
+      }
+    });
+  }
+
   Future<void> _saveSession() async {
     if (_titleController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -112,7 +148,7 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
       );
       final duration = endDateTime.difference(sessionDateTime).inMinutes;
 
-      await scheduleService.createSchedule({
+      final sessionData = {
         'session_type': _selectedSessionType,
         'title': _titleController.text.trim(),
         'date': _selectedDate.toIso8601String().split('T')[0],
@@ -123,11 +159,19 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
         'coach_id': _selectedCoachId,
         'location': _locationController.text.trim().isEmpty ? null : _locationController.text.trim(),
         'description': _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim(),
-      });
+      };
+
+      if (_editingSession != null) {
+        await scheduleService.updateSchedule(_editingSession!.id, sessionData);
+      } else {
+        await scheduleService.createSchedule(sessionData);
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Session created successfully')),
+          SnackBar(content: Text(_editingSession != null
+              ? 'Session updated successfully'
+              : 'Session created successfully')),
         );
         setState(() {
           _showAddForm = false;
@@ -140,6 +184,7 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
           _endTime = null;
           _selectedBatchId = null;
           _selectedCoachId = null;
+          _editingSession = null;
         });
       }
     } catch (e) {
@@ -384,9 +429,9 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
           icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
           onPressed: () => setState(() => _showAddForm = false),
         ),
-        title: const Text(
-          'Create Session',
-          style: TextStyle(
+        title: Text(
+          _editingSession != null ? 'Edit Session' : 'Create Session',
+          style: const TextStyle(
             color: AppColors.textPrimary,
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -644,9 +689,9 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
                   ),
                   child: _isLoading
                       ? const LoadingSpinner()
-                      : const Text(
-                          'Create Session',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      : Text(
+                          _editingSession != null ? 'Update Session' : 'Create Session',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                         ),
                 ),
               ),
@@ -684,7 +729,9 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
               PopupMenuItem(
                 child: const Text('Edit', style: TextStyle(color: AppColors.textPrimary)),
                 onTap: () {
-                  // TODO: Implement edit
+                  Future.delayed(Duration.zero, () {
+                    _editSession(session);
+                  });
                 },
               ),
               PopupMenuItem(

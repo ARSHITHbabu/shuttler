@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../models/coach.dart';
+import '../../providers/service_providers.dart';
+import '../../models/batch.dart';
 
 /// Dialog for editing coach details
-class EditCoachDialog extends StatefulWidget {
+class EditCoachDialog extends ConsumerStatefulWidget {
   final Coach coach;
   final Function(Map<String, dynamic>)? onSubmit;
 
@@ -17,16 +20,18 @@ class EditCoachDialog extends StatefulWidget {
   });
 
   @override
-  State<EditCoachDialog> createState() => _EditCoachDialogState();
+  ConsumerState<EditCoachDialog> createState() => _EditCoachDialogState();
 }
 
-class _EditCoachDialogState extends State<EditCoachDialog> {
+class _EditCoachDialogState extends ConsumerState<EditCoachDialog> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
   late final TextEditingController _phoneController;
   late final TextEditingController _emailController;
   late final TextEditingController _specializationController;
   late final TextEditingController _experienceController;
+  List<int> _selectedBatchIds = [];
+  List<Batch> _batches = [];
   bool _isLoading = false;
 
   @override
@@ -71,6 +76,42 @@ class _EditCoachDialogState extends State<EditCoachDialog> {
 
       if (widget.onSubmit != null) {
         await widget.onSubmit!(coachData);
+      }
+
+      // Update batch assignments
+      if (mounted) {
+        try {
+          final batchService = ref.read(batchServiceProvider);
+          // Get current batches assigned to this coach
+          final currentBatches = _batches
+              .where((batch) => batch.assignedCoachId == widget.coach.id)
+              .toList();
+          
+          // Remove coach from batches that are no longer selected
+          for (final batch in currentBatches) {
+            if (!_selectedBatchIds.contains(batch.id)) {
+              await batchService.updateBatch(batch.id, {'assigned_coach_id': null});
+            }
+          }
+          
+          // Assign coach to newly selected batches
+          for (final batchId in _selectedBatchIds) {
+            final batch = _batches.firstWhere((b) => b.id == batchId);
+            if (batch.assignedCoachId != widget.coach.id) {
+              await batchService.updateBatch(batchId, {
+                'assigned_coach_id': widget.coach.id,
+                'assigned_coach_name': widget.coach.name,
+              });
+            }
+          }
+        } catch (e) {
+          // Log error but don't fail the update
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Coach updated but batch assignment failed: $e')),
+            );
+          }
+        }
       }
 
       if (mounted) {
@@ -156,6 +197,46 @@ class _EditCoachDialogState extends State<EditCoachDialog> {
                   label: 'Experience Years (Optional)',
                   hint: 'Enter years of experience',
                   keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: AppDimensions.spacingM),
+                // Batch Assignment
+                const Text(
+                  'Assign to Batches',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: AppDimensions.spacingS),
+                NeumorphicContainer(
+                  padding: const EdgeInsets.all(AppDimensions.paddingM),
+                  child: _batches.isEmpty
+                      ? const Text(
+                          'No batches available',
+                          style: TextStyle(color: AppColors.textSecondary),
+                        )
+                      : Wrap(
+                          spacing: AppDimensions.spacingS,
+                          runSpacing: AppDimensions.spacingS,
+                          children: _batches.map((batch) {
+                            final isSelected = _selectedBatchIds.contains(batch.id);
+                            return FilterChip(
+                              label: Text(batch.batchName),
+                              selected: isSelected,
+                              onSelected: (selected) {
+                                setState(() {
+                                  if (selected) {
+                                    _selectedBatchIds.add(batch.id);
+                                  } else {
+                                    _selectedBatchIds.remove(batch.id);
+                                  }
+                                });
+                              },
+                              selectedColor: AppColors.accent.withOpacity(0.2),
+                              checkmarkColor: AppColors.accent,
+                            );
+                          }).toList(),
+                        ),
                 ),
                 const SizedBox(height: AppDimensions.spacingL),
                 Row(

@@ -32,6 +32,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
   bool _isLoading = false;
   double? _calculatedBMI;
   String? _healthStatus;
+  int? _editingBMIRecordId; // Track if we're editing an existing record
 
   @override
   void dispose() {
@@ -126,16 +127,24 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
 
       setState(() => _isLoading = true);
       final bmiService = ref.read(bmiServiceProvider);
-      await bmiService.createBMIRecord({
+      final bmiData = {
         'student_id': _selectedStudentId,
         'date': _selectedDate.toIso8601String().split('T')[0],
         'height': height,
         'weight': weight,
-      });
+      };
+
+      if (_editingBMIRecordId != null) {
+        await bmiService.updateBMIRecord(_editingBMIRecordId!, bmiData);
+      } else {
+        await bmiService.createBMIRecord(bmiData);
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('BMI record saved successfully')),
+          SnackBar(content: Text(_editingBMIRecordId != null
+              ? 'BMI record updated successfully'
+              : 'BMI record saved successfully')),
         );
         setState(() {
           _showAddForm = false;
@@ -144,6 +153,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
           _calculatedBMI = null;
           _healthStatus = null;
           _selectedDate = DateTime.now();
+          _editingBMIRecordId = null;
         });
         _loadBMIHistory();
       }
@@ -328,9 +338,9 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
           icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
           onPressed: () => setState(() => _showAddForm = false),
         ),
-        title: const Text(
-          'Add BMI Record',
-          style: TextStyle(
+        title: Text(
+          _editingBMIRecordId != null ? 'Edit BMI Record' : 'Add BMI Record',
+          style: const TextStyle(
             color: AppColors.textPrimary,
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -462,9 +472,9 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
                   ),
                   child: _isLoading
                       ? const LoadingSpinner()
-                      : const Text(
-                          'Save BMI Record',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      : Text(
+                          _editingBMIRecordId != null ? 'Update BMI Record' : 'Save BMI Record',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                         ),
                 ),
               ),
@@ -473,6 +483,59 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
         ),
       ),
     );
+  }
+
+  void _editBMIRecord(BMIRecord record) {
+    setState(() {
+      _showAddForm = true;
+      _selectedDate = record.date;
+      _heightController.text = record.height.toString();
+      _weightController.text = record.weight.toString();
+      _calculateBMI();
+      _editingBMIRecordId = record.id;
+    });
+  }
+
+  Future<void> _deleteBMIRecord(BMIRecord record) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.cardBackground,
+        title: const Text('Delete BMI Record', style: TextStyle(color: AppColors.textPrimary)),
+        content: const Text('Are you sure you want to delete this BMI record?', style: TextStyle(color: AppColors.textSecondary)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true && mounted) {
+      setState(() => _isLoading = true);
+      try {
+        final bmiService = ref.read(bmiServiceProvider);
+        await bmiService.deleteBMIRecord(record.id);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('BMI record deleted successfully')),
+          );
+          _loadBMIHistory();
+        }
+      } catch (e) {
+        setState(() => _isLoading = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to delete BMI record: $e')),
+          );
+        }
+      }
+    }
   }
 
   Widget _buildBMICard(BMIRecord record) {
@@ -493,23 +556,61 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
                   color: AppColors.textPrimary,
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppDimensions.spacingM,
-                  vertical: AppDimensions.spacingS,
-                ),
-                decoration: BoxDecoration(
-                  color: _getHealthStatusColor(record.healthStatus ?? 'normal').withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                ),
-                child: Text(
-                  record.healthStatus?.toUpperCase() ?? 'NORMAL',
-                  style: TextStyle(
-                    color: _getHealthStatusColor(record.healthStatus ?? 'normal'),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppDimensions.spacingM,
+                      vertical: AppDimensions.spacingS,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _getHealthStatusColor(record.healthStatus ?? 'normal').withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                    ),
+                    child: Text(
+                      record.healthStatus?.toUpperCase() ?? 'NORMAL',
+                      style: TextStyle(
+                        color: _getHealthStatusColor(record.healthStatus ?? 'normal'),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                ),
+                  PopupMenuButton(
+                    icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+                    color: AppColors.cardBackground,
+                    itemBuilder: (context) => [
+                      PopupMenuItem(
+                        child: const Row(
+                          children: [
+                            Icon(Icons.edit, size: 18, color: AppColors.textPrimary),
+                            SizedBox(width: 8),
+                            Text('Edit', style: TextStyle(color: AppColors.textPrimary)),
+                          ],
+                        ),
+                        onTap: () {
+                          Future.delayed(Duration.zero, () {
+                            _editBMIRecord(record);
+                          });
+                        },
+                      ),
+                      PopupMenuItem(
+                        child: const Row(
+                          children: [
+                            Icon(Icons.delete, size: 18, color: AppColors.error),
+                            SizedBox(width: 8),
+                            Text('Delete', style: TextStyle(color: AppColors.error)),
+                          ],
+                        ),
+                        onTap: () {
+                          Future.delayed(Duration.zero, () {
+                            _deleteBMIRecord(record);
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ],
           ),
