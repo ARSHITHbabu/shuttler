@@ -11,6 +11,7 @@ import 'announcement_management_screen.dart';
 import 'calendar_view_screen.dart';
 import 'reports_screen.dart';
 import 'bmi_tracking_screen.dart';
+import 'performance_tracking_screen.dart';
 import 'settings_screen.dart';
 
 /// More Screen - Settings and additional features
@@ -131,6 +132,18 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (context) => const BMITrackingScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.trending_up_outlined,
+              title: 'Performance Tracking',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const PerformanceTrackingScreen(),
                   ),
                 );
               },

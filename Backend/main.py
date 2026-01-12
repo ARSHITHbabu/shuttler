@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, Text, Date, DateTime, ForeignKey, JSON, func
+from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, Text, Date, DateTime, ForeignKey, JSON, func, and_
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.exc import IntegrityError
@@ -566,6 +566,39 @@ class Performance(BaseModel):
     
     class Config:
         from_attributes = True
+
+# Frontend-compatible Performance Model (all skills in one record)
+class PerformanceFrontend(BaseModel):
+    id: int
+    student_id: int
+    student_name: Optional[str] = None
+    date: str
+    serve: int  # 1-5 rating
+    smash: int  # 1-5 rating
+    footwork: int  # 1-5 rating
+    defense: int  # 1-5 rating
+    stamina: int  # 1-5 rating
+    comments: Optional[str] = None
+    created_at: Optional[str] = None
+
+class PerformanceFrontendCreate(BaseModel):
+    student_id: int
+    date: str
+    serve: int = 0
+    smash: int = 0
+    footwork: int = 0
+    defense: int = 0
+    stamina: int = 0
+    comments: Optional[str] = None
+
+class PerformanceFrontendUpdate(BaseModel):
+    date: Optional[str] = None
+    serve: Optional[int] = None
+    smash: Optional[int] = None
+    footwork: Optional[int] = None
+    defense: Optional[int] = None
+    stamina: Optional[int] = None
+    comments: Optional[str] = None
 
 # BMI Models
 class BMICreate(BaseModel):
@@ -1514,18 +1547,6 @@ def update_fee(fee_id: int, fee_update: FeeUpdate):
 
 # ==================== Performance Routes ====================
 
-@app.post("/performance/", response_model=Performance)
-def create_performance(performance: PerformanceCreate):
-    db = SessionLocal()
-    try:
-        db_performance = PerformanceDB(**performance.dict())
-        db.add(db_performance)
-        db.commit()
-        db.refresh(db_performance)
-        return db_performance
-    finally:
-        db.close()
-
 @app.get("/performance/student/{student_id}")
 def get_student_performance(student_id: int):
     db = SessionLocal()
@@ -1647,6 +1668,316 @@ def get_coach_performance_grouped(coach_name: str):
             })
         
         return list(grouped.values())
+    finally:
+        db.close()
+
+# ==================== Performance Routes (Frontend Compatible) ====================
+
+def transform_performance_to_frontend(records: List[PerformanceDB], db) -> Optional[dict]:
+    """Transform backend performance records (multiple per date) to frontend format (single per date)"""
+    if not records:
+        return None
+    
+    # Get student name
+    student = db.query(StudentDB).filter(StudentDB.id == records[0].student_id).first()
+    student_name = student.name if student else None
+    
+    # Initialize with defaults
+    result = {
+        "id": records[0].id,  # Use first record's ID
+        "student_id": records[0].student_id,
+        "student_name": student_name,
+        "date": records[0].date,
+        "serve": 0,
+        "smash": 0,
+        "footwork": 0,
+        "defense": 0,
+        "stamina": 0,
+        "comments": None,
+        "created_at": None
+    }
+    
+    # Aggregate skills from all records
+    comments_list = []
+    for record in records:
+        skill_lower = record.skill.lower()
+        if skill_lower == "serve":
+            result["serve"] = record.rating
+        elif skill_lower == "smash":
+            result["smash"] = record.rating
+        elif skill_lower == "footwork":
+            result["footwork"] = record.rating
+        elif skill_lower == "defense":
+            result["defense"] = record.rating
+        elif skill_lower == "stamina":
+            result["stamina"] = record.rating
+        
+        if record.comments:
+            comments_list.append(record.comments)
+    
+    # Combine comments
+    if comments_list:
+        result["comments"] = " | ".join(comments_list)
+    
+    return result
+
+@app.get("/performance/", response_model=List[PerformanceFrontend])
+def get_performance_records(
+    student_id: Optional[int] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
+):
+    """Get performance records in frontend-compatible format with optional filtering"""
+    db = SessionLocal()
+    try:
+        query = db.query(PerformanceDB)
+        
+        if student_id is not None:
+            query = query.filter(PerformanceDB.student_id == student_id)
+        
+        if start_date:
+            query = query.filter(PerformanceDB.date >= start_date)
+        
+        if end_date:
+            query = query.filter(PerformanceDB.date <= end_date)
+        
+        all_records = query.order_by(PerformanceDB.date.desc()).all()
+        
+        # Group by date and student_id
+        grouped = {}
+        for record in all_records:
+            key = f"{record.date}_{record.student_id}"
+            if key not in grouped:
+                grouped[key] = []
+            grouped[key].append(record)
+        
+        # Transform each group to frontend format
+        result = []
+        for records in grouped.values():
+            transformed = transform_performance_to_frontend(records, db)
+            if transformed:
+                result.append(transformed)
+        
+        return result
+    finally:
+        db.close()
+
+@app.get("/performance/{record_id}", response_model=PerformanceFrontend)
+def get_performance_record(record_id: int):
+    """Get a single performance record by ID in frontend format"""
+    db = SessionLocal()
+    try:
+        # Get the first record with this ID
+        first_record = db.query(PerformanceDB).filter(PerformanceDB.id == record_id).first()
+        if not first_record:
+            raise HTTPException(status_code=404, detail="Performance record not found")
+        
+        # Get all records for the same date and student
+        all_records = db.query(PerformanceDB).filter(
+            and_(
+                PerformanceDB.student_id == first_record.student_id,
+                PerformanceDB.date == first_record.date
+            )
+        ).all()
+        
+        transformed = transform_performance_to_frontend(all_records, db)
+        if not transformed:
+            raise HTTPException(status_code=404, detail="Performance record not found")
+        
+        return transformed
+    finally:
+        db.close()
+
+@app.post("/performance/", response_model=PerformanceFrontend)
+def create_performance_record_v2(performance_data: PerformanceFrontendCreate):
+    """Create performance records (frontend-compatible endpoint)"""
+    db = SessionLocal()
+    try:
+        # Get current user for recorded_by (you may need to adjust this based on your auth)
+        recorded_by = "owner"  # Default, should come from auth context
+        
+        # Get student to find batch_id (required by backend model)
+        student = db.query(StudentDB).filter(StudentDB.id == performance_data.student_id).first()
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found")
+        
+        # Get student's first batch enrollment, or use default
+        batch_student = db.query(BatchStudentDB).filter(
+            BatchStudentDB.student_id == performance_data.student_id
+        ).first()
+        batch_id = batch_student.batch_id if batch_student else 1
+        
+        # Create individual records for each skill with rating > 0
+        skill_mappings = {
+            "serve": performance_data.serve,
+            "smash": performance_data.smash,
+            "footwork": performance_data.footwork,
+            "defense": performance_data.defense,
+            "stamina": performance_data.stamina,
+        }
+        
+        created_records = []
+        for skill, rating in skill_mappings.items():
+            if rating > 0:  # Only create record if rating is provided
+                db_performance = PerformanceDB(
+                    student_id=performance_data.student_id,
+                    batch_id=batch_id,
+                    date=performance_data.date,
+                    skill=skill,
+                    rating=rating,
+                    comments=performance_data.comments if skill == "serve" else None,  # Store comments only once
+                    recorded_by=recorded_by
+                )
+                db.add(db_performance)
+                created_records.append(db_performance)
+        
+        if not created_records:
+            raise HTTPException(status_code=400, detail="At least one skill rating must be provided")
+        
+        db.commit()
+        
+        # Refresh all records
+        for record in created_records:
+            db.refresh(record)
+        
+        # Get all records for this date/student to return in frontend format
+        all_records = db.query(PerformanceDB).filter(
+            and_(
+                PerformanceDB.student_id == performance_data.student_id,
+                PerformanceDB.date == performance_data.date
+            )
+        ).all()
+        
+        transformed = transform_performance_to_frontend(all_records, db)
+        if not transformed:
+            raise HTTPException(status_code=500, detail="Failed to create performance record")
+        
+        return transformed
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        db.close()
+
+@app.put("/performance/{record_id}", response_model=PerformanceFrontend)
+def update_performance_record(record_id: int, performance_update: PerformanceFrontendUpdate):
+    """Update performance records (frontend-compatible endpoint)"""
+    db = SessionLocal()
+    try:
+        # Get the first record with this ID
+        first_record = db.query(PerformanceDB).filter(PerformanceDB.id == record_id).first()
+        if not first_record:
+            raise HTTPException(status_code=404, detail="Performance record not found")
+        
+        # Get all records for the same date and student
+        all_records = db.query(PerformanceDB).filter(
+            and_(
+                PerformanceDB.student_id == first_record.student_id,
+                PerformanceDB.date == first_record.date
+            )
+        ).all()
+        
+        update_data = performance_update.dict(exclude_unset=True)
+        
+        # Update date if provided
+        new_date = update_data.get('date', first_record.date)
+        
+        # Update skill ratings
+        skill_mappings = {
+            "serve": update_data.get('serve'),
+            "smash": update_data.get('smash'),
+            "footwork": update_data.get('footwork'),
+            "defense": update_data.get('defense'),
+            "stamina": update_data.get('stamina'),
+        }
+        
+        # Update existing records or create new ones
+        for skill, new_rating in skill_mappings.items():
+            if new_rating is not None:
+                # Find existing record for this skill
+                existing = next((r for r in all_records if r.skill.lower() == skill), None)
+                
+                if existing:
+                    # Update existing record
+                    existing.rating = new_rating
+                    if new_rating == 0:
+                        # Delete if rating set to 0
+                        db.delete(existing)
+                elif new_rating > 0:
+                    # Create new record if rating > 0
+                    new_record = PerformanceDB(
+                        student_id=first_record.student_id,
+                        batch_id=first_record.batch_id,
+                        date=new_date,
+                        skill=skill,
+                        rating=new_rating,
+                        comments=update_data.get('comments') if skill == "serve" else None,
+                        recorded_by=first_record.recorded_by
+                    )
+                    db.add(new_record)
+        
+        # Update comments (store in first record)
+        if 'comments' in update_data:
+            first_record.comments = update_data['comments']
+        
+        # Update date for all records
+        if 'date' in update_data:
+            for record in all_records:
+                record.date = new_date
+        
+        db.commit()
+        
+        # Get updated records
+        updated_records = db.query(PerformanceDB).filter(
+            and_(
+                PerformanceDB.student_id == first_record.student_id,
+                PerformanceDB.date == new_date
+            )
+        ).all()
+        
+        transformed = transform_performance_to_frontend(updated_records, db)
+        if not transformed:
+            raise HTTPException(status_code=404, detail="Performance record not found")
+        
+        return transformed
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        db.close()
+
+@app.delete("/performance/{record_id}")
+def delete_performance_record(record_id: int):
+    """Delete performance records (all records for the same date/student)"""
+    db = SessionLocal()
+    try:
+        # Get the first record with this ID
+        first_record = db.query(PerformanceDB).filter(PerformanceDB.id == record_id).first()
+        if not first_record:
+            raise HTTPException(status_code=404, detail="Performance record not found")
+        
+        # Delete all records for the same date and student
+        all_records = db.query(PerformanceDB).filter(
+            and_(
+                PerformanceDB.student_id == first_record.student_id,
+                PerformanceDB.date == first_record.date
+            )
+        ).all()
+        
+        for record in all_records:
+            db.delete(record)
+        
+        db.commit()
+        return {"message": "Performance record deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
     finally:
         db.close()
 
