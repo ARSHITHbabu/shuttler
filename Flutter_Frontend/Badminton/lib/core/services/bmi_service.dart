@@ -1,5 +1,3 @@
-import 'dart:io';
-import 'dart:convert';
 import '../constants/api_endpoints.dart';
 import 'api_service.dart';
 import '../../models/bmi_record.dart';
@@ -57,23 +55,6 @@ class BMIService {
   /// Create a new BMI record
   Future<BMIRecord> createBMIRecord(Map<String, dynamic> bmiData) async {
     try {
-      // #region agent log
-      try {
-        final logFile = File(r'd:\laptop new\f\Personal Projects\badminton\abhi_colab\Shuttler_Cursor\shuttler\.cursor\debug.log');
-        final logEntry = jsonEncode({
-          'id': 'log_${DateTime.now().millisecondsSinceEpoch}',
-          'timestamp': DateTime.now().millisecondsSinceEpoch,
-          'location': 'bmi_service.dart:56',
-          'message': 'createBMIRecord entry - data before processing',
-          'data': {'bmiData': bmiData, 'hasBmi': bmiData.containsKey('bmi'), 'hasHealthStatus': bmiData.containsKey('health_status'), 'hasRecordedBy': bmiData.containsKey('recorded_by')},
-          'sessionId': 'debug-session',
-          'runId': 'run1',
-          'hypothesisId': 'A'
-        });
-        await logFile.writeAsString('$logEntry\n', mode: FileMode.append);
-      } catch (_) {}
-      // #endregion
-
       // Create a copy of bmiData to avoid mutating the original
       final requestData = Map<String, dynamic>.from(bmiData);
       
@@ -86,46 +67,12 @@ class BMIService {
         requestData['recorded_by'] = 'Owner'; // Default to Owner, can be overridden
       }
 
-      // #region agent log
-      try {
-        final logFile = File(r'd:\laptop new\f\Personal Projects\badminton\abhi_colab\Shuttler_Cursor\shuttler\.cursor\debug.log');
-        final logEntry = jsonEncode({
-          'id': 'log_${DateTime.now().millisecondsSinceEpoch}',
-          'timestamp': DateTime.now().millisecondsSinceEpoch,
-          'location': 'bmi_service.dart:66',
-          'message': 'createBMIRecord - data before POST request (after fix)',
-          'data': {'requestData': requestData, 'keys': requestData.keys.toList()},
-          'sessionId': 'debug-session',
-          'runId': 'run1',
-          'hypothesisId': 'B'
-        });
-        await logFile.writeAsString('$logEntry\n', mode: FileMode.append);
-      } catch (_) {}
-      // #endregion
-
       final response = await _apiService.post(
         ApiEndpoints.bmiRecords,
         data: requestData,
       );
       return BMIRecord.fromJson(response.data as Map<String, dynamic>);
     } catch (e) {
-      // #region agent log
-      try {
-        final logFile = File(r'd:\laptop new\f\Personal Projects\badminton\abhi_colab\Shuttler_Cursor\shuttler\.cursor\debug.log');
-        final errorMsg = _apiService.getErrorMessage(e);
-        final logEntry = jsonEncode({
-          'id': 'log_${DateTime.now().millisecondsSinceEpoch}',
-          'timestamp': DateTime.now().millisecondsSinceEpoch,
-          'location': 'bmi_service.dart:72',
-          'message': 'createBMIRecord error',
-          'data': {'error': e.toString(), 'errorMessage': errorMsg},
-          'sessionId': 'debug-session',
-          'runId': 'run1',
-          'hypothesisId': 'C'
-        });
-        await logFile.writeAsString('$logEntry\n', mode: FileMode.append);
-      } catch (_) {}
-      // #endregion
       throw Exception('Failed to create BMI record: ${_apiService.getErrorMessage(e)}');
     }
   }
