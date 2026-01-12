@@ -6,7 +6,29 @@ part of 'dashboard_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$upcomingBatchesHash() => r'de062d46c63d266da25e5a7ac291629a9d664f5f';
+String _$finishedBatchesWithAttendanceHash() =>
+    r'abd080b2260462afa02595c1cfad7740c9dce10e';
+
+/// Provider for finished batches with attendance rates
+///
+/// Copied from [finishedBatchesWithAttendance].
+@ProviderFor(finishedBatchesWithAttendance)
+final finishedBatchesWithAttendanceProvider =
+    AutoDisposeFutureProvider<List<BatchAttendance>>.internal(
+      finishedBatchesWithAttendance,
+      name: r'finishedBatchesWithAttendanceProvider',
+      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+          ? null
+          : _$finishedBatchesWithAttendanceHash,
+      dependencies: null,
+      allTransitiveDependencies: null,
+    );
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef FinishedBatchesWithAttendanceRef =
+    AutoDisposeFutureProviderRef<List<BatchAttendance>>;
+String _$upcomingBatchesHash() => r'a4f64b269ad4ed065b147b1fbfcb2080b6e173c8';
 
 /// Provider for upcoming batches
 ///
@@ -25,7 +47,7 @@ final upcomingBatchesProvider = AutoDisposeFutureProvider<List<Batch>>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef UpcomingBatchesRef = AutoDisposeFutureProviderRef<List<Batch>>;
-String _$dashboardStatsHash() => r'0e48396effce8f7c9d046f1cd23df0e334c5f1dd';
+String _$dashboardStatsHash() => r'd0d6277fe282787d1e6255b9c450f3d697bc2064';
 
 /// Provider for dashboard statistics
 ///

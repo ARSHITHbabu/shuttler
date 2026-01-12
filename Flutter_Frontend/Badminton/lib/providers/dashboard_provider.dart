@@ -1,5 +1,6 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../models/batch.dart';
+import '../models/batch_attendance.dart';
 import 'service_providers.dart';
 
 part 'dashboard_provider.g.dart';
@@ -11,12 +12,24 @@ class DashboardStats extends _$DashboardStats {
   Future<DashboardStatsData> build() async {
     final dashboardService = ref.watch(dashboardServiceProvider);
     final stats = await dashboardService.getDashboardStats();
+    
+    // Calculate attendance rate from finished batches
+    final finishedBatches = await dashboardService.getFinishedBatchesWithAttendance();
+    double attendanceRate = 0.0;
+    if (finishedBatches.isNotEmpty) {
+      final totalRate = finishedBatches.fold<double>(
+        0.0,
+        (sum, batch) => sum + batch.attendanceRate,
+      );
+      attendanceRate = totalRate / finishedBatches.length;
+    }
+    
     return DashboardStatsData(
       totalStudents: stats.totalStudents,
       totalCoaches: stats.totalCoaches,
       activeBatches: stats.activeBatches,
       pendingFees: stats.pendingFees,
-      todayAttendanceRate: stats.todayAttendanceRate,
+      todayAttendanceRate: attendanceRate,
     );
   }
 
@@ -26,12 +39,24 @@ class DashboardStats extends _$DashboardStats {
     state = await AsyncValue.guard(() async {
       final dashboardService = ref.read(dashboardServiceProvider);
       final stats = await dashboardService.getDashboardStats();
+      
+      // Calculate attendance rate from finished batches
+      final finishedBatches = await dashboardService.getFinishedBatchesWithAttendance();
+      double attendanceRate = 0.0;
+      if (finishedBatches.isNotEmpty) {
+        final totalRate = finishedBatches.fold<double>(
+          0.0,
+          (sum, batch) => sum + batch.attendanceRate,
+        );
+        attendanceRate = totalRate / finishedBatches.length;
+      }
+      
       return DashboardStatsData(
         totalStudents: stats.totalStudents,
         totalCoaches: stats.totalCoaches,
         activeBatches: stats.activeBatches,
         pendingFees: stats.pendingFees,
-        todayAttendanceRate: stats.todayAttendanceRate,
+        todayAttendanceRate: attendanceRate,
       );
     });
   }
@@ -54,27 +79,16 @@ class DashboardStatsData {
   });
 }
 
+/// Provider for finished batches with attendance rates
+@riverpod
+Future<List<BatchAttendance>> finishedBatchesWithAttendance(FinishedBatchesWithAttendanceRef ref) async {
+  final dashboardService = ref.watch(dashboardServiceProvider);
+  return await dashboardService.getFinishedBatchesWithAttendance();
+}
+
 /// Provider for upcoming batches
 @riverpod
 Future<List<Batch>> upcomingBatches(UpcomingBatchesRef ref) async {
-  final batchService = ref.watch(batchServiceProvider);
-  final batches = await batchService.getBatches();
-  
-  // Sort by timing and return first 2-3 upcoming batches
-  final now = DateTime.now();
-  final dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  final todayDayName = dayNames[now.weekday - 1];
-  
-  // Filter batches that have today in their days list
-  final todayBatches = batches.where((batch) {
-    return batch.days.contains(todayDayName);
-  }).toList();
-  
-  // Sort by timing (extract time from timing string)
-  todayBatches.sort((a, b) {
-    // Simple string comparison of timing
-    return a.timing.compareTo(b.timing);
-  });
-  
-  return todayBatches.take(3).toList();
+  final dashboardService = ref.watch(dashboardServiceProvider);
+  return await dashboardService.getUpcomingBatches();
 }
