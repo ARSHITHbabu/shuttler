@@ -1,23 +1,16 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
-import '../config/environment.dart';
 
 /// API endpoint constants for backend integration
-///
-/// The base URL is automatically configured based on the platform and environment:
-/// - Web: Always uses localhost (same machine)
-/// - Mobile/Desktop: Uses the IP configured in Environment.developmentIp
-///
-/// To change the backend URL, edit lib/core/config/environment.dart
 class ApiEndpoints {
-  // Base URL - Automatically configured based on platform and environment
+  // Base URL - Use localhost for web, computer's local IP for mobile/desktop
+  // IMPORTANT: Change this IP to your computer's local IP address (run ipconfig on Windows)
   static String get baseUrl {
     if (kIsWeb) {
-      // Web applications always use localhost (same machine as backend)
-      return 'http://localhost:${Environment.port}';
+      return 'http://localhost:8000';
     }
-    // Mobile and Desktop apps use environment-configured URL
-    // This allows phones to connect to laptop's backend over Wi-Fi
-    return Environment.apiBaseUrl;
+    // Use your computer's local network IP address
+    // Your computer IP: 192.168.1.7 (as of Jan 12, 2026)
+    return 'http://192.168.1.7:8000';
   }
 
   // Authentication
