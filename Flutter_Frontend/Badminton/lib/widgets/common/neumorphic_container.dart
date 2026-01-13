@@ -32,18 +32,22 @@ class NeumorphicContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final containerColor = color ?? (isDark ? AppColors.cardBackground : AppColorsLight.cardBackground);
+
     final widget = Container(
       width: width,
       height: height,
       padding: padding ?? const EdgeInsets.all(AppDimensions.paddingM),
       margin: margin,
       decoration: BoxDecoration(
-        color: color ?? AppColors.cardBackground,
+        color: containerColor,
         borderRadius: BorderRadius.circular(borderRadius),
         border: border,
         boxShadow: isFlat
-            ? NeumorphicStyles.getFlatShadow()
-            : NeumorphicStyles.getElevatedShadow(),
+            ? NeumorphicStyles.getFlatShadow(isDark: isDark)
+            : NeumorphicStyles.getElevatedShadow(isDark: isDark),
       ),
       child: child,
     );
@@ -85,16 +89,20 @@ class NeumorphicInsetContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final containerColor = color ?? (isDark ? AppColors.cardBackground : AppColorsLight.cardBackground);
+
     return Container(
       width: width,
       height: height,
       padding: padding ?? const EdgeInsets.all(AppDimensions.paddingM),
       margin: margin,
       decoration: BoxDecoration(
-        color: color ?? AppColors.cardBackground,
+        color: containerColor,
         borderRadius: BorderRadius.circular(borderRadius),
         border: border,
-        boxShadow: NeumorphicStyles.getInsetShadow(),
+        boxShadow: NeumorphicStyles.getInsetShadow(isDark: isDark),
       ),
       child: child,
     );

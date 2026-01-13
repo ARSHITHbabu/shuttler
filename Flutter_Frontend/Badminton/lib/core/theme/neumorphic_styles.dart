@@ -4,57 +4,89 @@ import '../constants/colors.dart';
 /// Neumorphic shadow and style definitions matching React UI
 class NeumorphicStyles {
   /// Elevated shadow effect (outset) - used for buttons and cards
-  /// Creates a raised, 3D effect matching React: 8px 8px 16px rgba(0,0,0,0.5), -8px -8px 16px rgba(40,40,40,0.1)
+  /// Creates a raised, 3D effect
   static List<BoxShadow> getElevatedShadow({
     double blurRadius = 16.0,
     double offset = 8.0,
+    bool isDark = true,
   }) {
-    return [
-      // Dark shadow (bottom-right) - 8px 8px 16px rgba(0,0,0,0.5)
-      BoxShadow(
-        color: AppColors.shadowDark.withOpacity(0.5),
-        offset: Offset(offset, offset),
-        blurRadius: blurRadius,
-      ),
-      // Light shadow (top-left) - -8px -8px 16px rgba(40,40,40,0.1)
-      BoxShadow(
-        color: const Color(0xFF282828).withOpacity(0.1), // rgba(40,40,40,0.1)
-        offset: Offset(-offset, -offset),
-        blurRadius: blurRadius,
-      ),
-    ];
+    if (isDark) {
+      // Dark mode: 8px 8px 16px rgba(0,0,0,0.5), -8px -8px 16px rgba(40,40,40,0.1)
+      return [
+        BoxShadow(
+          color: AppColors.shadowDark.withValues(alpha: 0.5),
+          offset: Offset(offset, offset),
+          blurRadius: blurRadius,
+        ),
+        BoxShadow(
+          color: const Color(0xFF282828).withValues(alpha: 0.1),
+          offset: Offset(-offset, -offset),
+          blurRadius: blurRadius,
+        ),
+      ];
+    } else {
+      // Light mode: softer shadows
+      return [
+        BoxShadow(
+          color: AppColorsLight.shadowDark,
+          offset: Offset(offset, offset),
+          blurRadius: blurRadius,
+        ),
+        BoxShadow(
+          color: AppColorsLight.shadowLight,
+          offset: Offset(-offset, -offset),
+          blurRadius: blurRadius,
+        ),
+      ];
+    }
   }
 
   /// Inset shadow effect - used for text fields and pressed buttons
-  /// Creates a sunken, depressed effect matching React: inset 4px 4px 8px rgba(0,0,0,0.5)
+  /// Creates a sunken, depressed effect
   static List<BoxShadow> getInsetShadow({
     double blurRadius = 8.0,
     double offset = 4.0,
     double spreadRadius = -2.0,
+    bool isDark = true,
   }) {
-    return [
-      // Inset shadow - inset 4px 4px 8px rgba(0,0,0,0.5)
-      BoxShadow(
-        color: AppColors.shadowDark.withOpacity(0.5),
-        offset: Offset(offset, offset),
-        blurRadius: blurRadius,
-        spreadRadius: spreadRadius,
-      ),
-      // Light inset highlight - inset -4px -4px 8px rgba(40,40,40,0.1)
-      BoxShadow(
-        color: const Color(0xFF282828).withOpacity(0.1),
-        offset: Offset(-offset, -offset),
-        blurRadius: blurRadius,
-        spreadRadius: spreadRadius,
-      ),
-    ];
+    if (isDark) {
+      return [
+        BoxShadow(
+          color: AppColors.shadowDark.withValues(alpha: 0.5),
+          offset: Offset(offset, offset),
+          blurRadius: blurRadius,
+          spreadRadius: spreadRadius,
+        ),
+        BoxShadow(
+          color: const Color(0xFF282828).withValues(alpha: 0.1),
+          offset: Offset(-offset, -offset),
+          blurRadius: blurRadius,
+          spreadRadius: spreadRadius,
+        ),
+      ];
+    } else {
+      return [
+        BoxShadow(
+          color: AppColorsLight.shadowDark,
+          offset: Offset(offset, offset),
+          blurRadius: blurRadius,
+          spreadRadius: spreadRadius,
+        ),
+        BoxShadow(
+          color: AppColorsLight.shadowLight,
+          offset: Offset(-offset, -offset),
+          blurRadius: blurRadius,
+          spreadRadius: spreadRadius,
+        ),
+      ];
+    }
   }
   
   /// Small inset shadow for input fields - inset 2px 2px 4px rgba(0,0,0,0.5)
   static List<BoxShadow> getSmallInsetShadow() {
     return [
       BoxShadow(
-        color: AppColors.shadowDark.withOpacity(0.5),
+        color: AppColors.shadowDark.withValues(alpha:0.5),
         offset: const Offset(2, 2),
         blurRadius: 4.0,
         spreadRadius: -1.0,
@@ -63,10 +95,12 @@ class NeumorphicStyles {
   }
 
   /// Flat shadow - minimal elevation
-  static List<BoxShadow> getFlatShadow() {
+  static List<BoxShadow> getFlatShadow({bool isDark = true}) {
     return [
       BoxShadow(
-        color: AppColors.shadowDark.withOpacity(0.2),
+        color: isDark
+            ? AppColors.shadowDark.withValues(alpha: 0.2)
+            : AppColorsLight.shadowDark,
         offset: const Offset(2, 2),
         blurRadius: 4,
       ),
@@ -78,14 +112,14 @@ class NeumorphicStyles {
     return [
       // Inset dark shadow
       BoxShadow(
-        color: AppColors.shadowDark.withOpacity(0.5),
+        color: AppColors.shadowDark.withValues(alpha:0.5),
         offset: const Offset(4, 4),
         blurRadius: 8.0,
         spreadRadius: -2.0,
       ),
       // Inset light highlight
       BoxShadow(
-        color: const Color(0xFF282828).withOpacity(0.1),
+        color: const Color(0xFF282828).withValues(alpha:0.1),
         offset: const Offset(-4, -4),
         blurRadius: 8.0,
         spreadRadius: -2.0,
@@ -103,13 +137,13 @@ class NeumorphicStyles {
     return [
       // Accent glow
       BoxShadow(
-        color: color.withOpacity(0.3),
+        color: color.withValues(alpha:0.3),
         blurRadius: blurRadius * 1.5,
         spreadRadius: 2,
       ),
       // Dark shadow
       BoxShadow(
-        color: AppColors.shadowDark.withOpacity(0.4),
+        color: AppColors.shadowDark.withValues(alpha:0.4),
         offset: Offset(offset, offset),
         blurRadius: blurRadius,
       ),

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
 import 'core/services/storage_service.dart';
 import 'routes/app_router.dart';
+import 'providers/theme_provider.dart';
 
 void main() async {
   // Ensure Flutter is initialized
@@ -14,27 +15,35 @@ void main() async {
 
   runApp(
     ProviderScope(
-      child: MyApp(storageService: storageService),
+      overrides: [
+        storageServiceProvider.overrideWithValue(storageService),
+      ],
+      child: const MyApp(),
     ),
   );
 }
 
-class MyApp extends StatelessWidget {
-  final StorageService storageService;
+class MyApp extends ConsumerStatefulWidget {
+  const MyApp({super.key});
 
-  const MyApp({
-    super.key,
-    required this.storageService,
-  });
+  @override
+  ConsumerState<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends ConsumerState<MyApp> {
+  // Create router once and reuse it to preserve navigation state
+  late final router = AppRouter.createRouter();
 
   @override
   Widget build(BuildContext context) {
-    final router = AppRouter.createRouter();
+    final themeMode = ref.watch(themeNotifierProvider);
 
     return MaterialApp.router(
       title: 'Badminton Academy',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme,
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: themeMode,
       routerConfig: router,
     );
   }

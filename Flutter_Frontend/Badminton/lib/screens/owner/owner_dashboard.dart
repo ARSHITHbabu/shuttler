@@ -35,11 +35,17 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final backgroundColor = theme.scaffoldBackgroundColor;
+    final surfaceColor = isDark ? AppColors.surfaceLight : AppColorsLight.surfaceLight;
+    final shadowColor = isDark ? AppColors.shadowDark : AppColorsLight.shadowDark;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: backgroundColor,
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.backgroundGradient,
+        decoration: BoxDecoration(
+          gradient: isDark ? AppColors.backgroundGradient : AppColorsLight.backgroundGradient,
         ),
         child: SafeArea(
           child: Column(
@@ -48,20 +54,20 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
               Expanded(
                 child: _screens[_currentIndex],
               ),
-              
+
               // Bottom Navigation
               Container(
                 decoration: BoxDecoration(
-                  color: AppColors.background,
+                  color: backgroundColor,
                   border: Border(
                     top: BorderSide(
-                      color: AppColors.surfaceLight,
+                      color: surfaceColor,
                       width: 1,
                     ),
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.shadowDark.withOpacity(0.5),
+                      color: shadowColor.withValues(alpha: 0.5),
                       offset: const Offset(0, -4),
                       blurRadius: 16,
                     ),
@@ -94,6 +100,11 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
   Widget _buildNavItem(int index) {
     final item = _navItems[index];
     final isActive = _currentIndex == index;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final cardColor = isDark ? AppColors.cardBackground : AppColorsLight.cardBackground;
+    final activeColor = isDark ? AppColors.iconActive : AppColorsLight.iconActive;
+    final inactiveColor = isDark ? AppColors.textTertiary : AppColorsLight.textTertiary;
 
     return GestureDetector(
       onTap: () {
@@ -107,7 +118,7 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
           vertical: AppDimensions.spacingS,
         ),
         decoration: BoxDecoration(
-          color: isActive ? AppColors.cardBackground : Colors.transparent,
+          color: isActive ? cardColor : Colors.transparent,
           borderRadius: BorderRadius.circular(AppDimensions.radiusM),
           boxShadow: isActive ? NeumorphicStyles.getPressedShadow() : null,
         ),
@@ -117,14 +128,14 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
             Icon(
               item.icon,
               size: 20,
-              color: isActive ? AppColors.iconActive : AppColors.textTertiary,
+              color: isActive ? activeColor : inactiveColor,
             ),
             const SizedBox(height: 4),
             Text(
               item.label,
               style: TextStyle(
                 fontSize: 12,
-                color: isActive ? AppColors.iconActive : AppColors.textTertiary,
+                color: isActive ? activeColor : inactiveColor,
               ),
             ),
           ],
