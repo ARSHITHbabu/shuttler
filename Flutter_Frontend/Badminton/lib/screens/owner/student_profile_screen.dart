@@ -334,9 +334,15 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                   ),
                   const SizedBox(height: AppDimensions.spacingM),
                   _buildInfoRow(Icons.calendar_today, 'Due Date', DateFormat('dd MMM, yyyy').format(fee.dueDate)),
-                  if (fee.paidDate != null) ...[
+                  if (fee.payments != null && fee.payments!.isNotEmpty) ...[
                     const SizedBox(height: AppDimensions.spacingS),
-                    _buildInfoRow(Icons.check_circle, 'Paid Date', DateFormat('dd MMM, yyyy').format(fee.paidDate!)),
+                    _buildInfoRow(
+                      Icons.check_circle,
+                      'Paid Date',
+                      DateFormat('dd MMM, yyyy').format(
+                        fee.payments!.map((p) => p.paidDate).reduce((a, b) => a.isAfter(b) ? a : b),
+                      ),
+                    ),
                   ],
                 ],
               ),
