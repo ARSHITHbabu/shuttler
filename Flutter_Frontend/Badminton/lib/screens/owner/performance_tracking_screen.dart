@@ -19,10 +19,12 @@ class PerformanceTrackingScreen extends ConsumerStatefulWidget {
   const PerformanceTrackingScreen({super.key});
 
   @override
-  ConsumerState<PerformanceTrackingScreen> createState() => _PerformanceTrackingScreenState();
+  ConsumerState<PerformanceTrackingScreen> createState() =>
+      _PerformanceTrackingScreenState();
 }
 
-class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingScreen> {
+class _PerformanceTrackingScreenState
+    extends ConsumerState<PerformanceTrackingScreen> {
   int? _selectedBatchId;
   int? _selectedStudentId;
   bool _showAddForm = false;
@@ -33,9 +35,11 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
   bool _loadingStudents = false;
 
   // Table form data for bulk entry
-  final Map<int, Map<String, dynamic>> _tableData = {}; // studentId -> {skill ratings + comments}
-  final Map<int, TextEditingController> _commentControllers = {}; // studentId -> TextEditingController
-  
+  final Map<int, Map<String, dynamic>> _tableData =
+      {}; // studentId -> {skill ratings + comments}
+  final Map<int, TextEditingController> _commentControllers =
+      {}; // studentId -> TextEditingController
+
   final List<Map<String, dynamic>> _skills = [
     {'key': 'serve', 'label': 'Serve', 'icon': Icons.sports_tennis},
     {'key': 'smash', 'label': 'Smash', 'icon': Icons.flash_on},
@@ -78,9 +82,9 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
     } catch (e) {
       setState(() => _loadingStudents = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load students: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to load students: $e')));
       }
     }
   }
@@ -113,8 +117,14 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: AppColors.cardBackground,
-        title: const Text('Delete Performance Record', style: TextStyle(color: AppColors.textPrimary)),
-        content: const Text('Are you sure you want to delete this performance record?', style: TextStyle(color: AppColors.textSecondary)),
+        title: const Text(
+          'Delete Performance Record',
+          style: TextStyle(color: AppColors.textPrimary),
+        ),
+        content: const Text(
+          'Are you sure you want to delete this performance record?',
+          style: TextStyle(color: AppColors.textSecondary),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -122,7 +132,10 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: AppColors.error)),
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: AppColors.error),
+            ),
           ),
         ],
       ),
@@ -135,7 +148,9 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
         await performanceService.deletePerformance(performance.id);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Performance record deleted successfully')),
+            const SnackBar(
+              content: Text('Performance record deleted successfully'),
+            ),
           );
           _loadPerformanceHistory();
         }
@@ -212,7 +227,11 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
 
     if (!hasAnyRating) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please rate at least one skill for at least one student')),
+        const SnackBar(
+          content: Text(
+            'Please rate at least one skill for at least one student',
+          ),
+        ),
       );
       return;
     }
@@ -221,15 +240,15 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
     try {
       final performanceService = ref.read(performanceServiceProvider);
       final dateString = _selectedDate.toIso8601String().split('T')[0];
-      
+
       // Save performance for each student
       int successCount = 0;
       int failCount = 0;
-      
+
       for (var entry in _tableData.entries) {
         final studentId = entry.key;
         final data = entry.value;
-        
+
         // Skip if no ratings
         if (data['serve'] == 0 &&
             data['smash'] == 0 &&
@@ -252,7 +271,7 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
                 ? null
                 : (data['comments'] as String?)?.trim(),
           };
-          
+
           await performanceService.createPerformance(performanceData);
           successCount++;
         } catch (e) {
@@ -272,17 +291,23 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
           }
           _commentControllers.clear();
         });
-        
+
         if (failCount == 0) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Performance records saved successfully for $successCount student(s)')),
+            SnackBar(
+              content: Text(
+                'Performance records saved successfully for $successCount student(s)',
+              ),
+            ),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Saved $successCount record(s), $failCount failed')),
+            SnackBar(
+              content: Text('Saved $successCount record(s), $failCount failed'),
+            ),
           );
         }
-        
+
         // Reload history if a student was selected
         if (_selectedStudentId != null) {
           _loadPerformanceHistory();
@@ -394,7 +419,9 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
                       ),
                     )
                   else
-                    ..._performanceHistory.map((performance) => _buildPerformanceCard(performance)),
+                    ..._performanceHistory.map(
+                      (performance) => _buildPerformanceCard(performance),
+                    ),
                 ],
               ],
             ],
@@ -530,9 +557,9 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
     } catch (e) {
       setState(() => _loadingStudents = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load students: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to load students: $e')));
       }
     }
   }
@@ -624,7 +651,10 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
                     },
                     child: Row(
                       children: [
-                        const Icon(Icons.calendar_today, color: AppColors.textSecondary),
+                        const Icon(
+                          Icons.calendar_today,
+                          color: AppColors.textSecondary,
+                        ),
                         const SizedBox(width: AppDimensions.spacingM),
                         Text(
                           DateFormat('dd MMM, yyyy').format(_selectedDate),
@@ -675,13 +705,18 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.accent,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingM),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: AppDimensions.spacingM,
+                  ),
                 ),
                 child: _isLoading
                     ? const LoadingSpinner()
                     : const Text(
                         'Save Performance',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
               ),
             ),
@@ -705,7 +740,8 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
     const studentColWidth = 120.0;
     const skillColWidth = 80.0;
     const commentsColWidth = 200.0; // Fixed width for comments
-    final minTableWidth = studentColWidth + (skillColWidth * _skills.length) + commentsColWidth;
+    final minTableWidth =
+        studentColWidth + (skillColWidth * _skills.length) + commentsColWidth;
 
     return ConstrainedBox(
       constraints: BoxConstraints(minWidth: minTableWidth),
@@ -718,60 +754,67 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
           0: const FixedColumnWidth(studentColWidth), // Student name
           for (int i = 1; i <= _skills.length; i++)
             i: const FixedColumnWidth(skillColWidth), // Skill columns
-          _skills.length + 1: const FixedColumnWidth(commentsColWidth), // Comments column - fixed width
+          _skills.length + 1: const FixedColumnWidth(
+            commentsColWidth,
+          ), // Comments column - fixed width
         },
-      children: [
-        // Header row
-        TableRow(
-          decoration: BoxDecoration(
-            color: AppColors.accent.withOpacity(0.1),
-          ),
-          children: [
-            _buildTableHeaderCell('Student'),
-            ..._skills.map((skill) => _buildTableHeaderCell(skill['label'] as String)),
-            _buildTableHeaderCell('Comments'),
-          ],
-        ),
-        // Data rows
-          ..._batchStudents.map((student) {
-          final studentData = _tableData[student.id] ?? {
-            'serve': 0,
-            'smash': 0,
-            'footwork': 0,
-            'defense': 0,
-            'stamina': 0,
-            'comments': '',
-          };
-          
-          // Ensure comment controller exists
-          if (!_commentControllers.containsKey(student.id)) {
-            _commentControllers[student.id] = TextEditingController(
-              text: studentData['comments'] as String? ?? '',
-            );
-          }
-          
-          return TableRow(
+        children: [
+          // Header row
+          TableRow(
+            decoration: BoxDecoration(color: AppColors.accent.withOpacity(0.1)),
             children: [
-              _buildTableCell(
-                Text(
-                  student.name,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+              _buildTableHeaderCell('Student'),
+              ..._skills.map(
+                (skill) => _buildTableHeaderCell(skill['label'] as String),
+              ),
+              _buildTableHeaderCell('Comments'),
+            ],
+          ),
+          // Data rows
+          ..._batchStudents.map((student) {
+            final studentData =
+                _tableData[student.id] ??
+                {
+                  'serve': 0,
+                  'smash': 0,
+                  'footwork': 0,
+                  'defense': 0,
+                  'stamina': 0,
+                  'comments': '',
+                };
+
+            // Ensure comment controller exists
+            if (!_commentControllers.containsKey(student.id)) {
+              _commentControllers[student.id] = TextEditingController(
+                text: studentData['comments'] as String? ?? '',
+              );
+            }
+
+            return TableRow(
+              children: [
+                _buildTableCell(
+                  Text(
+                    student.name,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-              ),
-              ..._skills.map((skill) {
-                final key = skill['key'] as String;
-                final rating = studentData[key] as int? ?? 0;
-                return _buildRatingCell(student.id, key, rating);
-              }),
-              _buildCommentsCell(student.id, studentData['comments'] as String? ?? ''),
-            ],
-          );
-        }),
-      ],
+                ..._skills.map((skill) {
+                  final key = skill['key'] as String;
+                  final rating = studentData[key] as int? ?? 0;
+                  return _buildRatingCell(student.id, key, rating);
+                }),
+                _buildCommentsCell(
+                  student.id,
+                  studentData['comments'] as String? ?? '',
+                ),
+              ],
+            );
+          }),
+        ],
       ),
     );
   }
@@ -794,16 +837,15 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
   }
 
   Widget _buildTableCell(Widget child) {
-    return Container(
-      padding: const EdgeInsets.all(4.0),
-      child: child,
-    );
+    return Container(padding: const EdgeInsets.all(4.0), child: child);
   }
 
   Widget _buildRatingCell(int studentId, String skillKey, int currentRating) {
     return _buildTableCell(
       TextField(
-        controller: TextEditingController(text: currentRating > 0 ? currentRating.toString() : ''),
+        controller: TextEditingController(
+          text: currentRating > 0 ? currentRating.toString() : '',
+        ),
         keyboardType: TextInputType.number,
         inputFormatters: [
           FilteringTextInputFormatter.allow(RegExp(r'[1-5]')),
@@ -818,17 +860,24 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
         decoration: InputDecoration(
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(4),
-            borderSide: BorderSide(color: AppColors.textSecondary.withOpacity(0.3)),
+            borderSide: BorderSide(
+              color: AppColors.textSecondary.withOpacity(0.3),
+            ),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(4),
-            borderSide: BorderSide(color: AppColors.textSecondary.withOpacity(0.3)),
+            borderSide: BorderSide(
+              color: AppColors.textSecondary.withOpacity(0.3),
+            ),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(4),
             borderSide: const BorderSide(color: AppColors.accent, width: 2),
           ),
-          contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          contentPadding: const EdgeInsets.symmetric(
+            vertical: 8,
+            horizontal: 4,
+          ),
           filled: true,
           fillColor: AppColors.cardBackground,
         ),
@@ -844,7 +893,9 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
                 'comments': '',
               };
             }
-            _tableData[studentId]![skillKey] = value.isEmpty ? 0 : int.tryParse(value) ?? 0;
+            _tableData[studentId]![skillKey] = value.isEmpty
+                ? 0
+                : int.tryParse(value) ?? 0;
           });
         },
       ),
@@ -854,34 +905,34 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
   Widget _buildCommentsCell(int studentId, String currentComments) {
     // Get or create controller for this student
     if (!_commentControllers.containsKey(studentId)) {
-      _commentControllers[studentId] = TextEditingController(text: currentComments);
+      _commentControllers[studentId] = TextEditingController(
+        text: currentComments,
+      );
     }
-    
+
     final controller = _commentControllers[studentId]!;
-    
+
     return Container(
       padding: const EdgeInsets.all(4.0),
-      constraints: const BoxConstraints(
-        minWidth: 200,
-        minHeight: 50,
-      ),
+      constraints: const BoxConstraints(minWidth: 200, minHeight: 50),
       child: TextField(
         controller: controller,
         maxLines: 3,
         minLines: 2,
-        style: const TextStyle(
-          color: AppColors.textPrimary,
-          fontSize: 12,
-        ),
+        style: const TextStyle(color: AppColors.textPrimary, fontSize: 12),
         decoration: InputDecoration(
           isDense: true,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(4),
-            borderSide: BorderSide(color: AppColors.textSecondary.withOpacity(0.3)),
+            borderSide: BorderSide(
+              color: AppColors.textSecondary.withOpacity(0.3),
+            ),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(4),
-            borderSide: BorderSide(color: AppColors.textSecondary.withOpacity(0.3)),
+            borderSide: BorderSide(
+              color: AppColors.textSecondary.withOpacity(0.3),
+            ),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(4),
@@ -939,7 +990,9 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
                     ),
                     decoration: BoxDecoration(
                       color: AppColors.accent.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                      borderRadius: BorderRadius.circular(
+                        AppDimensions.radiusS,
+                      ),
                     ),
                     child: Text(
                       'Avg: ${performance.averageRating.toStringAsFixed(1)}',
@@ -951,15 +1004,26 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
                     ),
                   ),
                   PopupMenuButton(
-                    icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+                    icon: const Icon(
+                      Icons.more_vert,
+                      size: 20,
+                      color: AppColors.textSecondary,
+                    ),
                     color: AppColors.cardBackground,
                     itemBuilder: (context) => [
                       PopupMenuItem(
                         child: const Row(
                           children: [
-                            Icon(Icons.delete, size: 18, color: AppColors.error),
+                            Icon(
+                              Icons.delete,
+                              size: 18,
+                              color: AppColors.error,
+                            ),
                             SizedBox(width: 8),
-                            Text('Delete', style: TextStyle(color: AppColors.error)),
+                            Text(
+                              'Delete',
+                              style: TextStyle(color: AppColors.error),
+                            ),
                           ],
                         ),
                         onTap: () {
@@ -980,7 +1044,8 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
           _buildSkillRow('Footwork', performance.footwork),
           _buildSkillRow('Defense', performance.defense),
           _buildSkillRow('Stamina', performance.stamina),
-          if (performance.comments != null && performance.comments!.isNotEmpty) ...[
+          if (performance.comments != null &&
+              performance.comments!.isNotEmpty) ...[
             const SizedBox(height: AppDimensions.spacingM),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1040,7 +1105,9 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
               return Icon(
                 index < rating ? Icons.star : Icons.star_border,
                 size: 16,
-                color: index < rating ? AppColors.warning : AppColors.textSecondary,
+                color: index < rating
+                    ? AppColors.warning
+                    : AppColors.textSecondary,
               );
             }),
           ),
@@ -1070,10 +1137,7 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
         children: [
           const Text(
             'Average Performance Over Time',
-            style: TextStyle(
-              fontSize: 14,
-              color: AppColors.textSecondary,
-            ),
+            style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
           ),
           const SizedBox(height: AppDimensions.spacingM),
           SizedBox(
