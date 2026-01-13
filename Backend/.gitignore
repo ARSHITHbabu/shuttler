@@ -20,17 +20,23 @@ ENV/
 # Alembic
 alembic/versions/*.pyc
 
-# Uploads
-uploads/
+# Uploads (user uploaded files - don't commit personal data)
+uploads/*
+!uploads/.gitkeep
+
+# Image uploads
 *.jpg
 *.jpeg
 *.png
 *.gif
 *.webp
 
-# Firebase credentials
+# Firebase credentials and sensitive JSON files
 firebase-credentials.json
-*.json
+firebase-adminsdk*.json
+service-account*.json
+secrets.json
+credentials.json
 
 # IDE
 .vscode/
