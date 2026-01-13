@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../core/constants/colors.dart';
@@ -6,14 +7,14 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
-import '../../widgets/common/custom_text_field.dart';
 import '../../providers/service_providers.dart';
 import '../../models/performance.dart';
 import '../../models/student.dart';
+import '../../models/batch.dart';
 import 'package:intl/intl.dart';
 
 /// Performance Tracking Screen - Track student skill development
-/// Matches React reference: PerformanceTracking.tsx
+/// New flow: Select Batch -> Select Student -> View History OR Add Performance (table format)
 class PerformanceTrackingScreen extends ConsumerStatefulWidget {
   const PerformanceTrackingScreen({super.key});
 
@@ -22,22 +23,19 @@ class PerformanceTrackingScreen extends ConsumerStatefulWidget {
 }
 
 class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingScreen> {
+  int? _selectedBatchId;
   int? _selectedStudentId;
-  Student? _selectedStudent;
   bool _showAddForm = false;
   DateTime _selectedDate = DateTime.now();
-  final Map<String, int> _skillRatings = {
-    'serve': 0,
-    'smash': 0,
-    'footwork': 0,
-    'defense': 0,
-    'stamina': 0,
-  };
-  final _commentsController = TextEditingController();
   List<Performance> _performanceHistory = [];
   bool _isLoading = false;
-  int? _editingPerformanceId; // Track if we're editing an existing record
+  List<Student> _batchStudents = [];
+  bool _loadingStudents = false;
 
+  // Table form data for bulk entry
+  final Map<int, Map<String, dynamic>> _tableData = {}; // studentId -> {skill ratings + comments}
+  final Map<int, TextEditingController> _commentControllers = {}; // studentId -> TextEditingController
+  
   final List<Map<String, dynamic>> _skills = [
     {'key': 'serve', 'label': 'Serve', 'icon': Icons.sports_tennis},
     {'key': 'smash', 'label': 'Smash', 'icon': Icons.flash_on},
@@ -48,8 +46,43 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
 
   @override
   void dispose() {
-    _commentsController.dispose();
+    // Dispose comment controllers
+    for (var controller in _commentControllers.values) {
+      controller.dispose();
+    }
+    _commentControllers.clear();
     super.dispose();
+  }
+
+  Future<void> _loadBatchStudents() async {
+    if (_selectedBatchId == null) {
+      setState(() {
+        _batchStudents = [];
+        _selectedStudentId = null;
+        _performanceHistory = [];
+      });
+      return;
+    }
+
+    setState(() => _loadingStudents = true);
+    try {
+      final batchService = ref.read(batchServiceProvider);
+      final students = await batchService.getBatchStudents(_selectedBatchId!);
+      setState(() {
+        _batchStudents = students;
+        _loadingStudents = false;
+        // Reset student selection when batch changes
+        _selectedStudentId = null;
+        _performanceHistory = [];
+      });
+    } catch (e) {
+      setState(() => _loadingStudents = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load students: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _loadPerformanceHistory() async {
@@ -73,20 +106,6 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
         );
       }
     }
-  }
-
-  void _editPerformance(Performance performance) {
-    setState(() {
-      _showAddForm = true;
-      _selectedDate = performance.date;
-      _skillRatings['serve'] = performance.serve;
-      _skillRatings['smash'] = performance.smash;
-      _skillRatings['footwork'] = performance.footwork;
-      _skillRatings['defense'] = performance.defense;
-      _skillRatings['stamina'] = performance.stamina;
-      _commentsController.text = performance.comments ?? '';
-      _editingPerformanceId = performance.id;
-    });
   }
 
   Future<void> _deletePerformance(Performance performance) async {
@@ -131,26 +150,69 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
     }
   }
 
-  Future<void> _savePerformance() async {
-    if (_selectedStudentId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a student')),
-      );
-      return;
+  void _openAddForm() async {
+    // Clear previous form data
+    _tableData.clear();
+    // Dispose old controllers
+    for (var controller in _commentControllers.values) {
+      controller.dispose();
     }
+    _commentControllers.clear();
 
-    // Validate ratings
-    bool hasRating = false;
-    for (var rating in _skillRatings.values) {
-      if (rating > 0) {
-        hasRating = true;
+    setState(() {
+      _showAddForm = true;
+      _selectedDate = DateTime.now();
+    });
+
+    // If a batch is already selected, load its students
+    if (_selectedBatchId != null) {
+      await _loadBatchStudentsForForm();
+      _initializeTableData();
+    }
+  }
+
+  void _initializeTableData() {
+    if (_batchStudents.isEmpty) return;
+
+    // Initialize table data for all students
+    _tableData.clear();
+    // Dispose old controllers
+    for (var controller in _commentControllers.values) {
+      controller.dispose();
+    }
+    _commentControllers.clear();
+
+    for (var student in _batchStudents) {
+      _tableData[student.id] = {
+        'serve': 0,
+        'smash': 0,
+        'footwork': 0,
+        'defense': 0,
+        'stamina': 0,
+        'comments': '',
+      };
+      // Create controller for comments
+      _commentControllers[student.id] = TextEditingController();
+    }
+  }
+
+  Future<void> _saveBulkPerformance() async {
+    // Validate that at least one student has ratings
+    bool hasAnyRating = false;
+    for (var studentData in _tableData.values) {
+      if (studentData['serve'] > 0 ||
+          studentData['smash'] > 0 ||
+          studentData['footwork'] > 0 ||
+          studentData['defense'] > 0 ||
+          studentData['stamina'] > 0) {
+        hasAnyRating = true;
         break;
       }
     }
 
-    if (!hasRating) {
+    if (!hasAnyRating) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please rate at least one skill')),
+        const SnackBar(content: Text('Please rate at least one skill for at least one student')),
       );
       return;
     }
@@ -158,39 +220,73 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
     setState(() => _isLoading = true);
     try {
       final performanceService = ref.read(performanceServiceProvider);
-      final performanceData = {
-        'student_id': _selectedStudentId,
-        'date': _selectedDate.toIso8601String().split('T')[0],
-        'serve': _skillRatings['serve'] ?? 0,
-        'smash': _skillRatings['smash'] ?? 0,
-        'footwork': _skillRatings['footwork'] ?? 0,
-        'defense': _skillRatings['defense'] ?? 0,
-        'stamina': _skillRatings['stamina'] ?? 0,
-        'comments': _commentsController.text.trim().isEmpty
-            ? null
-            : _commentsController.text.trim(),
-      };
+      final dateString = _selectedDate.toIso8601String().split('T')[0];
+      
+      // Save performance for each student
+      int successCount = 0;
+      int failCount = 0;
+      
+      for (var entry in _tableData.entries) {
+        final studentId = entry.key;
+        final data = entry.value;
+        
+        // Skip if no ratings
+        if (data['serve'] == 0 &&
+            data['smash'] == 0 &&
+            data['footwork'] == 0 &&
+            data['defense'] == 0 &&
+            data['stamina'] == 0) {
+          continue;
+        }
 
-      if (_editingPerformanceId != null) {
-        await performanceService.updatePerformance(_editingPerformanceId!, performanceData);
-      } else {
-        await performanceService.createPerformance(performanceData);
+        try {
+          final performanceData = {
+            'student_id': studentId,
+            'date': dateString,
+            'serve': data['serve'] ?? 0,
+            'smash': data['smash'] ?? 0,
+            'footwork': data['footwork'] ?? 0,
+            'defense': data['defense'] ?? 0,
+            'stamina': data['stamina'] ?? 0,
+            'comments': (data['comments'] as String?)?.trim().isEmpty == true
+                ? null
+                : (data['comments'] as String?)?.trim(),
+          };
+          
+          await performanceService.createPerformance(performanceData);
+          successCount++;
+        } catch (e) {
+          failCount++;
+          // Continue with other students even if one fails
+        }
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_editingPerformanceId != null
-              ? 'Performance record updated successfully'
-              : 'Performance record saved successfully')),
-        );
         setState(() {
+          _isLoading = false;
           _showAddForm = false;
-          _skillRatings.updateAll((key, value) => 0);
-          _commentsController.clear();
-          _selectedDate = DateTime.now();
-          _editingPerformanceId = null;
+          _tableData.clear();
+          // Dispose controllers
+          for (var controller in _commentControllers.values) {
+            controller.dispose();
+          }
+          _commentControllers.clear();
         });
-        _loadPerformanceHistory();
+        
+        if (failCount == 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Performance records saved successfully for $successCount student(s)')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Saved $successCount record(s), $failCount failed')),
+          );
+        }
+        
+        // Reload history if a student was selected
+        if (_selectedStudentId != null) {
+          _loadPerformanceHistory();
+        }
       }
     } catch (e) {
       setState(() => _isLoading = false);
@@ -205,7 +301,7 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
   @override
   Widget build(BuildContext context) {
     if (_showAddForm) {
-      return _buildAddForm();
+      return _buildTableForm();
     }
 
     return Scaffold(
@@ -228,15 +324,7 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
         actions: [
           IconButton(
             icon: const Icon(Icons.add, color: AppColors.accent),
-            onPressed: () {
-              if (_selectedStudentId == null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please select a student first')),
-                );
-                return;
-              }
-              setState(() => _showAddForm = true);
-            },
+            onPressed: _openAddForm,
           ),
         ],
       ),
@@ -246,16 +334,35 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Student Selector
-              _buildStudentSelector(),
+              // Batch Selector
+              _buildBatchSelector(),
 
-              if (_selectedStudentId != null) ...[
+              if (_selectedBatchId != null) ...[
                 const SizedBox(height: AppDimensions.spacingL),
+                // Student Selector
+                _buildStudentSelector(),
 
-                // Progress Chart
-                if (_performanceHistory.length >= 2) ...[
+                if (_selectedStudentId != null) ...[
+                  const SizedBox(height: AppDimensions.spacingL),
+
+                  // Progress Chart
+                  if (_performanceHistory.length >= 2) ...[
+                    const Text(
+                      'Progress Chart',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: AppDimensions.spacingM),
+                    _buildProgressChart(),
+                    const SizedBox(height: AppDimensions.spacingL),
+                  ],
+
+                  // Performance History
                   const Text(
-                    'Progress Chart',
+                    'Performance History',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
@@ -263,45 +370,32 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
                     ),
                   ),
                   const SizedBox(height: AppDimensions.spacingM),
-                  _buildProgressChart(),
-                  const SizedBox(height: AppDimensions.spacingL),
-                ],
 
-                // Performance History
-                const Text(
-                  'Performance History',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: AppDimensions.spacingM),
-
-                if (_isLoading)
-                  const Center(child: LoadingSpinner())
-                else if (_performanceHistory.isEmpty)
-                  Center(
-                    child: Column(
-                      children: [
-                        const Icon(
-                          Icons.assessment_outlined,
-                          size: 64,
-                          color: AppColors.textSecondary,
-                        ),
-                        const SizedBox(height: AppDimensions.spacingM),
-                        const Text(
-                          'No performance records yet',
-                          style: TextStyle(
+                  if (_isLoading)
+                    const Center(child: LoadingSpinner())
+                  else if (_performanceHistory.isEmpty)
+                    Center(
+                      child: Column(
+                        children: [
+                          const Icon(
+                            Icons.assessment_outlined,
+                            size: 64,
                             color: AppColors.textSecondary,
-                            fontSize: 16,
                           ),
-                        ),
-                      ],
-                    ),
-                  )
-                else
-                  ..._performanceHistory.map((performance) => _buildPerformanceCard(performance)),
+                          const SizedBox(height: AppDimensions.spacingM),
+                          const Text(
+                            'No performance records yet',
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    ..._performanceHistory.map((performance) => _buildPerformanceCard(performance)),
+                ],
               ],
             ],
           ),
@@ -310,9 +404,9 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
     );
   }
 
-  Widget _buildStudentSelector() {
-    return FutureBuilder<List<Student>>(
-      future: ref.read(studentServiceProvider).getStudents(),
+  Widget _buildBatchSelector() {
+    return FutureBuilder<List<Batch>>(
+      future: ref.read(batchServiceProvider).getBatches(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const LoadingSpinner();
@@ -320,15 +414,15 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
 
         if (snapshot.hasError) {
           return ErrorDisplay(
-            message: 'Failed to load students',
+            message: 'Failed to load batches',
             onRetry: () => setState(() {}),
           );
         }
 
-        final students = snapshot.data ?? [];
-        if (students.isEmpty) {
+        final batches = snapshot.data ?? [];
+        if (batches.isEmpty) {
           return const Text(
-            'No students available',
+            'No batches available',
             style: TextStyle(color: AppColors.textSecondary),
           );
         }
@@ -336,26 +430,25 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
         return NeumorphicContainer(
           padding: const EdgeInsets.all(AppDimensions.paddingM),
           child: DropdownButtonFormField<int>(
-            value: _selectedStudentId,
+            value: _selectedBatchId,
             decoration: const InputDecoration(
-              labelText: 'Select Student',
+              labelText: 'Select Batch',
               labelStyle: TextStyle(color: AppColors.textSecondary),
               border: InputBorder.none,
             ),
             dropdownColor: AppColors.cardBackground,
             style: const TextStyle(color: AppColors.textPrimary),
-            items: students.map((student) {
+            items: batches.map((batch) {
               return DropdownMenuItem<int>(
-                value: student.id,
-                child: Text(student.name),
+                value: batch.id,
+                child: Text(batch.batchName),
               );
             }).toList(),
             onChanged: (value) {
               setState(() {
-                _selectedStudentId = value;
-                _selectedStudent = students.firstWhere((s) => s.id == value);
+                _selectedBatchId = value;
               });
-              _loadPerformanceHistory();
+              _loadBatchStudents();
             },
           ),
         );
@@ -363,7 +456,127 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
     );
   }
 
-  Widget _buildAddForm() {
+  Widget _buildBatchSelectorInForm() {
+    return FutureBuilder<List<Batch>>(
+      future: ref.read(batchServiceProvider).getBatches(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const LoadingSpinner();
+        }
+
+        if (snapshot.hasError) {
+          return ErrorDisplay(
+            message: 'Failed to load batches',
+            onRetry: () => setState(() {}),
+          );
+        }
+
+        final batches = snapshot.data ?? [];
+        if (batches.isEmpty) {
+          return const Text(
+            'No batches available',
+            style: TextStyle(color: AppColors.textSecondary),
+          );
+        }
+
+        return NeumorphicContainer(
+          padding: const EdgeInsets.all(AppDimensions.paddingM),
+          child: DropdownButtonFormField<int>(
+            value: _selectedBatchId,
+            decoration: const InputDecoration(
+              labelText: 'Select Batch',
+              labelStyle: TextStyle(color: AppColors.textSecondary),
+              border: InputBorder.none,
+            ),
+            dropdownColor: AppColors.cardBackground,
+            style: const TextStyle(color: AppColors.textPrimary),
+            items: batches.map((batch) {
+              return DropdownMenuItem<int>(
+                value: batch.id,
+                child: Text(batch.batchName),
+              );
+            }).toList(),
+            onChanged: (value) async {
+              setState(() {
+                _selectedBatchId = value;
+              });
+              // Load students for the selected batch
+              await _loadBatchStudentsForForm();
+              // Initialize table data with new students
+              _initializeTableData();
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _loadBatchStudentsForForm() async {
+    if (_selectedBatchId == null) {
+      setState(() {
+        _batchStudents = [];
+      });
+      return;
+    }
+
+    setState(() => _loadingStudents = true);
+    try {
+      final batchService = ref.read(batchServiceProvider);
+      final students = await batchService.getBatchStudents(_selectedBatchId!);
+      setState(() {
+        _batchStudents = students;
+        _loadingStudents = false;
+      });
+    } catch (e) {
+      setState(() => _loadingStudents = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load students: $e')),
+        );
+      }
+    }
+  }
+
+  Widget _buildStudentSelector() {
+    if (_loadingStudents) {
+      return const Center(child: LoadingSpinner());
+    }
+
+    if (_batchStudents.isEmpty) {
+      return const Text(
+        'No students in this batch',
+        style: TextStyle(color: AppColors.textSecondary),
+      );
+    }
+
+    return NeumorphicContainer(
+      padding: const EdgeInsets.all(AppDimensions.paddingM),
+      child: DropdownButtonFormField<int>(
+        value: _selectedStudentId,
+        decoration: const InputDecoration(
+          labelText: 'Select Student',
+          labelStyle: TextStyle(color: AppColors.textSecondary),
+          border: InputBorder.none,
+        ),
+        dropdownColor: AppColors.cardBackground,
+        style: const TextStyle(color: AppColors.textPrimary),
+        items: _batchStudents.map((student) {
+          return DropdownMenuItem<int>(
+            value: student.id,
+            child: Text(student.name),
+          );
+        }).toList(),
+        onChanged: (value) {
+          setState(() {
+            _selectedStudentId = value;
+          });
+          _loadPerformanceHistory();
+        },
+      ),
+    );
+  }
+
+  Widget _buildTableForm() {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -373,175 +586,328 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
           icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
           onPressed: () => setState(() => _showAddForm = false),
         ),
-        title: Text(
-          _editingPerformanceId != null ? 'Edit Performance' : 'Add Performance',
-          style: const TextStyle(
+        title: const Text(
+          'Add Performance Records',
+          style: TextStyle(
             color: AppColors.textPrimary,
             fontSize: 20,
             fontWeight: FontWeight.w600,
           ),
         ),
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(AppDimensions.paddingL),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Student Info
-              if (_selectedStudent != null)
+      body: Column(
+        children: [
+          // Batch and Date Selection
+          Padding(
+            padding: const EdgeInsets.all(AppDimensions.paddingL),
+            child: Column(
+              children: [
+                // Batch Selector (in form)
+                _buildBatchSelectorInForm(),
+
+                const SizedBox(height: AppDimensions.spacingM),
+
+                // Date Picker
                 NeumorphicContainer(
                   padding: const EdgeInsets.all(AppDimensions.paddingM),
-                  margin: const EdgeInsets.only(bottom: AppDimensions.spacingL),
-                  child: Text(
-                    'Student: ${_selectedStudent!.name}',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+                  child: InkWell(
+                    onTap: () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        initialDate: _selectedDate,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now(),
+                      );
+                      if (date != null) {
+                        setState(() => _selectedDate = date);
+                      }
+                    },
+                    child: Row(
+                      children: [
+                        const Icon(Icons.calendar_today, color: AppColors.textSecondary),
+                        const SizedBox(width: AppDimensions.spacingM),
+                        Text(
+                          DateFormat('dd MMM, yyyy').format(_selectedDate),
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-
-              // Date Picker
-              NeumorphicContainer(
-                padding: const EdgeInsets.all(AppDimensions.paddingM),
-                margin: const EdgeInsets.only(bottom: AppDimensions.spacingL),
-                child: InkWell(
-                  onTap: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: _selectedDate,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime.now(),
-                    );
-                    if (date != null) {
-                      setState(() => _selectedDate = date);
-                    }
-                  },
-                  child: Row(
-                    children: [
-                      const Icon(Icons.calendar_today, color: AppColors.textSecondary),
-                      const SizedBox(width: AppDimensions.spacingM),
-                      Text(
-                        DateFormat('dd MMM, yyyy').format(_selectedDate),
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Skills Rating
-              const Text(
-                'Rate Skills (1-5)',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: AppDimensions.spacingM),
-
-              ..._skills.map((skill) => _buildSkillRatingCard(skill)),
-
-              const SizedBox(height: AppDimensions.spacingL),
-
-              // Comments
-              CustomTextField(
-                controller: _commentsController,
-                label: 'Comments',
-                hint: 'Add comments...',
-                maxLines: 4,
-              ),
-
-              const SizedBox(height: AppDimensions.spacingL),
-
-              // Save Button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _savePerformance,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.accent,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingM),
-                  ),
-                  child: _isLoading
-                      ? const LoadingSpinner()
-                      : Text(
-                          _editingPerformanceId != null ? 'Update Performance' : 'Save Performance',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                        ),
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
+
+          // Table
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.vertical,
+                child: Padding(
+                  padding: const EdgeInsets.all(AppDimensions.paddingL),
+                  child: _buildPerformanceTable(),
+                ),
+              ),
+            ),
+          ),
+
+          // Save Button
+          Container(
+            padding: const EdgeInsets.all(AppDimensions.paddingL),
+            decoration: BoxDecoration(
+              color: AppColors.cardBackground,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, -2),
+                ),
+              ],
+            ),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isLoading ? null : _saveBulkPerformance,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingM),
+                ),
+                child: _isLoading
+                    ? const LoadingSpinner()
+                    : const Text(
+                        'Save Performance',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPerformanceTable() {
+    if (_batchStudents.isEmpty) {
+      return const Center(
+        child: Text(
+          'No students in this batch',
+          style: TextStyle(color: AppColors.textSecondary),
+        ),
+      );
+    }
+
+    // Calculate minimum table width
+    const studentColWidth = 120.0;
+    const skillColWidth = 80.0;
+    const commentsColWidth = 200.0; // Fixed width for comments
+    final minTableWidth = studentColWidth + (skillColWidth * _skills.length) + commentsColWidth;
+
+    return ConstrainedBox(
+      constraints: BoxConstraints(minWidth: minTableWidth),
+      child: Table(
+        border: TableBorder.all(
+          color: AppColors.textSecondary.withOpacity(0.2),
+          width: 1,
+        ),
+        columnWidths: {
+          0: const FixedColumnWidth(studentColWidth), // Student name
+          for (int i = 1; i <= _skills.length; i++)
+            i: const FixedColumnWidth(skillColWidth), // Skill columns
+          _skills.length + 1: const FixedColumnWidth(commentsColWidth), // Comments column - fixed width
+        },
+      children: [
+        // Header row
+        TableRow(
+          decoration: BoxDecoration(
+            color: AppColors.accent.withOpacity(0.1),
+          ),
+          children: [
+            _buildTableHeaderCell('Student'),
+            ..._skills.map((skill) => _buildTableHeaderCell(skill['label'] as String)),
+            _buildTableHeaderCell('Comments'),
+          ],
+        ),
+        // Data rows
+          ..._batchStudents.map((student) {
+          final studentData = _tableData[student.id] ?? {
+            'serve': 0,
+            'smash': 0,
+            'footwork': 0,
+            'defense': 0,
+            'stamina': 0,
+            'comments': '',
+          };
+          
+          // Ensure comment controller exists
+          if (!_commentControllers.containsKey(student.id)) {
+            _commentControllers[student.id] = TextEditingController(
+              text: studentData['comments'] as String? ?? '',
+            );
+          }
+          
+          return TableRow(
+            children: [
+              _buildTableCell(
+                Text(
+                  student.name,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              ..._skills.map((skill) {
+                final key = skill['key'] as String;
+                final rating = studentData[key] as int? ?? 0;
+                return _buildRatingCell(student.id, key, rating);
+              }),
+              _buildCommentsCell(student.id, studentData['comments'] as String? ?? ''),
+            ],
+          );
+        }),
+      ],
+      ),
+    );
+  }
+
+  Widget _buildTableHeaderCell(String text) {
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: Center(
+        child: Text(
+          text,
+          style: const TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+          textAlign: TextAlign.center,
         ),
       ),
     );
   }
 
-  Widget _buildSkillRatingCard(Map<String, dynamic> skill) {
-    final key = skill['key'] as String;
-    final label = skill['label'] as String;
-    final icon = skill['icon'] as IconData;
-    final rating = _skillRatings[key] ?? 0;
+  Widget _buildTableCell(Widget child) {
+    return Container(
+      padding: const EdgeInsets.all(4.0),
+      child: child,
+    );
+  }
 
-    return NeumorphicContainer(
-      padding: const EdgeInsets.all(AppDimensions.paddingM),
-      margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 20, color: AppColors.textSecondary),
-              const SizedBox(width: AppDimensions.spacingS),
-              Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppDimensions.spacingM),
-          Row(
-            children: List.generate(5, (index) {
-              final starRating = index + 1;
-              final isSelected = rating >= starRating;
-              return Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 2),
-                  child: InkWell(
-                    onTap: () {
-                      setState(() {
-                        _skillRatings[key] = starRating;
-                      });
-                    },
-                    child: NeumorphicContainer(
-                      padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
-                      child: Center(
-                        child: Text(
-                          '$starRating',
-                          style: TextStyle(
-                            color: isSelected ? AppColors.accent : AppColors.textSecondary,
-                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            }),
-          ),
+  Widget _buildRatingCell(int studentId, String skillKey, int currentRating) {
+    return _buildTableCell(
+      TextField(
+        controller: TextEditingController(text: currentRating > 0 ? currentRating.toString() : ''),
+        keyboardType: TextInputType.number,
+        inputFormatters: [
+          FilteringTextInputFormatter.allow(RegExp(r'[1-5]')),
+          LengthLimitingTextInputFormatter(1),
         ],
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+        ),
+        decoration: InputDecoration(
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(4),
+            borderSide: BorderSide(color: AppColors.textSecondary.withOpacity(0.3)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(4),
+            borderSide: BorderSide(color: AppColors.textSecondary.withOpacity(0.3)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(4),
+            borderSide: const BorderSide(color: AppColors.accent, width: 2),
+          ),
+          contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          filled: true,
+          fillColor: AppColors.cardBackground,
+        ),
+        onChanged: (value) {
+          setState(() {
+            if (!_tableData.containsKey(studentId)) {
+              _tableData[studentId] = {
+                'serve': 0,
+                'smash': 0,
+                'footwork': 0,
+                'defense': 0,
+                'stamina': 0,
+                'comments': '',
+              };
+            }
+            _tableData[studentId]![skillKey] = value.isEmpty ? 0 : int.tryParse(value) ?? 0;
+          });
+        },
+      ),
+    );
+  }
+
+  Widget _buildCommentsCell(int studentId, String currentComments) {
+    // Get or create controller for this student
+    if (!_commentControllers.containsKey(studentId)) {
+      _commentControllers[studentId] = TextEditingController(text: currentComments);
+    }
+    
+    final controller = _commentControllers[studentId]!;
+    
+    return Container(
+      padding: const EdgeInsets.all(4.0),
+      constraints: const BoxConstraints(
+        minWidth: 200,
+        minHeight: 50,
+      ),
+      child: TextField(
+        controller: controller,
+        maxLines: 3,
+        minLines: 2,
+        style: const TextStyle(
+          color: AppColors.textPrimary,
+          fontSize: 12,
+        ),
+        decoration: InputDecoration(
+          isDense: true,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(4),
+            borderSide: BorderSide(color: AppColors.textSecondary.withOpacity(0.3)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(4),
+            borderSide: BorderSide(color: AppColors.textSecondary.withOpacity(0.3)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(4),
+            borderSide: const BorderSide(color: AppColors.accent, width: 2),
+          ),
+          contentPadding: const EdgeInsets.all(8),
+          filled: true,
+          fillColor: AppColors.cardBackground,
+          hintText: 'Add comments...',
+          hintStyle: TextStyle(color: AppColors.textSecondary.withOpacity(0.5)),
+        ),
+        onChanged: (value) {
+          setState(() {
+            if (!_tableData.containsKey(studentId)) {
+              _tableData[studentId] = {
+                'serve': 0,
+                'smash': 0,
+                'footwork': 0,
+                'defense': 0,
+                'stamina': 0,
+                'comments': '',
+              };
+            }
+            _tableData[studentId]!['comments'] = value;
+          });
+        },
       ),
     );
   }
@@ -588,20 +954,6 @@ class _PerformanceTrackingScreenState extends ConsumerState<PerformanceTrackingS
                     icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
                     color: AppColors.cardBackground,
                     itemBuilder: (context) => [
-                      PopupMenuItem(
-                        child: const Row(
-                          children: [
-                            Icon(Icons.edit, size: 18, color: AppColors.textPrimary),
-                            SizedBox(width: 8),
-                            Text('Edit', style: TextStyle(color: AppColors.textPrimary)),
-                          ],
-                        ),
-                        onTap: () {
-                          Future.delayed(Duration.zero, () {
-                            _editPerformance(performance);
-                          });
-                        },
-                      ),
                       PopupMenuItem(
                         child: const Row(
                           children: [
