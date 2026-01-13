@@ -33,6 +33,8 @@ class _ShuttlecockThemeToggleState extends State<ShuttlecockThemeToggle>
     _controller = AnimationController(
       duration: const Duration(milliseconds: 1200),
       vsync: this,
+      // Initialize to correct position: dark mode = 0.0 (left), light mode = 1.0 (right)
+      value: widget.isDarkMode ? 0.0 : 1.0,
     );
 
     // Shuttlecock moves from left (0.0) to right (1.0)
@@ -80,7 +82,19 @@ class _ShuttlecockThemeToggleState extends State<ShuttlecockThemeToggle>
       if (status == AnimationStatus.completed) {
         setState(() => _isAnimating = false);
       }
+      if (status == AnimationStatus.dismissed) {
+        setState(() => _isAnimating = false);
+      }
     });
+  }
+
+  @override
+  void didUpdateWidget(ShuttlecockThemeToggle oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Update controller position if theme changed externally
+    if (oldWidget.isDarkMode != widget.isDarkMode && !_isAnimating) {
+      _controller.value = widget.isDarkMode ? 0.0 : 1.0;
+    }
   }
 
   @override
@@ -96,11 +110,14 @@ class _ShuttlecockThemeToggleState extends State<ShuttlecockThemeToggle>
 
     if (widget.isDarkMode) {
       // Going from dark to light (left to right)
-      _controller.forward(from: 0.0).then((_) => widget.onToggle());
+      _controller.forward(from: 0.0);
     } else {
       // Going from light to dark (right to left)
-      _controller.reverse(from: 1.0).then((_) => widget.onToggle());
+      _controller.reverse(from: 1.0);
     }
+
+    // Toggle theme immediately, not after animation
+    widget.onToggle();
   }
 
   @override
@@ -151,7 +168,7 @@ class _ShuttlecockThemeToggleState extends State<ShuttlecockThemeToggle>
               child: Container(
                 height: 2,
                 decoration: BoxDecoration(
-                  color: textColor.withOpacity(0.2),
+                  color: textColor.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(1),
                 ),
               ),
@@ -235,14 +252,14 @@ class _ThemeLabel extends StatelessWidget {
       children: [
         Icon(
           icon,
-          color: isActive ? const Color(0xFF4a9eff) : textColor.withOpacity(0.3),
+          color: isActive ? const Color(0xFF4a9eff) : textColor.withValues(alpha: 0.3),
           size: 24,
         ),
         const SizedBox(height: 4),
         Text(
           label,
           style: TextStyle(
-            color: isActive ? const Color(0xFF4a9eff) : textColor.withOpacity(0.3),
+            color: isActive ? const Color(0xFF4a9eff) : textColor.withValues(alpha: 0.3),
             fontSize: 12,
             fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
           ),
@@ -328,7 +345,7 @@ class _Character extends StatelessWidget {
       child: CustomPaint(
         size: const Size(40, 60),
         painter: _CharacterPainter(
-          color: isActive ? const Color(0xFF4a9eff) : color.withOpacity(0.4),
+          color: isActive ? const Color(0xFF4a9eff) : color.withValues(alpha: 0.4),
         ),
       ),
     );

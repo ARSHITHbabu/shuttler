@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../providers/auth_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../widgets/settings/shuttlecock_theme_toggle.dart';
 
@@ -22,19 +20,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final themeMode = ref.watch(themeNotifierProvider);
     final isDarkMode = themeMode == ThemeMode.dark;
+    final theme = Theme.of(context);
+    final backgroundColor = theme.scaffoldBackgroundColor;
+    final textPrimaryColor = theme.colorScheme.onSurface;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: backgroundColor,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: backgroundColor,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back, color: textPrimaryColor),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text(
+        title: Text(
           'Settings',
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: textPrimaryColor,
             fontSize: 20,
             fontWeight: FontWeight.w600,
           ),
@@ -56,14 +58,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Row(
+                    Row(
                       children: [
-                        Icon(Icons.notifications_outlined, color: AppColors.textSecondary),
-                        SizedBox(width: AppDimensions.spacingM),
+                        Icon(Icons.notifications_outlined, color: textPrimaryColor.withValues(alpha: 0.6)),
+                        const SizedBox(width: AppDimensions.spacingM),
                         Text(
                           'Push Notifications',
                           style: TextStyle(
-                            color: AppColors.textPrimary,
+                            color: textPrimaryColor,
                             fontSize: 16,
                           ),
                         ),
@@ -74,19 +76,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       onChanged: (value) {
                         setState(() => _notificationsEnabled = value);
                       },
-                      activeColor: AppColors.accent,
+                      activeTrackColor: theme.colorScheme.primary,
                     ),
                   ],
                 ),
               ),
 
               // Theme Toggle Section
-              const Text(
+              Text(
                 'Theme',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+                  color: textPrimaryColor,
                 ),
               ),
               const SizedBox(height: AppDimensions.spacingM),
@@ -166,20 +168,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 icon: Icons.delete_outline,
                 title: 'Clear Cache',
                 onTap: () async {
+                  final dialogTheme = Theme.of(context);
                   final confirm = await showDialog<bool>(
                     context: context,
-                    builder: (context) => AlertDialog(
-                      backgroundColor: AppColors.cardBackground,
-                      title: const Text('Clear Cache', style: TextStyle(color: AppColors.textPrimary)),
-                      content: const Text('Are you sure you want to clear all cached data?', style: TextStyle(color: AppColors.textSecondary)),
+                    builder: (dialogContext) => AlertDialog(
+                      backgroundColor: dialogTheme.colorScheme.surface,
+                      title: Text('Clear Cache', style: TextStyle(color: dialogTheme.colorScheme.onSurface)),
+                      content: Text('Are you sure you want to clear all cached data?', style: TextStyle(color: dialogTheme.colorScheme.onSurface.withValues(alpha: 0.6))),
                       actions: [
                         TextButton(
-                          onPressed: () => Navigator.pop(context, false),
+                          onPressed: () => Navigator.pop(dialogContext, false),
                           child: const Text('Cancel'),
                         ),
                         TextButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          child: const Text('Clear', style: TextStyle(color: AppColors.error)),
+                          onPressed: () => Navigator.pop(dialogContext, true),
+                          child: Text('Clear', style: TextStyle(color: dialogTheme.colorScheme.error)),
                         ),
                       ],
                     ),
@@ -244,12 +247,13 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textSecondaryColor = Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6);
     return Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 14,
         fontWeight: FontWeight.w600,
-        color: AppColors.textSecondary,
+        color: textSecondaryColor,
         letterSpacing: 0.5,
       ),
     );
@@ -271,13 +275,17 @@ class _SettingsTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final textPrimaryColor = theme.colorScheme.onSurface;
+    final textSecondaryColor = theme.colorScheme.onSurface.withValues(alpha: 0.6);
+
     return NeumorphicContainer(
       padding: const EdgeInsets.all(AppDimensions.paddingM),
       margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
       onTap: onTap,
       child: Row(
         children: [
-          Icon(icon, color: AppColors.textSecondary, size: 24),
+          Icon(icon, color: textSecondaryColor, size: 24),
           const SizedBox(width: AppDimensions.spacingM),
           Expanded(
             child: Column(
@@ -285,8 +293,8 @@ class _SettingsTile extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
+                  style: TextStyle(
+                    color: textPrimaryColor,
                     fontSize: 16,
                   ),
                 ),
@@ -294,8 +302,8 @@ class _SettingsTile extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     subtitle!,
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
+                    style: TextStyle(
+                      color: textSecondaryColor,
                       fontSize: 12,
                     ),
                   ),
@@ -304,9 +312,9 @@ class _SettingsTile extends StatelessWidget {
             ),
           ),
           if (onTap != null)
-            const Icon(
+            Icon(
               Icons.chevron_right,
-              color: AppColors.textSecondary,
+              color: textSecondaryColor,
               size: 20,
             ),
         ],
