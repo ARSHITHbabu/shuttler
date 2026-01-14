@@ -5,6 +5,7 @@ import '../screens/auth/login_screen.dart';
 import '../screens/auth/signup_screen.dart';
 import '../screens/student/profile_completion_screen.dart';
 import '../screens/owner/owner_dashboard.dart';
+import '../screens/coach/coach_dashboard.dart';
 
 /// App routing configuration with go_router
 class AppRouter {
@@ -47,14 +48,11 @@ class AppRouter {
           builder: (context, state) => const OwnerDashboard(),
         ),
 
-        // Coach Dashboard route (placeholder)
+        // Coach Dashboard route
         GoRoute(
           path: '/coach-dashboard',
           name: 'coach-dashboard',
-          builder: (context, state) => const PlaceholderDashboard(
-            role: 'Coach',
-            icon: Icons.person_outline,
-          ),
+          builder: (context, state) => const CoachDashboard(),
         ),
 
         // Student Profile Completion route
