@@ -4,6 +4,7 @@ import '../screens/auth/role_selection_screen.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/signup_screen.dart';
 import '../screens/student/profile_completion_screen.dart';
+import '../screens/student/student_dashboard.dart';
 import '../screens/owner/owner_dashboard.dart';
 import '../screens/coach/coach_dashboard.dart';
 
@@ -62,14 +63,11 @@ class AppRouter {
           builder: (context, state) => const ProfileCompletionScreen(),
         ),
 
-        // Student Dashboard route (placeholder)
+        // Student Dashboard route
         GoRoute(
           path: '/student-dashboard',
           name: 'student-dashboard',
-          builder: (context, state) => const PlaceholderDashboard(
-            role: 'Student',
-            icon: Icons.school_outlined,
-          ),
+          builder: (context, state) => const StudentDashboard(),
         ),
       ],
 
