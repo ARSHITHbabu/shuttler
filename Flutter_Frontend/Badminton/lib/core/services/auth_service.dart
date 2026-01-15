@@ -10,6 +10,69 @@ class AuthService {
 
   AuthService(this._apiService, this._storageService);
 
+  /// Get user-friendly error message from exception
+  String getUserFriendlyErrorMessage(dynamic error) {
+    if (error is DioException) {
+      switch (error.type) {
+        case DioExceptionType.connectionTimeout:
+        case DioExceptionType.receiveTimeout:
+          return 'Connection timeout. Please check your internet connection and try again.';
+        case DioExceptionType.badResponse:
+          final response = error.response;
+          if (response != null && response.data != null) {
+            final data = response.data;
+            if (data is Map<String, dynamic>) {
+              // Check for backend error messages
+              if (data.containsKey('message')) {
+                return data['message'].toString();
+              }
+              if (data.containsKey('detail')) {
+                return data['detail'].toString();
+              }
+              if (data.containsKey('error')) {
+                return data['error'].toString();
+              }
+            }
+          }
+          // HTTP status code based messages
+          switch (error.response?.statusCode) {
+            case 400:
+              return 'Invalid request. Please check your input.';
+            case 401:
+              return 'Invalid email or password. Please try again.';
+            case 403:
+              return 'Access denied. Please contact support.';
+            case 404:
+              return 'Service not found. Please try again later.';
+            case 500:
+              return 'Server error. Please try again later.';
+            default:
+              return 'An error occurred. Please try again.';
+          }
+        case DioExceptionType.cancel:
+          return 'Request cancelled.';
+        case DioExceptionType.unknown:
+          return 'Network error. Please check your internet connection.';
+        default:
+          return 'An error occurred. Please try again.';
+      }
+    }
+    
+    // Handle string exceptions
+    final errorString = error.toString();
+    if (errorString.contains('Exception: ')) {
+      return errorString.replaceAll('Exception: ', '');
+    }
+    if (errorString.contains('Login failed')) {
+      return 'Invalid email or password. Please try again.';
+    }
+    if (errorString.contains('Network')) {
+      return 'Network error. Please check your internet connection.';
+    }
+    
+    return 'An unexpected error occurred. Please try again.';
+  }
+
   /// Login with email and password
   /// Returns user data on success
   Future<Map<String, dynamic>> login({
@@ -74,9 +137,9 @@ class AuthService {
         throw Exception('Login failed with status: ${response.statusCode}');
       }
     } on DioException catch (e) {
-      throw Exception(_apiService.getErrorMessage(e));
+      throw Exception(getUserFriendlyErrorMessage(e));
     } catch (e) {
-      throw Exception('Login failed: ${e.toString()}');
+      throw Exception(getUserFriendlyErrorMessage(e));
     }
   }
 
@@ -146,9 +209,9 @@ class AuthService {
         throw Exception('Registration failed with status: ${response.statusCode}');
       }
     } on DioException catch (e) {
-      throw Exception(_apiService.getErrorMessage(e));
+      throw Exception(getUserFriendlyErrorMessage(e));
     } catch (e) {
-      throw Exception('Registration failed: ${e.toString()}');
+      throw Exception(getUserFriendlyErrorMessage(e));
     }
   }
 

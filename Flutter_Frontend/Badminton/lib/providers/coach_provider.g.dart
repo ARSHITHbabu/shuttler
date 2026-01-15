@@ -6,7 +6,7 @@ part of 'coach_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$coachBatchesHash() => r'f0afb001dbda28055409b03b8504727e907977d8';
+String _$coachBatchesHash() => r'9f953ff151920903cae2405939780530f4b9a0ea';
 
 /// Copied from Dart SDK
 class _SystemHash {
@@ -159,7 +159,7 @@ class _CoachBatchesProviderElement
   int get coachId => (origin as CoachBatchesProvider).coachId;
 }
 
-String _$coachStatsHash() => r'b07c38b3ceda6cb5dead1ebc248efe3d6599894a';
+String _$coachStatsHash() => r'41b7ca2b69022a523ef440f1ead19288df48c333';
 
 /// Provider for coach statistics
 ///
@@ -291,24 +291,28 @@ class _CoachStatsProviderElement
 }
 
 String _$coachTodaySessionsHash() =>
-    r'0b61fe04c9a4496e4f2a6e06f8e589fe5a59f548';
+    r'41bd7668bb1d3d3291385760fc9a4dc6ebbe093c';
 
 /// Provider for coach's today sessions
+/// Since schedules don't have coach_id directly, we get schedules through batches
 ///
 /// Copied from [coachTodaySessions].
 @ProviderFor(coachTodaySessions)
 const coachTodaySessionsProvider = CoachTodaySessionsFamily();
 
 /// Provider for coach's today sessions
+/// Since schedules don't have coach_id directly, we get schedules through batches
 ///
 /// Copied from [coachTodaySessions].
 class CoachTodaySessionsFamily extends Family<AsyncValue<List<Schedule>>> {
   /// Provider for coach's today sessions
+  /// Since schedules don't have coach_id directly, we get schedules through batches
   ///
   /// Copied from [coachTodaySessions].
   const CoachTodaySessionsFamily();
 
   /// Provider for coach's today sessions
+  /// Since schedules don't have coach_id directly, we get schedules through batches
   ///
   /// Copied from [coachTodaySessions].
   CoachTodaySessionsProvider call(int coachId) {
@@ -338,11 +342,13 @@ class CoachTodaySessionsFamily extends Family<AsyncValue<List<Schedule>>> {
 }
 
 /// Provider for coach's today sessions
+/// Since schedules don't have coach_id directly, we get schedules through batches
 ///
 /// Copied from [coachTodaySessions].
 class CoachTodaySessionsProvider
     extends AutoDisposeFutureProvider<List<Schedule>> {
   /// Provider for coach's today sessions
+  /// Since schedules don't have coach_id directly, we get schedules through batches
   ///
   /// Copied from [coachTodaySessions].
   CoachTodaySessionsProvider(int coachId)

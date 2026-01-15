@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../screens/auth/role_selection_screen.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/signup_screen.dart';
+import '../screens/auth/forgot_password_screen.dart';
 import '../screens/student/profile_completion_screen.dart';
 import '../screens/student/student_dashboard.dart';
 import '../screens/owner/owner_dashboard.dart';
@@ -39,6 +40,16 @@ class AppRouter {
           builder: (context, state) {
             final userType = state.extra as String? ?? 'student';
             return SignupScreen(userType: userType);
+          },
+        ),
+
+        // Forgot Password route
+        GoRoute(
+          path: '/forgot-password',
+          name: 'forgot-password',
+          builder: (context, state) {
+            final userType = state.extra as String? ?? 'student';
+            return ForgotPasswordScreen(userType: userType);
           },
         ),
 

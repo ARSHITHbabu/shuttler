@@ -50,10 +50,20 @@ class Authenticated extends AuthState {
 }
 
 /// Authentication provider with code generation
-@riverpod
+/// Keep alive to maintain auth state across navigation
+@Riverpod(keepAlive: true)
 class Auth extends _$Auth {
   @override
   Future<AuthState> build() async {
+    // Keep provider alive to maintain state
+    ref.keepAlive();
+    
+    // Ensure storage is initialized before checking
+    final storageService = ref.read(storageServiceProvider);
+    if (!storageService.isInitialized) {
+      await storageService.init();
+    }
+    
     // Check if user is already logged in on app start
     final authService = ref.read(authServiceProvider);
 
