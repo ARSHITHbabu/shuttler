@@ -2,6 +2,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../models/batch.dart';
 import '../models/student.dart';
 import 'service_providers.dart';
+import 'dashboard_provider.dart';
 
 part 'batch_provider.g.dart';
 
@@ -55,6 +56,44 @@ class BatchList extends _$BatchList {
       throw Exception('Failed to delete batch: $e');
     }
   }
+
+  /// Enroll a student in a batch and invalidate related providers
+  Future<void> enrollStudent(int batchId, int studentId) async {
+    try {
+      final batchService = ref.read(batchServiceProvider);
+      await batchService.enrollStudent(batchId, studentId);
+      
+      // Invalidate all related providers
+      ref.invalidate(batchStudentsProvider(batchId));
+      ref.invalidate(studentBatchesProvider(studentId));
+      ref.invalidate(upcomingBatchesProvider);
+      ref.invalidate(dashboardStatsProvider);
+      
+      // Refresh batch list to update enrollment counts
+      await refresh();
+    } catch (e) {
+      throw Exception('Failed to enroll student: $e');
+    }
+  }
+
+  /// Remove a student from a batch and invalidate related providers
+  Future<void> removeStudent(int batchId, int studentId) async {
+    try {
+      final batchService = ref.read(batchServiceProvider);
+      await batchService.removeStudent(batchId, studentId);
+      
+      // Invalidate all related providers
+      ref.invalidate(batchStudentsProvider(batchId));
+      ref.invalidate(studentBatchesProvider(studentId));
+      ref.invalidate(upcomingBatchesProvider);
+      ref.invalidate(dashboardStatsProvider);
+      
+      // Refresh batch list to update enrollment counts
+      await refresh();
+    } catch (e) {
+      throw Exception('Failed to remove student: $e');
+    }
+  }
 }
 
 /// Provider for batch students
@@ -62,4 +101,11 @@ class BatchList extends _$BatchList {
 Future<List<Student>> batchStudents(BatchStudentsRef ref, int batchId) async {
   final batchService = ref.watch(batchServiceProvider);
   return batchService.getBatchStudents(batchId);
+}
+
+/// Provider for student batches (batches a student is enrolled in)
+@riverpod
+Future<List<Batch>> studentBatches(StudentBatchesRef ref, int studentId) async {
+  final batchService = ref.watch(batchServiceProvider);
+  return batchService.getStudentBatches(studentId);
 }

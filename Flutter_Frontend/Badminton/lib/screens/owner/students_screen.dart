@@ -13,6 +13,8 @@ import '../../models/batch.dart';
 import '../../models/fee.dart';
 import '../../core/services/batch_service.dart';
 import '../../core/services/fee_service.dart';
+import '../../core/services/batch_enrollment_service.dart';
+import '../../providers/batch_provider.dart';
 import 'performance_tracking_screen.dart';
 import 'bmi_tracking_screen.dart';
 import 'fees_screen.dart';
@@ -29,7 +31,6 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _selectedFilter = 'all'; // 'all', 'active', 'inactive'
   Future<List<Student>>? _studentsFuture;
-  int _refreshKey = 0; // Key to force FutureBuilder rebuild
 
   @override
   void dispose() {
@@ -221,7 +222,7 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                           itemBuilder: (context, index) {
                             final student = filteredStudents[index];
                                   return NeumorphicContainer(
-                              key: ValueKey('student_${student.id}_$_refreshKey'),
+                              key: ValueKey('student_${student.id}'),
                               padding: const EdgeInsets.all(AppDimensions.paddingM),
                               margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
                               child: Column(
@@ -341,98 +342,8 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                                     ],
                                   ),
                                   const SizedBox(height: AppDimensions.spacingM),
-                                  // Batch and Fee Status (async loaded)
-                                  FutureBuilder<Map<String, dynamic>>(
-                                    key: ValueKey('batch_status_${student.id}_$_refreshKey'),
-                                    future: _getStudentBatchAndFeeStatus(student.id, cacheBuster: _refreshKey),
-                                    builder: (context, snapshot) {
-                                      if (snapshot.hasData) {
-                                        final data = snapshot.data!;
-                                        final batches = data['batches'] as List<Batch>? ?? [];
-                                        final feeStatus = data['feeStatus'] as String?;
-                                        
-                                        return Column(
-                                          children: [
-                                            if (batches.isNotEmpty) ...[
-                                              Row(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  const Icon(Icons.group, size: 16, color: AppColors.textSecondary),
-                                                  const SizedBox(width: AppDimensions.spacingS),
-                                                  Expanded(
-                                                    child: Wrap(
-                                                      spacing: AppDimensions.spacingS,
-                                                      runSpacing: AppDimensions.spacingS,
-                                                      children: batches.map((batch) {
-                                                        return Container(
-                                                          padding: const EdgeInsets.symmetric(
-                                                            horizontal: AppDimensions.spacingS,
-                                                            vertical: 4,
-                                                          ),
-                                                          decoration: BoxDecoration(
-                                                            color: AppColors.accent.withOpacity(0.2),
-                                                            borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                                                            border: Border.all(
-                                                              color: AppColors.accent.withOpacity(0.3),
-                                                              width: 1,
-                                                            ),
-                                                          ),
-                                                          child: Text(
-                                                            batch.batchName,
-                                                            style: const TextStyle(
-                                                              color: AppColors.accent,
-                                                              fontSize: 12,
-                                                              fontWeight: FontWeight.w500,
-                                                            ),
-                                                          ),
-                                                        );
-                                                      }).toList(),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                              const SizedBox(height: AppDimensions.spacingS),
-                                            ],
-                                            if (feeStatus != null) ...[
-                                              Row(
-                                                children: [
-                                                  const Icon(Icons.attach_money, size: 16, color: AppColors.textSecondary),
-                                                  const SizedBox(width: AppDimensions.spacingS),
-                                                  const Text(
-                                                    'Fee Status: ',
-                                                    style: TextStyle(
-                                                      color: AppColors.textSecondary,
-                                                      fontSize: 14,
-                                                    ),
-                                                  ),
-                                                  Container(
-                                                    padding: const EdgeInsets.symmetric(
-                                                      horizontal: AppDimensions.spacingS,
-                                                      vertical: 2,
-                                                    ),
-                                                    decoration: BoxDecoration(
-                                                      color: _getFeeStatusColor(feeStatus),
-                                                      borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                                                    ),
-                                                    child: Text(
-                                                      feeStatus.toUpperCase(),
-                                                      style: const TextStyle(
-                                                        color: Colors.white,
-                                                        fontSize: 10,
-                                                        fontWeight: FontWeight.w600,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                              const SizedBox(height: AppDimensions.spacingS),
-                                            ],
-                                          ],
-                                        );
-                                      }
-                                      return const SizedBox.shrink();
-                                    },
-                                  ),
+                                  // Batch and Fee Status (using providers)
+                                  _StudentBatchAndFeeStatus(studentId: student.id),
                                   if (student.email.isNotEmpty) ...[
                                     const SizedBox(height: AppDimensions.spacingS),
                                     _InfoRow(
@@ -561,11 +472,13 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
   }
 
   void _showManageBatchesDialog(BuildContext context, Student student) async {
-    // Capture widget's setState to avoid shadowing by StatefulBuilder
-    final widgetSetState = setState;
+    // Capture parent context before showing dialog (Fix: Use parent context for ScaffoldMessenger)
+    final parentContext = context;
+    
     try {
-      final batchService = ref.read(batchServiceProvider);
-      final studentBatches = await batchService.getStudentBatches(student.id);
+      // Use provider to get student batches reactively
+      // Use .future to get the Future from the AsyncValue
+      final studentBatches = await ref.read(studentBatchesProvider(student.id).future);
       
       if (studentBatches.isEmpty) {
         // No batches assigned, show simple assign dialog
@@ -576,7 +489,7 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
       // Show manage batches dialog
       await showDialog(
         context: context,
-        builder: (context) => AlertDialog(
+        builder: (dialogContext) => AlertDialog(
           backgroundColor: AppColors.cardBackground,
           title: const Text('Manage Batches', style: TextStyle(color: AppColors.textPrimary)),
           content: StatefulBuilder(
@@ -622,25 +535,21 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                               icon: const Icon(Icons.close, size: 18, color: AppColors.error),
                               onPressed: () async {
                                 try {
-                                  await batchService.removeStudent(batch.id, student.id);
-                                  if (mounted) {
-                                    Navigator.of(context).pop();
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('Student removed from batch successfully')),
-                                    );
-                                    // Increment refreshKey FIRST, then reload students
-                                    // This ensures FutureBuilder gets the new key value
-                                    // Use widget's setState, not dialog's setState
-                                    widgetSetState(() {
-                                      _refreshKey++; // Force FutureBuilder rebuild
-                                      // Refresh the student list AFTER key increment
-                                      _loadStudents();
-                                    });
+                                  await BatchEnrollmentHelper.removeStudent(ref, batch.id, student.id);
+                                  if (mounted && Navigator.of(dialogContext).canPop()) {
+                                    Navigator.of(dialogContext).pop();
+                                    // Use the parent context for SnackBar to avoid widget lifecycle issues
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(parentContext).showSnackBar(
+                                        const SnackBar(content: Text('Student removed from batch successfully')),
+                                      );
+                                    }
+                                    // No need to manually refresh - providers handle it automatically
                                   }
                                 } catch (e) {
                                   if (mounted) {
                                     final errorMessage = e.toString().replaceFirst('Exception: ', '');
-                                    ScaffoldMessenger.of(context).showSnackBar(
+                                    ScaffoldMessenger.of(parentContext).showSnackBar(
                                       SnackBar(
                                         content: Text('Failed to remove from batch: $errorMessage'),
                                         backgroundColor: AppColors.error,
@@ -670,15 +579,9 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                       width: double.infinity,
                       child: ElevatedButton.icon(
                         onPressed: () async {
-                          Navigator.of(context).pop();
+                          Navigator.of(dialogContext).pop();
                           await _showAddBatchDialog(context, student, studentBatches);
-                          // Refresh after add dialog closes
-                          if (mounted) {
-                            widgetSetState(() {
-                              _refreshKey++;
-                              _loadStudents();
-                            });
-                          }
+                          // No need to manually refresh - providers handle it automatically
                         },
                         icon: const Icon(Icons.add, size: 18),
                         label: const Text('Add Another Batch'),
@@ -694,15 +597,9 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                         width: double.infinity,
                         child: ElevatedButton.icon(
                           onPressed: () async {
-                            Navigator.of(context).pop();
+                            Navigator.of(dialogContext).pop();
                             await _showChangeBatchDialog(context, student, studentBatches.first);
-                            // Refresh after change dialog closes
-                            if (mounted) {
-                              widgetSetState(() {
-                                _refreshKey++;
-                                _loadStudents();
-                              });
-                            }
+                            // No need to manually refresh - providers handle it automatically
                           },
                           icon: const Icon(Icons.edit, size: 18),
                           label: const Text('Change Batch'),
@@ -815,14 +712,14 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                       ? null
                       : () async {
                           try {
-                            await batchService.enrollStudent(selectedBatchId!, student.id);
+                            await BatchEnrollmentHelper.enrollStudent(ref, selectedBatchId!, student.id);
                             if (mounted) {
                               Navigator.of(dialogContext).pop();
                               // Use parent context instead of dialog context (Fix)
                               ScaffoldMessenger.of(parentContext).showSnackBar(
                                 const SnackBar(content: Text('Student added to batch successfully')),
                               );
-                              // Refresh is handled by the button handler that opened this dialog
+                              // Providers automatically update all UI components
                             }
                           } catch (e) {
                             if (mounted) {
@@ -938,16 +835,20 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                       ? null
                       : () async {
                           try {
-                            // Remove from current batch and add to new batch
-                            await batchService.removeStudent(currentBatch.id, student.id);
-                            await batchService.enrollStudent(selectedBatchId!, student.id);
+                            // Transfer student from current batch to new batch
+                            await BatchEnrollmentHelper.transferStudent(
+                              ref,
+                              currentBatch.id,
+                              selectedBatchId!,
+                              student.id,
+                            );
                             if (mounted) {
                               Navigator.of(dialogContext).pop();
                               // Use parent context instead of dialog context (Fix)
                               ScaffoldMessenger.of(parentContext).showSnackBar(
                                 const SnackBar(content: Text('Batch changed successfully')),
                               );
-                              // Refresh is handled by the button handler that opened this dialog
+                              // Providers automatically update all UI components
                             }
                           } catch (e) {
                             if (mounted) {
@@ -982,68 +883,6 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
     }
   }
 
-  Future<Map<String, dynamic>> _getStudentBatchAndFeeStatus(int studentId, {int? cacheBuster}) async {
-    try {
-      final batchService = ref.read(batchServiceProvider);
-      final feeService = ref.read(feeServiceProvider);
-      
-      // Get all batches for this student
-      List<Batch> studentBatches = [];
-      try {
-        studentBatches = await batchService.getStudentBatches(studentId);
-      } catch (e) {
-        // Fallback: Get all batches and find which ones contain this student
-        final batches = await batchService.getBatches();
-        for (final batch in batches) {
-          try {
-            final batchStudents = await batchService.getBatchStudents(batch.id);
-            if (batchStudents.any((s) => s.id == studentId)) {
-              studentBatches.add(batch);
-            }
-          } catch (e) {
-            // Skip if batch students fetch fails
-          }
-        }
-      }
-      
-      // Get fee status
-      String? feeStatus;
-      try {
-        final fees = await feeService.getFees(studentId: studentId);
-        if (fees.isNotEmpty) {
-          final pendingFees = fees.where((f) => f.status != 'paid').toList();
-          if (pendingFees.isNotEmpty) {
-            final overdueFees = pendingFees.where((f) => f.isOverdue).toList();
-            feeStatus = overdueFees.isNotEmpty ? 'overdue' : 'pending';
-          } else {
-            feeStatus = 'paid';
-          }
-        }
-      } catch (e) {
-        // Skip if fees fetch fails
-      }
-      
-      return {
-        'batches': studentBatches,
-        'feeStatus': feeStatus,
-      };
-    } catch (e) {
-      return {'batches': <Batch>[]};
-    }
-  }
-
-  Color _getFeeStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'paid':
-        return AppColors.success;
-      case 'pending':
-        return AppColors.warning;
-      case 'overdue':
-        return AppColors.error;
-      default:
-        return AppColors.textSecondary;
-    }
-  }
 
   void _toggleStudentStatus(BuildContext context, Student student) async {
     try {
@@ -1191,6 +1030,144 @@ class _InfoRow extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+/// Widget that displays student batches and fee status using providers
+class _StudentBatchAndFeeStatus extends ConsumerWidget {
+  final int studentId;
+
+  const _StudentBatchAndFeeStatus({required this.studentId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final studentBatchesAsync = ref.watch(studentBatchesProvider(studentId));
+    final feeService = ref.watch(feeServiceProvider);
+
+    return FutureBuilder<String?>(
+      future: _getFeeStatus(feeService, studentId),
+      builder: (context, feeSnapshot) {
+        return studentBatchesAsync.when(
+          data: (batches) {
+            final feeStatus = feeSnapshot.data;
+            return Column(
+              children: [
+                if (batches.isNotEmpty) ...[
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.group, size: 16, color: AppColors.textSecondary),
+                      const SizedBox(width: AppDimensions.spacingS),
+                      Expanded(
+                        child: Wrap(
+                          spacing: AppDimensions.spacingS,
+                          runSpacing: AppDimensions.spacingS,
+                          children: batches.map((batch) {
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppDimensions.spacingS,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.accent.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                                border: Border.all(
+                                  color: AppColors.accent.withOpacity(0.3),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Text(
+                                batch.batchName,
+                                style: const TextStyle(
+                                  color: AppColors.accent,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppDimensions.spacingS),
+                ],
+                if (feeStatus != null) ...[
+                  Row(
+                    children: [
+                      const Icon(Icons.attach_money, size: 16, color: AppColors.textSecondary),
+                      const SizedBox(width: AppDimensions.spacingS),
+                      const Text(
+                        'Fee Status: ',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 14,
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppDimensions.spacingS,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _getFeeStatusColor(feeStatus),
+                          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                        ),
+                        child: Text(
+                          feeStatus.toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppDimensions.spacingS),
+                ],
+              ],
+            );
+          },
+          loading: () => const SizedBox(
+            height: 20,
+            child: Center(child: LoadingSpinner()),
+          ),
+          error: (error, stack) => const SizedBox.shrink(),
+        );
+      },
+    );
+  }
+
+  Future<String?> _getFeeStatus(FeeService feeService, int studentId) async {
+    try {
+      final fees = await feeService.getFees(studentId: studentId);
+      if (fees.isNotEmpty) {
+        final pendingFees = fees.where((f) => f.status != 'paid').toList();
+        if (pendingFees.isNotEmpty) {
+          final overdueFees = pendingFees.where((f) => f.isOverdue).toList();
+          return overdueFees.isNotEmpty ? 'overdue' : 'pending';
+        } else {
+          return 'paid';
+        }
+      }
+    } catch (e) {
+      // Skip if fees fetch fails
+    }
+    return null;
+  }
+
+  Color _getFeeStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'paid':
+        return AppColors.success;
+      case 'pending':
+        return AppColors.warning;
+      case 'overdue':
+        return AppColors.error;
+      default:
+        return AppColors.textSecondary;
+    }
   }
 }
 

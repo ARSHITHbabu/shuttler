@@ -7,6 +7,7 @@ import '../../widgets/common/custom_text_field.dart';
 import '../../models/student.dart';
 import '../../providers/service_providers.dart';
 import '../../models/batch.dart';
+import '../../core/services/batch_enrollment_service.dart';
 
 /// Dialog for editing student details
 class EditStudentDialog extends ConsumerStatefulWidget {
@@ -79,8 +80,8 @@ class _EditStudentDialogState extends ConsumerState<EditStudentDialog> {
       // Assign to batch if selected
       if (_selectedBatchId != null && mounted) {
         try {
-          final batchService = ref.read(batchServiceProvider);
-          await batchService.enrollStudent(_selectedBatchId!, widget.student.id);
+          await BatchEnrollmentHelper.enrollStudent(ref, _selectedBatchId!, widget.student.id);
+          // Providers automatically update all UI components
         } catch (e) {
           // Log error but don't fail the update
           if (mounted) {

@@ -172,6 +172,8 @@ class DashboardService {
   }
 
   /// Get student count for a batch
+  /// Note: This method is used by the dashboard. For reactive updates,
+  /// use the batchStudentsProvider directly in UI components.
   Future<int> getBatchStudentCount(int batchId) async {
     try {
       final students = await _batchService.getBatchStudents(batchId);

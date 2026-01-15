@@ -10,6 +10,7 @@ import '../../widgets/forms/add_student_dialog.dart';
 import '../../widgets/forms/add_coach_dialog.dart';
 import '../../providers/dashboard_provider.dart';
 import '../../providers/service_providers.dart';
+import '../../providers/batch_provider.dart';
 import '../../models/batch_attendance.dart';
 import 'students_screen.dart';
 import 'coaches_screen.dart';
@@ -608,12 +609,11 @@ class _UpcomingBatchItem extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final dashboardService = ref.watch(dashboardServiceProvider);
+    final batchStudentsAsync = ref.watch(batchStudentsProvider(batchId));
     
-    return FutureBuilder<int>(
-      future: dashboardService.getBatchStudentCount(batchId),
-      builder: (context, snapshot) {
-        final studentCount = snapshot.data ?? 0;
+    return batchStudentsAsync.when(
+      data: (students) {
+        final studentCount = students.length;
         
         return Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -658,6 +658,66 @@ class _UpcomingBatchItem extends ConsumerWidget {
           ],
         );
       },
+      loading: () => Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              Text(
+                time,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(
+            width: 60,
+            height: 20,
+            child: Center(child: LoadingSpinner()),
+          ),
+        ],
+      ),
+      error: (error, stack) => Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              Text(
+                time,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+          const Text(
+            '0 students',
+            style: TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
