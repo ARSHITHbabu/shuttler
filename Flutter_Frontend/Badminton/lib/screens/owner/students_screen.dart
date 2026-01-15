@@ -402,7 +402,9 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                                           onTap: () {
                                             Navigator.of(context).push(
                                               MaterialPageRoute(
-                                                builder: (context) => const PerformanceTrackingScreen(),
+                                                builder: (context) => PerformanceTrackingScreen(
+                                                  initialStudent: student,
+                                                ),
                                               ),
                                             );
                                           },
