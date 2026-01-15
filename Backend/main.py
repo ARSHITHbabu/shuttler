@@ -7,13 +7,66 @@ from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
 from typing import List, Optional
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import json
 import os
 import shutil
 import uuid
+import secrets
 from pathlib import Path
 from dotenv import load_dotenv
+from passlib.context import CryptContext
+import bcrypt
+
+# Password hashing context - use bcrypt directly to avoid passlib initialization issues
+# Fallback to passlib if direct bcrypt fails
+try:
+    # Test bcrypt directly first
+    test_hash = bcrypt.hashpw(b"test", bcrypt.gensalt())
+    USE_DIRECT_BCRYPT = True
+except Exception as e:
+    print(f"⚠️  Direct bcrypt test failed: {e}, using passlib")
+    USE_DIRECT_BCRYPT = False
+
+if USE_DIRECT_BCRYPT:
+    # Use direct bcrypt for better compatibility
+    pwd_context = None
+else:
+    # Fallback to passlib
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def hash_password(password: str) -> str:
+    """Hash a password using bcrypt"""
+    # Validate password length (bcrypt limit is 72 bytes)
+    password_bytes = password.encode('utf-8')
+    if len(password_bytes) > 72:
+        raise ValueError("Password cannot be longer than 72 bytes")
+    
+    try:
+        if USE_DIRECT_BCRYPT:
+            # Use direct bcrypt
+            salt = bcrypt.gensalt()
+            hashed = bcrypt.hashpw(password_bytes, salt)
+            result = hashed.decode('utf-8')
+        else:
+            # Use passlib
+            result = pwd_context.hash(password)
+        return result
+    except Exception as e:
+        raise
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify a password against its hash"""
+    try:
+        if USE_DIRECT_BCRYPT:
+            # Use direct bcrypt
+            result = bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+        else:
+            # Use passlib
+            result = pwd_context.verify(plain_password, hashed_password)
+        return result
+    except Exception as e:
+        raise
 
 # Load environment variables from .env file
 load_dotenv()
@@ -429,6 +482,16 @@ class Coach(BaseModel):
 class CoachLogin(BaseModel):
     email: str
     password: str
+
+class ForgotPasswordRequest(BaseModel):
+    email: str
+    user_type: str  # "coach" or "student"
+
+class ResetPasswordRequest(BaseModel):
+    email: str
+    reset_token: str
+    new_password: str
+    user_type: str  # "coach" or "student"
 
 class CoachUpdate(BaseModel):
     name: Optional[str] = None
@@ -942,7 +1005,10 @@ def read_root():
 def create_coach(coach: CoachCreate):
     db = SessionLocal()
     try:
-        db_coach = CoachDB(**coach.dict())
+        # Hash password before storing
+        coach_dict = coach.dict()
+        coach_dict['password'] = hash_password(coach_dict['password'])
+        db_coach = CoachDB(**coach_dict)
         db.add(db_coach)
         db.commit()
         db.refresh(db_coach)
@@ -1015,11 +1081,29 @@ def login_coach(login_data: CoachLogin):
     db = SessionLocal()
     try:
         coach = db.query(CoachDB).filter(
-            CoachDB.email == login_data.email,
-            CoachDB.password == login_data.password
+            CoachDB.email == login_data.email
         ).first()
         
         if coach:
+            # Verify password (supports both hashed and plain text for backward compatibility)
+            password_valid = False
+            if coach.password.startswith('$2b$') or coach.password.startswith('$2a$'):
+                # Password is hashed, verify it
+                password_valid = verify_password(login_data.password, coach.password)
+            else:
+                # Plain text password (legacy), check directly and upgrade to hash
+                password_valid = (coach.password == login_data.password)
+                if password_valid:
+                    # Upgrade to hashed password
+                    coach.password = hash_password(login_data.password)
+                    db.commit()
+            
+            if not password_valid:
+                return {
+                    "success": False,
+                    "message": "Invalid email or password"
+                }
+            
             if coach.status == "inactive":
                 return {
                     "success": False,
@@ -1042,8 +1126,105 @@ def login_coach(login_data: CoachLogin):
         else:
             return {
                 "success": False,
-                "message": "Invalid credentials"
+                "message": "Invalid email or password"
             }
+    finally:
+        db.close()
+
+# In-memory storage for password reset tokens (in production, use Redis or database)
+password_reset_tokens = {}
+
+@app.post("/auth/forgot-password")
+def forgot_password(request: ForgotPasswordRequest):
+    """Request password reset - generates a reset token"""
+    db = SessionLocal()
+    try:
+        # Find user by email and type
+        if request.user_type == "coach" or request.user_type == "owner":
+            user = db.query(CoachDB).filter(CoachDB.email == request.email).first()
+        else:
+            user = db.query(StudentDB).filter(StudentDB.email == request.email).first()
+        
+        if not user:
+            # Don't reveal if email exists for security
+            return {
+                "success": True,
+                "message": "If an account exists with this email, a password reset link has been sent."
+            }
+        
+        # Generate secure reset token
+        reset_token = secrets.token_urlsafe(32)
+        
+        # Store token with expiration (1 hour)
+        password_reset_tokens[reset_token] = {
+            "email": request.email,
+            "user_type": request.user_type,
+            "expires_at": datetime.now() + timedelta(hours=1)
+        }
+        
+        # In production, send email with reset link
+        # For now, return token (in production, don't return token, send via email)
+        return {
+            "success": True,
+            "message": "Password reset token generated. Use this token to reset your password.",
+            "reset_token": reset_token,  # Remove this in production, send via email instead
+            "expires_in": 3600  # seconds
+        }
+    finally:
+        db.close()
+
+@app.post("/auth/reset-password")
+def reset_password(request: ResetPasswordRequest):
+    """Reset password using reset token"""
+    db = SessionLocal()
+    try:
+        # Validate token
+        if request.reset_token not in password_reset_tokens:
+            return {
+                "success": False,
+                "message": "Invalid or expired reset token"
+            }
+        
+        token_data = password_reset_tokens[request.reset_token]
+        
+        # Check expiration
+        if datetime.now() > token_data["expires_at"]:
+            del password_reset_tokens[request.reset_token]
+            return {
+                "success": False,
+                "message": "Reset token has expired. Please request a new one."
+            }
+        
+        # Verify email matches
+        if token_data["email"] != request.email or token_data["user_type"] != request.user_type:
+            return {
+                "success": False,
+                "message": "Invalid reset token"
+            }
+        
+        # Find user
+        if request.user_type == "coach" or request.user_type == "owner":
+            user = db.query(CoachDB).filter(CoachDB.email == request.email).first()
+        else:
+            user = db.query(StudentDB).filter(StudentDB.email == request.email).first()
+        
+        if not user:
+            return {
+                "success": False,
+                "message": "User not found"
+            }
+        
+        # Update password
+        user.password = hash_password(request.new_password)
+        db.commit()
+        
+        # Remove used token
+        del password_reset_tokens[request.reset_token]
+        
+        return {
+            "success": True,
+            "message": "Password reset successfully. You can now login with your new password."
+        }
     finally:
         db.close()
 
@@ -1215,6 +1396,9 @@ def create_student(student: StudentCreate):
         # Prepare student data with defaults
         student_data = student.model_dump()
         
+        # Hash password before storing
+        student_data['password'] = hash_password(student_data['password'])
+        
         # Set default values for optional fields
         if not student_data.get('added_by'):
             student_data['added_by'] = 'self'
@@ -1326,11 +1510,28 @@ def login_student(login_data: StudentLogin):
     db = SessionLocal()
     try:
         student = db.query(StudentDB).filter(
-            StudentDB.email == login_data.email,
-            StudentDB.password == login_data.password
+            StudentDB.email == login_data.email
         ).first()
         
         if student:
+            # Verify password (supports both hashed and plain text for backward compatibility)
+            password_valid = False
+            if student.password.startswith('$2b$') or student.password.startswith('$2a$'):
+                # Password is hashed, verify it
+                password_valid = verify_password(login_data.password, student.password)
+            else:
+                # Plain text password (legacy), check directly and upgrade to hash
+                password_valid = (student.password == login_data.password)
+                if password_valid:
+                    # Upgrade to hashed password
+                    student.password = hash_password(login_data.password)
+                    db.commit()
+            
+            if not password_valid:
+                return {
+                    "success": False,
+                    "message": "Invalid email or password"
+                }
             # Check if student has any approved batches
             approved_batches = db.query(BatchStudentDB).filter(
                 BatchStudentDB.student_id == student.id,

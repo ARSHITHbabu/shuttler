@@ -35,6 +35,23 @@ class BatchService {
     }
   }
 
+  /// Get batches assigned to a specific coach
+  Future<List<Batch>> getBatchesByCoachId(int coachId) async {
+    try {
+      // Backend endpoint: GET /batches/coach/{coach_id}
+      final response = await _apiService.get('/batches/coach/$coachId');
+      
+      if (response.data is List) {
+        return (response.data as List)
+            .map((json) => Batch.fromJson(json as Map<String, dynamic>))
+            .toList();
+      }
+      return [];
+    } catch (e) {
+      throw Exception('Failed to fetch coach batches: ${_apiService.getErrorMessage(e)}');
+    }
+  }
+
   /// Get batch by ID
   Future<Batch> getBatchById(int id) async {
     try {

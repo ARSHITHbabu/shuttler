@@ -82,10 +82,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       }
     } catch (e) {
       if (mounted) {
+        // Extract user-friendly error message
+        String errorMessage = 'An error occurred. Please try again.';
+        if (e.toString().contains('Exception: ')) {
+          errorMessage = e.toString().replaceAll('Exception: ', '');
+        } else if (e.toString().isNotEmpty) {
+          errorMessage = e.toString();
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(e.toString().replaceAll('Exception: ', '')),
+            content: Text(errorMessage),
             backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'Dismiss',
+              textColor: Colors.white,
+              onPressed: () {},
+            ),
           ),
         );
       }
@@ -252,12 +266,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       onPressed: _isLoading
                           ? null
                           : () {
-                              // TODO: Navigate to forgot password screen
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Forgot password feature coming soon'),
-                                ),
-                              );
+                              context.push('/forgot-password', extra: widget.userType);
                             },
                       child: Text(
                         'Forgot Password?',
