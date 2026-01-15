@@ -31,11 +31,26 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _selectedFilter = 'all'; // 'all', 'active', 'inactive'
   Future<List<Student>>? _studentsFuture;
+  ScaffoldMessengerState? _scaffoldMessenger;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  /// Safely show a SnackBar using the stored ScaffoldMessenger reference
+  /// This prevents errors when the widget is disposed during async operations
+  void _showSnackBar(SnackBar snackBar) {
+    if (mounted && _scaffoldMessenger != null) {
+      _scaffoldMessenger!.showSnackBar(snackBar);
+    }
   }
 
   void _loadStudents() {
@@ -538,24 +553,20 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                                   await BatchEnrollmentHelper.removeStudent(ref, batch.id, student.id);
                                   if (mounted && Navigator.of(dialogContext).canPop()) {
                                     Navigator.of(dialogContext).pop();
-                                    // Use the parent context for SnackBar to avoid widget lifecycle issues
-                                    if (mounted) {
-                                      ScaffoldMessenger.of(parentContext).showSnackBar(
-                                        const SnackBar(content: Text('Student removed from batch successfully')),
-                                      );
-                                    }
+                                    // Use safe helper method to avoid widget lifecycle issues
+                                    _showSnackBar(
+                                      const SnackBar(content: Text('Student removed from batch successfully')),
+                                    );
                                     // No need to manually refresh - providers handle it automatically
                                   }
                                 } catch (e) {
-                                  if (mounted) {
-                                    final errorMessage = e.toString().replaceFirst('Exception: ', '');
-                                    ScaffoldMessenger.of(parentContext).showSnackBar(
-                                      SnackBar(
-                                        content: Text('Failed to remove from batch: $errorMessage'),
-                                        backgroundColor: AppColors.error,
-                                      ),
-                                    );
-                                  }
+                                  final errorMessage = e.toString().replaceFirst('Exception: ', '');
+                                  _showSnackBar(
+                                    SnackBar(
+                                      content: Text('Failed to remove from batch: $errorMessage'),
+                                      backgroundColor: AppColors.error,
+                                    ),
+                                  );
                                 }
                               },
                             ),
@@ -624,11 +635,9 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
         ),
       );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load batches: $e')),
-        );
-      }
+      _showSnackBar(
+        SnackBar(content: Text('Failed to load batches: $e')),
+      );
     }
   }
 
@@ -643,11 +652,9 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
       final allBatches = await batchService.getBatches();
       
       if (allBatches.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(parentContext).showSnackBar(
-            const SnackBar(content: Text('No batches available. Please create a batch first.')),
-          );
-        }
+        _showSnackBar(
+          const SnackBar(content: Text('No batches available. Please create a batch first.')),
+        );
         return;
       }
 
@@ -656,11 +663,9 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
       final availableBatches = allBatches.where((b) => !existingBatchIds.contains(b.id)).toList();
 
       if (availableBatches.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(parentContext).showSnackBar(
-            const SnackBar(content: Text('Student is already enrolled in all available batches.')),
-          );
-        }
+        _showSnackBar(
+          const SnackBar(content: Text('Student is already enrolled in all available batches.')),
+        );
         return;
       }
 
@@ -715,23 +720,20 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                             await BatchEnrollmentHelper.enrollStudent(ref, selectedBatchId!, student.id);
                             if (mounted) {
                               Navigator.of(dialogContext).pop();
-                              // Use parent context instead of dialog context (Fix)
-                              ScaffoldMessenger.of(parentContext).showSnackBar(
+                              // Use safe helper method to avoid widget lifecycle issues
+                              _showSnackBar(
                                 const SnackBar(content: Text('Student added to batch successfully')),
                               );
                               // Providers automatically update all UI components
                             }
                           } catch (e) {
-                            if (mounted) {
-                              final errorMessage = e.toString().replaceFirst('Exception: ', '');
-                              // Use parent context instead of dialog context (Fix)
-                              ScaffoldMessenger.of(parentContext).showSnackBar(
-                                SnackBar(
-                                  content: Text('Failed to add batch: $errorMessage'),
-                                  backgroundColor: AppColors.error,
-                                ),
-                              );
-                            }
+                            final errorMessage = e.toString().replaceFirst('Exception: ', '');
+                            _showSnackBar(
+                              SnackBar(
+                                content: Text('Failed to add batch: $errorMessage'),
+                                backgroundColor: AppColors.error,
+                              ),
+                            );
                           }
                         },
                   child: const Text('Add Batch'),
@@ -742,15 +744,13 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
         ),
       );
     } catch (e) {
-      if (mounted) {
-        final errorMessage = e.toString().replaceFirst('Exception: ', '');
-        ScaffoldMessenger.of(parentContext).showSnackBar(
-          SnackBar(
-            content: Text('Failed to load batches: $errorMessage'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+      final errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _showSnackBar(
+        SnackBar(
+          content: Text('Failed to load batches: $errorMessage'),
+          backgroundColor: AppColors.error,
+        ),
+      );
     }
   }
 
@@ -765,11 +765,9 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
       final allBatches = await batchService.getBatches();
       
       if (allBatches.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(parentContext).showSnackBar(
-            const SnackBar(content: Text('No batches available. Please create a batch first.')),
-          );
-        }
+        _showSnackBar(
+          const SnackBar(content: Text('No batches available. Please create a batch first.')),
+        );
         return;
       }
 
@@ -844,23 +842,20 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                             );
                             if (mounted) {
                               Navigator.of(dialogContext).pop();
-                              // Use parent context instead of dialog context (Fix)
-                              ScaffoldMessenger.of(parentContext).showSnackBar(
+                              // Use safe helper method to avoid widget lifecycle issues
+                              _showSnackBar(
                                 const SnackBar(content: Text('Batch changed successfully')),
                               );
                               // Providers automatically update all UI components
                             }
                           } catch (e) {
-                            if (mounted) {
-                              final errorMessage = e.toString().replaceFirst('Exception: ', '');
-                              // Use parent context instead of dialog context (Fix)
-                              ScaffoldMessenger.of(parentContext).showSnackBar(
-                                SnackBar(
-                                  content: Text('Failed to change batch: $errorMessage'),
-                                  backgroundColor: AppColors.error,
-                                ),
-                              );
-                            }
+                            final errorMessage = e.toString().replaceFirst('Exception: ', '');
+                            _showSnackBar(
+                              SnackBar(
+                                content: Text('Failed to change batch: $errorMessage'),
+                                backgroundColor: AppColors.error,
+                              ),
+                            );
                           }
                         },
                   child: const Text('Change'),
@@ -871,15 +866,13 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
         ),
       );
     } catch (e) {
-      if (mounted) {
-        final errorMessage = e.toString().replaceFirst('Exception: ', '');
-        ScaffoldMessenger.of(parentContext).showSnackBar(
-          SnackBar(
-            content: Text('Failed to load batches: $errorMessage'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+      final errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _showSnackBar(
+        SnackBar(
+          content: Text('Failed to load batches: $errorMessage'),
+          backgroundColor: AppColors.error,
+        ),
+      );
     }
   }
 
@@ -892,18 +885,16 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
       if (mounted) {
         _loadStudents();
         setState(() {});
-        ScaffoldMessenger.of(context).showSnackBar(
+        _showSnackBar(
           SnackBar(
             content: Text('Student ${newStatus == 'active' ? 'activated' : 'deactivated'} successfully'),
           ),
         );
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update student status: $e')),
-        );
-      }
+      _showSnackBar(
+        SnackBar(content: Text('Failed to update student status: $e')),
+      );
     }
   }
 
@@ -931,16 +922,14 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                   Navigator.of(context).pop();
                   _loadStudents();
                   setState(() {});
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  _showSnackBar(
                     const SnackBar(content: Text('Student deleted successfully')),
                   );
                 }
               } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Failed to delete student: $e')),
-                  );
-                }
+                _showSnackBar(
+                  SnackBar(content: Text('Failed to delete student: $e')),
+                );
               }
             },
             child: const Text('Delete', style: TextStyle(color: AppColors.error)),
