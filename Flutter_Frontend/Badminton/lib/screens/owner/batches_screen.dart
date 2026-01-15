@@ -57,7 +57,7 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
     try {
       final apiService = ref.read(apiServiceProvider);
       final response = await apiService.get(ApiEndpoints.coaches);
-      if (response.data is List) {
+      if (response.data is List && mounted) {
         setState(() {
           _coaches = (response.data as List)
               .map((json) => Coach.fromJson(json as Map<String, dynamic>))
@@ -209,39 +209,109 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
         }
       }
       
-      // Prepare batch data
-      final batchData = <String, dynamic>{
-        'name': _nameController.text.trim(),
-        'batch_name': _nameController.text.trim(),
-        'timing': '$startTimeStr - $endTimeStr',
-        'period': _selectedDays.join(', '),
-        'days': _selectedDays.join(', '),
-        'start_time': startTimeStr,
-        'end_time': endTimeStr,
-        'capacity': int.parse(_capacityController.text.trim()),
-        'location': _locationController.text.trim().isEmpty
-            ? null
-            : _locationController.text.trim(),
-      };
+      // Prepare batch data - only include changed fields when editing
+      final batchData = <String, dynamic>{};
       
-      // Handle fees - use existing value if editing and field is empty, otherwise use new value
       if (_editingBatch != null) {
-        // When editing, preserve existing fees if not changed
-        final feesValue = _feesController.text.trim();
-        if (feesValue.isNotEmpty) {
-          batchData['fees'] = feesValue;
-        } else {
-          batchData['fees'] = _editingBatch!.fees;
+        // When editing, only send fields that have changed
+        final originalBatch = _editingBatch!;
+        final originalTiming = originalBatch.timing;
+        final newTiming = '$startTimeStr - $endTimeStr';
+        final originalPeriod = originalBatch.period;
+        final newPeriod = _selectedDays.join(', ');
+        final originalDays = originalBatch.days.join(', ');
+        final newDays = _selectedDays.join(', ');
+        
+        // Check if name changed
+        if (_nameController.text.trim() != originalBatch.name) {
+          batchData['name'] = _nameController.text.trim();
+          batchData['batch_name'] = _nameController.text.trim();
         }
         
-        // Preserve existing start_date if not changed
-        if (_startDate != null) {
-          batchData['start_date'] = _startDate!.toIso8601String().split('T')[0];
-        } else {
-          batchData['start_date'] = _editingBatch!.startDate;
+        // Check if timing changed
+        if (newTiming != originalTiming) {
+          batchData['timing'] = newTiming;
+          batchData['start_time'] = startTimeStr;
+          batchData['end_time'] = endTimeStr;
         }
+        
+        // Check if period/days changed
+        if (newPeriod != originalPeriod || newDays != originalDays) {
+          batchData['period'] = newPeriod;
+          batchData['days'] = newDays;
+        }
+        
+        // Check if capacity changed
+        final newCapacity = int.parse(_capacityController.text.trim());
+        if (newCapacity != originalBatch.capacity) {
+          batchData['capacity'] = newCapacity;
+        }
+        
+        // Handle location - preserve existing if field is empty, only update if changed
+        final locationValue = _locationController.text.trim();
+        if (locationValue.isEmpty) {
+          // Field is empty - preserve original location (don't send it)
+          // Only send if we want to explicitly clear it (user cleared a previously set location)
+          if (originalBatch.location != null && originalBatch.location!.isNotEmpty) {
+            // User cleared a location that existed - preserve it by not sending location field
+            // If you want to allow clearing, uncomment the next line:
+            // batchData['location'] = null;
+          }
+        } else {
+          // Field has value - check if it changed
+          if (locationValue != originalBatch.location) {
+            batchData['location'] = locationValue;
+          }
+        }
+        
+        // Handle fees - preserve existing if not changed
+        final feesValue = _feesController.text.trim();
+        if (feesValue.isEmpty) {
+          // Field is empty - preserve original fees (don't send it)
+        } else if (feesValue != originalBatch.fees) {
+          // Fees changed - send new value
+          batchData['fees'] = feesValue;
+        }
+        // If feesValue == originalBatch.fees, don't send it (no change)
+        
+        // Handle start_date - preserve existing if not changed
+        if (_startDate != null) {
+          final newStartDate = _startDate!.toIso8601String().split('T')[0];
+          if (newStartDate != originalBatch.startDate) {
+            batchData['start_date'] = newStartDate;
+          }
+        }
+        // If _startDate is null, preserve original (don't send it)
+        
+        // Handle coach assignment - only send if changed
+        final originalCoachId = originalBatch.coachId;
+        if (assignedCoachId != originalCoachId) {
+          // Coach assignment changed
+          if (assignedCoachId != null) {
+            batchData['assigned_coach_id'] = assignedCoachId;
+            if (assignedCoachName != null) {
+              batchData['assigned_coach_name'] = assignedCoachName;
+            }
+          } else {
+            // Coach was removed
+            batchData['assigned_coach_id'] = null;
+            batchData['assigned_coach_name'] = null;
+          }
+        }
+        // If coach didn't change, don't send coach fields
       } else {
-        // When creating, use provided fees or default
+        // When creating, send all required fields
+        batchData['name'] = _nameController.text.trim();
+        batchData['batch_name'] = _nameController.text.trim();
+        batchData['timing'] = '$startTimeStr - $endTimeStr';
+        batchData['period'] = _selectedDays.join(', ');
+        batchData['days'] = _selectedDays.join(', ');
+        batchData['start_time'] = startTimeStr;
+        batchData['end_time'] = endTimeStr;
+        batchData['capacity'] = int.parse(_capacityController.text.trim());
+        batchData['location'] = _locationController.text.trim().isEmpty
+            ? null
+            : _locationController.text.trim();
         batchData['fees'] = _feesController.text.trim().isEmpty 
             ? '0' 
             : _feesController.text.trim();
@@ -249,18 +319,18 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
             ? _startDate!.toIso8601String().split('T')[0]
             : DateTime.now().toIso8601String().split('T')[0];
         batchData['created_by'] = 'owner'; // TODO: Get from auth
-      }
-      
-      // Add coach assignment (singular, not plural)
-      if (assignedCoachId != null) {
-        batchData['assigned_coach_id'] = assignedCoachId;
-        if (assignedCoachName != null) {
-          batchData['assigned_coach_name'] = assignedCoachName;
+        
+        // Add coach assignment (singular, not plural)
+        if (assignedCoachId != null) {
+          batchData['assigned_coach_id'] = assignedCoachId;
+          if (assignedCoachName != null) {
+            batchData['assigned_coach_name'] = assignedCoachName;
+          }
+        } else {
+          // No coach assigned
+          batchData['assigned_coach_id'] = null;
+          batchData['assigned_coach_name'] = null;
         }
-      } else {
-        // Explicitly set to null to clear assignment
-        batchData['assigned_coach_id'] = null;
-        batchData['assigned_coach_name'] = null;
       }
 
       if (_editingBatch != null) {
@@ -268,33 +338,41 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
               _editingBatch!.id,
               batchData,
             );
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Batch updated successfully'),
-            backgroundColor: AppColors.success,
-          ),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Batch updated successfully'),
+              backgroundColor: AppColors.success,
+            ),
+          );
+        }
       } else {
         await ref.read(batchListProvider.notifier).createBatch(batchData);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Batch created successfully'),
+              backgroundColor: AppColors.success,
+            ),
+          );
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _showAddForm = false;
+          _editingBatch = null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Batch created successfully'),
-            backgroundColor: AppColors.success,
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: AppColors.error,
           ),
         );
       }
-
-      setState(() {
-        _showAddForm = false;
-        _editingBatch = null;
-      });
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${e.toString()}'),
-          backgroundColor: AppColors.error,
-        ),
-      );
     }
   }
 
@@ -328,19 +406,23 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
     if (confirmed == true) {
       try {
         await ref.read(batchListProvider.notifier).deleteBatch(batch.id);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Batch deleted successfully'),
-            backgroundColor: AppColors.success,
-          ),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Batch deleted successfully'),
+              backgroundColor: AppColors.success,
+            ),
+          );
+        }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: ${e.toString()}'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
       }
     }
   }
