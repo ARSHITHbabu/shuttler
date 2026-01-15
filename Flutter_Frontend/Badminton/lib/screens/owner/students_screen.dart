@@ -161,6 +161,9 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                   return true;
                 }).toList();
 
+                // Sort filtered students alphabetically by name
+                filteredStudents.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
                 // Determine empty message based on filter
                 String emptyMessage;
                 if (_selectedFilter == 'active') {
@@ -217,6 +220,7 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                           itemBuilder: (context, index) {
                             final student = filteredStudents[index];
                                   return NeumorphicContainer(
+                              key: ValueKey(student.id),
                               padding: const EdgeInsets.all(AppDimensions.paddingM),
                               margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
                               child: Column(

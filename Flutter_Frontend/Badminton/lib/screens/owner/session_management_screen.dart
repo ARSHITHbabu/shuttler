@@ -32,6 +32,7 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _locationController = TextEditingController();
+  final _capacityController = TextEditingController();
   String _selectedSessionType = 'practice';
   DateTime _selectedDate = DateTime.now();
   TimeOfDay? _startTime;
@@ -52,6 +53,7 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
     _titleController.dispose();
     _descriptionController.dispose();
     _locationController.dispose();
+    _capacityController.dispose();
     super.dispose();
   }
 
@@ -116,6 +118,7 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
       _titleController.text = session.title;
       _descriptionController.text = session.description ?? '';
       _locationController.text = session.location ?? '';
+      _capacityController.text = session.capacity?.toString() ?? '';
       _selectedSessionType = session.sessionType;
       _selectedDate = session.date;
       _selectedBatchId = session.batchId;
@@ -172,7 +175,11 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
 
       // Map Flutter format to backend format
       // Backend expects: batch_id (int, required), date (str), activity (str, required), 
-      // created_by (str, required), description (str, optional)
+      // created_by (str, required), description (str, optional), capacity (int, optional)
+      final capacityValue = _capacityController.text.trim().isEmpty
+          ? null
+          : int.tryParse(_capacityController.text.trim());
+      
       final sessionData = {
         'batch_id': _selectedBatchId!, // Required, not nullable
         'date': _selectedDate.toIso8601String().split('T')[0],
@@ -181,6 +188,7 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
         'description': _descriptionController.text.trim().isEmpty 
             ? null 
             : _descriptionController.text.trim(),
+        'capacity': capacityValue,
       };
 
       if (_editingSession != null) {
@@ -200,6 +208,7 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
           _titleController.clear();
           _descriptionController.clear();
           _locationController.clear();
+          _capacityController.clear();
           _selectedSessionType = 'practice';
           _selectedDate = DateTime.now();
           _startTime = null;
@@ -684,6 +693,25 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
 
               const SizedBox(height: AppDimensions.spacingM),
 
+              // Capacity
+              CustomTextField(
+                controller: _capacityController,
+                label: 'Capacity (Optional)',
+                hint: 'e.g., 20',
+                keyboardType: TextInputType.number,
+                validator: (value) {
+                  if (value != null && value.isNotEmpty) {
+                    final capacity = int.tryParse(value);
+                    if (capacity == null || capacity <= 0) {
+                      return 'Invalid capacity';
+                    }
+                  }
+                  return null;
+                },
+              ),
+
+              const SizedBox(height: AppDimensions.spacingM),
+
               // Description
               CustomTextField(
                 controller: _descriptionController,
@@ -815,6 +843,8 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
                       _buildDetailRow('Duration', '${session.duration} minutes'),
                     if (session.location != null)
                       _buildDetailRow('Location', session.location!),
+                    if (session.capacity != null)
+                      _buildDetailRow('Capacity', session.capacity!.toString()),
                     if (session.coachName != null)
                       _buildDetailRow('Coach', session.coachName!),
                     if (session.batchName != null)

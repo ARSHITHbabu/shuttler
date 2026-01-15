@@ -27,8 +27,8 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
   Batch? _editingBatch;
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _startTimeController = TextEditingController();
-  final _endTimeController = TextEditingController();
+  TimeOfDay? _startTime;
+  TimeOfDay? _endTime;
   final _capacityController = TextEditingController();
   final _locationController = TextEditingController();
   final List<int> _selectedCoachIds = [];
@@ -45,8 +45,6 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
   @override
   void dispose() {
     _nameController.dispose();
-    _startTimeController.dispose();
-    _endTimeController.dispose();
     _capacityController.dispose();
     _locationController.dispose();
     super.dispose();
@@ -73,8 +71,8 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
       _showAddForm = true;
       _editingBatch = null;
       _nameController.clear();
-      _startTimeController.clear();
-      _endTimeController.clear();
+      _startTime = null;
+      _endTime = null;
       _capacityController.clear();
       _locationController.clear();
       _selectedCoachIds.clear();
@@ -83,14 +81,20 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
   }
 
   void _openEditForm(Batch batch) {
-    // Parse timing string (e.g., "6:00 AM - 7:30 AM") to extract start and end times
-    String startTime = '';
-    String endTime = '';
+    // Parse timing string (e.g., "6:00 AM - 7:30 AM") to TimeOfDay
+    TimeOfDay? startTime;
+    TimeOfDay? endTime;
+    
     if (batch.timing.contains(' - ')) {
       final parts = batch.timing.split(' - ');
       if (parts.length == 2) {
-        startTime = parts[0].trim();
-        endTime = parts[1].trim();
+        final startTimeStr = parts[0].trim();
+        final endTimeStr = parts[1].trim();
+        
+        // Parse start time
+        startTime = _parseTimeString(startTimeStr);
+        // Parse end time
+        endTime = _parseTimeString(endTimeStr);
       }
     }
     
@@ -98,8 +102,8 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
       _showAddForm = true;
       _editingBatch = batch;
       _nameController.text = batch.name;
-      _startTimeController.text = startTime;
-      _endTimeController.text = endTime;
+      _startTime = startTime;
+      _endTime = endTime;
       _capacityController.text = batch.capacity.toString();
       _locationController.text = batch.location ?? '';
       _selectedCoachIds.clear();
@@ -111,8 +115,61 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
     });
   }
 
+  /// Helper method to parse time string to TimeOfDay
+  /// Supports formats like "6:00 AM", "18:00", etc.
+  TimeOfDay? _parseTimeString(String timeStr) {
+    try {
+      // Try parsing formats like "6:00 AM", "18:00", etc.
+      final timeFormat = RegExp(r'(\d{1,2}):(\d{2})\s*(AM|PM)?', caseSensitive: false);
+      final match = timeFormat.firstMatch(timeStr);
+      
+      if (match != null) {
+        int hour = int.parse(match.group(1)!);
+        int minute = int.parse(match.group(2)!);
+        final period = match.group(3)?.toUpperCase();
+        
+        // Convert to 24-hour format if AM/PM is present
+        if (period != null) {
+          if (period == 'PM' && hour != 12) {
+            hour += 12;
+          } else if (period == 'AM' && hour == 12) {
+            hour = 0;
+          }
+        }
+        
+        return TimeOfDay(hour: hour, minute: minute);
+      }
+    } catch (e) {
+      // Return null if parsing fails
+    }
+    return null;
+  }
+
+  /// Helper method to format TimeOfDay to string (e.g., "6:00 AM")
+  String _formatTimeOfDay(TimeOfDay time) {
+    final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+    final minute = time.minute.toString().padLeft(2, '0');
+    final period = time.period == DayPeriod.am ? 'AM' : 'PM';
+    return '$hour:$minute $period';
+  }
+
   Future<void> _saveBatch() async {
     if (!_formKey.currentState!.validate()) return;
+    
+    // Validate time fields
+    if (_startTime == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select start time')),
+      );
+      return;
+    }
+    if (_endTime == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select end time')),
+      );
+      return;
+    }
+    
     if (_selectedDays.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select at least one day')),
@@ -121,14 +178,18 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
     }
 
     try {
+      // Format times as strings
+      final startTimeStr = _formatTimeOfDay(_startTime!);
+      final endTimeStr = _formatTimeOfDay(_endTime!);
+      
       final batchData = {
         'name': _nameController.text.trim(),
         'batch_name': _nameController.text.trim(),
-        'timing': '${_startTimeController.text.trim()} - ${_endTimeController.text.trim()}',
+        'timing': '$startTimeStr - $endTimeStr',
         'period': _selectedDays.join(', '),
         'days': _selectedDays.join(', '),
-        'start_time': _startTimeController.text.trim(),
-        'end_time': _endTimeController.text.trim(),
+        'start_time': startTimeStr,
+        'end_time': endTimeStr,
         'capacity': int.parse(_capacityController.text.trim()),
         'fees': '0', // Default fees
         'start_date': DateTime.now().toIso8601String().split('T')[0],
@@ -326,22 +387,70 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                       Row(
                         children: [
                           Expanded(
-                            child: CustomTextField(
-                              controller: _startTimeController,
-                              label: 'Start Time',
-                              hint: 'e.g., 6:00 AM',
-                              validator: (value) =>
-                                  value == null || value.isEmpty ? 'Required' : null,
+                            child: NeumorphicContainer(
+                              padding: const EdgeInsets.all(AppDimensions.paddingM),
+                              child: InkWell(
+                                onTap: () async {
+                                  final time = await showTimePicker(
+                                    context: context,
+                                    initialTime: _startTime ?? TimeOfDay.now(),
+                                  );
+                                  if (time != null) {
+                                    setState(() => _startTime = time);
+                                  }
+                                },
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.access_time, color: AppColors.textSecondary),
+                                    const SizedBox(width: AppDimensions.spacingM),
+                                    Text(
+                                      _startTime != null
+                                          ? _startTime!.format(context)
+                                          : 'Select start time',
+                                      style: TextStyle(
+                                        color: _startTime != null
+                                            ? AppColors.textPrimary
+                                            : AppColors.textSecondary,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
                           const SizedBox(width: AppDimensions.spacingM),
                           Expanded(
-                            child: CustomTextField(
-                              controller: _endTimeController,
-                              label: 'End Time',
-                              hint: 'e.g., 7:30 AM',
-                              validator: (value) =>
-                                  value == null || value.isEmpty ? 'Required' : null,
+                            child: NeumorphicContainer(
+                              padding: const EdgeInsets.all(AppDimensions.paddingM),
+                              child: InkWell(
+                                onTap: () async {
+                                  final time = await showTimePicker(
+                                    context: context,
+                                    initialTime: _endTime ?? TimeOfDay.now(),
+                                  );
+                                  if (time != null) {
+                                    setState(() => _endTime = time);
+                                  }
+                                },
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.access_time, color: AppColors.textSecondary),
+                                    const SizedBox(width: AppDimensions.spacingM),
+                                    Text(
+                                      _endTime != null
+                                          ? _endTime!.format(context)
+                                          : 'Select end time',
+                                      style: TextStyle(
+                                        color: _endTime != null
+                                            ? AppColors.textPrimary
+                                            : AppColors.textSecondary,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
                         ],
