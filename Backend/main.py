@@ -1086,7 +1086,7 @@ def create_coach(coach: CoachCreate):
     db = SessionLocal()
     try:
         # Hash password before storing
-        coach_dict = coach.dict()
+        coach_dict = coach.model_dump()
         coach_dict['password'] = hash_password(coach_dict['password'])
         db_coach = CoachDB(**coach_dict)
         db.add(db_coach)
@@ -1133,7 +1133,7 @@ def update_coach(coach_id: int, coach_update: CoachUpdate):
         if not coach:
             raise HTTPException(status_code=404, detail="Coach not found")
         
-        update_data = coach_update.dict(exclude_unset=True)
+        update_data = coach_update.model_dump(exclude_unset=True)
         for key, value in update_data.items():
             setattr(coach, key, value)
         
@@ -1314,7 +1314,7 @@ def reset_password(request: ResetPasswordRequest):
 def create_batch(batch: BatchCreate):
     db = SessionLocal()
     try:
-        db_batch = BatchDB(**batch.dict())
+        db_batch = BatchDB(**batch.model_dump())
         db.add(db_batch)
         db.commit()
         db.refresh(db_batch)
@@ -1348,7 +1348,7 @@ def update_batch(batch_id: int, batch_update: BatchUpdate):
         if not batch:
             raise HTTPException(status_code=404, detail="Batch not found")
         
-        update_data = batch_update.dict(exclude_unset=True)
+        update_data = batch_update.model_dump(exclude_unset=True)
         for key, value in update_data.items():
             setattr(batch, key, value)
         
@@ -1674,7 +1674,7 @@ def assign_student_to_batch(assignment: BatchStudentAssign):
         if existing:
             return {"message": "Student already assigned to this batch"}
         
-        db_assignment = BatchStudentDB(**assignment.dict(), status="approved")
+        db_assignment = BatchStudentDB(**assignment.model_dump(), status="approved")
         db.add(db_assignment)
         db.commit()
         return {"message": "Student assigned to batch successfully"}
@@ -1776,13 +1776,13 @@ def mark_attendance(attendance: AttendanceCreate):
         ).first()
         
         if existing:
-            for key, value in attendance.dict().items():
+            for key, value in attendance.model_dump().items():
                 setattr(existing, key, value)
             db.commit()
             db.refresh(existing)
             return existing
         else:
-            db_attendance = AttendanceDB(**attendance.dict())
+            db_attendance = AttendanceDB(**attendance.model_dump())
             db.add(db_attendance)
             db.commit()
             db.refresh(db_attendance)
@@ -1822,13 +1822,13 @@ def mark_coach_attendance(attendance: CoachAttendanceCreate):
         ).first()
         
         if existing:
-            for key, value in attendance.dict().items():
+            for key, value in attendance.model_dump().items():
                 setattr(existing, key, value)
             db.commit()
             db.refresh(existing)
             return existing
         else:
-            db_attendance = CoachAttendanceDB(**attendance.dict())
+            db_attendance = CoachAttendanceDB(**attendance.model_dump())
             db.add(db_attendance)
             db.commit()
             db.refresh(db_attendance)
@@ -2030,7 +2030,7 @@ def update_fee(fee_id: int, fee_update: FeeUpdate):
         if not fee:
             raise HTTPException(status_code=404, detail="Fee not found")
         
-        update_data = fee_update.dict(exclude_unset=True)
+        update_data = fee_update.model_dump(exclude_unset=True)
         # Don't update status directly, it will be recalculated
         if 'status' in update_data:
             del update_data['status']
@@ -2065,7 +2065,7 @@ def create_fee_payment(fee_id: int, payment: FeePaymentCreate):
             raise HTTPException(status_code=400, detail=f"Payment amount (₹{payment.amount}) exceeds pending amount (₹{pending_amount})")
         
         # Create payment
-        payment_dict = payment.dict()
+        payment_dict = payment.model_dump()
         payment_dict['fee_id'] = fee_id
         db_payment = FeePaymentDB(**payment_dict)
         db.add(db_payment)
@@ -2544,7 +2544,7 @@ def update_performance_record(record_id: int, performance_update: PerformanceFro
             )
         ).all()
         
-        update_data = performance_update.dict(exclude_unset=True)
+        update_data = performance_update.model_dump(exclude_unset=True)
         
         # Update date if provided
         new_date = update_data.get('date', first_record.date)
