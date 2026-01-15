@@ -31,6 +31,8 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
   TimeOfDay? _endTime;
   final _capacityController = TextEditingController();
   final _locationController = TextEditingController();
+  final _feesController = TextEditingController();
+  DateTime? _startDate;
   final List<int> _selectedCoachIds = [];
   final List<String> _selectedDays = [];
   List<Coach> _coaches = [];
@@ -47,6 +49,7 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
     _nameController.dispose();
     _capacityController.dispose();
     _locationController.dispose();
+    _feesController.dispose();
     super.dispose();
   }
 
@@ -75,6 +78,8 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
       _endTime = null;
       _capacityController.clear();
       _locationController.clear();
+      _feesController.clear();
+      _startDate = null;
       _selectedCoachIds.clear();
       _selectedDays.clear();
     });
@@ -98,6 +103,14 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
       }
     }
     
+    // Parse start_date string to DateTime
+    DateTime? startDate;
+    try {
+      startDate = DateTime.parse(batch.startDate);
+    } catch (e) {
+      // If parsing fails, use null
+    }
+    
     setState(() {
       _showAddForm = true;
       _editingBatch = batch;
@@ -106,6 +119,8 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
       _endTime = endTime;
       _capacityController.text = batch.capacity.toString();
       _locationController.text = batch.location ?? '';
+      _feesController.text = batch.fees;
+      _startDate = startDate;
       _selectedCoachIds.clear();
       if (batch.coachId != null) {
         _selectedCoachIds.add(batch.coachId!);
@@ -182,7 +197,20 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
       final startTimeStr = _formatTimeOfDay(_startTime!);
       final endTimeStr = _formatTimeOfDay(_endTime!);
       
-      final batchData = {
+      // Get coach assignment (only first coach if multiple selected, or null if none)
+      int? assignedCoachId;
+      String? assignedCoachName;
+      if (_selectedCoachIds.isNotEmpty) {
+        assignedCoachId = _selectedCoachIds.first;
+        try {
+          assignedCoachName = _coaches.firstWhere((c) => c.id == assignedCoachId).name;
+        } catch (e) {
+          // Coach not found in list, name will be null
+        }
+      }
+      
+      // Prepare batch data
+      final batchData = <String, dynamic>{
         'name': _nameController.text.trim(),
         'batch_name': _nameController.text.trim(),
         'timing': '$startTimeStr - $endTimeStr',
@@ -191,17 +219,49 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
         'start_time': startTimeStr,
         'end_time': endTimeStr,
         'capacity': int.parse(_capacityController.text.trim()),
-        'fees': '0', // Default fees
-        'start_date': DateTime.now().toIso8601String().split('T')[0],
-        'assigned_coach_ids': _selectedCoachIds,
-        'assigned_coach_names': _selectedCoachIds.map((id) {
-          return _coaches.firstWhere((c) => c.id == id).name;
-        }).join(', '),
         'location': _locationController.text.trim().isEmpty
             ? null
             : _locationController.text.trim(),
-        'created_by': 'owner', // TODO: Get from auth
       };
+      
+      // Handle fees - use existing value if editing and field is empty, otherwise use new value
+      if (_editingBatch != null) {
+        // When editing, preserve existing fees if not changed
+        final feesValue = _feesController.text.trim();
+        if (feesValue.isNotEmpty) {
+          batchData['fees'] = feesValue;
+        } else {
+          batchData['fees'] = _editingBatch!.fees;
+        }
+        
+        // Preserve existing start_date if not changed
+        if (_startDate != null) {
+          batchData['start_date'] = _startDate!.toIso8601String().split('T')[0];
+        } else {
+          batchData['start_date'] = _editingBatch!.startDate;
+        }
+      } else {
+        // When creating, use provided fees or default
+        batchData['fees'] = _feesController.text.trim().isEmpty 
+            ? '0' 
+            : _feesController.text.trim();
+        batchData['start_date'] = _startDate != null
+            ? _startDate!.toIso8601String().split('T')[0]
+            : DateTime.now().toIso8601String().split('T')[0];
+        batchData['created_by'] = 'owner'; // TODO: Get from auth
+      }
+      
+      // Add coach assignment (singular, not plural)
+      if (assignedCoachId != null) {
+        batchData['assigned_coach_id'] = assignedCoachId;
+        if (assignedCoachName != null) {
+          batchData['assigned_coach_name'] = assignedCoachName;
+        }
+      } else {
+        // Explicitly set to null to clear assignment
+        batchData['assigned_coach_id'] = null;
+        batchData['assigned_coach_name'] = null;
+      }
 
       if (_editingBatch != null) {
         await ref.read(batchListProvider.notifier).updateBatch(
@@ -472,6 +532,54 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                       ),
                       const SizedBox(height: AppDimensions.spacingM),
                       CustomTextField(
+                        controller: _feesController,
+                        label: 'Fees',
+                        hint: 'e.g., 5000',
+                        keyboardType: TextInputType.number,
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return _editingBatch != null ? null : 'Required';
+                          }
+                          // Allow numeric values
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: AppDimensions.spacingM),
+                      NeumorphicContainer(
+                        padding: const EdgeInsets.all(AppDimensions.paddingM),
+                        child: InkWell(
+                          onTap: () async {
+                            final date = await showDatePicker(
+                              context: context,
+                              initialDate: _startDate ?? DateTime.now(),
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(2100),
+                            );
+                            if (date != null) {
+                              setState(() => _startDate = date);
+                            }
+                          },
+                          child: Row(
+                            children: [
+                              const Icon(Icons.calendar_today, color: AppColors.textSecondary),
+                              const SizedBox(width: AppDimensions.spacingM),
+                              Text(
+                                _startDate != null
+                                    ? '${_startDate!.day}/${_startDate!.month}/${_startDate!.year}'
+                                    : 'Select start date',
+                                style: TextStyle(
+                                  color: _startDate != null
+                                      ? AppColors.textPrimary
+                                      : AppColors.textSecondary,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AppDimensions.spacingM),
+                      CustomTextField(
                         controller: _locationController,
                         label: 'Location (Optional)',
                         hint: 'e.g., Court 1',
@@ -512,7 +620,7 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                       ),
                       const SizedBox(height: AppDimensions.spacingM),
                       const Text(
-                        'Assign Coaches (Optional)',
+                        'Assign Coach (Optional)',
                         style: TextStyle(
                           fontSize: 14,
                           color: AppColors.textSecondary,
@@ -530,6 +638,8 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                             onSelected: (selected) {
                               setState(() {
                                 if (selected) {
+                                  // Only allow one coach selection
+                                  _selectedCoachIds.clear();
                                   _selectedCoachIds.add(coach.id);
                                 } else {
                                   _selectedCoachIds.remove(coach.id);
@@ -548,12 +658,27 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                       ),
                       if (_selectedCoachIds.isNotEmpty) ...[
                         const SizedBox(height: AppDimensions.spacingS),
-                        Text(
-                          'Selected: ${_selectedCoachIds.length} coach(es)',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary,
-                          ),
+                        Builder(
+                          builder: (context) {
+                            try {
+                              final coachName = _coaches.firstWhere((c) => c.id == _selectedCoachIds.first).name;
+                              return Text(
+                                'Selected: $coachName',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
+                                ),
+                              );
+                            } catch (e) {
+                              return Text(
+                                'Selected: Coach ${_selectedCoachIds.first}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
+                                ),
+                              );
+                            }
+                          },
                         ),
                       ],
                       const SizedBox(height: AppDimensions.spacingL),
@@ -825,21 +950,28 @@ class _BatchCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppDimensions.spacingM),
+          // Days - always shown
           Row(
             children: [
               _InfoChip(
                 icon: Icons.calendar_today_outlined,
                 label: batch.daysString,
               ),
-              if (batch.coachName != null) ...[
-                const SizedBox(width: AppDimensions.spacingS),
-                _InfoChip(
-                  icon: Icons.person_outline,
-                  label: batch.coachName!,
-                ),
-              ],
             ],
           ),
+          // Coach Name - conditionally shown (check both ID and name)
+          if (batch.assignedCoachId != null) ...[
+            const SizedBox(height: AppDimensions.spacingS),
+            Row(
+              children: [
+                _InfoChip(
+                  icon: Icons.person_outline,
+                  label: batch.coachName ?? 'Coach ${batch.assignedCoachId}',
+                ),
+              ],
+            ),
+          ],
+          // Location - conditionally shown
           if (batch.location != null) ...[
             const SizedBox(height: AppDimensions.spacingS),
             Row(
@@ -848,17 +980,22 @@ class _BatchCard extends StatelessWidget {
                   icon: Icons.location_on_outlined,
                   label: batch.location!,
                 ),
-                const Spacer(),
-                Text(
-                  'Capacity: ${batch.capacity}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
               ],
             ),
           ],
+          // Capacity - always shown
+          const SizedBox(height: AppDimensions.spacingS),
+          Row(
+            children: [
+              Text(
+                'Capacity: ${batch.capacity}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
