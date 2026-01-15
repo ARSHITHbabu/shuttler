@@ -65,11 +65,13 @@ class _PerformanceTrackingScreenState
   }
 
   Future<void> _initializeWithStudent(Student student) async {
+    if (!mounted) return;
     setState(() => _isInitializing = true);
     try {
       // Get student's batches
       final studentBatches = await ref.read(studentBatchesProvider(student.id).future);
 
+      if (!mounted) return;
       if (studentBatches.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -78,12 +80,15 @@ class _PerformanceTrackingScreenState
             ),
           );
         }
-        setState(() => _isInitializing = false);
+        if (mounted) {
+          setState(() => _isInitializing = false);
+        }
         return;
       }
 
       // Pre-select the first batch
       final firstBatch = studentBatches.first;
+      if (!mounted) return;
       setState(() {
         _selectedBatchId = firstBatch.id;
         _selectedStudentId = student.id;
@@ -95,8 +100,10 @@ class _PerformanceTrackingScreenState
       // Load performance history
       await _loadPerformanceHistory();
       
+      if (!mounted) return;
       setState(() => _isInitializing = false);
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isInitializing = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -118,6 +125,7 @@ class _PerformanceTrackingScreenState
 
   Future<void> _loadBatchStudents({bool keepStudentSelection = false}) async {
     if (_selectedBatchId == null) {
+      if (!mounted) return;
       setState(() {
         _batchStudents = [];
         if (!keepStudentSelection) {
@@ -128,10 +136,12 @@ class _PerformanceTrackingScreenState
       return;
     }
 
+    if (!mounted) return;
     setState(() => _loadingStudents = true);
     try {
       final batchService = ref.read(batchServiceProvider);
       final students = await batchService.getBatchStudents(_selectedBatchId!);
+      if (!mounted) return;
       setState(() {
         _batchStudents = students;
         _loadingStudents = false;
@@ -151,6 +161,7 @@ class _PerformanceTrackingScreenState
         }
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _loadingStudents = false);
       if (mounted) {
         ScaffoldMessenger.of(
@@ -162,6 +173,7 @@ class _PerformanceTrackingScreenState
 
   Future<void> _loadPerformanceHistory() async {
     if (_selectedStudentId == null) return;
+    if (!mounted) return;
 
     setState(() => _isLoading = true);
     try {
@@ -169,11 +181,13 @@ class _PerformanceTrackingScreenState
       final records = await performanceService.getPerformanceRecords(
         studentId: _selectedStudentId,
       );
+      if (!mounted) return;
       setState(() {
         _performanceHistory = records;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
