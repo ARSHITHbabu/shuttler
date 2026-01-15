@@ -187,6 +187,7 @@ class ScheduleDB(Base):
     date = Column(String, nullable=False)
     activity = Column(String, nullable=False)
     description = Column(Text, nullable=True)
+    capacity = Column(Integer, nullable=True)
     created_by = Column(String, nullable=False)
 
 class TournamentDB(Base):
@@ -380,6 +381,10 @@ def migrate_database_schema(engine):
             print("⚠️  If this persists, check that FeePaymentDB model is properly defined.")
         else:
             print("✅ fee_payments table exists")
+        
+        # Migrate schedules table - add capacity column
+        if 'schedules' in tables:
+            check_and_add_column(engine, 'schedules', 'capacity', 'INTEGER', nullable=True)
         
         print("✅ Database schema migration completed!")
     except Exception as e:
@@ -735,6 +740,7 @@ class ScheduleCreate(BaseModel):
     date: str
     activity: str
     description: Optional[str] = None
+    capacity: Optional[int] = None
     created_by: str
 
 class Schedule(BaseModel):
@@ -743,6 +749,7 @@ class Schedule(BaseModel):
     date: str
     activity: str
     description: Optional[str] = None
+    capacity: Optional[int] = None
     created_by: str
     
     class Config:
