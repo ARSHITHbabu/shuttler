@@ -180,4 +180,21 @@ class BatchService {
       throw Exception('Failed to remove student: ${_apiService.getErrorMessage(e)}');
     }
   }
+
+  /// Get all batches that a student is enrolled in
+  Future<List<Batch>> getStudentBatches(int studentId) async {
+    try {
+      // Backend uses: GET /student-batches/{student_id}
+      final response = await _apiService.get('/student-batches/$studentId');
+      
+      if (response.data is List) {
+        return (response.data as List)
+            .map((json) => Batch.fromJson(json as Map<String, dynamic>))
+            .toList();
+      }
+      return [];
+    } catch (e) {
+      throw Exception('Failed to fetch student batches: ${_apiService.getErrorMessage(e)}');
+    }
+  }
 }

@@ -29,6 +29,7 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _selectedFilter = 'all'; // 'all', 'active', 'inactive'
   Future<List<Student>>? _studentsFuture;
+  int _refreshKey = 0; // Key to force FutureBuilder rebuild
 
   @override
   void dispose() {
@@ -220,7 +221,7 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                           itemBuilder: (context, index) {
                             final student = filteredStudents[index];
                                   return NeumorphicContainer(
-                              key: ValueKey(student.id),
+                              key: ValueKey('student_${student.id}_$_refreshKey'),
                               padding: const EdgeInsets.all(AppDimensions.paddingM),
                               margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
                               child: Column(
@@ -312,12 +313,12 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                                               children: [
                                                 Icon(Icons.group_add, size: 18, color: AppColors.textPrimary),
                                                 SizedBox(width: 8),
-                                                Text('Assign Batch', style: TextStyle(color: AppColors.textPrimary)),
+                                                Text('Manage Batches', style: TextStyle(color: AppColors.textPrimary)),
                                               ],
                                             ),
                                             onTap: () {
                                               Future.delayed(Duration.zero, () {
-                                                _showAssignBatchDialog(context, student);
+                                                _showManageBatchesDialog(context, student);
                                               });
                                             },
                                           ),
@@ -342,20 +343,53 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                                   const SizedBox(height: AppDimensions.spacingM),
                                   // Batch and Fee Status (async loaded)
                                   FutureBuilder<Map<String, dynamic>>(
-                                    future: _getStudentBatchAndFeeStatus(student.id),
+                                    key: ValueKey('batch_status_${student.id}_$_refreshKey'),
+                                    future: _getStudentBatchAndFeeStatus(student.id, cacheBuster: _refreshKey),
                                     builder: (context, snapshot) {
                                       if (snapshot.hasData) {
                                         final data = snapshot.data!;
-                                        final batchName = data['batchName'] as String?;
+                                        final batches = data['batches'] as List<Batch>? ?? [];
                                         final feeStatus = data['feeStatus'] as String?;
                                         
                                         return Column(
                                           children: [
-                                            if (batchName != null) ...[
-                                              _InfoRow(
-                                                icon: Icons.group,
-                                                label: 'Batch',
-                                                value: batchName,
+                                            if (batches.isNotEmpty) ...[
+                                              Row(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  const Icon(Icons.group, size: 16, color: AppColors.textSecondary),
+                                                  const SizedBox(width: AppDimensions.spacingS),
+                                                  Expanded(
+                                                    child: Wrap(
+                                                      spacing: AppDimensions.spacingS,
+                                                      runSpacing: AppDimensions.spacingS,
+                                                      children: batches.map((batch) {
+                                                        return Container(
+                                                          padding: const EdgeInsets.symmetric(
+                                                            horizontal: AppDimensions.spacingS,
+                                                            vertical: 4,
+                                                          ),
+                                                          decoration: BoxDecoration(
+                                                            color: AppColors.accent.withOpacity(0.2),
+                                                            borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                                                            border: Border.all(
+                                                              color: AppColors.accent.withOpacity(0.3),
+                                                              width: 1,
+                                                            ),
+                                                          ),
+                                                          child: Text(
+                                                            batch.batchName,
+                                                            style: const TextStyle(
+                                                              color: AppColors.accent,
+                                                              fontSize: 12,
+                                                              fontWeight: FontWeight.w500,
+                                                            ),
+                                                          ),
+                                                        );
+                                                      }).toList(),
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
                                               const SizedBox(height: AppDimensions.spacingS),
                                             ],
@@ -526,73 +560,168 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
     );
   }
 
-  void _showAssignBatchDialog(BuildContext context, Student student) async {
+  void _showManageBatchesDialog(BuildContext context, Student student) async {
+    // Capture widget's setState to avoid shadowing by StatefulBuilder
+    final widgetSetState = setState;
     try {
       final batchService = ref.read(batchServiceProvider);
-      final batches = await batchService.getBatches();
+      final studentBatches = await batchService.getStudentBatches(student.id);
       
-      if (batches.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No batches available. Please create a batch first.')),
-          );
-        }
+      if (studentBatches.isEmpty) {
+        // No batches assigned, show simple assign dialog
+        _showAddBatchDialog(context, student, []);
         return;
       }
 
-      int? selectedBatchId;
+      // Show manage batches dialog
       await showDialog(
         context: context,
         builder: (context) => AlertDialog(
           backgroundColor: AppColors.cardBackground,
-          title: const Text('Assign to Batch', style: TextStyle(color: AppColors.textPrimary)),
+          title: const Text('Manage Batches', style: TextStyle(color: AppColors.textPrimary)),
           content: StatefulBuilder(
             builder: (context, setState) {
-              return DropdownButtonFormField<int>(
-                value: selectedBatchId,
-                decoration: const InputDecoration(
-                  labelText: 'Select Batch',
-                  labelStyle: TextStyle(color: AppColors.textSecondary),
+              return SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Current Batches:',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: AppDimensions.spacingS),
+                    ...studentBatches.map((batch) {
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: AppDimensions.spacingS),
+                        padding: const EdgeInsets.all(AppDimensions.paddingS),
+                        decoration: BoxDecoration(
+                          color: AppColors.background,
+                          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                          border: Border.all(
+                            color: AppColors.accent.withOpacity(0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                batch.batchName,
+                                style: const TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close, size: 18, color: AppColors.error),
+                              onPressed: () async {
+                                try {
+                                  await batchService.removeStudent(batch.id, student.id);
+                                  if (mounted) {
+                                    Navigator.of(context).pop();
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Student removed from batch successfully')),
+                                    );
+                                    // Increment refreshKey FIRST, then reload students
+                                    // This ensures FutureBuilder gets the new key value
+                                    // Use widget's setState, not dialog's setState
+                                    widgetSetState(() {
+                                      _refreshKey++; // Force FutureBuilder rebuild
+                                      // Refresh the student list AFTER key increment
+                                      _loadStudents();
+                                    });
+                                  }
+                                } catch (e) {
+                                  if (mounted) {
+                                    final errorMessage = e.toString().replaceFirst('Exception: ', '');
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Failed to remove from batch: $errorMessage'),
+                                        backgroundColor: AppColors.error,
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                    const SizedBox(height: AppDimensions.spacingM),
+                    const Divider(color: AppColors.textSecondary),
+                    const SizedBox(height: AppDimensions.spacingM),
+                    const Text(
+                      'Actions:',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: AppDimensions.spacingS),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          Navigator.of(context).pop();
+                          await _showAddBatchDialog(context, student, studentBatches);
+                          // Refresh after add dialog closes
+                          if (mounted) {
+                            widgetSetState(() {
+                              _refreshKey++;
+                              _loadStudents();
+                            });
+                          }
+                        },
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('Add Another Batch'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.accent,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                    if (studentBatches.length == 1) ...[
+                      const SizedBox(height: AppDimensions.spacingS),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            Navigator.of(context).pop();
+                            await _showChangeBatchDialog(context, student, studentBatches.first);
+                            // Refresh after change dialog closes
+                            if (mounted) {
+                              widgetSetState(() {
+                                _refreshKey++;
+                                _loadStudents();
+                              });
+                            }
+                          },
+                          icon: const Icon(Icons.edit, size: 18),
+                          label: const Text('Change Batch'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.cardBackground,
+                            foregroundColor: AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-                dropdownColor: AppColors.cardBackground,
-                style: const TextStyle(color: AppColors.textPrimary),
-                items: batches.map((batch) {
-                  return DropdownMenuItem<int>(
-                    value: batch.id,
-                    child: Text(batch.batchName),
-                  );
-                }).toList(),
-                onChanged: (value) => setState(() => selectedBatchId = value),
               );
             },
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: selectedBatchId == null
-                  ? null
-                  : () async {
-                      try {
-                        await batchService.enrollStudent(selectedBatchId!, student.id);
-                        if (mounted) {
-                          Navigator.of(context).pop();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Student assigned to batch successfully')),
-                          );
-                          setState(() {});
-                        }
-                      } catch (e) {
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Failed to assign batch: $e')),
-                          );
-                        }
-                      }
-                    },
-              child: const Text('Assign'),
+              child: const Text('Close'),
             ),
           ],
         ),
@@ -606,23 +735,274 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
     }
   }
 
-  Future<Map<String, dynamic>> _getStudentBatchAndFeeStatus(int studentId) async {
+  Future<void> _showAddBatchDialog(BuildContext context, Student student, List<Batch> existingBatches) async {
+    // Capture parent context before dialog (Fix: Use parent context for ScaffoldMessenger)
+    final parentContext = context;
+    // Capture widget's setState to avoid shadowing by StatefulBuilder
+    final widgetSetState = setState;
+    
+    try {
+      final batchService = ref.read(batchServiceProvider);
+      final allBatches = await batchService.getBatches();
+      
+      if (allBatches.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(parentContext).showSnackBar(
+            const SnackBar(content: Text('No batches available. Please create a batch first.')),
+          );
+        }
+        return;
+      }
+
+      // Filter out batches student is already in
+      final existingBatchIds = existingBatches.map((b) => b.id).toSet();
+      final availableBatches = allBatches.where((b) => !existingBatchIds.contains(b.id)).toList();
+
+      if (availableBatches.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(parentContext).showSnackBar(
+            const SnackBar(content: Text('Student is already enrolled in all available batches.')),
+          );
+        }
+        return;
+      }
+
+      // Use ValueNotifier to properly manage state
+      final selectedBatchIdNotifier = ValueNotifier<int?>(null);
+      
+      await showDialog(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          backgroundColor: AppColors.cardBackground,
+          title: const Text('Add Another Batch', style: TextStyle(color: AppColors.textPrimary)),
+          content: StatefulBuilder(
+            builder: (context, setState) {
+              return ValueListenableBuilder<int?>(
+                valueListenable: selectedBatchIdNotifier,
+                builder: (context, selectedBatchId, _) {
+                  return DropdownButtonFormField<int>(
+                    value: selectedBatchId,
+                    decoration: const InputDecoration(
+                      labelText: 'Select Batch',
+                      labelStyle: TextStyle(color: AppColors.textSecondary),
+                    ),
+                    dropdownColor: AppColors.cardBackground,
+                    style: const TextStyle(color: AppColors.textPrimary),
+                    items: availableBatches.map((batch) {
+                      return DropdownMenuItem<int>(
+                        value: batch.id,
+                        child: Text(batch.batchName),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      selectedBatchIdNotifier.value = value;
+                    },
+                  );
+                },
+              );
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            ValueListenableBuilder<int?>(
+              valueListenable: selectedBatchIdNotifier,
+              builder: (context, selectedBatchId, _) {
+                return TextButton(
+                  onPressed: selectedBatchId == null
+                      ? null
+                      : () async {
+                          try {
+                            await batchService.enrollStudent(selectedBatchId!, student.id);
+                            if (mounted) {
+                              Navigator.of(dialogContext).pop();
+                              // Use parent context instead of dialog context (Fix)
+                              ScaffoldMessenger.of(parentContext).showSnackBar(
+                                const SnackBar(content: Text('Student added to batch successfully')),
+                              );
+                              // Refresh is handled by the button handler that opened this dialog
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              final errorMessage = e.toString().replaceFirst('Exception: ', '');
+                              // Use parent context instead of dialog context (Fix)
+                              ScaffoldMessenger.of(parentContext).showSnackBar(
+                                SnackBar(
+                                  content: Text('Failed to add batch: $errorMessage'),
+                                  backgroundColor: AppColors.error,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                  child: const Text('Add Batch'),
+                );
+              },
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        final errorMessage = e.toString().replaceFirst('Exception: ', '');
+        ScaffoldMessenger.of(parentContext).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load batches: $errorMessage'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showChangeBatchDialog(BuildContext context, Student student, Batch currentBatch) async {
+    // Capture parent context before dialog (Fix: Use parent context for ScaffoldMessenger)
+    final parentContext = context;
+    // Capture widget's setState to avoid shadowing by StatefulBuilder
+    final widgetSetState = setState;
+    
+    try {
+      final batchService = ref.read(batchServiceProvider);
+      final allBatches = await batchService.getBatches();
+      
+      if (allBatches.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(parentContext).showSnackBar(
+            const SnackBar(content: Text('No batches available. Please create a batch first.')),
+          );
+        }
+        return;
+      }
+
+      // Use ValueNotifier to properly manage state - initialize to null (Fix 3)
+      final selectedBatchIdNotifier = ValueNotifier<int?>(null);
+      
+      await showDialog(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          backgroundColor: AppColors.cardBackground,
+          title: const Text('Change Batch', style: TextStyle(color: AppColors.textPrimary)),
+          content: StatefulBuilder(
+            builder: (context, setState) {
+              return ValueListenableBuilder<int?>(
+                valueListenable: selectedBatchIdNotifier,
+                builder: (context, selectedBatchId, _) {
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Current: ${currentBatch.batchName}',
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: AppDimensions.spacingM),
+                      DropdownButtonFormField<int>(
+                        value: selectedBatchId,
+                        decoration: const InputDecoration(
+                          labelText: 'Select New Batch',
+                          labelStyle: TextStyle(color: AppColors.textSecondary),
+                        ),
+                        dropdownColor: AppColors.cardBackground,
+                        style: const TextStyle(color: AppColors.textPrimary),
+                        items: allBatches.map((batch) {
+                          return DropdownMenuItem<int>(
+                            value: batch.id,
+                            child: Text(batch.batchName),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          selectedBatchIdNotifier.value = value;
+                        },
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            ValueListenableBuilder<int?>(
+              valueListenable: selectedBatchIdNotifier,
+              builder: (context, selectedBatchId, _) {
+                return TextButton(
+                  onPressed: selectedBatchId == null || selectedBatchId == currentBatch.id
+                      ? null
+                      : () async {
+                          try {
+                            // Remove from current batch and add to new batch
+                            await batchService.removeStudent(currentBatch.id, student.id);
+                            await batchService.enrollStudent(selectedBatchId!, student.id);
+                            if (mounted) {
+                              Navigator.of(dialogContext).pop();
+                              // Use parent context instead of dialog context (Fix)
+                              ScaffoldMessenger.of(parentContext).showSnackBar(
+                                const SnackBar(content: Text('Batch changed successfully')),
+                              );
+                              // Refresh is handled by the button handler that opened this dialog
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              final errorMessage = e.toString().replaceFirst('Exception: ', '');
+                              // Use parent context instead of dialog context (Fix)
+                              ScaffoldMessenger.of(parentContext).showSnackBar(
+                                SnackBar(
+                                  content: Text('Failed to change batch: $errorMessage'),
+                                  backgroundColor: AppColors.error,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                  child: const Text('Change'),
+                );
+              },
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        final errorMessage = e.toString().replaceFirst('Exception: ', '');
+        ScaffoldMessenger.of(parentContext).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load batches: $errorMessage'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<Map<String, dynamic>> _getStudentBatchAndFeeStatus(int studentId, {int? cacheBuster}) async {
     try {
       final batchService = ref.read(batchServiceProvider);
       final feeService = ref.read(feeServiceProvider);
       
-      // Get all batches and find which one contains this student
-      final batches = await batchService.getBatches();
-      String? batchName;
-      for (final batch in batches) {
-        try {
-          final batchStudents = await batchService.getBatchStudents(batch.id);
-          if (batchStudents.any((s) => s.id == studentId)) {
-            batchName = batch.batchName;
-            break;
+      // Get all batches for this student
+      List<Batch> studentBatches = [];
+      try {
+        studentBatches = await batchService.getStudentBatches(studentId);
+      } catch (e) {
+        // Fallback: Get all batches and find which ones contain this student
+        final batches = await batchService.getBatches();
+        for (final batch in batches) {
+          try {
+            final batchStudents = await batchService.getBatchStudents(batch.id);
+            if (batchStudents.any((s) => s.id == studentId)) {
+              studentBatches.add(batch);
+            }
+          } catch (e) {
+            // Skip if batch students fetch fails
           }
-        } catch (e) {
-          // Skip if batch students fetch fails
         }
       }
       
@@ -644,11 +1024,11 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
       }
       
       return {
-        'batchName': batchName,
+        'batches': studentBatches,
         'feeStatus': feeStatus,
       };
     } catch (e) {
-      return {};
+      return {'batches': <Batch>[]};
     }
   }
 
