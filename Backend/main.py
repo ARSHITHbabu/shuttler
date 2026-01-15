@@ -1704,11 +1704,6 @@ def get_all_fees(
     end_date: Optional[str] = None
 ):
     """Get all fees with optional filtering, enriched with student and batch names"""
-    # #region agent log
-    import json
-    with open(r'c:\Users\morch\Documents\Code\RallyOn\shuttler\.cursor\debug.log', 'a') as f:
-        f.write(json.dumps({"id":f"log_{int(datetime.now().timestamp()*1000)}","timestamp":int(datetime.now().timestamp()*1000),"location":"main.py:1592","message":"GET /fees/ entry","data":{"student_id":student_id,"batch_id":batch_id,"status":status},"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+'\n')
-    # #endregion
     db = SessionLocal()
     try:
         query = db.query(FeeDB)
@@ -1730,26 +1725,11 @@ def get_all_fees(
         
         fees = query.order_by(FeeDB.due_date.desc()).all()
 
-        # #region agent log
-        # Check total fees in database (diagnostic)
-        total_fees_in_db = db.query(FeeDB).count()
-        with open(r'c:\Users\morch\Documents\Code\RallyOn\shuttler\.cursor\debug.log', 'a') as f:
-            f.write(json.dumps({"id":f"log_{int(datetime.now().timestamp()*1000)}","timestamp":int(datetime.now().timestamp()*1000),"location":"main.py:1731","message":"Query result count","data":{"fee_count":len(fees),"total_fees_in_db":total_fees_in_db,"has_filters":student_id is not None or batch_id is not None or status is not None},"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+'\n')
-        # #endregion
-
         # Enrich with payments and calculate totals using the helper function
         result = []
         for fee in fees:
-            # #region agent log
-            with open(r'c:\Users\morch\Documents\Code\RallyOn\shuttler\.cursor\debug.log', 'a') as f:
-                f.write(json.dumps({"id":f"log_{int(datetime.now().timestamp()*1000)}","timestamp":int(datetime.now().timestamp()*1000),"location":"main.py:1742","message":"Enriching fee","data":{"fee_id":fee.id,"student_id":fee.student_id},"sessionId":"debug-session","runId":"run1","hypothesisId":"B"})+'\n')
-            # #endregion
             enriched_fee = enrich_fee_with_payments(fee, db)
             result.append(enriched_fee)
-        # #region agent log
-        with open(r'c:\Users\morch\Documents\Code\RallyOn\shuttler\.cursor\debug.log', 'a') as f:
-            f.write(json.dumps({"id":f"log_{int(datetime.now().timestamp()*1000)}","timestamp":int(datetime.now().timestamp()*1000),"location":"main.py:1750","message":"Returning result","data":{"result_count":len(result),"first_fee_student_name":result[0].get('student_name') if result else None},"sessionId":"debug-session","runId":"run1","hypothesisId":"A"})+'\n')
-        # #endregion
         return result
     finally:
         db.close()
