@@ -28,6 +28,7 @@ class StudentsScreen extends ConsumerStatefulWidget {
 class _StudentsScreenState extends ConsumerState<StudentsScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _selectedFilter = 'all'; // 'all', 'active', 'inactive'
+  Future<List<Student>>? _studentsFuture;
 
   @override
   void dispose() {
@@ -35,8 +36,15 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
     super.dispose();
   }
 
+  void _loadStudents() {
+    _studentsFuture = ref.read(studentServiceProvider).getStudents();
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Load students on first build
+    _studentsFuture ??= ref.read(studentServiceProvider).getStudents();
+    
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -61,374 +69,421 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
           ),
         ],
       ),
-      body: FutureBuilder<List<Student>>(
-        future: ref.read(studentServiceProvider).getStudents(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: LoadingSpinner());
-          }
-
-          if (snapshot.hasError) {
-            return ErrorDisplay(
-              message: 'Failed to load students',
-              onRetry: () => setState(() {}),
-            );
-          }
-
-          final allStudents = snapshot.data ?? [];
-          
-          // Apply search filter
-          final searchQuery = _searchController.text.toLowerCase();
-          var filteredStudents = allStudents.where((student) {
-            if (searchQuery.isNotEmpty) {
-              final matchesSearch = student.name.toLowerCase().contains(searchQuery) ||
-                  student.email.toLowerCase().contains(searchQuery) ||
-                  student.phone.contains(searchQuery);
-              if (!matchesSearch) return false;
-            }
-            // Apply status filter
-            if (_selectedFilter == 'active') {
-              return student.status == 'active';
-            } else if (_selectedFilter == 'inactive') {
-              return student.status != 'active';
-            }
-            return true;
-          }).toList();
-
-          if (filteredStudents.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.people_outline,
-                    size: 64,
-                    color: AppColors.textSecondary,
-                  ),
-                  const SizedBox(height: AppDimensions.spacingM),
-                  const Text(
-                    'No students added yet',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 16,
+      body: Column(
+        children: [
+          // Search and Filter - Always visible, outside FutureBuilder
+          Padding(
+            padding: const EdgeInsets.all(AppDimensions.paddingL),
+            child: Column(
+              children: [
+                // Search Bar
+                NeumorphicContainer(
+                  padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
+                  child: TextField(
+                    controller: _searchController,
+                    style: const TextStyle(color: AppColors.textPrimary),
+                    decoration: const InputDecoration(
+                      hintText: 'Search students...',
+                      hintStyle: TextStyle(color: AppColors.textSecondary),
+                      border: InputBorder.none,
+                      icon: Icon(Icons.search, color: AppColors.textSecondary),
                     ),
+                    onChanged: (value) => setState(() {}),
                   ),
-                  const SizedBox(height: AppDimensions.spacingL),
-                  ElevatedButton.icon(
-                    onPressed: () => _showAddStudentDialog(context),
-                    icon: const Icon(Icons.add),
-                    label: const Text('Add Student'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.accent,
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return Column(
-            children: [
-              // Search and Filter
-              Padding(
-                padding: const EdgeInsets.all(AppDimensions.paddingL),
-                child: Column(
-                  children: [
-                    // Search Bar
-                    NeumorphicContainer(
-                      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
-                      child: TextField(
-                        controller: _searchController,
-                        style: const TextStyle(color: AppColors.textPrimary),
-                        decoration: const InputDecoration(
-                          hintText: 'Search students...',
-                          hintStyle: TextStyle(color: AppColors.textSecondary),
-                          border: InputBorder.none,
-                          icon: Icon(Icons.search, color: AppColors.textSecondary),
-                        ),
-                        onChanged: (value) => setState(() {}),
+                ),
+                const SizedBox(height: AppDimensions.spacingM),
+                // Filter Chips
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _FilterChip(
+                        label: 'All',
+                        isSelected: _selectedFilter == 'all',
+                        onTap: () => setState(() => _selectedFilter = 'all'),
                       ),
-                    ),
-                    const SizedBox(height: AppDimensions.spacingM),
-                    // Filter Chips
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          _FilterChip(
-                            label: 'All',
-                            isSelected: _selectedFilter == 'all',
-                            onTap: () => setState(() => _selectedFilter = 'all'),
+                      const SizedBox(width: AppDimensions.spacingS),
+                      _FilterChip(
+                        label: 'Active',
+                        isSelected: _selectedFilter == 'active',
+                        onTap: () => setState(() => _selectedFilter = 'active'),
+                        color: AppColors.success,
+                      ),
+                      const SizedBox(width: AppDimensions.spacingS),
+                      _FilterChip(
+                        label: 'Inactive',
+                        isSelected: _selectedFilter == 'inactive',
+                        onTap: () => setState(() => _selectedFilter = 'inactive'),
+                        color: AppColors.error,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Students List or Empty State - Inside FutureBuilder
+          Expanded(
+            child: FutureBuilder<List<Student>>(
+              future: _studentsFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: LoadingSpinner());
+                }
+
+                if (snapshot.hasError) {
+                  return ErrorDisplay(
+                    message: 'Failed to load students',
+                    onRetry: () {
+                      _loadStudents();
+                      setState(() {});
+                    },
+                  );
+                }
+
+                final allStudents = snapshot.data ?? [];
+                
+                // Apply search filter
+                final searchQuery = _searchController.text.toLowerCase();
+                var filteredStudents = allStudents.where((student) {
+                  if (searchQuery.isNotEmpty) {
+                    final matchesSearch = student.name.toLowerCase().contains(searchQuery) ||
+                        student.email.toLowerCase().contains(searchQuery) ||
+                        student.phone.contains(searchQuery);
+                    if (!matchesSearch) return false;
+                  }
+                  // Apply status filter
+                  if (_selectedFilter == 'active') {
+                    return student.status == 'active';
+                  } else if (_selectedFilter == 'inactive') {
+                    return student.status == 'inactive';
+                  }
+                  return true;
+                }).toList();
+
+                // Determine empty message based on filter
+                String emptyMessage;
+                if (_selectedFilter == 'active') {
+                  emptyMessage = 'No active students found';
+                } else if (_selectedFilter == 'inactive') {
+                  emptyMessage = 'No inactive students found';
+                } else {
+                  emptyMessage = 'No students added yet';
+                }
+
+                if (filteredStudents.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.people_outline,
+                          size: 64,
+                          color: AppColors.textSecondary,
+                        ),
+                        const SizedBox(height: AppDimensions.spacingM),
+                        Text(
+                          emptyMessage,
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 16,
                           ),
-                          const SizedBox(width: AppDimensions.spacingS),
-                          _FilterChip(
-                            label: 'Active',
-                            isSelected: _selectedFilter == 'active',
-                            onTap: () => setState(() => _selectedFilter = 'active'),
-                            color: AppColors.success,
-                          ),
-                          const SizedBox(width: AppDimensions.spacingS),
-                          _FilterChip(
-                            label: 'Inactive',
-                            isSelected: _selectedFilter == 'inactive',
-                            onTap: () => setState(() => _selectedFilter = 'inactive'),
-                            color: AppColors.error,
+                        ),
+                        if (_selectedFilter == 'all') ...[
+                          const SizedBox(height: AppDimensions.spacingL),
+                          ElevatedButton.icon(
+                            onPressed: () => _showAddStudentDialog(context),
+                            icon: const Icon(Icons.add),
+                            label: const Text('Add Student'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.accent,
+                              foregroundColor: Colors.white,
+                            ),
                           ),
                         ],
-                      ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
-              // Students List
-              Expanded(
-                child: RefreshIndicator(
+                  );
+                }
+
+                return RefreshIndicator(
                   onRefresh: () async {
+                    _loadStudents();
                     setState(() {});
                   },
                   child: ListView.builder(
-                    padding: const EdgeInsets.all(AppDimensions.paddingL),
-                    itemCount: filteredStudents.length,
-                    itemBuilder: (context, index) {
-                      final student = filteredStudents[index];
-                      return NeumorphicContainer(
-                  padding: const EdgeInsets.all(AppDimensions.paddingM),
-                  margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              student.name,
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppDimensions.spacingM,
-                              vertical: AppDimensions.spacingS,
-                            ),
-                            decoration: BoxDecoration(
-                              color: student.status == 'active'
-                                  ? AppColors.success
-                                  : AppColors.error,
-                              borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                            ),
-                            child: Text(
-                              student.status.toUpperCase(),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          PopupMenuButton(
-                            icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
-                            color: AppColors.cardBackground,
-                            itemBuilder: (context) => [
-                              PopupMenuItem(
-                                child: const Row(
-                                  children: [
-                                    Icon(Icons.edit, size: 18, color: AppColors.textPrimary),
-                                    SizedBox(width: 8),
-                                    Text('Edit', style: TextStyle(color: AppColors.textPrimary)),
-                                  ],
-                                ),
-                                onTap: () {
-                                  Future.delayed(Duration.zero, () {
-                                    _showEditStudentDialog(context, student);
-                                  });
-                                },
-                              ),
-                              PopupMenuItem(
-                                child: const Row(
-                                  children: [
-                                    Icon(Icons.group_add, size: 18, color: AppColors.textPrimary),
-                                    SizedBox(width: 8),
-                                    Text('Assign Batch', style: TextStyle(color: AppColors.textPrimary)),
-                                  ],
-                                ),
-                                onTap: () {
-                                  Future.delayed(Duration.zero, () {
-                                    _showAssignBatchDialog(context, student);
-                                  });
-                                },
-                              ),
-                              PopupMenuItem(
-                                child: const Row(
-                                  children: [
-                                    Icon(Icons.delete, size: 18, color: AppColors.error),
-                                    SizedBox(width: 8),
-                                    Text('Delete', style: TextStyle(color: AppColors.error)),
-                                  ],
-                                ),
-                                onTap: () {
-                                  Future.delayed(Duration.zero, () {
-                                    _showDeleteConfirmation(context, student);
-                                  });
-                                },
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppDimensions.spacingM),
-                      // Batch and Fee Status (async loaded)
-                      FutureBuilder<Map<String, dynamic>>(
-                        future: _getStudentBatchAndFeeStatus(student.id),
-                        builder: (context, snapshot) {
-                          if (snapshot.hasData) {
-                            final data = snapshot.data!;
-                            final batchName = data['batchName'] as String?;
-                            final feeStatus = data['feeStatus'] as String?;
-                            
-                            return Column(
-                              children: [
-                                if (batchName != null) ...[
-                                  _InfoRow(
-                                    icon: Icons.group,
-                                    label: 'Batch',
-                                    value: batchName,
-                                  ),
-                                  const SizedBox(height: AppDimensions.spacingS),
-                                ],
-                                if (feeStatus != null) ...[
+                          padding: const EdgeInsets.all(AppDimensions.paddingL),
+                          itemCount: filteredStudents.length,
+                          itemBuilder: (context, index) {
+                            final student = filteredStudents[index];
+                                  return NeumorphicContainer(
+                              padding: const EdgeInsets.all(AppDimensions.paddingM),
+                              margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
                                   Row(
                                     children: [
-                                      const Icon(Icons.attach_money, size: 16, color: AppColors.textSecondary),
-                                      const SizedBox(width: AppDimensions.spacingS),
-                                      const Text(
-                                        'Fee Status: ',
-                                        style: TextStyle(
-                                          color: AppColors.textSecondary,
-                                          fontSize: 14,
+                                      Expanded(
+                                        child: Text(
+                                          student.name,
+                                          style: const TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.textPrimary,
+                                          ),
                                         ),
                                       ),
                                       Container(
                                         padding: const EdgeInsets.symmetric(
-                                          horizontal: AppDimensions.spacingS,
-                                          vertical: 2,
+                                          horizontal: AppDimensions.spacingM,
+                                          vertical: AppDimensions.spacingS,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: _getFeeStatusColor(feeStatus),
+                                          color: student.status == 'active'
+                                              ? AppColors.success
+                                              : AppColors.error,
                                           borderRadius: BorderRadius.circular(AppDimensions.radiusS),
                                         ),
                                         child: Text(
-                                          feeStatus.toUpperCase(),
+                                          student.status.toUpperCase(),
                                           style: const TextStyle(
                                             color: Colors.white,
-                                            fontSize: 10,
+                                            fontSize: 12,
                                             fontWeight: FontWeight.w600,
                                           ),
                                         ),
                                       ),
+                                      PopupMenuButton(
+                                        icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+                                        color: AppColors.cardBackground,
+                                        itemBuilder: (context) => [
+                                          PopupMenuItem(
+                                            child: const Row(
+                                              children: [
+                                                Icon(Icons.edit, size: 18, color: AppColors.textPrimary),
+                                                SizedBox(width: 8),
+                                                Text('Edit', style: TextStyle(color: AppColors.textPrimary)),
+                                              ],
+                                            ),
+                                            onTap: () {
+                                              Future.delayed(Duration.zero, () {
+                                                _showEditStudentDialog(context, student);
+                                              });
+                                            },
+                                          ),
+                                          PopupMenuItem(
+                                            child: Row(
+                                              children: [
+                                                Icon(
+                                                  student.status == 'active' 
+                                                      ? Icons.person_off 
+                                                      : Icons.person,
+                                                  size: 18,
+                                                  color: student.status == 'active' 
+                                                      ? AppColors.error 
+                                                      : AppColors.success,
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Text(
+                                                  student.status == 'active' 
+                                                      ? 'Mark Inactive' 
+                                                      : 'Mark Active',
+                                                  style: TextStyle(
+                                                    color: student.status == 'active' 
+                                                        ? AppColors.error 
+                                                        : AppColors.success,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            onTap: () {
+                                              Future.delayed(Duration.zero, () {
+                                                _toggleStudentStatus(context, student);
+                                              });
+                                            },
+                                          ),
+                                          PopupMenuItem(
+                                            child: const Row(
+                                              children: [
+                                                Icon(Icons.group_add, size: 18, color: AppColors.textPrimary),
+                                                SizedBox(width: 8),
+                                                Text('Assign Batch', style: TextStyle(color: AppColors.textPrimary)),
+                                              ],
+                                            ),
+                                            onTap: () {
+                                              Future.delayed(Duration.zero, () {
+                                                _showAssignBatchDialog(context, student);
+                                              });
+                                            },
+                                          ),
+                                          PopupMenuItem(
+                                            child: const Row(
+                                              children: [
+                                                Icon(Icons.delete, size: 18, color: AppColors.error),
+                                                SizedBox(width: 8),
+                                                Text('Delete', style: TextStyle(color: AppColors.error)),
+                                              ],
+                                            ),
+                                            onTap: () {
+                                              Future.delayed(Duration.zero, () {
+                                                _showDeleteConfirmation(context, student);
+                                              });
+                                            },
+                                          ),
+                                        ],
+                                      ),
                                     ],
                                   ),
-                                  const SizedBox(height: AppDimensions.spacingS),
+                                  const SizedBox(height: AppDimensions.spacingM),
+                                  // Batch and Fee Status (async loaded)
+                                  FutureBuilder<Map<String, dynamic>>(
+                                    future: _getStudentBatchAndFeeStatus(student.id),
+                                    builder: (context, snapshot) {
+                                      if (snapshot.hasData) {
+                                        final data = snapshot.data!;
+                                        final batchName = data['batchName'] as String?;
+                                        final feeStatus = data['feeStatus'] as String?;
+                                        
+                                        return Column(
+                                          children: [
+                                            if (batchName != null) ...[
+                                              _InfoRow(
+                                                icon: Icons.group,
+                                                label: 'Batch',
+                                                value: batchName,
+                                              ),
+                                              const SizedBox(height: AppDimensions.spacingS),
+                                            ],
+                                            if (feeStatus != null) ...[
+                                              Row(
+                                                children: [
+                                                  const Icon(Icons.attach_money, size: 16, color: AppColors.textSecondary),
+                                                  const SizedBox(width: AppDimensions.spacingS),
+                                                  const Text(
+                                                    'Fee Status: ',
+                                                    style: TextStyle(
+                                                      color: AppColors.textSecondary,
+                                                      fontSize: 14,
+                                                    ),
+                                                  ),
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(
+                                                      horizontal: AppDimensions.spacingS,
+                                                      vertical: 2,
+                                                    ),
+                                                    decoration: BoxDecoration(
+                                                      color: _getFeeStatusColor(feeStatus),
+                                                      borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                                                    ),
+                                                    child: Text(
+                                                      feeStatus.toUpperCase(),
+                                                      style: const TextStyle(
+                                                        color: Colors.white,
+                                                        fontSize: 10,
+                                                        fontWeight: FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: AppDimensions.spacingS),
+                                            ],
+                                          ],
+                                        );
+                                      }
+                                      return const SizedBox.shrink();
+                                    },
+                                  ),
+                                  if (student.email.isNotEmpty) ...[
+                                    const SizedBox(height: AppDimensions.spacingS),
+                                    _InfoRow(
+                                      icon: Icons.email_outlined,
+                                      label: 'Email',
+                                      value: student.email,
+                                    ),
+                                  ],
+                                  if (student.phone.isNotEmpty) ...[
+                                    const SizedBox(height: AppDimensions.spacingS),
+                                    _InfoRow(
+                                      icon: Icons.phone_outlined,
+                                      label: 'Phone',
+                                      value: student.phone,
+                                    ),
+                                  ],
+                                  if (student.guardianName != null && student.guardianName!.isNotEmpty) ...[
+                                    const SizedBox(height: AppDimensions.spacingS),
+                                    _InfoRow(
+                                      icon: Icons.person_outline,
+                                      label: 'Guardian',
+                                      value: student.guardianName!,
+                                    ),
+                                  ],
+                                  if (student.guardianPhone != null && student.guardianPhone!.isNotEmpty) ...[
+                                    const SizedBox(height: AppDimensions.spacingS),
+                                    _InfoRow(
+                                      icon: Icons.phone_outlined,
+                                      label: 'Guardian Phone',
+                                      value: student.guardianPhone!,
+                                    ),
+                                  ],
+                                  const SizedBox(height: AppDimensions.spacingM),
+                                  // Action Buttons
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: _ActionButton(
+                                          icon: Icons.trending_up,
+                                          label: 'Performance',
+                                          onTap: () {
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder: (context) => const PerformanceTrackingScreen(),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(width: AppDimensions.spacingS),
+                                      Expanded(
+                                        child: _ActionButton(
+                                          icon: Icons.monitor_weight,
+                                          label: 'BMI',
+                                          onTap: () {
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder: (context) => const BMITrackingScreen(),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(width: AppDimensions.spacingS),
+                                      Expanded(
+                                        child: _ActionButton(
+                                          icon: Icons.attach_money,
+                                          label: 'Fees',
+                                          onTap: () {
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder: (context) => const FeesScreen(),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ],
-                              ],
+                              ),
                             );
-                          }
-                          return const SizedBox.shrink();
-                        },
-                      ),
-                      if (student.email.isNotEmpty) ...[
-                        const SizedBox(height: AppDimensions.spacingS),
-                        _InfoRow(
-                          icon: Icons.email_outlined,
-                          label: 'Email',
-                          value: student.email,
+                          },
                         ),
-                      ],
-                      if (student.phone.isNotEmpty) ...[
-                        const SizedBox(height: AppDimensions.spacingS),
-                        _InfoRow(
-                          icon: Icons.phone_outlined,
-                          label: 'Phone',
-                          value: student.phone,
-                        ),
-                      ],
-                      if (student.guardianName != null && student.guardianName!.isNotEmpty) ...[
-                        const SizedBox(height: AppDimensions.spacingS),
-                        _InfoRow(
-                          icon: Icons.person_outline,
-                          label: 'Guardian',
-                          value: student.guardianName!,
-                        ),
-                      ],
-                      if (student.guardianPhone != null && student.guardianPhone!.isNotEmpty) ...[
-                        const SizedBox(height: AppDimensions.spacingS),
-                        _InfoRow(
-                          icon: Icons.phone_outlined,
-                          label: 'Guardian Phone',
-                          value: student.guardianPhone!,
-                        ),
-                      ],
-                      const SizedBox(height: AppDimensions.spacingM),
-                      // Action Buttons
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _ActionButton(
-                              icon: Icons.trending_up,
-                              label: 'Performance',
-                              onTap: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (context) => const PerformanceTrackingScreen(),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: AppDimensions.spacingS),
-                          Expanded(
-                            child: _ActionButton(
-                              icon: Icons.monitor_weight,
-                              label: 'BMI',
-                              onTap: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (context) => const BMITrackingScreen(),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: AppDimensions.spacingS),
-                          Expanded(
-                            child: _ActionButton(
-                              icon: Icons.attach_money,
-                              label: 'Fees',
-                              onTap: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (context) => const FeesScreen(),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-                    },
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
+                      );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -441,6 +496,7 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
           final studentService = ref.read(studentServiceProvider);
           await studentService.createStudent(studentData);
           if (mounted) {
+            _loadStudents();
             setState(() {});
           }
         },
@@ -457,6 +513,7 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
           final studentService = ref.read(studentServiceProvider);
           await studentService.updateStudent(student.id, studentData);
           if (mounted) {
+            _loadStudents();
             setState(() {});
             Navigator.of(context).pop();
           }
@@ -604,6 +661,29 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
     }
   }
 
+  void _toggleStudentStatus(BuildContext context, Student student) async {
+    try {
+      final studentService = ref.read(studentServiceProvider);
+      final newStatus = student.status == 'active' ? 'inactive' : 'active';
+      await studentService.updateStudent(student.id, {'status': newStatus});
+      if (mounted) {
+        _loadStudents();
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Student ${newStatus == 'active' ? 'activated' : 'deactivated'} successfully'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update student status: $e')),
+        );
+      }
+    }
+  }
+
   void _showDeleteConfirmation(BuildContext context, Student student) {
     showDialog(
       context: context,
@@ -626,6 +706,7 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                 await studentService.deleteStudent(student.id);
                 if (mounted) {
                   Navigator.of(context).pop();
+                  _loadStudents();
                   setState(() {});
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Student deleted successfully')),
