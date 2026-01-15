@@ -111,7 +111,7 @@ class DashboardService {
       
       // Filter batches that run today and have finished
       final finishedBatches = allBatches.where((batch) {
-        if (!batch.days.contains(todayDayName)) return false;
+        if (!_batchRunsOnDay(batch, todayDayName)) return false;
         return BatchTimeUtils.isBatchFinished(batch);
       }).toList();
 
@@ -160,6 +160,29 @@ class DashboardService {
     }
   }
 
+  /// Check if batch runs on a specific day
+  /// Handles "Daily" period and regular day lists
+  bool _batchRunsOnDay(Batch batch, String dayName) {
+    // Check if batch runs daily
+    if (batch.period.toLowerCase() == 'daily') {
+      return true;
+    }
+    // Check if batch runs on the specific day
+    return batch.days.contains(dayName);
+  }
+
+  /// Get student count for a batch
+  /// Note: This method is used by the dashboard. For reactive updates,
+  /// use the batchStudentsProvider directly in UI components.
+  Future<int> getBatchStudentCount(int batchId) async {
+    try {
+      final students = await _batchService.getBatchStudents(batchId);
+      return students.length;
+    } catch (e) {
+      return 0; // Return 0 on error to not break UI
+    }
+  }
+
   /// Get upcoming batches (today after current time + future days)
   Future<List<Batch>> getUpcomingBatches() async {
     try {
@@ -174,7 +197,7 @@ class DashboardService {
       
       // First, get batches for today that haven't finished
       final todayBatches = allBatches.where((batch) {
-        if (!batch.days.contains(todayDayName)) return false;
+        if (!_batchRunsOnDay(batch, todayDayName)) return false;
         return BatchTimeUtils.isBatchUpcoming(batch);
       }).toList();
       
@@ -194,7 +217,7 @@ class DashboardService {
         final checkDayName = dayNames[checkDate.weekday - 1];
         
         final futureBatches = allBatches.where((batch) {
-          return batch.days.contains(checkDayName);
+          return _batchRunsOnDay(batch, checkDayName);
         }).toList();
         
         // Sort by timing

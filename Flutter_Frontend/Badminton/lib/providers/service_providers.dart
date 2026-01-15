@@ -119,3 +119,7 @@ CalendarService calendarService(CalendarServiceRef ref) {
   final apiService = ref.watch(apiServiceProvider);
   return CalendarService(apiService);
 }
+
+/// Provider for BatchEnrollmentService
+/// Note: This requires WidgetRef, so it should be created in widgets that need it
+/// For now, we'll use a helper function instead

@@ -18,22 +18,48 @@ class BatchTimeUtils {
         final timeFormat = DateFormat('h:mm a');
         final time = timeFormat.parse(endTimeStr);
         final now = DateTime.now();
-        // Use the parsed hour and minute directly
+        // DateFormat.parse correctly handles AM/PM conversion, so time.hour is already in 24-hour format
         return DateTime(now.year, now.month, now.day, time.hour, time.minute);
       } catch (_) {
-        // Try 24-hour format
+        // Try manual parsing for AM/PM format (fallback)
         try {
-          final timeParts = endTimeStr.split(':');
+          final upperStr = endTimeStr.toUpperCase();
+          final isPM = upperStr.contains('PM');
+          final isAM = upperStr.contains('AM');
+          
+          // Remove AM/PM from string
+          final timeStr = upperStr.replaceAll(RegExp(r'\s*(AM|PM)\s*'), '');
+          final timeParts = timeStr.split(':');
+          
           if (timeParts.length == 2) {
-            final hourStr = timeParts[0].trim();
-            final minuteStr = timeParts[1].trim().split(' ')[0]; // Remove AM/PM if present
-            final hour = int.parse(hourStr);
-            final minute = int.parse(minuteStr);
+            var hour = int.parse(timeParts[0].trim());
+            final minute = int.parse(timeParts[1].trim());
+            
+            // Convert to 24-hour format
+            if (isPM && hour != 12) {
+              hour += 12;
+            } else if (isAM && hour == 12) {
+              hour = 0;
+            }
+            
             final now = DateTime.now();
             return DateTime(now.year, now.month, now.day, hour, minute);
           }
         } catch (_) {
-          return null;
+          // Try 24-hour format
+          try {
+            final timeParts = endTimeStr.split(':');
+            if (timeParts.length == 2) {
+              final hourStr = timeParts[0].trim();
+              final minuteStr = timeParts[1].trim().split(' ')[0]; // Remove AM/PM if present
+              final hour = int.parse(hourStr);
+              final minute = int.parse(minuteStr);
+              final now = DateTime.now();
+              return DateTime(now.year, now.month, now.day, hour, minute);
+            }
+          } catch (_) {
+            return null;
+          }
         }
       }
     } catch (e) {
