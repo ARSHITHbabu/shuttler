@@ -26,7 +26,7 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
   final _emailController = TextEditingController();
   final _guardianNameController = TextEditingController();
   final _guardianPhoneController = TextEditingController();
-  bool _isLoading = false;
+  final bool _isLoading = false;
 
   @override
   void dispose() {

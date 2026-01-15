@@ -30,8 +30,8 @@ class _EditCoachDialogState extends ConsumerState<EditCoachDialog> {
   late final TextEditingController _emailController;
   late final TextEditingController _specializationController;
   late final TextEditingController _experienceController;
-  List<int> _selectedBatchIds = [];
-  List<Batch> _batches = [];
+  final List<int> _selectedBatchIds = [];
+  final List<Batch> _batches = [];
   bool _isLoading = false;
 
   @override

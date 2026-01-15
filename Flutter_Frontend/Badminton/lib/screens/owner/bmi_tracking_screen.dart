@@ -301,7 +301,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
         return NeumorphicContainer(
           padding: const EdgeInsets.all(AppDimensions.paddingM),
           child: DropdownButtonFormField<int>(
-            value: _selectedStudentId,
+            initialValue: _selectedStudentId,
             decoration: const InputDecoration(
               labelText: 'Select Student',
               labelStyle: TextStyle(color: AppColors.textSecondary),
@@ -684,8 +684,8 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
     // Calculate min and max BMI for Y axis
     final minBMI = sortedHistory.map((r) => r.bmi).reduce((a, b) => a < b ? a : b);
     final maxBMI = sortedHistory.map((r) => r.bmi).reduce((a, b) => a > b ? a : b);
-    final yMin = (minBMI - 2.0).clamp(0.0, double.infinity) as double;
-    final yMax = (maxBMI + 2.0) as double;
+    final yMin = (minBMI - 2.0).clamp(0.0, double.infinity);
+    final yMax = (maxBMI + 2.0);
 
     return NeumorphicContainer(
       padding: const EdgeInsets.all(AppDimensions.paddingM),

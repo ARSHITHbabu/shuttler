@@ -549,7 +549,7 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
           content: StatefulBuilder(
             builder: (context, setState) {
               return DropdownButtonFormField<int>(
-                value: selectedBatchId,
+                initialValue: selectedBatchId,
                 decoration: const InputDecoration(
                   labelText: 'Select Batch',
                   labelStyle: TextStyle(color: AppColors.textSecondary),

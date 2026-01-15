@@ -457,7 +457,7 @@ class _PerformanceTrackingScreenState
         return NeumorphicContainer(
           padding: const EdgeInsets.all(AppDimensions.paddingM),
           child: DropdownButtonFormField<int>(
-            value: _selectedBatchId,
+            initialValue: _selectedBatchId,
             decoration: const InputDecoration(
               labelText: 'Select Batch',
               labelStyle: TextStyle(color: AppColors.textSecondary),
@@ -509,7 +509,7 @@ class _PerformanceTrackingScreenState
         return NeumorphicContainer(
           padding: const EdgeInsets.all(AppDimensions.paddingM),
           child: DropdownButtonFormField<int>(
-            value: _selectedBatchId,
+            initialValue: _selectedBatchId,
             decoration: const InputDecoration(
               labelText: 'Select Batch',
               labelStyle: TextStyle(color: AppColors.textSecondary),
@@ -579,7 +579,7 @@ class _PerformanceTrackingScreenState
     return NeumorphicContainer(
       padding: const EdgeInsets.all(AppDimensions.paddingM),
       child: DropdownButtonFormField<int>(
-        value: _selectedStudentId,
+        initialValue: _selectedStudentId,
         decoration: const InputDecoration(
           labelText: 'Select Student',
           labelStyle: TextStyle(color: AppColors.textSecondary),
