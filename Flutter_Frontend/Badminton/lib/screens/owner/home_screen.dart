@@ -414,7 +414,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 _UpcomingBatchItem(
                                   name: batch.name,
                                   time: batch.timeRange,
-                                  students: 0, // TODO: Get enrolled count from batch
+                                  batchId: batch.id,
                                 ),
                                 if (!isLast) const SizedBox(height: AppDimensions.spacingS),
                               ],
@@ -595,60 +595,69 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-class _UpcomingBatchItem extends StatelessWidget {
+class _UpcomingBatchItem extends ConsumerWidget {
   final String name;
   final String time;
-  final int students;
+  final int batchId;
 
   const _UpcomingBatchItem({
     required this.name,
     required this.time,
-    required this.students,
+    required this.batchId,
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final dashboardService = ref.watch(dashboardServiceProvider);
+    
+    return FutureBuilder<int>(
+      future: dashboardService.getBatchStudentCount(batchId),
+      builder: (context, snapshot) {
+        final studentCount = snapshot.data ?? 0;
+        
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              name,
-              style: const TextStyle(
-                fontSize: 14,
-                color: AppColors.textPrimary,
-              ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                Text(
+                  time,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
             ),
-            Text(
-              time,
-              style: const TextStyle(
-                fontSize: 12,
-                color: AppColors.textSecondary,
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimensions.spacingM,
+                vertical: AppDimensions.spacingS,
+              ),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                boxShadow: NeumorphicStyles.getSmallInsetShadow(),
+              ),
+              child: Text(
+                '$studentCount ${studentCount == 1 ? 'student' : 'students'}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.iconPrimary,
+                ),
               ),
             ),
           ],
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppDimensions.spacingM,
-            vertical: AppDimensions.spacingS,
-          ),
-          decoration: BoxDecoration(
-            color: AppColors.background,
-            borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-            boxShadow: NeumorphicStyles.getSmallInsetShadow(),
-          ),
-          child: Text(
-            '$students students',
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.iconPrimary,
-            ),
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
 }
