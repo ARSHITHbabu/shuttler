@@ -6,6 +6,10 @@ import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../providers/service_providers.dart';
+import 'coach_profile_screen.dart';
+import 'coach_announcements_screen.dart';
+import 'coach_schedule_screen.dart';
+import 'coach_settings_screen.dart';
 
 /// Coach More Screen - Navigation hub for additional features
 class CoachMoreScreen extends ConsumerWidget {
@@ -37,11 +41,9 @@ class CoachMoreScreen extends ConsumerWidget {
               icon: Icons.person_outline,
               title: 'Profile',
               onTap: () {
-                // TODO: Navigate to coach profile screen when implemented
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Profile screen coming soon'),
-                    duration: Duration(seconds: 2),
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const CoachProfileScreen(),
                   ),
                 );
               },
@@ -56,11 +58,9 @@ class CoachMoreScreen extends ConsumerWidget {
               icon: Icons.campaign_outlined,
               title: 'Announcements',
               onTap: () {
-                // TODO: Navigate to coach announcements screen when implemented
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Announcements screen coming soon'),
-                    duration: Duration(seconds: 2),
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const CoachAnnouncementsScreen(),
                   ),
                 );
               },
@@ -70,11 +70,9 @@ class CoachMoreScreen extends ConsumerWidget {
               icon: Icons.calendar_today_outlined,
               title: 'Schedule',
               onTap: () {
-                // TODO: Navigate to coach schedule screen when implemented
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Schedule screen coming soon'),
-                    duration: Duration(seconds: 2),
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const CoachScheduleScreen(),
                   ),
                 );
               },
@@ -89,11 +87,9 @@ class CoachMoreScreen extends ConsumerWidget {
               icon: Icons.settings_outlined,
               title: 'Settings',
               onTap: () {
-                // TODO: Navigate to coach settings screen when implemented
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Settings screen coming soon'),
-                    duration: Duration(seconds: 2),
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const CoachSettingsScreen(),
                   ),
                 );
               },

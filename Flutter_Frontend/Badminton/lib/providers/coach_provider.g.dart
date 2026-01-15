@@ -452,5 +452,143 @@ final coachAnnouncementsProvider =
 // ignore: unused_element
 typedef CoachAnnouncementsRef =
     AutoDisposeFutureProviderRef<List<Announcement>>;
+String _$coachScheduleHash() => r'3b1d2d47b58bf60361aa77c704bf60b91d7e6841';
+
+/// Provider for coach's all sessions (upcoming and past)
+/// Gets schedules through coach's batches
+///
+/// Copied from [coachSchedule].
+@ProviderFor(coachSchedule)
+const coachScheduleProvider = CoachScheduleFamily();
+
+/// Provider for coach's all sessions (upcoming and past)
+/// Gets schedules through coach's batches
+///
+/// Copied from [coachSchedule].
+class CoachScheduleFamily extends Family<AsyncValue<List<Schedule>>> {
+  /// Provider for coach's all sessions (upcoming and past)
+  /// Gets schedules through coach's batches
+  ///
+  /// Copied from [coachSchedule].
+  const CoachScheduleFamily();
+
+  /// Provider for coach's all sessions (upcoming and past)
+  /// Gets schedules through coach's batches
+  ///
+  /// Copied from [coachSchedule].
+  CoachScheduleProvider call(int coachId) {
+    return CoachScheduleProvider(coachId);
+  }
+
+  @override
+  CoachScheduleProvider getProviderOverride(
+    covariant CoachScheduleProvider provider,
+  ) {
+    return call(provider.coachId);
+  }
+
+  static const Iterable<ProviderOrFamily>? _dependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get dependencies => _dependencies;
+
+  static const Iterable<ProviderOrFamily>? _allTransitiveDependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get allTransitiveDependencies =>
+      _allTransitiveDependencies;
+
+  @override
+  String? get name => r'coachScheduleProvider';
+}
+
+/// Provider for coach's all sessions (upcoming and past)
+/// Gets schedules through coach's batches
+///
+/// Copied from [coachSchedule].
+class CoachScheduleProvider extends AutoDisposeFutureProvider<List<Schedule>> {
+  /// Provider for coach's all sessions (upcoming and past)
+  /// Gets schedules through coach's batches
+  ///
+  /// Copied from [coachSchedule].
+  CoachScheduleProvider(int coachId)
+    : this._internal(
+        (ref) => coachSchedule(ref as CoachScheduleRef, coachId),
+        from: coachScheduleProvider,
+        name: r'coachScheduleProvider',
+        debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+            ? null
+            : _$coachScheduleHash,
+        dependencies: CoachScheduleFamily._dependencies,
+        allTransitiveDependencies:
+            CoachScheduleFamily._allTransitiveDependencies,
+        coachId: coachId,
+      );
+
+  CoachScheduleProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.coachId,
+  }) : super.internal();
+
+  final int coachId;
+
+  @override
+  Override overrideWith(
+    FutureOr<List<Schedule>> Function(CoachScheduleRef provider) create,
+  ) {
+    return ProviderOverride(
+      origin: this,
+      override: CoachScheduleProvider._internal(
+        (ref) => create(ref as CoachScheduleRef),
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        coachId: coachId,
+      ),
+    );
+  }
+
+  @override
+  AutoDisposeFutureProviderElement<List<Schedule>> createElement() {
+    return _CoachScheduleProviderElement(this);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is CoachScheduleProvider && other.coachId == coachId;
+  }
+
+  @override
+  int get hashCode {
+    var hash = _SystemHash.combine(0, runtimeType.hashCode);
+    hash = _SystemHash.combine(hash, coachId.hashCode);
+
+    return _SystemHash.finish(hash);
+  }
+}
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+mixin CoachScheduleRef on AutoDisposeFutureProviderRef<List<Schedule>> {
+  /// The parameter `coachId` of this provider.
+  int get coachId;
+}
+
+class _CoachScheduleProviderElement
+    extends AutoDisposeFutureProviderElement<List<Schedule>>
+    with CoachScheduleRef {
+  _CoachScheduleProviderElement(super.provider);
+
+  @override
+  int get coachId => (origin as CoachScheduleProvider).coachId;
+}
+
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package
