@@ -13,6 +13,7 @@ import '../core/services/bmi_service.dart';
 import '../core/services/schedule_service.dart';
 import '../core/services/announcement_service.dart';
 import '../core/services/calendar_service.dart';
+import '../core/services/invitation_service.dart';
 
 part 'service_providers.g.dart';
 
@@ -118,6 +119,13 @@ AnnouncementService announcementService(AnnouncementServiceRef ref) {
 CalendarService calendarService(CalendarServiceRef ref) {
   final apiService = ref.watch(apiServiceProvider);
   return CalendarService(apiService);
+}
+
+/// Provider for InvitationService singleton
+@riverpod
+InvitationService invitationService(InvitationServiceRef ref) {
+  final apiService = ref.watch(apiServiceProvider);
+  return InvitationService(apiService);
 }
 
 /// Provider for BatchEnrollmentService

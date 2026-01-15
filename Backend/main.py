@@ -265,9 +265,10 @@ class InvitationDB(Base):
     id = Column(Integer, primary_key=True, index=True)
     coach_id = Column(Integer, nullable=False)
     coach_name = Column(String, nullable=False)
-    student_phone = Column(String, nullable=False)
-    student_email = Column(String, nullable=False)
-    batch_id = Column(Integer, nullable=False)
+    student_phone = Column(String, nullable=True)
+    student_email = Column(String, nullable=True)
+    batch_id = Column(Integer, nullable=True)
+    invite_token = Column(String, nullable=False, unique=True, index=True)
     status = Column(String, default="pending")
     created_at = Column(String, nullable=False)
 
@@ -438,6 +439,83 @@ def migrate_database_schema(engine):
         # Migrate schedules table - add capacity column
         if 'schedules' in tables:
             check_and_add_column(engine, 'schedules', 'capacity', 'INTEGER', nullable=True)
+        
+        # Migrate invitations table - add invite_token and make columns nullable
+        if 'invitations' in tables:
+            columns = [col['name'] for col in inspector.get_columns('invitations')]
+            
+            # Add invite_token column if missing
+            if 'invite_token' not in columns:
+                try:
+                    with engine.begin() as conn:
+                        # Check if there are existing rows
+                        row_count = conn.execute(text("SELECT COUNT(*) FROM invitations")).scalar()
+                        
+                        # Add column as nullable first (to handle existing rows)
+                        conn.execute(text("ALTER TABLE invitations ADD COLUMN invite_token VARCHAR(255)"))
+                        print("✅ Added invite_token column to invitations table")
+                        
+                        # If there are existing rows, generate tokens for them
+                        if row_count > 0:
+                            print(f"⚠️  Found {row_count} existing invitation(s), generating tokens...")
+                            rows = conn.execute(text("SELECT id FROM invitations WHERE invite_token IS NULL")).fetchall()
+                            for row in rows:
+                                token = secrets.token_urlsafe(32)
+                                conn.execute(text("UPDATE invitations SET invite_token = :token WHERE id = :id"), 
+                                           {"token": token, "id": row[0]})
+                            print(f"✅ Generated tokens for {row_count} existing invitation(s)")
+                        
+                        # Now make it NOT NULL
+                        conn.execute(text("ALTER TABLE invitations ALTER COLUMN invite_token SET NOT NULL"))
+                        
+                        # Add unique constraint
+                        constraint_check = text("""
+                            SELECT COUNT(*) 
+                            FROM information_schema.table_constraints 
+                            WHERE table_name = 'invitations' 
+                            AND constraint_name = 'invitations_invite_token_key'
+                        """)
+                        result = conn.execute(constraint_check).scalar()
+                        if result == 0:
+                            conn.execute(text("ALTER TABLE invitations ADD CONSTRAINT invitations_invite_token_key UNIQUE (invite_token)"))
+                            print("✅ Added unique constraint for invitations.invite_token")
+                        
+                        # Create index if it doesn't exist
+                        index_check = text("""
+                            SELECT COUNT(*) 
+                            FROM pg_indexes 
+                            WHERE tablename = 'invitations' 
+                            AND indexname = 'ix_invitations_invite_token'
+                        """)
+                        index_result = conn.execute(index_check).scalar()
+                        if index_result == 0:
+                            conn.execute(text("CREATE INDEX ix_invitations_invite_token ON invitations (invite_token)"))
+                            print("✅ Added index for invitations.invite_token")
+                except Exception as constraint_error:
+                    print(f"⚠️  Error adding invite_token column: {constraint_error}")
+            
+            # Make student_phone, student_email, and batch_id nullable if they aren't already
+            try:
+                with engine.begin() as conn:
+                    if 'student_phone' in columns:
+                        col_info = next((col for col in inspector.get_columns('invitations') if col['name'] == 'student_phone'), None)
+                        if col_info and not col_info.get('nullable', True):
+                            conn.execute(text("ALTER TABLE invitations ALTER COLUMN student_phone DROP NOT NULL"))
+                            print("✅ Made student_phone nullable in invitations table")
+                    
+                    if 'student_email' in columns:
+                        col_info = next((col for col in inspector.get_columns('invitations') if col['name'] == 'student_email'), None)
+                        if col_info and not col_info.get('nullable', True):
+                            conn.execute(text("ALTER TABLE invitations ALTER COLUMN student_email DROP NOT NULL"))
+                            print("✅ Made student_email nullable in invitations table")
+                    
+                    if 'batch_id' in columns:
+                        col_info = next((col for col in inspector.get_columns('invitations') if col['name'] == 'batch_id'), None)
+                        if col_info and not col_info.get('nullable', True):
+                            conn.execute(text("ALTER TABLE invitations ALTER COLUMN batch_id DROP NOT NULL"))
+                            print("✅ Made batch_id nullable in invitations table")
+            except Exception as alter_error:
+                print(f"⚠️  Warning: Could not alter column constraints: {alter_error}")
         
         print("✅ Database schema migration completed!")
     except Exception as e:
@@ -858,17 +936,19 @@ class VideoResource(BaseModel):
 class InvitationCreate(BaseModel):
     coach_id: int
     coach_name: str
-    student_phone: str
-    student_email: str
-    batch_id: int
+    student_phone: Optional[str] = None
+    student_email: Optional[str] = None
+    batch_id: Optional[int] = None
 
 class Invitation(BaseModel):
     id: int
     coach_id: int
     coach_name: str
-    student_phone: str
-    student_email: str
-    batch_id: int
+    student_phone: Optional[str]
+    student_email: Optional[str]
+    batch_id: Optional[int]
+    invite_token: str
+    invite_link: Optional[str] = None
     status: str
     created_at: str
     
@@ -2943,16 +3023,52 @@ def delete_video(video_id: int):
 
 @app.post("/invitations/", response_model=Invitation)
 def create_invitation(invitation: InvitationCreate):
+    # Validate that at least phone or email is provided
+    phone = (invitation.student_phone or '').strip()
+    email = (invitation.student_email or '').strip()
+    if not phone and not email:
+        raise HTTPException(
+            status_code=400,
+            detail="At least phone number or email address must be provided"
+        )
+    
     db = SessionLocal()
     try:
-        db_invitation = InvitationDB(
-            **invitation.dict(),
-            created_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        )
+        # Generate unique invite token
+        invite_token = secrets.token_urlsafe(32)
+        
+        # Create invitation record
+        invitation_dict = invitation.model_dump()  # Use model_dump() instead of dict() for Pydantic v2
+        invitation_dict['invite_token'] = invite_token
+        invitation_dict['created_at'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        db_invitation = InvitationDB(**invitation_dict)
         db.add(db_invitation)
         db.commit()
         db.refresh(db_invitation)
-        return db_invitation
+        
+        # Generate invite link (using a configurable base URL or default)
+        # In production, this should come from environment variables
+        base_url = os.getenv("INVITE_BASE_URL", "https://academy.app")
+        invite_link = f"{base_url}/invite/{invite_token}"
+        
+        # Convert to response model with invite link
+        invitation_response = Invitation(
+            id=db_invitation.id,
+            coach_id=db_invitation.coach_id,
+            coach_name=db_invitation.coach_name,
+            student_phone=db_invitation.student_phone,
+            student_email=db_invitation.student_email,
+            batch_id=db_invitation.batch_id,
+            invite_token=db_invitation.invite_token,
+            invite_link=invite_link,
+            status=db_invitation.status,
+            created_at=db_invitation.created_at
+        )
+        
+        return invitation_response
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     finally:
         db.close()
 
