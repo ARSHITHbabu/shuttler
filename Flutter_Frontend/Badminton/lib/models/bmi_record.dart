@@ -91,6 +91,23 @@ class BMIRecord {
     return 'obese';
   }
 
+  /// Get achievement message based on BMI status
+  /// Returns null for normal BMI, guidance message for underweight/overweight/obese
+  static String? getAchievementMessage(double bmi) {
+    final status = getHealthStatus(bmi);
+    switch (status) {
+      case 'underweight':
+        return 'Aim to gain weight to reach healthy BMI (18.5-24.9)';
+      case 'overweight':
+        return 'Aim to lose weight to reach healthy BMI (18.5-24.9)';
+      case 'obese':
+        return 'Aim to significantly lose weight to reach healthy BMI (18.5-24.9)';
+      case 'normal':
+      default:
+        return null; // No message for normal BMI
+    }
+  }
+
   @override
   String toString() {
     return 'BMIRecord(id: $id, studentId: $studentId, date: $date, bmi: ${bmi.toStringAsFixed(1)})';

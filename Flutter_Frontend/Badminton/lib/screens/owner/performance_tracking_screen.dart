@@ -8,6 +8,7 @@ import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../providers/service_providers.dart';
+import '../../providers/batch_provider.dart';
 import '../../models/performance.dart';
 import '../../models/student.dart';
 import '../../models/batch.dart';
@@ -16,7 +17,12 @@ import 'package:intl/intl.dart';
 /// Performance Tracking Screen - Track student skill development
 /// New flow: Select Batch -> Select Student -> View History OR Add Performance (table format)
 class PerformanceTrackingScreen extends ConsumerStatefulWidget {
-  const PerformanceTrackingScreen({super.key});
+  final Student? initialStudent;
+  
+  const PerformanceTrackingScreen({
+    super.key,
+    this.initialStudent,
+  });
 
   @override
   ConsumerState<PerformanceTrackingScreen> createState() =>
@@ -33,6 +39,7 @@ class _PerformanceTrackingScreenState
   bool _isLoading = false;
   List<Student> _batchStudents = [];
   bool _loadingStudents = false;
+  bool _isInitializing = false;
 
   // Table form data for bulk entry
   final Map<int, Map<String, dynamic>> _tableData =
@@ -49,6 +56,64 @@ class _PerformanceTrackingScreenState
   ];
 
   @override
+  void initState() {
+    super.initState();
+    // Initialize with student if provided
+    if (widget.initialStudent != null) {
+      _initializeWithStudent(widget.initialStudent!);
+    }
+  }
+
+  Future<void> _initializeWithStudent(Student student) async {
+    if (!mounted) return;
+    setState(() => _isInitializing = true);
+    try {
+      // Get student's batches
+      final studentBatches = await ref.read(studentBatchesProvider(student.id).future);
+
+      if (!mounted) return;
+      if (studentBatches.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Student is not enrolled in any batches'),
+            ),
+          );
+        }
+        if (mounted) {
+          setState(() => _isInitializing = false);
+        }
+        return;
+      }
+
+      // Pre-select the first batch
+      final firstBatch = studentBatches.first;
+      if (!mounted) return;
+      setState(() {
+        _selectedBatchId = firstBatch.id;
+        _selectedStudentId = student.id;
+      });
+
+      // Load batch students
+      await _loadBatchStudents(keepStudentSelection: true);
+      
+      // Load performance history
+      await _loadPerformanceHistory();
+      
+      if (!mounted) return;
+      setState(() => _isInitializing = false);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isInitializing = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to initialize: $e')),
+        );
+      }
+    }
+  }
+
+  @override
   void dispose() {
     // Dispose comment controllers
     for (var controller in _commentControllers.values) {
@@ -58,28 +123,45 @@ class _PerformanceTrackingScreenState
     super.dispose();
   }
 
-  Future<void> _loadBatchStudents() async {
+  Future<void> _loadBatchStudents({bool keepStudentSelection = false}) async {
     if (_selectedBatchId == null) {
+      if (!mounted) return;
       setState(() {
         _batchStudents = [];
-        _selectedStudentId = null;
-        _performanceHistory = [];
+        if (!keepStudentSelection) {
+          _selectedStudentId = null;
+          _performanceHistory = [];
+        }
       });
       return;
     }
 
+    if (!mounted) return;
     setState(() => _loadingStudents = true);
     try {
       final batchService = ref.read(batchServiceProvider);
       final students = await batchService.getBatchStudents(_selectedBatchId!);
+      if (!mounted) return;
       setState(() {
         _batchStudents = students;
         _loadingStudents = false;
-        // Reset student selection when batch changes
-        _selectedStudentId = null;
-        _performanceHistory = [];
+        // Reset student selection when batch changes (unless we're keeping it)
+        if (!keepStudentSelection) {
+          _selectedStudentId = null;
+          _performanceHistory = [];
+        } else {
+          // Verify the selected student is still in this batch
+          if (_selectedStudentId != null) {
+            final studentExists = students.any((s) => s.id == _selectedStudentId);
+            if (!studentExists) {
+              _selectedStudentId = null;
+              _performanceHistory = [];
+            }
+          }
+        }
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _loadingStudents = false);
       if (mounted) {
         ScaffoldMessenger.of(
@@ -91,6 +173,7 @@ class _PerformanceTrackingScreenState
 
   Future<void> _loadPerformanceHistory() async {
     if (_selectedStudentId == null) return;
+    if (!mounted) return;
 
     setState(() => _isLoading = true);
     try {
@@ -98,11 +181,13 @@ class _PerformanceTrackingScreenState
       final records = await performanceService.getPerformanceRecords(
         studentId: _selectedStudentId,
       );
+      if (!mounted) return;
       setState(() {
         _performanceHistory = records;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -329,6 +414,30 @@ class _PerformanceTrackingScreenState
       return _buildTableForm();
     }
 
+    // Show loading during initialization
+    if (_isInitializing) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: AppColors.background,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          title: const Text(
+            'Performance Tracking',
+            style: TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        body: const Center(child: LoadingSpinner()),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -475,7 +584,7 @@ class _PerformanceTrackingScreenState
               setState(() {
                 _selectedBatchId = value;
               });
-              _loadBatchStudents();
+              _loadBatchStudents(keepStudentSelection: false);
             },
           ),
         );
