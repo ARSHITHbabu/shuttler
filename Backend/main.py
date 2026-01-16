@@ -1114,7 +1114,8 @@ def create_coach(coach: CoachCreate):
 def get_coaches():
     db = SessionLocal()
     try:
-        coaches = db.query(CoachDB).all()
+        # Filter out owners - only return coaches with role="coach"
+        coaches = db.query(CoachDB).filter(CoachDB.role != "owner").all()
         return coaches
     finally:
         db.close()
@@ -1395,33 +1396,6 @@ def get_available_students_for_batch(batch_id: int):
         available_students = [s for s in all_students if s.id not in assigned_student_ids]
         
         return available_students
-    finally:
-        db.close()
-
-@app.get("/batches/{batch_id}/students")
-def get_batch_students(batch_id: int):
-    """Get all students assigned to this batch"""
-    db = SessionLocal()
-    try:
-        batch_students = db.query(BatchStudentDB).filter(
-            BatchStudentDB.batch_id == batch_id,
-            BatchStudentDB.status == "approved"
-        ).all()
-        
-        students = []
-        for bs in batch_students:
-            student = db.query(StudentDB).filter(StudentDB.id == bs.student_id).first()
-            if student:
-                students.append({
-                    "id": student.id,
-                    "name": student.name,
-                    "email": student.email,
-                    "phone": student.phone,
-                    "guardian_name": student.guardian_name,
-                    "guardian_phone": student.guardian_phone
-                })
-        
-        return students
     finally:
         db.close()
 
@@ -2169,11 +2143,14 @@ def delete_fee_payment(fee_id: int, payment_id: int):
 
 @app.get("/batches/{batch_id}/students", response_model=List[Student])
 def get_batch_students(batch_id: int):
-    """Get all students enrolled in a batch"""
+    """Get all approved students enrolled in a batch"""
     db = SessionLocal()
     try:
-        # Get student IDs from batch_students table
-        batch_students = db.query(BatchStudentDB).filter(BatchStudentDB.batch_id == batch_id).all()
+        # Get student IDs from batch_students table (only approved students)
+        batch_students = db.query(BatchStudentDB).filter(
+            BatchStudentDB.batch_id == batch_id,
+            BatchStudentDB.status == "approved"
+        ).all()
         student_ids = [bs.student_id for bs in batch_students]
         
         if not student_ids:
@@ -3153,8 +3130,9 @@ def get_analytics_dashboard():
         total_students = db.query(StudentDB).count()
         active_students = db.query(StudentDB).filter(StudentDB.status == "active").count()
         total_batches = db.query(BatchDB).count()
-        total_coaches = db.query(CoachDB).count()
-        active_coaches = db.query(CoachDB).filter(CoachDB.status == "active").count()
+        # Exclude owners from coach counts - only count actual coaches
+        total_coaches = db.query(CoachDB).filter(CoachDB.role != "owner").count()
+        active_coaches = db.query(CoachDB).filter(CoachDB.role != "owner", CoachDB.status == "active").count()
         
         # Fee analytics
         total_fees = db.query(FeeDB).all()
