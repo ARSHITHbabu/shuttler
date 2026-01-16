@@ -105,7 +105,6 @@ class CoachDB(Base):
     email = Column(String, nullable=False, unique=True)
     phone = Column(String, nullable=False)
     password = Column(String, nullable=False)
-    role = Column(String, default="coach")  # "coach" or "owner"
     specialization = Column(String, nullable=True)
     experience_years = Column(Integer, nullable=True)
     status = Column(String, default="active")  # active, inactive
@@ -115,8 +114,26 @@ class CoachDB(Base):
     fcm_token = Column(String(500), nullable=True)  # Firebase Cloud Messaging token for push notifications
 
     # RELATIONSHIPS (will be defined after the related models are created):
-    announcements = relationship("AnnouncementDB", back_populates="creator", cascade="all, delete-orphan")
-    calendar_events = relationship("CalendarEventDB", back_populates="creator", cascade="all, delete-orphan")
+    # Note: Announcements and calendar events now support both coaches and owners via polymorphic relationships
+
+class OwnerDB(Base):
+    """Separate table for academy owners"""
+    __tablename__ = "owners"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    email = Column(String, nullable=False, unique=True)
+    phone = Column(String, nullable=False)
+    password = Column(String, nullable=False)
+    specialization = Column(String, nullable=True)
+    experience_years = Column(Integer, nullable=True)
+    status = Column(String, default="active")  # active, inactive
+    
+    # Profile enhancements:
+    profile_photo = Column(String(500), nullable=True)  # Profile photo URL/path
+    fcm_token = Column(String(500), nullable=True)  # Firebase Cloud Messaging token for push notifications
+    
+    # RELATIONSHIPS (will be defined after the related models are created):
+    # Note: Announcements and calendar events now support both coaches and owners via polymorphic relationships
 
 class BatchDB(Base):
     __tablename__ = "batches"
@@ -284,13 +301,13 @@ class AnnouncementDB(Base):
     message = Column(Text, nullable=False)
     target_audience = Column(String(50), default="all")  # "all", "students", "coaches"
     priority = Column(String(20), default="normal")  # "normal", "high", "urgent"
-    created_by = Column(Integer, ForeignKey("coaches.id"), nullable=False)
+    created_by = Column(Integer, nullable=True)  # Can be coach or owner ID
+    creator_type = Column(String(20), default="coach")  # "coach" or "owner"
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     scheduled_at = Column(DateTime(timezone=True), nullable=True)
     is_sent = Column(Boolean, default=False)
 
-    # Relationship
-    creator = relationship("CoachDB", back_populates="announcements")
+    # Note: Relationships are handled via creator_type field - use creator_type to determine if created_by refers to coach or owner
 
 
 class NotificationDB(Base):
@@ -317,11 +334,11 @@ class CalendarEventDB(Base):
     event_type = Column(String(50), nullable=False)  # "holiday", "tournament", "event"
     date = Column(Date, nullable=False)
     description = Column(Text, nullable=True)
-    created_by = Column(Integer, ForeignKey("coaches.id"), nullable=False)
+    created_by = Column(Integer, nullable=True)  # Can be coach or owner ID
+    creator_type = Column(String(20), default="coach")  # "coach" or "owner"
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    # Relationship
-    creator = relationship("CoachDB", back_populates="calendar_events")
+    # Note: Relationships are handled via creator_type field - use creator_type to determine if created_by refers to coach or owner
 
 # ==================== Database Migration Functions ====================
 
@@ -365,7 +382,6 @@ def migrate_database_schema(engine):
         
         # Migrate coaches table
         if 'coaches' in tables:
-            check_and_add_column(engine, 'coaches', 'role', 'VARCHAR', nullable=True, default_value="'coach'")
             check_and_add_column(engine, 'coaches', 'profile_photo', 'VARCHAR(500)', nullable=True)
             check_and_add_column(engine, 'coaches', 'fcm_token', 'VARCHAR(500)', nullable=True)
         
@@ -401,6 +417,32 @@ def migrate_database_schema(engine):
                             conn.execute(text("ALTER TABLE students ALTER COLUMN added_by DROP NOT NULL"))
             except Exception as alter_error:
                 print(f"⚠️  Warning: Could not alter column constraints: {alter_error}")
+        
+        # Migrate announcements table - add creator_type and make created_by nullable
+        if 'announcements' in tables:
+            check_and_add_column(engine, 'announcements', 'creator_type', 'VARCHAR(20)', nullable=True, default_value="'coach'")
+            # Make created_by nullable (remove NOT NULL constraint if exists)
+            try:
+                with engine.begin() as conn:
+                    # Check if created_by is NOT NULL and make it nullable
+                    col_info = next((col for col in inspector.get_columns('announcements') if col['name'] == 'created_by'), None)
+                    if col_info and not col_info.get('nullable', True):
+                        conn.execute(text("ALTER TABLE announcements ALTER COLUMN created_by DROP NOT NULL"))
+            except Exception as alter_error:
+                print(f"⚠️  Warning: Could not alter announcements.created_by constraint: {alter_error}")
+        
+        # Migrate calendar_events table - add creator_type and make created_by nullable
+        if 'calendar_events' in tables:
+            check_and_add_column(engine, 'calendar_events', 'creator_type', 'VARCHAR(20)', nullable=True, default_value="'coach'")
+            # Make created_by nullable (remove NOT NULL constraint if exists)
+            try:
+                with engine.begin() as conn:
+                    # Check if created_by is NOT NULL and make it nullable
+                    col_info = next((col for col in inspector.get_columns('calendar_events') if col['name'] == 'created_by'), None)
+                    if col_info and not col_info.get('nullable', True):
+                        conn.execute(text("ALTER TABLE calendar_events ALTER COLUMN created_by DROP NOT NULL"))
+            except Exception as alter_error:
+                print(f"⚠️  Warning: Could not alter calendar_events.created_by constraint: {alter_error}")
         
         # Migrate fees table - add payee_student_id column
         if 'fees' in tables:
@@ -540,7 +582,6 @@ class CoachCreate(BaseModel):
     email: str
     phone: str
     password: str
-    role: Optional[str] = "coach"  # "coach" or "owner"
     specialization: Optional[str] = None
     experience_years: Optional[int] = None
 
@@ -550,7 +591,6 @@ class Coach(BaseModel):
     email: str
     phone: str
     password: str
-    role: str = "coach"
     specialization: Optional[str] = None
     experience_years: Optional[int] = None
     status: str = "active"
@@ -566,13 +606,13 @@ class CoachLogin(BaseModel):
 
 class ForgotPasswordRequest(BaseModel):
     email: str
-    user_type: str  # "coach" or "student"
+    user_type: str  # "coach", "owner", or "student"
 
 class ResetPasswordRequest(BaseModel):
     email: str
     reset_token: str
     new_password: str
-    user_type: str  # "coach" or "student"
+    user_type: str  # "coach", "owner", or "student"
 
 class CoachUpdate(BaseModel):
     name: Optional[str] = None
@@ -582,6 +622,43 @@ class CoachUpdate(BaseModel):
     specialization: Optional[str] = None
     experience_years: Optional[int] = None
     status: Optional[str] = None
+
+# Owner Models
+class OwnerCreate(BaseModel):
+    name: str
+    email: str
+    phone: str
+    password: str
+    specialization: Optional[str] = None
+    experience_years: Optional[int] = None
+
+class Owner(BaseModel):
+    id: int
+    name: str
+    email: str
+    phone: str
+    specialization: Optional[str] = None
+    experience_years: Optional[int] = None
+    status: str = "active"
+    profile_photo: Optional[str] = None
+    fcm_token: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class OwnerLogin(BaseModel):
+    email: str
+    password: str
+
+class OwnerUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    password: Optional[str] = None
+    specialization: Optional[str] = None
+    experience_years: Optional[int] = None
+    profile_photo: Optional[str] = None
+    fcm_token: Optional[str] = None
 
 # Batch Models
 class BatchCreate(BaseModel):
@@ -977,6 +1054,7 @@ class AnnouncementCreate(BaseModel):
     target_audience: str = "all"
     priority: str = "normal"
     created_by: int
+    creator_type: str = "coach"  # "coach" or "owner"
     scheduled_at: Optional[str] = None
 
 class Announcement(BaseModel):
@@ -986,6 +1064,7 @@ class Announcement(BaseModel):
     target_audience: str
     priority: str
     created_by: int
+    creator_type: str = "coach"  # "coach" or "owner"
     created_at: str
     scheduled_at: Optional[str] = None
     is_sent: bool
@@ -1034,6 +1113,7 @@ class CalendarEventCreate(BaseModel):
     date: str  # Format: "YYYY-MM-DD"
     description: Optional[str] = None
     created_by: int
+    creator_type: str = "coach"  # "coach" or "owner"
 
 class CalendarEvent(BaseModel):
     id: int
@@ -1042,6 +1122,7 @@ class CalendarEvent(BaseModel):
     date: str
     description: Optional[str] = None
     created_by: int
+    creator_type: str = "coach"  # "coach" or "owner"
     created_at: str
 
     class Config:
@@ -1088,15 +1169,38 @@ def read_root():
 
 @app.post("/coaches/", response_model=Coach)
 def create_coach(coach: CoachCreate):
+    """Create a new coach account - saves to coaches table only"""
     db = SessionLocal()
     try:
+        # Check if email already exists in owners table (shouldn't happen, but safety check)
+        existing_owner = db.query(OwnerDB).filter(OwnerDB.email == coach.email).first()
+        if existing_owner:
+            raise HTTPException(status_code=400, detail="Email already registered as an owner. Coaches and owners must have unique emails.")
+        
         # Hash password before storing
         coach_dict = coach.model_dump()
         coach_dict['password'] = hash_password(coach_dict['password'])
+        
+        # Explicitly create CoachDB instance (saves to coaches table)
         db_coach = CoachDB(**coach_dict)
+        
+        # Verify it's a CoachDB instance before adding
+        if not isinstance(db_coach, CoachDB):
+            raise HTTPException(status_code=500, detail="Internal error: Invalid coach instance")
+        
+        # Verify table name
+        if db_coach.__tablename__ != "coaches":
+            raise HTTPException(status_code=500, detail="Internal error: Coach not mapped to coaches table")
+        
         db.add(db_coach)
         db.commit()
         db.refresh(db_coach)
+        
+        # Verify it was saved to coaches table by querying it back
+        verify_coach = db.query(CoachDB).filter(CoachDB.id == db_coach.id).first()
+        if not verify_coach:
+            raise HTTPException(status_code=500, detail="Error: Coach was not saved to coaches table")
+        
         return db_coach
     except IntegrityError as e:
         db.rollback()
@@ -1114,6 +1218,7 @@ def create_coach(coach: CoachCreate):
 def get_coaches():
     db = SessionLocal()
     try:
+        # Get all coaches (owners are in separate table)
         coaches = db.query(CoachDB).all()
         return coaches
     finally:
@@ -1163,6 +1268,7 @@ def delete_coach(coach_id: int):
 
 @app.post("/coaches/login")
 def login_coach(login_data: CoachLogin):
+    """Login endpoint for coaches only - owners should use /owners/login"""
     db = SessionLocal()
     try:
         coach = db.query(CoachDB).filter(
@@ -1225,8 +1331,10 @@ def forgot_password(request: ForgotPasswordRequest):
     db = SessionLocal()
     try:
         # Find user by email and type
-        if request.user_type == "coach" or request.user_type == "owner":
+        if request.user_type == "coach":
             user = db.query(CoachDB).filter(CoachDB.email == request.email).first()
+        elif request.user_type == "owner":
+            user = db.query(OwnerDB).filter(OwnerDB.email == request.email).first()
         else:
             user = db.query(StudentDB).filter(StudentDB.email == request.email).first()
         
@@ -1288,8 +1396,10 @@ def reset_password(request: ResetPasswordRequest):
             }
         
         # Find user
-        if request.user_type == "coach" or request.user_type == "owner":
+        if request.user_type == "coach":
             user = db.query(CoachDB).filter(CoachDB.email == request.email).first()
+        elif request.user_type == "owner":
+            user = db.query(OwnerDB).filter(OwnerDB.email == request.email).first()
         else:
             user = db.query(StudentDB).filter(StudentDB.email == request.email).first()
         
@@ -1310,6 +1420,185 @@ def reset_password(request: ResetPasswordRequest):
             "success": True,
             "message": "Password reset successfully. You can now login with your new password."
         }
+    finally:
+        db.close()
+
+# ==================== Owner Routes ====================
+
+@app.post("/owners/", response_model=Owner)
+def create_owner(owner: OwnerCreate):
+    """Create a new owner account - saves to owners table only"""
+    db = SessionLocal()
+    try:
+        # Check if owner with this email already exists in owners table
+        existing_owner = db.query(OwnerDB).filter(OwnerDB.email == owner.email).first()
+        
+        if existing_owner:
+            raise HTTPException(status_code=400, detail="Owner with this email already exists")
+        
+        # Also check if email exists in coaches table (shouldn't happen, but safety check)
+        existing_coach = db.query(CoachDB).filter(CoachDB.email == owner.email).first()
+        if existing_coach:
+            raise HTTPException(status_code=400, detail="Email already registered as a coach. Owners and coaches must have unique emails.")
+        
+        # Hash password before storing
+        owner_dict = owner.model_dump()
+        owner_dict['password'] = hash_password(owner_dict['password'])
+        owner_dict['status'] = "active"  # Default status
+        
+        # Explicitly create OwnerDB instance (saves to owners table)
+        db_owner = OwnerDB(**owner_dict)
+        
+        # Verify it's an OwnerDB instance before adding
+        if not isinstance(db_owner, OwnerDB):
+            raise HTTPException(status_code=500, detail="Internal error: Invalid owner instance")
+        
+        # Verify table name
+        if db_owner.__tablename__ != "owners":
+            raise HTTPException(status_code=500, detail="Internal error: Owner not mapped to owners table")
+        
+        db.add(db_owner)
+        db.commit()
+        db.refresh(db_owner)
+        
+        # Verify it was saved to owners table by querying it back
+        verify_owner = db.query(OwnerDB).filter(OwnerDB.id == db_owner.id).first()
+        if not verify_owner:
+            raise HTTPException(status_code=500, detail="Error: Owner was not saved to owners table")
+        
+        return db_owner
+    except IntegrityError as e:
+        db.rollback()
+        error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
+        if 'email' in error_msg.lower() or 'unique' in error_msg.lower():
+            raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=400, detail=f"Database constraint violation: {error_msg}")
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error creating owner: {str(e)}")
+    finally:
+        db.close()
+
+@app.get("/owners/", response_model=List[Owner])
+def get_owners():
+    """Get all owners"""
+    db = SessionLocal()
+    try:
+        owners = db.query(OwnerDB).all()
+        return owners
+    finally:
+        db.close()
+
+@app.get("/owners/{owner_id}", response_model=Owner)
+def get_owner(owner_id: int):
+    """Get a specific owner by ID"""
+    db = SessionLocal()
+    try:
+        owner = db.query(OwnerDB).filter(OwnerDB.id == owner_id).first()
+        if not owner:
+            raise HTTPException(status_code=404, detail="Owner not found")
+        return owner
+    finally:
+        db.close()
+
+@app.put("/owners/{owner_id}", response_model=Owner)
+def update_owner(owner_id: int, owner_update: OwnerUpdate):
+    """Update owner profile"""
+    db = SessionLocal()
+    try:
+        owner = db.query(OwnerDB).filter(OwnerDB.id == owner_id).first()
+        
+        if not owner:
+            raise HTTPException(status_code=404, detail="Owner not found")
+        
+        # Update only provided fields
+        update_data = owner_update.model_dump(exclude_unset=True)
+        
+        # Hash password if provided
+        if 'password' in update_data:
+            update_data['password'] = hash_password(update_data['password'])
+        
+        for key, value in update_data.items():
+            setattr(owner, key, value)
+        
+        db.commit()
+        db.refresh(owner)
+        return owner
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error updating owner: {str(e)}")
+    finally:
+        db.close()
+
+@app.delete("/owners/{owner_id}")
+def delete_owner(owner_id: int):
+    """Delete owner account"""
+    db = SessionLocal()
+    try:
+        owner = db.query(OwnerDB).filter(OwnerDB.id == owner_id).first()
+        
+        if not owner:
+            raise HTTPException(status_code=404, detail="Owner not found")
+        
+        db.delete(owner)
+        db.commit()
+        return {"message": "Owner deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error deleting owner: {str(e)}")
+    finally:
+        db.close()
+
+@app.post("/owners/login")
+def login_owner(login_data: OwnerLogin):
+    """Owner login endpoint"""
+    db = SessionLocal()
+    try:
+        owner = db.query(OwnerDB).filter(OwnerDB.email == login_data.email).first()
+        
+        if owner:
+            # Verify password
+            password_valid = False
+            if owner.password.startswith('$2b$') or owner.password.startswith('$2a$'):
+                password_valid = verify_password(login_data.password, owner.password)
+            else:
+                # Plain text password (legacy), check directly and upgrade to hash
+                password_valid = (owner.password == login_data.password)
+                if password_valid:
+                    owner.password = hash_password(login_data.password)
+                    db.commit()
+            
+            if not password_valid:
+                return {
+                    "success": False,
+                    "message": "Invalid email or password"
+                }
+            
+            if owner.status == "inactive":
+                return {
+                    "success": False,
+                    "message": "Your account has been deactivated."
+                }
+            
+            return {
+                "success": True,
+                "message": "Login successful",
+                "owner": {
+                    "id": owner.id,
+                    "name": owner.name,
+                    "email": owner.email,
+                    "phone": owner.phone,
+                    "specialization": owner.specialization,
+                    "experience_years": owner.experience_years,
+                    "status": owner.status,
+                    "profile_photo": owner.profile_photo
+                }
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Invalid email or password"
+            }
     finally:
         db.close()
 
@@ -1395,33 +1684,6 @@ def get_available_students_for_batch(batch_id: int):
         available_students = [s for s in all_students if s.id not in assigned_student_ids]
         
         return available_students
-    finally:
-        db.close()
-
-@app.get("/batches/{batch_id}/students")
-def get_batch_students(batch_id: int):
-    """Get all students assigned to this batch"""
-    db = SessionLocal()
-    try:
-        batch_students = db.query(BatchStudentDB).filter(
-            BatchStudentDB.batch_id == batch_id,
-            BatchStudentDB.status == "approved"
-        ).all()
-        
-        students = []
-        for bs in batch_students:
-            student = db.query(StudentDB).filter(StudentDB.id == bs.student_id).first()
-            if student:
-                students.append({
-                    "id": student.id,
-                    "name": student.name,
-                    "email": student.email,
-                    "phone": student.phone,
-                    "guardian_name": student.guardian_name,
-                    "guardian_phone": student.guardian_phone
-                })
-        
-        return students
     finally:
         db.close()
 
@@ -2169,11 +2431,14 @@ def delete_fee_payment(fee_id: int, payment_id: int):
 
 @app.get("/batches/{batch_id}/students", response_model=List[Student])
 def get_batch_students(batch_id: int):
-    """Get all students enrolled in a batch"""
+    """Get all approved students enrolled in a batch"""
     db = SessionLocal()
     try:
-        # Get student IDs from batch_students table
-        batch_students = db.query(BatchStudentDB).filter(BatchStudentDB.batch_id == batch_id).all()
+        # Get student IDs from batch_students table (only approved students)
+        batch_students = db.query(BatchStudentDB).filter(
+            BatchStudentDB.batch_id == batch_id,
+            BatchStudentDB.status == "approved"
+        ).all()
         student_ids = [bs.student_id for bs in batch_students]
         
         if not student_ids:
@@ -3153,6 +3418,7 @@ def get_analytics_dashboard():
         total_students = db.query(StudentDB).count()
         active_students = db.query(StudentDB).filter(StudentDB.status == "active").count()
         total_batches = db.query(BatchDB).count()
+        # Count coaches (owners are in separate table)
         total_coaches = db.query(CoachDB).count()
         active_coaches = db.query(CoachDB).filter(CoachDB.status == "active").count()
         
@@ -3252,11 +3518,30 @@ def create_announcement(announcement: AnnouncementCreate):
     """Create a new announcement"""
     db = SessionLocal()
     try:
+        # Validate that the creator (coach/owner) exists
+        if announcement.creator_type == "owner":
+            creator = db.query(OwnerDB).filter(OwnerDB.id == announcement.created_by).first()
+            if not creator:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Invalid created_by user ID. Owner with ID {announcement.created_by} does not exist."
+                )
+        else:  # coach
+            creator = db.query(CoachDB).filter(CoachDB.id == announcement.created_by).first()
+            if not creator:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Invalid created_by user ID. Coach with ID {announcement.created_by} does not exist."
+                )
+        
         db_announcement = AnnouncementDB(**announcement.dict())
         db.add(db_announcement)
         db.commit()
         db.refresh(db_announcement)
         return db_announcement
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
@@ -3419,12 +3704,20 @@ def create_calendar_event(event: CalendarEventCreate):
     db = SessionLocal()
     try:
         # Validate that the creator (coach/owner) exists
-        coach = db.query(CoachDB).filter(CoachDB.id == event.created_by).first()
-        if not coach:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Invalid created_by user ID. User with ID {event.created_by} does not exist in coaches table."
-            )
+        if event.creator_type == "owner":
+            creator = db.query(OwnerDB).filter(OwnerDB.id == event.created_by).first()
+            if not creator:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Invalid created_by user ID. Owner with ID {event.created_by} does not exist."
+                )
+        else:  # coach
+            creator = db.query(CoachDB).filter(CoachDB.id == event.created_by).first()
+            if not creator:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Invalid created_by user ID. Coach with ID {event.created_by} does not exist."
+                )
         
         # Convert date string to date object
         event_date = datetime.strptime(event.date, "%Y-%m-%d").date()
@@ -3436,6 +3729,7 @@ def create_calendar_event(event: CalendarEventCreate):
             date=event_date,
             description=event.description,
             created_by=event.created_by,
+            creator_type=event.creator_type,
         )
         db.add(db_event)
         db.commit()
@@ -3454,7 +3748,7 @@ def create_calendar_event(event: CalendarEventCreate):
         if 'foreign key' in error_msg.lower() or 'created_by' in error_msg.lower():
             raise HTTPException(
                 status_code=400, 
-                detail=f"Invalid created_by user ID. User with ID {event.created_by} does not exist in coaches table."
+                detail=f"Invalid created_by user ID. User with ID {event.created_by} does not exist."
             )
         raise HTTPException(status_code=400, detail=f"Database constraint violation: {error_msg}")
     except Exception as e:
