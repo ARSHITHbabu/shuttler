@@ -59,7 +59,8 @@ class _CoachesScreenState extends ConsumerState<CoachesScreen> {
             );
           }
 
-          final coaches = snapshot.data ?? [];
+          final coaches = (snapshot.data ?? [])
+            ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
           if (coaches.isEmpty) {
             return Center(
@@ -104,6 +105,7 @@ class _CoachesScreenState extends ConsumerState<CoachesScreen> {
               itemBuilder: (context, index) {
                 final coach = coaches[index];
                 return NeumorphicContainer(
+                  key: ValueKey(coach.id),
                   padding: const EdgeInsets.all(AppDimensions.paddingM),
                   margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
                   child: Column(
@@ -140,6 +142,85 @@ class _CoachesScreenState extends ConsumerState<CoachesScreen> {
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
+                          ),
+                          PopupMenuButton(
+                            icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+                            color: AppColors.cardBackground,
+                            itemBuilder: (context) => [
+                              PopupMenuItem(
+                                child: const Row(
+                                  children: [
+                                    Icon(Icons.edit, size: 18, color: AppColors.textPrimary),
+                                    SizedBox(width: 8),
+                                    Text('Edit', style: TextStyle(color: AppColors.textPrimary)),
+                                  ],
+                                ),
+                                onTap: () {
+                                  Future.delayed(Duration.zero, () {
+                                    _showEditCoachDialog(context, coach);
+                                  });
+                                },
+                              ),
+                              PopupMenuItem(
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      coach.status == 'active' 
+                                          ? Icons.person_off 
+                                          : Icons.person,
+                                      size: 18,
+                                      color: coach.status == 'active' 
+                                          ? AppColors.error 
+                                          : AppColors.success,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      coach.status == 'active' 
+                                          ? 'Mark Inactive' 
+                                          : 'Mark Active',
+                                      style: TextStyle(
+                                        color: coach.status == 'active' 
+                                            ? AppColors.error 
+                                            : AppColors.success,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                onTap: () {
+                                  Future.delayed(Duration.zero, () {
+                                    _toggleCoachStatus(context, coach);
+                                  });
+                                },
+                              ),
+                              PopupMenuItem(
+                                child: const Row(
+                                  children: [
+                                    Icon(Icons.group, size: 18, color: AppColors.textPrimary),
+                                    SizedBox(width: 8),
+                                    Text('View Batches', style: TextStyle(color: AppColors.textPrimary)),
+                                  ],
+                                ),
+                                onTap: () {
+                                  Future.delayed(Duration.zero, () {
+                                    _showCoachBatches(context, coach);
+                                  });
+                                },
+                              ),
+                              PopupMenuItem(
+                                child: const Row(
+                                  children: [
+                                    Icon(Icons.delete, size: 18, color: AppColors.error),
+                                    SizedBox(width: 8),
+                                    Text('Delete', style: TextStyle(color: AppColors.error)),
+                                  ],
+                                ),
+                                onTap: () {
+                                  Future.delayed(Duration.zero, () {
+                                    _showDeleteConfirmation(context, coach);
+                                  });
+                                },
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -207,7 +288,6 @@ class _CoachesScreenState extends ConsumerState<CoachesScreen> {
           await coachService.updateCoach(coach.id, coachData);
           if (mounted) {
             setState(() {});
-            Navigator.of(context).pop();
           }
         },
       ),

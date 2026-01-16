@@ -437,7 +437,7 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
           Text(
             _selectedFilter == 'all'
                 ? 'Your attendance will appear here once recorded'
-                : 'No ${_selectedFilter} records for this month',
+                : 'No $_selectedFilter records for this month',
             style: TextStyle(
               fontSize: 14,
               color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,

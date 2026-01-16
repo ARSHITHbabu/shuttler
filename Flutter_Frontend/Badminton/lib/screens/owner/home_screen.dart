@@ -10,6 +10,7 @@ import '../../widgets/forms/add_student_dialog.dart';
 import '../../widgets/forms/add_coach_dialog.dart';
 import '../../providers/dashboard_provider.dart';
 import '../../providers/service_providers.dart';
+import '../../providers/batch_provider.dart';
 import '../../models/batch_attendance.dart';
 import 'students_screen.dart';
 import 'coaches_screen.dart';
@@ -414,7 +415,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 _UpcomingBatchItem(
                                   name: batch.name,
                                   time: batch.timeRange,
-                                  students: 0, // TODO: Get enrolled count from batch
+                                  batchId: batch.id,
                                 ),
                                 if (!isLast) const SizedBox(height: AppDimensions.spacingS),
                               ],
@@ -595,60 +596,128 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-class _UpcomingBatchItem extends StatelessWidget {
+class _UpcomingBatchItem extends ConsumerWidget {
   final String name;
   final String time;
-  final int students;
+  final int batchId;
 
   const _UpcomingBatchItem({
     required this.name,
     required this.time,
-    required this.students,
+    required this.batchId,
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context, WidgetRef ref) {
+    final batchStudentsAsync = ref.watch(batchStudentsProvider(batchId));
+    
+    return batchStudentsAsync.when(
+      data: (students) {
+        final studentCount = students.length;
+        
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              name,
-              style: const TextStyle(
-                fontSize: 14,
-                color: AppColors.textPrimary,
-              ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                Text(
+                  time,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
             ),
-            Text(
-              time,
-              style: const TextStyle(
-                fontSize: 12,
-                color: AppColors.textSecondary,
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimensions.spacingM,
+                vertical: AppDimensions.spacingS,
+              ),
+              decoration: BoxDecoration(
+                color: AppColors.background,
+                borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                boxShadow: NeumorphicStyles.getSmallInsetShadow(),
+              ),
+              child: Text(
+                '$studentCount ${studentCount == 1 ? 'student' : 'students'}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.iconPrimary,
+                ),
               ),
             ),
           ],
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppDimensions.spacingM,
-            vertical: AppDimensions.spacingS,
+        );
+      },
+      loading: () => Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              Text(
+                time,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
           ),
-          decoration: BoxDecoration(
-            color: AppColors.background,
-            borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-            boxShadow: NeumorphicStyles.getSmallInsetShadow(),
+          const SizedBox(
+            width: 60,
+            height: 20,
+            child: Center(child: LoadingSpinner()),
           ),
-          child: Text(
-            '$students students',
-            style: const TextStyle(
+        ],
+      ),
+      error: (error, stack) => Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              Text(
+                time,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+          const Text(
+            '0 students',
+            style: TextStyle(
               fontSize: 12,
-              color: AppColors.iconPrimary,
+              color: AppColors.textSecondary,
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

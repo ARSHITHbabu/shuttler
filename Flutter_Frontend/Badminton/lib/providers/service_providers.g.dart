@@ -277,5 +277,25 @@ final calendarServiceProvider = AutoDisposeProvider<CalendarService>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef CalendarServiceRef = AutoDisposeProviderRef<CalendarService>;
+String _$invitationServiceHash() => r'c14beb5162aef298d8269a46cbc9523b6c4837a1';
+
+/// Provider for InvitationService singleton
+///
+/// Copied from [invitationService].
+@ProviderFor(invitationService)
+final invitationServiceProvider =
+    AutoDisposeProvider<InvitationService>.internal(
+      invitationService,
+      name: r'invitationServiceProvider',
+      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+          ? null
+          : _$invitationServiceHash,
+      dependencies: null,
+      allTransitiveDependencies: null,
+    );
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef InvitationServiceRef = AutoDisposeProviderRef<InvitationService>;
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package

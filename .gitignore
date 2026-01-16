@@ -121,3 +121,5 @@ tmpclaude-*-cwd
 # ========================================
 Backend/uploads/*
 !Backend/uploads/.gitkeep
+
+postgres_docs.txt

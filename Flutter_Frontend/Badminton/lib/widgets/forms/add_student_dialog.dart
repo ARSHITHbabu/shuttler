@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/neumorphic_button.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/service_providers.dart';
 
 /// Dialog for sending invite link to a new student
-class AddStudentDialog extends StatefulWidget {
+class AddStudentDialog extends ConsumerStatefulWidget {
   final Function(Map<String, dynamic>)? onSubmit;
 
   const AddStudentDialog({
@@ -16,17 +19,17 @@ class AddStudentDialog extends StatefulWidget {
   });
 
   @override
-  State<AddStudentDialog> createState() => _AddStudentDialogState();
+  ConsumerState<AddStudentDialog> createState() => _AddStudentDialogState();
 }
 
-class _AddStudentDialogState extends State<AddStudentDialog> {
+class _AddStudentDialogState extends ConsumerState<AddStudentDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _guardianNameController = TextEditingController();
   final _guardianPhoneController = TextEditingController();
-  bool _isLoading = false;
+  final bool _isLoading = false;
 
   @override
   void dispose() {
@@ -55,18 +58,94 @@ class _AddStudentDialogState extends State<AddStudentDialog> {
       return;
     }
 
-    // Show invite link options
-    _showInviteOptions();
+    // Get current user info
+    final authState = ref.read(authProvider);
+    await authState.when(
+      data: (authValue) async {
+        if (authValue is! Authenticated) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please login to send invitations'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+          return;
+        }
+
+        // Only owners and coaches can send invitations
+        if (authValue.userType != 'owner' && authValue.userType != 'coach') {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Only owners and coaches can send invitations'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+          return;
+        }
+
+        setState(() {
+          _isLoading = true;
+        });
+
+        try {
+          final invitationService = ref.read(invitationServiceProvider);
+          final phone = _phoneController.text.trim();
+          final email = _emailController.text.trim();
+
+          // Create invitation via backend
+          final invitation = await invitationService.createInvitation(
+            coachId: authValue.userId,
+            coachName: authValue.userName,
+            studentPhone: phone.isNotEmpty ? phone : null,
+            studentEmail: email.isNotEmpty ? email : null,
+            batchId: null, // Optional for now - can be added later
+          );
+
+          // Get invite link from response
+          final inviteLink = invitation['invite_link'] as String? ??
+              'https://academy.app/invite/${invitation['invite_token']}';
+
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+            });
+            // Show invite link options with real link
+            _showInviteOptions(inviteLink);
+          }
+        } catch (e) {
+          if (mounted) {
+            setState(() {
+              _isLoading = false;
+            });
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to create invitation: ${e.toString().replaceFirst('Exception: ', '')}'),
+                backgroundColor: AppColors.error,
+              ),
+            );
+          }
+        }
+      },
+      loading: () {},
+      error: (error, stack) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${error.toString()}'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      },
+    );
   }
 
-  void _showInviteOptions() {
+  void _showInviteOptions(String inviteLink) {
     final phone = _phoneController.text.trim();
     final email = _emailController.text.trim();
     final hasPhone = phone.isNotEmpty;
     final hasEmail = email.isNotEmpty;
-
-    // Generate invite link (placeholder - backend will provide actual link)
-    final inviteLink = 'https://academy.app/invite/student123'; // TODO: Get from backend
 
     showDialog(
       context: context,

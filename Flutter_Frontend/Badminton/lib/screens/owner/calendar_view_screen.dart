@@ -437,11 +437,11 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                     markerBuilder: (context, date, events) {
                       if (events.isEmpty) return null;
                       
-                      final eventTypes = events.map((e) => (e as CalendarEvent).eventType).toSet();
+                      final eventTypes = events.map((e) => (e).eventType).toSet();
                       return Row(
                         mainAxisSize: MainAxisSize.min,
                         children: eventTypes.map((type) {
-                          final event = events.firstWhere((e) => (e as CalendarEvent).eventType == type) as CalendarEvent;
+                          final event = events.firstWhere((e) => (e).eventType == type);
                           return Container(
                             width: 6,
                             height: 6,
@@ -524,7 +524,7 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                     itemBuilder: (context, index) {
                       // Show holiday first if it exists
                       if (hasHoliday && index == 0) {
-                        return _buildHolidayCard(holidayName!);
+                        return _buildHolidayCard(holidayName);
                       }
                       // Then show regular events
                       final eventIndex = hasHoliday ? index - 1 : index;

@@ -14,6 +14,7 @@ class Schedule {
   final int? coachId;
   final String? coachName;
   final String? description;
+  final int? capacity;
   final DateTime? createdAt;
 
   Schedule({
@@ -31,6 +32,7 @@ class Schedule {
     this.coachId,
     this.coachName,
     this.description,
+    this.capacity,
     this.createdAt,
   });
 
@@ -57,6 +59,7 @@ class Schedule {
       coachId: json['coach_id'] as int?,
       coachName: json['coach_name'] as String?,
       description: json['description'] as String?,
+      capacity: json['capacity'] as int?,
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String)
           : null,
@@ -77,6 +80,7 @@ class Schedule {
       'location': location,
       'coach_id': coachId,
       'description': description,
+      'capacity': capacity,
     };
   }
 
@@ -96,6 +100,7 @@ class Schedule {
     int? coachId,
     String? coachName,
     String? description,
+    int? capacity,
     DateTime? createdAt,
   }) {
     return Schedule(
@@ -113,6 +118,7 @@ class Schedule {
       coachId: coachId ?? this.coachId,
       coachName: coachName ?? this.coachName,
       description: description ?? this.description,
+      capacity: capacity ?? this.capacity,
       createdAt: createdAt ?? this.createdAt,
     );
   }

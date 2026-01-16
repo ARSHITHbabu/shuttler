@@ -13,6 +13,8 @@ import '../../models/batch.dart';
 import '../../models/fee.dart';
 import '../../core/services/batch_service.dart';
 import '../../core/services/fee_service.dart';
+import '../../core/services/batch_enrollment_service.dart';
+import '../../providers/batch_provider.dart';
 import 'performance_tracking_screen.dart';
 import 'bmi_tracking_screen.dart';
 import 'fees_screen.dart';
@@ -28,6 +30,14 @@ class StudentsScreen extends ConsumerStatefulWidget {
 class _StudentsScreenState extends ConsumerState<StudentsScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _selectedFilter = 'all'; // 'all', 'active', 'inactive'
+  Future<List<Student>>? _studentsFuture;
+  ScaffoldMessengerState? _scaffoldMessenger;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
+  }
 
   @override
   void dispose() {
@@ -35,8 +45,23 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
     super.dispose();
   }
 
+  /// Safely show a SnackBar using the stored ScaffoldMessenger reference
+  /// This prevents errors when the widget is disposed during async operations
+  void _showSnackBar(SnackBar snackBar) {
+    if (mounted && _scaffoldMessenger != null) {
+      _scaffoldMessenger!.showSnackBar(snackBar);
+    }
+  }
+
+  void _loadStudents() {
+    _studentsFuture = ref.read(studentServiceProvider).getStudents();
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Load students on first build
+    _studentsFuture ??= ref.read(studentServiceProvider).getStudents();
+    
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -61,374 +86,372 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
           ),
         ],
       ),
-      body: FutureBuilder<List<Student>>(
-        future: ref.read(studentServiceProvider).getStudents(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: LoadingSpinner());
-          }
-
-          if (snapshot.hasError) {
-            return ErrorDisplay(
-              message: 'Failed to load students',
-              onRetry: () => setState(() {}),
-            );
-          }
-
-          final allStudents = snapshot.data ?? [];
-          
-          // Apply search filter
-          final searchQuery = _searchController.text.toLowerCase();
-          var filteredStudents = allStudents.where((student) {
-            if (searchQuery.isNotEmpty) {
-              final matchesSearch = student.name.toLowerCase().contains(searchQuery) ||
-                  student.email.toLowerCase().contains(searchQuery) ||
-                  student.phone.contains(searchQuery);
-              if (!matchesSearch) return false;
-            }
-            // Apply status filter
-            if (_selectedFilter == 'active') {
-              return student.status == 'active';
-            } else if (_selectedFilter == 'inactive') {
-              return student.status != 'active';
-            }
-            return true;
-          }).toList();
-
-          if (filteredStudents.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(
-                    Icons.people_outline,
-                    size: 64,
-                    color: AppColors.textSecondary,
-                  ),
-                  const SizedBox(height: AppDimensions.spacingM),
-                  const Text(
-                    'No students added yet',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 16,
+      body: Column(
+        children: [
+          // Search and Filter - Always visible, outside FutureBuilder
+          Padding(
+            padding: const EdgeInsets.all(AppDimensions.paddingL),
+            child: Column(
+              children: [
+                // Search Bar
+                NeumorphicContainer(
+                  padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
+                  child: TextField(
+                    controller: _searchController,
+                    style: const TextStyle(color: AppColors.textPrimary),
+                    decoration: const InputDecoration(
+                      hintText: 'Search students...',
+                      hintStyle: TextStyle(color: AppColors.textSecondary),
+                      border: InputBorder.none,
+                      icon: Icon(Icons.search, color: AppColors.textSecondary),
                     ),
+                    onChanged: (value) => setState(() {}),
                   ),
-                  const SizedBox(height: AppDimensions.spacingL),
-                  ElevatedButton.icon(
-                    onPressed: () => _showAddStudentDialog(context),
-                    icon: const Icon(Icons.add),
-                    label: const Text('Add Student'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.accent,
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return Column(
-            children: [
-              // Search and Filter
-              Padding(
-                padding: const EdgeInsets.all(AppDimensions.paddingL),
-                child: Column(
-                  children: [
-                    // Search Bar
-                    NeumorphicContainer(
-                      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
-                      child: TextField(
-                        controller: _searchController,
-                        style: const TextStyle(color: AppColors.textPrimary),
-                        decoration: const InputDecoration(
-                          hintText: 'Search students...',
-                          hintStyle: TextStyle(color: AppColors.textSecondary),
-                          border: InputBorder.none,
-                          icon: Icon(Icons.search, color: AppColors.textSecondary),
-                        ),
-                        onChanged: (value) => setState(() {}),
+                ),
+                const SizedBox(height: AppDimensions.spacingM),
+                // Filter Chips
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _FilterChip(
+                        label: 'All',
+                        isSelected: _selectedFilter == 'all',
+                        onTap: () => setState(() => _selectedFilter = 'all'),
                       ),
-                    ),
-                    const SizedBox(height: AppDimensions.spacingM),
-                    // Filter Chips
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          _FilterChip(
-                            label: 'All',
-                            isSelected: _selectedFilter == 'all',
-                            onTap: () => setState(() => _selectedFilter = 'all'),
+                      const SizedBox(width: AppDimensions.spacingS),
+                      _FilterChip(
+                        label: 'Active',
+                        isSelected: _selectedFilter == 'active',
+                        onTap: () => setState(() => _selectedFilter = 'active'),
+                        color: AppColors.success,
+                      ),
+                      const SizedBox(width: AppDimensions.spacingS),
+                      _FilterChip(
+                        label: 'Inactive',
+                        isSelected: _selectedFilter == 'inactive',
+                        onTap: () => setState(() => _selectedFilter = 'inactive'),
+                        color: AppColors.error,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Students List or Empty State - Inside FutureBuilder
+          Expanded(
+            child: FutureBuilder<List<Student>>(
+              future: _studentsFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: LoadingSpinner());
+                }
+
+                if (snapshot.hasError) {
+                  return ErrorDisplay(
+                    message: 'Failed to load students',
+                    onRetry: () {
+                      _loadStudents();
+                      setState(() {});
+                    },
+                  );
+                }
+
+                final allStudents = snapshot.data ?? [];
+                
+                // Apply search filter
+                final searchQuery = _searchController.text.toLowerCase();
+                var filteredStudents = allStudents.where((student) {
+                  if (searchQuery.isNotEmpty) {
+                    final matchesSearch = student.name.toLowerCase().contains(searchQuery) ||
+                        student.email.toLowerCase().contains(searchQuery) ||
+                        student.phone.contains(searchQuery);
+                    if (!matchesSearch) return false;
+                  }
+                  // Apply status filter
+                  if (_selectedFilter == 'active') {
+                    return student.status == 'active';
+                  } else if (_selectedFilter == 'inactive') {
+                    return student.status == 'inactive';
+                  }
+                  return true;
+                }).toList();
+
+                // Sort filtered students alphabetically by name
+                filteredStudents.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+                // Determine empty message based on filter
+                String emptyMessage;
+                if (_selectedFilter == 'active') {
+                  emptyMessage = 'No active students found';
+                } else if (_selectedFilter == 'inactive') {
+                  emptyMessage = 'No inactive students found';
+                } else {
+                  emptyMessage = 'No students added yet';
+                }
+
+                if (filteredStudents.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.people_outline,
+                          size: 64,
+                          color: AppColors.textSecondary,
+                        ),
+                        const SizedBox(height: AppDimensions.spacingM),
+                        Text(
+                          emptyMessage,
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 16,
                           ),
-                          const SizedBox(width: AppDimensions.spacingS),
-                          _FilterChip(
-                            label: 'Active',
-                            isSelected: _selectedFilter == 'active',
-                            onTap: () => setState(() => _selectedFilter = 'active'),
-                            color: AppColors.success,
-                          ),
-                          const SizedBox(width: AppDimensions.spacingS),
-                          _FilterChip(
-                            label: 'Inactive',
-                            isSelected: _selectedFilter == 'inactive',
-                            onTap: () => setState(() => _selectedFilter = 'inactive'),
-                            color: AppColors.error,
+                        ),
+                        if (_selectedFilter == 'all') ...[
+                          const SizedBox(height: AppDimensions.spacingL),
+                          ElevatedButton.icon(
+                            onPressed: () => _showAddStudentDialog(context),
+                            icon: const Icon(Icons.add),
+                            label: const Text('Add Student'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppColors.accent,
+                              foregroundColor: Colors.white,
+                            ),
                           ),
                         ],
-                      ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
-              // Students List
-              Expanded(
-                child: RefreshIndicator(
+                  );
+                }
+
+                return RefreshIndicator(
                   onRefresh: () async {
+                    _loadStudents();
                     setState(() {});
                   },
                   child: ListView.builder(
-                    padding: const EdgeInsets.all(AppDimensions.paddingL),
-                    itemCount: filteredStudents.length,
-                    itemBuilder: (context, index) {
-                      final student = filteredStudents[index];
-                      return NeumorphicContainer(
-                  padding: const EdgeInsets.all(AppDimensions.paddingM),
-                  margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              student.name,
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppDimensions.spacingM,
-                              vertical: AppDimensions.spacingS,
-                            ),
-                            decoration: BoxDecoration(
-                              color: student.status == 'active'
-                                  ? AppColors.success
-                                  : AppColors.error,
-                              borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                            ),
-                            child: Text(
-                              student.status.toUpperCase(),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          PopupMenuButton(
-                            icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
-                            color: AppColors.cardBackground,
-                            itemBuilder: (context) => [
-                              PopupMenuItem(
-                                child: const Row(
-                                  children: [
-                                    Icon(Icons.edit, size: 18, color: AppColors.textPrimary),
-                                    SizedBox(width: 8),
-                                    Text('Edit', style: TextStyle(color: AppColors.textPrimary)),
-                                  ],
-                                ),
-                                onTap: () {
-                                  Future.delayed(Duration.zero, () {
-                                    _showEditStudentDialog(context, student);
-                                  });
-                                },
-                              ),
-                              PopupMenuItem(
-                                child: const Row(
-                                  children: [
-                                    Icon(Icons.group_add, size: 18, color: AppColors.textPrimary),
-                                    SizedBox(width: 8),
-                                    Text('Assign Batch', style: TextStyle(color: AppColors.textPrimary)),
-                                  ],
-                                ),
-                                onTap: () {
-                                  Future.delayed(Duration.zero, () {
-                                    _showAssignBatchDialog(context, student);
-                                  });
-                                },
-                              ),
-                              PopupMenuItem(
-                                child: const Row(
-                                  children: [
-                                    Icon(Icons.delete, size: 18, color: AppColors.error),
-                                    SizedBox(width: 8),
-                                    Text('Delete', style: TextStyle(color: AppColors.error)),
-                                  ],
-                                ),
-                                onTap: () {
-                                  Future.delayed(Duration.zero, () {
-                                    _showDeleteConfirmation(context, student);
-                                  });
-                                },
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppDimensions.spacingM),
-                      // Batch and Fee Status (async loaded)
-                      FutureBuilder<Map<String, dynamic>>(
-                        future: _getStudentBatchAndFeeStatus(student.id),
-                        builder: (context, snapshot) {
-                          if (snapshot.hasData) {
-                            final data = snapshot.data!;
-                            final batchName = data['batchName'] as String?;
-                            final feeStatus = data['feeStatus'] as String?;
-                            
-                            return Column(
-                              children: [
-                                if (batchName != null) ...[
-                                  _InfoRow(
-                                    icon: Icons.group,
-                                    label: 'Batch',
-                                    value: batchName,
-                                  ),
-                                  const SizedBox(height: AppDimensions.spacingS),
-                                ],
-                                if (feeStatus != null) ...[
+                          padding: const EdgeInsets.all(AppDimensions.paddingL),
+                          itemCount: filteredStudents.length,
+                          itemBuilder: (context, index) {
+                            final student = filteredStudents[index];
+                                  return NeumorphicContainer(
+                              key: ValueKey('student_${student.id}'),
+                              padding: const EdgeInsets.all(AppDimensions.paddingM),
+                              margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
                                   Row(
                                     children: [
-                                      const Icon(Icons.attach_money, size: 16, color: AppColors.textSecondary),
-                                      const SizedBox(width: AppDimensions.spacingS),
-                                      const Text(
-                                        'Fee Status: ',
-                                        style: TextStyle(
-                                          color: AppColors.textSecondary,
-                                          fontSize: 14,
+                                      Expanded(
+                                        child: Text(
+                                          student.name,
+                                          style: const TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.textPrimary,
+                                          ),
                                         ),
                                       ),
                                       Container(
                                         padding: const EdgeInsets.symmetric(
-                                          horizontal: AppDimensions.spacingS,
-                                          vertical: 2,
+                                          horizontal: AppDimensions.spacingM,
+                                          vertical: AppDimensions.spacingS,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: _getFeeStatusColor(feeStatus),
+                                          color: student.status == 'active'
+                                              ? AppColors.success
+                                              : AppColors.error,
                                           borderRadius: BorderRadius.circular(AppDimensions.radiusS),
                                         ),
                                         child: Text(
-                                          feeStatus.toUpperCase(),
+                                          student.status.toUpperCase(),
                                           style: const TextStyle(
                                             color: Colors.white,
-                                            fontSize: 10,
+                                            fontSize: 12,
                                             fontWeight: FontWeight.w600,
                                           ),
                                         ),
                                       ),
+                                      PopupMenuButton(
+                                        icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+                                        color: AppColors.cardBackground,
+                                        itemBuilder: (context) => [
+                                          PopupMenuItem(
+                                            child: const Row(
+                                              children: [
+                                                Icon(Icons.edit, size: 18, color: AppColors.textPrimary),
+                                                SizedBox(width: 8),
+                                                Text('Edit', style: TextStyle(color: AppColors.textPrimary)),
+                                              ],
+                                            ),
+                                            onTap: () {
+                                              Future.delayed(Duration.zero, () {
+                                                _showEditStudentDialog(context, student);
+                                              });
+                                            },
+                                          ),
+                                          PopupMenuItem(
+                                            child: Row(
+                                              children: [
+                                                Icon(
+                                                  student.status == 'active' 
+                                                      ? Icons.person_off 
+                                                      : Icons.person,
+                                                  size: 18,
+                                                  color: student.status == 'active' 
+                                                      ? AppColors.error 
+                                                      : AppColors.success,
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Text(
+                                                  student.status == 'active' 
+                                                      ? 'Mark Inactive' 
+                                                      : 'Mark Active',
+                                                  style: TextStyle(
+                                                    color: student.status == 'active' 
+                                                        ? AppColors.error 
+                                                        : AppColors.success,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            onTap: () {
+                                              Future.delayed(Duration.zero, () {
+                                                _toggleStudentStatus(context, student);
+                                              });
+                                            },
+                                          ),
+                                          PopupMenuItem(
+                                            child: const Row(
+                                              children: [
+                                                Icon(Icons.group_add, size: 18, color: AppColors.textPrimary),
+                                                SizedBox(width: 8),
+                                                Text('Manage Batches', style: TextStyle(color: AppColors.textPrimary)),
+                                              ],
+                                            ),
+                                            onTap: () {
+                                              Future.delayed(Duration.zero, () {
+                                                _showManageBatchesDialog(context, student);
+                                              });
+                                            },
+                                          ),
+                                          PopupMenuItem(
+                                            child: const Row(
+                                              children: [
+                                                Icon(Icons.delete, size: 18, color: AppColors.error),
+                                                SizedBox(width: 8),
+                                                Text('Delete', style: TextStyle(color: AppColors.error)),
+                                              ],
+                                            ),
+                                            onTap: () {
+                                              Future.delayed(Duration.zero, () {
+                                                _showDeleteConfirmation(context, student);
+                                              });
+                                            },
+                                          ),
+                                        ],
+                                      ),
                                     ],
                                   ),
-                                  const SizedBox(height: AppDimensions.spacingS),
+                                  const SizedBox(height: AppDimensions.spacingM),
+                                  // Batch and Fee Status (using providers)
+                                  _StudentBatchAndFeeStatus(studentId: student.id),
+                                  if (student.email.isNotEmpty) ...[
+                                    const SizedBox(height: AppDimensions.spacingS),
+                                    _InfoRow(
+                                      icon: Icons.email_outlined,
+                                      label: 'Email',
+                                      value: student.email,
+                                    ),
+                                  ],
+                                  if (student.phone.isNotEmpty) ...[
+                                    const SizedBox(height: AppDimensions.spacingS),
+                                    _InfoRow(
+                                      icon: Icons.phone_outlined,
+                                      label: 'Phone',
+                                      value: student.phone,
+                                    ),
+                                  ],
+                                  if (student.guardianName != null && student.guardianName!.isNotEmpty) ...[
+                                    const SizedBox(height: AppDimensions.spacingS),
+                                    _InfoRow(
+                                      icon: Icons.person_outline,
+                                      label: 'Guardian',
+                                      value: student.guardianName!,
+                                    ),
+                                  ],
+                                  if (student.guardianPhone != null && student.guardianPhone!.isNotEmpty) ...[
+                                    const SizedBox(height: AppDimensions.spacingS),
+                                    _InfoRow(
+                                      icon: Icons.phone_outlined,
+                                      label: 'Guardian Phone',
+                                      value: student.guardianPhone!,
+                                    ),
+                                  ],
+                                  const SizedBox(height: AppDimensions.spacingM),
+                                  // Action Buttons
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: _ActionButton(
+                                          icon: Icons.trending_up,
+                                          label: 'Performance',
+                                          onTap: () {
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder: (context) => PerformanceTrackingScreen(
+                                                  initialStudent: student,
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(width: AppDimensions.spacingS),
+                                      Expanded(
+                                        child: _ActionButton(
+                                          icon: Icons.monitor_weight,
+                                          label: 'BMI',
+                                          onTap: () {
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder: (context) => BMITrackingScreen(
+                                                  initialStudent: student,
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(width: AppDimensions.spacingS),
+                                      Expanded(
+                                        child: _ActionButton(
+                                          icon: Icons.attach_money,
+                                          label: 'Fees',
+                                          onTap: () {
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder: (context) => const FeesScreen(),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ],
-                              ],
+                              ),
                             );
-                          }
-                          return const SizedBox.shrink();
-                        },
-                      ),
-                      if (student.email.isNotEmpty) ...[
-                        const SizedBox(height: AppDimensions.spacingS),
-                        _InfoRow(
-                          icon: Icons.email_outlined,
-                          label: 'Email',
-                          value: student.email,
+                          },
                         ),
-                      ],
-                      if (student.phone.isNotEmpty) ...[
-                        const SizedBox(height: AppDimensions.spacingS),
-                        _InfoRow(
-                          icon: Icons.phone_outlined,
-                          label: 'Phone',
-                          value: student.phone,
-                        ),
-                      ],
-                      if (student.guardianName != null && student.guardianName!.isNotEmpty) ...[
-                        const SizedBox(height: AppDimensions.spacingS),
-                        _InfoRow(
-                          icon: Icons.person_outline,
-                          label: 'Guardian',
-                          value: student.guardianName!,
-                        ),
-                      ],
-                      if (student.guardianPhone != null && student.guardianPhone!.isNotEmpty) ...[
-                        const SizedBox(height: AppDimensions.spacingS),
-                        _InfoRow(
-                          icon: Icons.phone_outlined,
-                          label: 'Guardian Phone',
-                          value: student.guardianPhone!,
-                        ),
-                      ],
-                      const SizedBox(height: AppDimensions.spacingM),
-                      // Action Buttons
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _ActionButton(
-                              icon: Icons.trending_up,
-                              label: 'Performance',
-                              onTap: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (context) => const PerformanceTrackingScreen(),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: AppDimensions.spacingS),
-                          Expanded(
-                            child: _ActionButton(
-                              icon: Icons.monitor_weight,
-                              label: 'BMI',
-                              onTap: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (context) => const BMITrackingScreen(),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: AppDimensions.spacingS),
-                          Expanded(
-                            child: _ActionButton(
-                              icon: Icons.attach_money,
-                              label: 'Fees',
-                              onTap: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (context) => const FeesScreen(),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-                    },
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
+                      );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -441,6 +464,7 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
           final studentService = ref.read(studentServiceProvider);
           await studentService.createStudent(studentData);
           if (mounted) {
+            _loadStudents();
             setState(() {});
           }
         },
@@ -457,6 +481,7 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
           final studentService = ref.read(studentServiceProvider);
           await studentService.updateStudent(student.id, studentData);
           if (mounted) {
+            _loadStudents();
             setState(() {});
             Navigator.of(context).pop();
           }
@@ -465,142 +490,415 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
     );
   }
 
-  void _showAssignBatchDialog(BuildContext context, Student student) async {
+  void _showManageBatchesDialog(BuildContext context, Student student) async {
+    // Capture parent context before showing dialog (Fix: Use parent context for ScaffoldMessenger)
+    final parentContext = context;
+    
     try {
-      final batchService = ref.read(batchServiceProvider);
-      final batches = await batchService.getBatches();
+      // Use provider to get student batches reactively
+      // Use .future to get the Future from the AsyncValue
+      final studentBatches = await ref.read(studentBatchesProvider(student.id).future);
       
-      if (batches.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No batches available. Please create a batch first.')),
-          );
-        }
+      if (studentBatches.isEmpty) {
+        // No batches assigned, show simple assign dialog
+        _showAddBatchDialog(context, student, []);
         return;
       }
 
-      int? selectedBatchId;
+      // Show manage batches dialog
       await showDialog(
         context: context,
-        builder: (context) => AlertDialog(
+        builder: (dialogContext) => AlertDialog(
           backgroundColor: AppColors.cardBackground,
-          title: const Text('Assign to Batch', style: TextStyle(color: AppColors.textPrimary)),
+          title: const Text('Manage Batches', style: TextStyle(color: AppColors.textPrimary)),
           content: StatefulBuilder(
             builder: (context, setState) {
-              return DropdownButtonFormField<int>(
-                value: selectedBatchId,
-                decoration: const InputDecoration(
-                  labelText: 'Select Batch',
-                  labelStyle: TextStyle(color: AppColors.textSecondary),
+              return SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Current Batches:',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: AppDimensions.spacingS),
+                    ...studentBatches.map((batch) {
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: AppDimensions.spacingS),
+                        padding: const EdgeInsets.all(AppDimensions.paddingS),
+                        decoration: BoxDecoration(
+                          color: AppColors.background,
+                          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                          border: Border.all(
+                            color: AppColors.accent.withOpacity(0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                batch.batchName,
+                                style: const TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close, size: 18, color: AppColors.error),
+                              onPressed: () async {
+                                try {
+                                  await BatchEnrollmentHelper.removeStudent(ref, batch.id, student.id);
+                                  if (mounted && Navigator.of(dialogContext).canPop()) {
+                                    Navigator.of(dialogContext).pop();
+                                    // Use safe helper method to avoid widget lifecycle issues
+                                    _showSnackBar(
+                                      const SnackBar(content: Text('Student removed from batch successfully')),
+                                    );
+                                    // No need to manually refresh - providers handle it automatically
+                                  }
+                                } catch (e) {
+                                  final errorMessage = e.toString().replaceFirst('Exception: ', '');
+                                  _showSnackBar(
+                                    SnackBar(
+                                      content: Text('Failed to remove from batch: $errorMessage'),
+                                      backgroundColor: AppColors.error,
+                                    ),
+                                  );
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                    const SizedBox(height: AppDimensions.spacingM),
+                    const Divider(color: AppColors.textSecondary),
+                    const SizedBox(height: AppDimensions.spacingM),
+                    const Text(
+                      'Actions:',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: AppDimensions.spacingS),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          Navigator.of(dialogContext).pop();
+                          await _showAddBatchDialog(context, student, studentBatches);
+                          // No need to manually refresh - providers handle it automatically
+                        },
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('Add Another Batch'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.accent,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                    if (studentBatches.length == 1) ...[
+                      const SizedBox(height: AppDimensions.spacingS),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () async {
+                            Navigator.of(dialogContext).pop();
+                            await _showChangeBatchDialog(context, student, studentBatches.first);
+                            // No need to manually refresh - providers handle it automatically
+                          },
+                          icon: const Icon(Icons.edit, size: 18),
+                          label: const Text('Change Batch'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.cardBackground,
+                            foregroundColor: AppColors.textPrimary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-                dropdownColor: AppColors.cardBackground,
-                style: const TextStyle(color: AppColors.textPrimary),
-                items: batches.map((batch) {
-                  return DropdownMenuItem<int>(
-                    value: batch.id,
-                    child: Text(batch.batchName),
-                  );
-                }).toList(),
-                onChanged: (value) => setState(() => selectedBatchId = value),
               );
             },
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: selectedBatchId == null
-                  ? null
-                  : () async {
-                      try {
-                        await batchService.enrollStudent(selectedBatchId!, student.id);
-                        if (mounted) {
-                          Navigator.of(context).pop();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Student assigned to batch successfully')),
-                          );
-                          setState(() {});
-                        }
-                      } catch (e) {
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Failed to assign batch: $e')),
-                          );
-                        }
-                      }
-                    },
-              child: const Text('Assign'),
+              child: const Text('Close'),
             ),
           ],
         ),
       );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load batches: $e')),
-        );
-      }
+      _showSnackBar(
+        SnackBar(content: Text('Failed to load batches: $e')),
+      );
     }
   }
 
-  Future<Map<String, dynamic>> _getStudentBatchAndFeeStatus(int studentId) async {
+  Future<void> _showAddBatchDialog(BuildContext context, Student student, List<Batch> existingBatches) async {
+    // Capture parent context before dialog (Fix: Use parent context for ScaffoldMessenger)
+    final parentContext = context;
+    // Capture widget's setState to avoid shadowing by StatefulBuilder
+    final widgetSetState = setState;
+    
     try {
       final batchService = ref.read(batchServiceProvider);
-      final feeService = ref.read(feeServiceProvider);
+      final allBatches = await batchService.getBatches();
       
-      // Get all batches and find which one contains this student
-      final batches = await batchService.getBatches();
-      String? batchName;
-      for (final batch in batches) {
-        try {
-          final batchStudents = await batchService.getBatchStudents(batch.id);
-          if (batchStudents.any((s) => s.id == studentId)) {
-            batchName = batch.batchName;
-            break;
-          }
-        } catch (e) {
-          // Skip if batch students fetch fails
-        }
+      if (allBatches.isEmpty) {
+        _showSnackBar(
+          const SnackBar(content: Text('No batches available. Please create a batch first.')),
+        );
+        return;
       }
-      
-      // Get fee status
-      String? feeStatus;
-      try {
-        final fees = await feeService.getFees(studentId: studentId);
-        if (fees.isNotEmpty) {
-          final pendingFees = fees.where((f) => f.status != 'paid').toList();
-          if (pendingFees.isNotEmpty) {
-            final overdueFees = pendingFees.where((f) => f.isOverdue).toList();
-            feeStatus = overdueFees.isNotEmpty ? 'overdue' : 'pending';
-          } else {
-            feeStatus = 'paid';
-          }
-        }
-      } catch (e) {
-        // Skip if fees fetch fails
+
+      // Filter out batches student is already in
+      final existingBatchIds = existingBatches.map((b) => b.id).toSet();
+      final availableBatches = allBatches.where((b) => !existingBatchIds.contains(b.id)).toList();
+
+      if (availableBatches.isEmpty) {
+        _showSnackBar(
+          const SnackBar(content: Text('Student is already enrolled in all available batches.')),
+        );
+        return;
       }
+
+      // Use ValueNotifier to properly manage state
+      final selectedBatchIdNotifier = ValueNotifier<int?>(null);
       
-      return {
-        'batchName': batchName,
-        'feeStatus': feeStatus,
-      };
+      await showDialog(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          backgroundColor: AppColors.cardBackground,
+          title: const Text('Add Another Batch', style: TextStyle(color: AppColors.textPrimary)),
+          content: StatefulBuilder(
+            builder: (context, setState) {
+              return ValueListenableBuilder<int?>(
+                valueListenable: selectedBatchIdNotifier,
+                builder: (context, selectedBatchId, _) {
+                  return DropdownButtonFormField<int>(
+                    value: selectedBatchId,
+                    decoration: const InputDecoration(
+                      labelText: 'Select Batch',
+                      labelStyle: TextStyle(color: AppColors.textSecondary),
+                    ),
+                    dropdownColor: AppColors.cardBackground,
+                    style: const TextStyle(color: AppColors.textPrimary),
+                    items: availableBatches.map((batch) {
+                      return DropdownMenuItem<int>(
+                        value: batch.id,
+                        child: Text(batch.batchName),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      selectedBatchIdNotifier.value = value;
+                    },
+                  );
+                },
+              );
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            ValueListenableBuilder<int?>(
+              valueListenable: selectedBatchIdNotifier,
+              builder: (context, selectedBatchId, _) {
+                return TextButton(
+                  onPressed: selectedBatchId == null
+                      ? null
+                      : () async {
+                          try {
+                            await BatchEnrollmentHelper.enrollStudent(ref, selectedBatchId!, student.id);
+                            if (mounted) {
+                              Navigator.of(dialogContext).pop();
+                              // Use safe helper method to avoid widget lifecycle issues
+                              _showSnackBar(
+                                const SnackBar(content: Text('Student added to batch successfully')),
+                              );
+                              // Providers automatically update all UI components
+                            }
+                          } catch (e) {
+                            final errorMessage = e.toString().replaceFirst('Exception: ', '');
+                            _showSnackBar(
+                              SnackBar(
+                                content: Text('Failed to add batch: $errorMessage'),
+                                backgroundColor: AppColors.error,
+                              ),
+                            );
+                          }
+                        },
+                  child: const Text('Add Batch'),
+                );
+              },
+            ),
+          ],
+        ),
+      );
     } catch (e) {
-      return {};
+      final errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _showSnackBar(
+        SnackBar(
+          content: Text('Failed to load batches: $errorMessage'),
+          backgroundColor: AppColors.error,
+        ),
+      );
     }
   }
 
-  Color _getFeeStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'paid':
-        return AppColors.success;
-      case 'pending':
-        return AppColors.warning;
-      case 'overdue':
-        return AppColors.error;
-      default:
-        return AppColors.textSecondary;
+  Future<void> _showChangeBatchDialog(BuildContext context, Student student, Batch currentBatch) async {
+    // Capture parent context before dialog (Fix: Use parent context for ScaffoldMessenger)
+    final parentContext = context;
+    // Capture widget's setState to avoid shadowing by StatefulBuilder
+    final widgetSetState = setState;
+    
+    try {
+      final batchService = ref.read(batchServiceProvider);
+      final allBatches = await batchService.getBatches();
+      
+      if (allBatches.isEmpty) {
+        _showSnackBar(
+          const SnackBar(content: Text('No batches available. Please create a batch first.')),
+        );
+        return;
+      }
+
+      // Use ValueNotifier to properly manage state - initialize to null (Fix 3)
+      final selectedBatchIdNotifier = ValueNotifier<int?>(null);
+      
+      await showDialog(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          backgroundColor: AppColors.cardBackground,
+          title: const Text('Change Batch', style: TextStyle(color: AppColors.textPrimary)),
+          content: StatefulBuilder(
+            builder: (context, setState) {
+              return ValueListenableBuilder<int?>(
+                valueListenable: selectedBatchIdNotifier,
+                builder: (context, selectedBatchId, _) {
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Current: ${currentBatch.batchName}',
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: AppDimensions.spacingM),
+                      DropdownButtonFormField<int>(
+                        value: selectedBatchId,
+                        decoration: const InputDecoration(
+                          labelText: 'Select New Batch',
+                          labelStyle: TextStyle(color: AppColors.textSecondary),
+                        ),
+                        dropdownColor: AppColors.cardBackground,
+                        style: const TextStyle(color: AppColors.textPrimary),
+                        items: allBatches.map((batch) {
+                          return DropdownMenuItem<int>(
+                            value: batch.id,
+                            child: Text(batch.batchName),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          selectedBatchIdNotifier.value = value;
+                        },
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancel'),
+            ),
+            ValueListenableBuilder<int?>(
+              valueListenable: selectedBatchIdNotifier,
+              builder: (context, selectedBatchId, _) {
+                return TextButton(
+                  onPressed: selectedBatchId == null || selectedBatchId == currentBatch.id
+                      ? null
+                      : () async {
+                          try {
+                            // Transfer student from current batch to new batch
+                            await BatchEnrollmentHelper.transferStudent(
+                              ref,
+                              currentBatch.id,
+                              selectedBatchId!,
+                              student.id,
+                            );
+                            if (mounted) {
+                              Navigator.of(dialogContext).pop();
+                              // Use safe helper method to avoid widget lifecycle issues
+                              _showSnackBar(
+                                const SnackBar(content: Text('Batch changed successfully')),
+                              );
+                              // Providers automatically update all UI components
+                            }
+                          } catch (e) {
+                            final errorMessage = e.toString().replaceFirst('Exception: ', '');
+                            _showSnackBar(
+                              SnackBar(
+                                content: Text('Failed to change batch: $errorMessage'),
+                                backgroundColor: AppColors.error,
+                              ),
+                            );
+                          }
+                        },
+                  child: const Text('Change'),
+                );
+              },
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      final errorMessage = e.toString().replaceFirst('Exception: ', '');
+      _showSnackBar(
+        SnackBar(
+          content: Text('Failed to load batches: $errorMessage'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
+
+  void _toggleStudentStatus(BuildContext context, Student student) async {
+    try {
+      final studentService = ref.read(studentServiceProvider);
+      final newStatus = student.status == 'active' ? 'inactive' : 'active';
+      await studentService.updateStudent(student.id, {'status': newStatus});
+      if (mounted) {
+        _loadStudents();
+        setState(() {});
+        _showSnackBar(
+          SnackBar(
+            content: Text('Student ${newStatus == 'active' ? 'activated' : 'deactivated'} successfully'),
+          ),
+        );
+      }
+    } catch (e) {
+      _showSnackBar(
+        SnackBar(content: Text('Failed to update student status: $e')),
+      );
     }
   }
 
@@ -626,17 +924,16 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                 await studentService.deleteStudent(student.id);
                 if (mounted) {
                   Navigator.of(context).pop();
+                  _loadStudents();
                   setState(() {});
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  _showSnackBar(
                     const SnackBar(content: Text('Student deleted successfully')),
                   );
                 }
               } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Failed to delete student: $e')),
-                  );
-                }
+                _showSnackBar(
+                  SnackBar(content: Text('Failed to delete student: $e')),
+                );
               }
             },
             child: const Text('Delete', style: TextStyle(color: AppColors.error)),
@@ -726,6 +1023,144 @@ class _InfoRow extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+/// Widget that displays student batches and fee status using providers
+class _StudentBatchAndFeeStatus extends ConsumerWidget {
+  final int studentId;
+
+  const _StudentBatchAndFeeStatus({required this.studentId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final studentBatchesAsync = ref.watch(studentBatchesProvider(studentId));
+    final feeService = ref.watch(feeServiceProvider);
+
+    return FutureBuilder<String?>(
+      future: _getFeeStatus(feeService, studentId),
+      builder: (context, feeSnapshot) {
+        return studentBatchesAsync.when(
+          data: (batches) {
+            final feeStatus = feeSnapshot.data;
+            return Column(
+              children: [
+                if (batches.isNotEmpty) ...[
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.group, size: 16, color: AppColors.textSecondary),
+                      const SizedBox(width: AppDimensions.spacingS),
+                      Expanded(
+                        child: Wrap(
+                          spacing: AppDimensions.spacingS,
+                          runSpacing: AppDimensions.spacingS,
+                          children: batches.map((batch) {
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppDimensions.spacingS,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.accent.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                                border: Border.all(
+                                  color: AppColors.accent.withOpacity(0.3),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Text(
+                                batch.batchName,
+                                style: const TextStyle(
+                                  color: AppColors.accent,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppDimensions.spacingS),
+                ],
+                if (feeStatus != null) ...[
+                  Row(
+                    children: [
+                      const Icon(Icons.attach_money, size: 16, color: AppColors.textSecondary),
+                      const SizedBox(width: AppDimensions.spacingS),
+                      const Text(
+                        'Fee Status: ',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 14,
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppDimensions.spacingS,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _getFeeStatusColor(feeStatus),
+                          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                        ),
+                        child: Text(
+                          feeStatus.toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppDimensions.spacingS),
+                ],
+              ],
+            );
+          },
+          loading: () => const SizedBox(
+            height: 20,
+            child: Center(child: LoadingSpinner()),
+          ),
+          error: (error, stack) => const SizedBox.shrink(),
+        );
+      },
+    );
+  }
+
+  Future<String?> _getFeeStatus(FeeService feeService, int studentId) async {
+    try {
+      final fees = await feeService.getFees(studentId: studentId);
+      if (fees.isNotEmpty) {
+        final pendingFees = fees.where((f) => f.status != 'paid').toList();
+        if (pendingFees.isNotEmpty) {
+          final overdueFees = pendingFees.where((f) => f.isOverdue).toList();
+          return overdueFees.isNotEmpty ? 'overdue' : 'pending';
+        } else {
+          return 'paid';
+        }
+      }
+    } catch (e) {
+      // Skip if fees fetch fails
+    }
+    return null;
+  }
+
+  Color _getFeeStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'paid':
+        return AppColors.success;
+      case 'pending':
+        return AppColors.warning;
+      case 'overdue':
+        return AppColors.error;
+      default:
+        return AppColors.textSecondary;
+    }
   }
 }
 

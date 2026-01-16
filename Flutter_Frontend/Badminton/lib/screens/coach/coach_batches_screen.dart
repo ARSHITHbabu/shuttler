@@ -469,10 +469,10 @@ class _BatchStudentsSheetState extends ConsumerState<_BatchStudentsSheet> {
                                       color: AppColors.textPrimary,
                                     ),
                                   ),
-                                  if (student.phone != null && student.phone!.isNotEmpty) ...[
+                                  if (student.phone.isNotEmpty) ...[
                                     const SizedBox(height: 4),
                                     Text(
-                                      student.phone!,
+                                      student.phone,
                                       style: const TextStyle(
                                         fontSize: 14,
                                         color: AppColors.textSecondary,

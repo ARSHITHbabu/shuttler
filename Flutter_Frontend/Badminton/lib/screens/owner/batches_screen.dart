@@ -27,10 +27,12 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
   Batch? _editingBatch;
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _startTimeController = TextEditingController();
-  final _endTimeController = TextEditingController();
+  TimeOfDay? _startTime;
+  TimeOfDay? _endTime;
   final _capacityController = TextEditingController();
   final _locationController = TextEditingController();
+  final _feesController = TextEditingController();
+  DateTime? _startDate;
   final List<int> _selectedCoachIds = [];
   final List<String> _selectedDays = [];
   List<Coach> _coaches = [];
@@ -45,10 +47,9 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
   @override
   void dispose() {
     _nameController.dispose();
-    _startTimeController.dispose();
-    _endTimeController.dispose();
     _capacityController.dispose();
     _locationController.dispose();
+    _feesController.dispose();
     super.dispose();
   }
 
@@ -56,7 +57,7 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
     try {
       final apiService = ref.read(apiServiceProvider);
       final response = await apiService.get(ApiEndpoints.coaches);
-      if (response.data is List) {
+      if (response.data is List && mounted) {
         setState(() {
           _coaches = (response.data as List)
               .map((json) => Coach.fromJson(json as Map<String, dynamic>))
@@ -73,35 +74,53 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
       _showAddForm = true;
       _editingBatch = null;
       _nameController.clear();
-      _startTimeController.clear();
-      _endTimeController.clear();
+      _startTime = null;
+      _endTime = null;
       _capacityController.clear();
       _locationController.clear();
+      _feesController.clear();
+      _startDate = null;
       _selectedCoachIds.clear();
       _selectedDays.clear();
     });
   }
 
   void _openEditForm(Batch batch) {
-    // Parse timing string (e.g., "6:00 AM - 7:30 AM") to extract start and end times
-    String startTime = '';
-    String endTime = '';
+    // Parse timing string (e.g., "6:00 AM - 7:30 AM") to TimeOfDay
+    TimeOfDay? startTime;
+    TimeOfDay? endTime;
+    
     if (batch.timing.contains(' - ')) {
       final parts = batch.timing.split(' - ');
       if (parts.length == 2) {
-        startTime = parts[0].trim();
-        endTime = parts[1].trim();
+        final startTimeStr = parts[0].trim();
+        final endTimeStr = parts[1].trim();
+        
+        // Parse start time
+        startTime = _parseTimeString(startTimeStr);
+        // Parse end time
+        endTime = _parseTimeString(endTimeStr);
       }
+    }
+    
+    // Parse start_date string to DateTime
+    DateTime? startDate;
+    try {
+      startDate = DateTime.parse(batch.startDate);
+    } catch (e) {
+      // If parsing fails, use null
     }
     
     setState(() {
       _showAddForm = true;
       _editingBatch = batch;
       _nameController.text = batch.name;
-      _startTimeController.text = startTime;
-      _endTimeController.text = endTime;
+      _startTime = startTime;
+      _endTime = endTime;
       _capacityController.text = batch.capacity.toString();
       _locationController.text = batch.location ?? '';
+      _feesController.text = batch.fees;
+      _startDate = startDate;
       _selectedCoachIds.clear();
       if (batch.coachId != null) {
         _selectedCoachIds.add(batch.coachId!);
@@ -111,8 +130,61 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
     });
   }
 
+  /// Helper method to parse time string to TimeOfDay
+  /// Supports formats like "6:00 AM", "18:00", etc.
+  TimeOfDay? _parseTimeString(String timeStr) {
+    try {
+      // Try parsing formats like "6:00 AM", "18:00", etc.
+      final timeFormat = RegExp(r'(\d{1,2}):(\d{2})\s*(AM|PM)?', caseSensitive: false);
+      final match = timeFormat.firstMatch(timeStr);
+      
+      if (match != null) {
+        int hour = int.parse(match.group(1)!);
+        int minute = int.parse(match.group(2)!);
+        final period = match.group(3)?.toUpperCase();
+        
+        // Convert to 24-hour format if AM/PM is present
+        if (period != null) {
+          if (period == 'PM' && hour != 12) {
+            hour += 12;
+          } else if (period == 'AM' && hour == 12) {
+            hour = 0;
+          }
+        }
+        
+        return TimeOfDay(hour: hour, minute: minute);
+      }
+    } catch (e) {
+      // Return null if parsing fails
+    }
+    return null;
+  }
+
+  /// Helper method to format TimeOfDay to string (e.g., "6:00 AM")
+  String _formatTimeOfDay(TimeOfDay time) {
+    final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+    final minute = time.minute.toString().padLeft(2, '0');
+    final period = time.period == DayPeriod.am ? 'AM' : 'PM';
+    return '$hour:$minute $period';
+  }
+
   Future<void> _saveBatch() async {
     if (!_formKey.currentState!.validate()) return;
+    
+    // Validate time fields
+    if (_startTime == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select start time')),
+      );
+      return;
+    }
+    if (_endTime == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select end time')),
+      );
+      return;
+    }
+    
     if (_selectedDays.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select at least one day')),
@@ -121,59 +193,186 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
     }
 
     try {
-      final batchData = {
-        'name': _nameController.text.trim(),
-        'batch_name': _nameController.text.trim(),
-        'timing': '${_startTimeController.text.trim()} - ${_endTimeController.text.trim()}',
-        'period': _selectedDays.join(', '),
-        'days': _selectedDays.join(', '),
-        'start_time': _startTimeController.text.trim(),
-        'end_time': _endTimeController.text.trim(),
-        'capacity': int.parse(_capacityController.text.trim()),
-        'fees': '0', // Default fees
-        'start_date': DateTime.now().toIso8601String().split('T')[0],
-        'assigned_coach_ids': _selectedCoachIds,
-        'assigned_coach_names': _selectedCoachIds.map((id) {
-          return _coaches.firstWhere((c) => c.id == id).name;
-        }).join(', '),
-        'location': _locationController.text.trim().isEmpty
+      // Format times as strings
+      final startTimeStr = _formatTimeOfDay(_startTime!);
+      final endTimeStr = _formatTimeOfDay(_endTime!);
+      
+      // Get coach assignment (only first coach if multiple selected, or null if none)
+      int? assignedCoachId;
+      String? assignedCoachName;
+      if (_selectedCoachIds.isNotEmpty) {
+        assignedCoachId = _selectedCoachIds.first;
+        try {
+          assignedCoachName = _coaches.firstWhere((c) => c.id == assignedCoachId).name;
+        } catch (e) {
+          // Coach not found in list, name will be null
+        }
+      }
+      
+      // Prepare batch data - only include changed fields when editing
+      final batchData = <String, dynamic>{};
+      
+      if (_editingBatch != null) {
+        // When editing, only send fields that have changed
+        final originalBatch = _editingBatch!;
+        final originalTiming = originalBatch.timing;
+        final newTiming = '$startTimeStr - $endTimeStr';
+        final originalPeriod = originalBatch.period;
+        final newPeriod = _selectedDays.join(', ');
+        final originalDays = originalBatch.days.join(', ');
+        final newDays = _selectedDays.join(', ');
+        
+        // Check if name changed
+        if (_nameController.text.trim() != originalBatch.name) {
+          batchData['name'] = _nameController.text.trim();
+          batchData['batch_name'] = _nameController.text.trim();
+        }
+        
+        // Check if timing changed
+        if (newTiming != originalTiming) {
+          batchData['timing'] = newTiming;
+          batchData['start_time'] = startTimeStr;
+          batchData['end_time'] = endTimeStr;
+        }
+        
+        // Check if period/days changed
+        if (newPeriod != originalPeriod || newDays != originalDays) {
+          batchData['period'] = newPeriod;
+          batchData['days'] = newDays;
+        }
+        
+        // Check if capacity changed
+        final newCapacity = int.parse(_capacityController.text.trim());
+        if (newCapacity != originalBatch.capacity) {
+          batchData['capacity'] = newCapacity;
+        }
+        
+        // Handle location - preserve existing if field is empty, only update if changed
+        final locationValue = _locationController.text.trim();
+        if (locationValue.isEmpty) {
+          // Field is empty - preserve original location (don't send it)
+          // Only send if we want to explicitly clear it (user cleared a previously set location)
+          if (originalBatch.location != null && originalBatch.location!.isNotEmpty) {
+            // User cleared a location that existed - preserve it by not sending location field
+            // If you want to allow clearing, uncomment the next line:
+            // batchData['location'] = null;
+          }
+        } else {
+          // Field has value - check if it changed
+          if (locationValue != originalBatch.location) {
+            batchData['location'] = locationValue;
+          }
+        }
+        
+        // Handle fees - preserve existing if not changed
+        final feesValue = _feesController.text.trim();
+        if (feesValue.isEmpty) {
+          // Field is empty - preserve original fees (don't send it)
+        } else if (feesValue != originalBatch.fees) {
+          // Fees changed - send new value
+          batchData['fees'] = feesValue;
+        }
+        // If feesValue == originalBatch.fees, don't send it (no change)
+        
+        // Handle start_date - preserve existing if not changed
+        if (_startDate != null) {
+          final newStartDate = _startDate!.toIso8601String().split('T')[0];
+          if (newStartDate != originalBatch.startDate) {
+            batchData['start_date'] = newStartDate;
+          }
+        }
+        // If _startDate is null, preserve original (don't send it)
+        
+        // Handle coach assignment - only send if changed
+        final originalCoachId = originalBatch.coachId;
+        if (assignedCoachId != originalCoachId) {
+          // Coach assignment changed
+          if (assignedCoachId != null) {
+            batchData['assigned_coach_id'] = assignedCoachId;
+            if (assignedCoachName != null) {
+              batchData['assigned_coach_name'] = assignedCoachName;
+            }
+          } else {
+            // Coach was removed
+            batchData['assigned_coach_id'] = null;
+            batchData['assigned_coach_name'] = null;
+          }
+        }
+        // If coach didn't change, don't send coach fields
+      } else {
+        // When creating, send all required fields
+        batchData['name'] = _nameController.text.trim();
+        batchData['batch_name'] = _nameController.text.trim();
+        batchData['timing'] = '$startTimeStr - $endTimeStr';
+        batchData['period'] = _selectedDays.join(', ');
+        batchData['days'] = _selectedDays.join(', ');
+        batchData['start_time'] = startTimeStr;
+        batchData['end_time'] = endTimeStr;
+        batchData['capacity'] = int.parse(_capacityController.text.trim());
+        batchData['location'] = _locationController.text.trim().isEmpty
             ? null
-            : _locationController.text.trim(),
-        'created_by': 'owner', // TODO: Get from auth
-      };
+            : _locationController.text.trim();
+        batchData['fees'] = _feesController.text.trim().isEmpty 
+            ? '0' 
+            : _feesController.text.trim();
+        batchData['start_date'] = _startDate != null
+            ? _startDate!.toIso8601String().split('T')[0]
+            : DateTime.now().toIso8601String().split('T')[0];
+        batchData['created_by'] = 'owner'; // TODO: Get from auth
+        
+        // Add coach assignment (singular, not plural)
+        if (assignedCoachId != null) {
+          batchData['assigned_coach_id'] = assignedCoachId;
+          if (assignedCoachName != null) {
+            batchData['assigned_coach_name'] = assignedCoachName;
+          }
+        } else {
+          // No coach assigned
+          batchData['assigned_coach_id'] = null;
+          batchData['assigned_coach_name'] = null;
+        }
+      }
 
       if (_editingBatch != null) {
         await ref.read(batchListProvider.notifier).updateBatch(
               _editingBatch!.id,
               batchData,
             );
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Batch updated successfully'),
-            backgroundColor: AppColors.success,
-          ),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Batch updated successfully'),
+              backgroundColor: AppColors.success,
+            ),
+          );
+        }
       } else {
         await ref.read(batchListProvider.notifier).createBatch(batchData);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Batch created successfully'),
+              backgroundColor: AppColors.success,
+            ),
+          );
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _showAddForm = false;
+          _editingBatch = null;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Batch created successfully'),
-            backgroundColor: AppColors.success,
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: AppColors.error,
           ),
         );
       }
-
-      setState(() {
-        _showAddForm = false;
-        _editingBatch = null;
-      });
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error: ${e.toString()}'),
-          backgroundColor: AppColors.error,
-        ),
-      );
     }
   }
 
@@ -207,19 +406,23 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
     if (confirmed == true) {
       try {
         await ref.read(batchListProvider.notifier).deleteBatch(batch.id);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Batch deleted successfully'),
-            backgroundColor: AppColors.success,
-          ),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Batch deleted successfully'),
+              backgroundColor: AppColors.success,
+            ),
+          );
+        }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: ${e.toString()}'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
       }
     }
   }
@@ -326,22 +529,70 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                       Row(
                         children: [
                           Expanded(
-                            child: CustomTextField(
-                              controller: _startTimeController,
-                              label: 'Start Time',
-                              hint: 'e.g., 6:00 AM',
-                              validator: (value) =>
-                                  value == null || value.isEmpty ? 'Required' : null,
+                            child: NeumorphicContainer(
+                              padding: const EdgeInsets.all(AppDimensions.paddingM),
+                              child: InkWell(
+                                onTap: () async {
+                                  final time = await showTimePicker(
+                                    context: context,
+                                    initialTime: _startTime ?? TimeOfDay.now(),
+                                  );
+                                  if (time != null) {
+                                    setState(() => _startTime = time);
+                                  }
+                                },
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.access_time, color: AppColors.textSecondary),
+                                    const SizedBox(width: AppDimensions.spacingM),
+                                    Text(
+                                      _startTime != null
+                                          ? _startTime!.format(context)
+                                          : 'Select start time',
+                                      style: TextStyle(
+                                        color: _startTime != null
+                                            ? AppColors.textPrimary
+                                            : AppColors.textSecondary,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
                           const SizedBox(width: AppDimensions.spacingM),
                           Expanded(
-                            child: CustomTextField(
-                              controller: _endTimeController,
-                              label: 'End Time',
-                              hint: 'e.g., 7:30 AM',
-                              validator: (value) =>
-                                  value == null || value.isEmpty ? 'Required' : null,
+                            child: NeumorphicContainer(
+                              padding: const EdgeInsets.all(AppDimensions.paddingM),
+                              child: InkWell(
+                                onTap: () async {
+                                  final time = await showTimePicker(
+                                    context: context,
+                                    initialTime: _endTime ?? TimeOfDay.now(),
+                                  );
+                                  if (time != null) {
+                                    setState(() => _endTime = time);
+                                  }
+                                },
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.access_time, color: AppColors.textSecondary),
+                                    const SizedBox(width: AppDimensions.spacingM),
+                                    Text(
+                                      _endTime != null
+                                          ? _endTime!.format(context)
+                                          : 'Select end time',
+                                      style: TextStyle(
+                                        color: _endTime != null
+                                            ? AppColors.textPrimary
+                                            : AppColors.textSecondary,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
                         ],
@@ -360,6 +611,54 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                           }
                           return null;
                         },
+                      ),
+                      const SizedBox(height: AppDimensions.spacingM),
+                      CustomTextField(
+                        controller: _feesController,
+                        label: 'Fees',
+                        hint: 'e.g., 5000',
+                        keyboardType: TextInputType.number,
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return _editingBatch != null ? null : 'Required';
+                          }
+                          // Allow numeric values
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: AppDimensions.spacingM),
+                      NeumorphicContainer(
+                        padding: const EdgeInsets.all(AppDimensions.paddingM),
+                        child: InkWell(
+                          onTap: () async {
+                            final date = await showDatePicker(
+                              context: context,
+                              initialDate: _startDate ?? DateTime.now(),
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime(2100),
+                            );
+                            if (date != null) {
+                              setState(() => _startDate = date);
+                            }
+                          },
+                          child: Row(
+                            children: [
+                              const Icon(Icons.calendar_today, color: AppColors.textSecondary),
+                              const SizedBox(width: AppDimensions.spacingM),
+                              Text(
+                                _startDate != null
+                                    ? '${_startDate!.day}/${_startDate!.month}/${_startDate!.year}'
+                                    : 'Select start date',
+                                style: TextStyle(
+                                  color: _startDate != null
+                                      ? AppColors.textPrimary
+                                      : AppColors.textSecondary,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                       const SizedBox(height: AppDimensions.spacingM),
                       CustomTextField(
@@ -403,7 +702,7 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                       ),
                       const SizedBox(height: AppDimensions.spacingM),
                       const Text(
-                        'Assign Coaches (Optional)',
+                        'Assign Coach (Optional)',
                         style: TextStyle(
                           fontSize: 14,
                           color: AppColors.textSecondary,
@@ -421,6 +720,8 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                             onSelected: (selected) {
                               setState(() {
                                 if (selected) {
+                                  // Only allow one coach selection
+                                  _selectedCoachIds.clear();
                                   _selectedCoachIds.add(coach.id);
                                 } else {
                                   _selectedCoachIds.remove(coach.id);
@@ -439,12 +740,27 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                       ),
                       if (_selectedCoachIds.isNotEmpty) ...[
                         const SizedBox(height: AppDimensions.spacingS),
-                        Text(
-                          'Selected: ${_selectedCoachIds.length} coach(es)',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary,
-                          ),
+                        Builder(
+                          builder: (context) {
+                            try {
+                              final coachName = _coaches.firstWhere((c) => c.id == _selectedCoachIds.first).name;
+                              return Text(
+                                'Selected: $coachName',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
+                                ),
+                              );
+                            } catch (e) {
+                              return Text(
+                                'Selected: Coach ${_selectedCoachIds.first}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
+                                ),
+                              );
+                            }
+                          },
                         ),
                       ],
                       const SizedBox(height: AppDimensions.spacingL),
@@ -716,21 +1032,28 @@ class _BatchCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppDimensions.spacingM),
+          // Days - always shown
           Row(
             children: [
               _InfoChip(
                 icon: Icons.calendar_today_outlined,
                 label: batch.daysString,
               ),
-              if (batch.coachName != null) ...[
-                const SizedBox(width: AppDimensions.spacingS),
-                _InfoChip(
-                  icon: Icons.person_outline,
-                  label: batch.coachName!,
-                ),
-              ],
             ],
           ),
+          // Coach Name - conditionally shown (check both ID and name)
+          if (batch.assignedCoachId != null) ...[
+            const SizedBox(height: AppDimensions.spacingS),
+            Row(
+              children: [
+                _InfoChip(
+                  icon: Icons.person_outline,
+                  label: batch.coachName ?? 'Coach ${batch.assignedCoachId}',
+                ),
+              ],
+            ),
+          ],
+          // Location - conditionally shown
           if (batch.location != null) ...[
             const SizedBox(height: AppDimensions.spacingS),
             Row(
@@ -739,17 +1062,22 @@ class _BatchCard extends StatelessWidget {
                   icon: Icons.location_on_outlined,
                   label: batch.location!,
                 ),
-                const Spacer(),
-                Text(
-                  'Capacity: ${batch.capacity}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
               ],
             ),
           ],
+          // Capacity - always shown
+          const SizedBox(height: AppDimensions.spacingS),
+          Row(
+            children: [
+              Text(
+                'Capacity: ${batch.capacity}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

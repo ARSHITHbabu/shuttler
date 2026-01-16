@@ -113,13 +113,37 @@ class BatchService {
       if (batchData.containsKey('fees')) {
         backendData['fees'] = batchData['fees'];
       }
+      if (batchData.containsKey('start_date')) {
+        backendData['start_date'] = batchData['start_date'];
+      }
       if (batchData.containsKey('location')) {
         backendData['location'] = batchData['location'];
       }
-      if (batchData.containsKey('coach_id') || batchData.containsKey('assigned_coach_id')) {
+      
+      // Handle coach assignment - support both singular and plural field names
+      if (batchData.containsKey('assigned_coach_ids')) {
+        // Handle plural form (list) - take first coach or null
+        final coachIds = batchData['assigned_coach_ids'] as List<dynamic>?;
+        if (coachIds != null && coachIds.isNotEmpty) {
+          backendData['assigned_coach_id'] = coachIds.first;
+        } else {
+          backendData['assigned_coach_id'] = null;
+        }
+      } else if (batchData.containsKey('coach_id') || batchData.containsKey('assigned_coach_id')) {
         backendData['assigned_coach_id'] = batchData['coach_id'] ?? batchData['assigned_coach_id'];
       }
-      if (batchData.containsKey('coach_name') || batchData.containsKey('assigned_coach_name')) {
+      
+      if (batchData.containsKey('assigned_coach_names')) {
+        // Handle plural form (string) - take first coach name or null
+        final coachNames = batchData['assigned_coach_names'] as String?;
+        if (coachNames != null && coachNames.isNotEmpty) {
+          // If it's a comma-separated string, take the first one
+          final names = coachNames.split(',').map((n) => n.trim()).where((n) => n.isNotEmpty).toList();
+          backendData['assigned_coach_name'] = names.isNotEmpty ? names.first : null;
+        } else {
+          backendData['assigned_coach_name'] = null;
+        }
+      } else if (batchData.containsKey('coach_name') || batchData.containsKey('assigned_coach_name')) {
         backendData['assigned_coach_name'] = batchData['coach_name'] ?? batchData['assigned_coach_name'];
       }
       
@@ -178,6 +202,23 @@ class BatchService {
       await _apiService.delete('/batches/$batchId/students/$studentId');
     } catch (e) {
       throw Exception('Failed to remove student: ${_apiService.getErrorMessage(e)}');
+    }
+  }
+
+  /// Get all batches that a student is enrolled in
+  Future<List<Batch>> getStudentBatches(int studentId) async {
+    try {
+      // Backend uses: GET /student-batches/{student_id}
+      final response = await _apiService.get('/student-batches/$studentId');
+      
+      if (response.data is List) {
+        return (response.data as List)
+            .map((json) => Batch.fromJson(json as Map<String, dynamic>))
+            .toList();
+      }
+      return [];
+    } catch (e) {
+      throw Exception('Failed to fetch student batches: ${_apiService.getErrorMessage(e)}');
     }
   }
 }

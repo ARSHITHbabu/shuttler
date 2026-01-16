@@ -15,7 +15,12 @@ import 'package:intl/intl.dart';
 /// BMI Tracking Screen - Track student health metrics
 /// Matches React reference: BMITracking.tsx
 class BMITrackingScreen extends ConsumerStatefulWidget {
-  const BMITrackingScreen({super.key});
+  final Student? initialStudent;
+  
+  const BMITrackingScreen({
+    super.key,
+    this.initialStudent,
+  });
 
   @override
   ConsumerState<BMITrackingScreen> createState() => _BMITrackingScreenState();
@@ -33,6 +38,43 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
   double? _calculatedBMI;
   String? _healthStatus;
   int? _editingBMIRecordId; // Track if we're editing an existing record
+  bool _isInitializing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize with student if provided
+    if (widget.initialStudent != null) {
+      _initializeWithStudent(widget.initialStudent!);
+    }
+  }
+
+  Future<void> _initializeWithStudent(Student student) async {
+    if (!mounted) return;
+    setState(() => _isInitializing = true);
+    try {
+      // Pre-select the student
+      if (!mounted) return;
+      setState(() {
+        _selectedStudentId = student.id;
+        _selectedStudent = student;
+      });
+      
+      // Load BMI history
+      await _loadBMIHistory();
+      
+      if (!mounted) return;
+      setState(() => _isInitializing = false);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isInitializing = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to initialize: $e')),
+        );
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -75,6 +117,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
 
   Future<void> _loadBMIHistory() async {
     if (_selectedStudentId == null) return;
+    if (!mounted) return;
 
     setState(() => _isLoading = true);
     try {
@@ -82,11 +125,13 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
       final records = await bmiService.getBMIRecords(
         studentId: _selectedStudentId,
       );
+      if (!mounted) return;
       setState(() {
         _bmiHistory = records;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -171,6 +216,30 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
   Widget build(BuildContext context) {
     if (_showAddForm) {
       return _buildAddForm();
+    }
+
+    // Show loading during initialization
+    if (_isInitializing) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: AppColors.background,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          title: const Text(
+            'BMI Tracking',
+            style: TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        body: const Center(child: LoadingSpinner()),
+      );
     }
 
     return Scaffold(
@@ -301,7 +370,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
         return NeumorphicContainer(
           padding: const EdgeInsets.all(AppDimensions.paddingM),
           child: DropdownButtonFormField<int>(
-            value: _selectedStudentId,
+            initialValue: _selectedStudentId,
             decoration: const InputDecoration(
               labelText: 'Select Student',
               labelStyle: TextStyle(color: AppColors.textSecondary),
@@ -614,6 +683,17 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
               ),
             ],
           ),
+          // Achievement message for underweight/overweight/obese
+          if (record.healthStatus != null)
+            Builder(
+              builder: (context) {
+                final achievementMsg = BMIRecord.getAchievementMessage(record.bmi);
+                if (achievementMsg != null) {
+                  return _buildAchievementLabel(achievementMsg);
+                }
+                return const SizedBox.shrink();
+              },
+            ),
           const SizedBox(height: AppDimensions.spacingM),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -652,6 +732,33 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
     );
   }
 
+  Widget _buildAchievementLabel(String message) {
+    return Padding(
+      padding: const EdgeInsets.only(top: AppDimensions.spacingS),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.lightbulb_outline,
+            size: 16,
+            color: AppColors.accent.withOpacity(0.7),
+          ),
+          const SizedBox(width: AppDimensions.spacingS),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                fontSize: 11,
+                color: AppColors.textSecondary,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Color _getHealthStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'underweight':
@@ -684,8 +791,8 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
     // Calculate min and max BMI for Y axis
     final minBMI = sortedHistory.map((r) => r.bmi).reduce((a, b) => a < b ? a : b);
     final maxBMI = sortedHistory.map((r) => r.bmi).reduce((a, b) => a > b ? a : b);
-    final yMin = (minBMI - 2.0).clamp(0.0, double.infinity) as double;
-    final yMax = (maxBMI + 2.0) as double;
+    final yMin = (minBMI - 2.0).clamp(0.0, double.infinity);
+    final yMax = (maxBMI + 2.0);
 
     return NeumorphicContainer(
       padding: const EdgeInsets.all(AppDimensions.paddingM),
