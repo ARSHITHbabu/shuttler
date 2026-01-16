@@ -178,7 +178,7 @@ class _CoachAttendanceScreenState extends ConsumerState<CoachAttendanceScreen> {
                       ),
                       const SizedBox(height: AppDimensions.spacingS),
                       DropdownButtonFormField<int>(
-                        value: _selectedBatchId,
+                        initialValue: _selectedBatchId,
                         decoration: const InputDecoration(
                           border: InputBorder.none,
                           contentPadding: EdgeInsets.symmetric(horizontal: 0),
@@ -545,9 +545,9 @@ class _StudentAttendanceCardState extends State<_StudentAttendanceCard> {
                         color: AppColors.textPrimary,
                       ),
                     ),
-                                  if (widget.student.phone != null && widget.student.phone!.isNotEmpty)
+                                  if (widget.student.phone.isNotEmpty)
                                     Text(
-                                      widget.student.phone!,
+                                      widget.student.phone,
                         style: const TextStyle(
                           fontSize: 12,
                           color: AppColors.textSecondary,

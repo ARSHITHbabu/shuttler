@@ -4,12 +4,7 @@ import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
 import '../../providers/service_providers.dart';
-import '../../core/services/attendance_service.dart';
-import '../../core/services/fee_service.dart';
-import '../../models/attendance.dart';
-import '../../models/fee.dart';
 
 /// Reports Screen - Generate and view reports
 /// Matches React reference: ReportsScreen.tsx

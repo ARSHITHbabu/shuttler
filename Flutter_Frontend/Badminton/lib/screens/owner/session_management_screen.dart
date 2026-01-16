@@ -633,7 +633,7 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
               NeumorphicContainer(
                 padding: const EdgeInsets.all(AppDimensions.paddingM),
                 child: DropdownButtonFormField<int>(
-                  value: _selectedBatchId,
+                  initialValue: _selectedBatchId,
                   decoration: const InputDecoration(
                     labelText: 'Batch *',
                     labelStyle: TextStyle(color: AppColors.textSecondary),
@@ -658,7 +658,7 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
               NeumorphicContainer(
                 padding: const EdgeInsets.all(AppDimensions.paddingM),
                 child: DropdownButtonFormField<int>(
-                  value: _selectedCoachId,
+                  initialValue: _selectedCoachId,
                   decoration: const InputDecoration(
                     labelText: 'Coach (Optional)',
                     labelStyle: TextStyle(color: AppColors.textSecondary),

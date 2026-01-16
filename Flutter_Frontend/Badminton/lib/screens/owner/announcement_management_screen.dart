@@ -353,7 +353,7 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
               NeumorphicContainer(
                 padding: const EdgeInsets.all(AppDimensions.paddingM),
             child: DropdownButtonFormField<String>(
-              value: _selectedTargetAudience,
+              initialValue: _selectedTargetAudience,
                   decoration: const InputDecoration(
                     labelText: 'Target Audience',
                     labelStyle: TextStyle(color: AppColors.textSecondary),

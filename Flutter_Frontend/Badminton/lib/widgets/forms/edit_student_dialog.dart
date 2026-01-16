@@ -32,7 +32,7 @@ class _EditStudentDialogState extends ConsumerState<EditStudentDialog> {
   late final TextEditingController _guardianNameController;
   late final TextEditingController _guardianPhoneController;
   int? _selectedBatchId;
-  List<Batch> _batches = [];
+  final List<Batch> _batches = [];
   bool _isLoading = false;
 
   @override
@@ -181,7 +181,7 @@ class _EditStudentDialogState extends ConsumerState<EditStudentDialog> {
                 NeumorphicContainer(
                   padding: const EdgeInsets.all(AppDimensions.paddingM),
                   child: DropdownButtonFormField<int>(
-                    value: _selectedBatchId,
+                    initialValue: _selectedBatchId,
                     decoration: const InputDecoration(
                       labelText: 'Assign to Batch (Optional)',
                       labelStyle: TextStyle(color: AppColors.textSecondary),
