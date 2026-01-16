@@ -143,7 +143,7 @@ class _ProfileCompletionScreenState
 
       // Update student profile
       final response = await apiService.put(
-        '${ApiEndpoints.students}$userId',
+        ApiEndpoints.studentById(userId),
         data: updateData,
       );
 
