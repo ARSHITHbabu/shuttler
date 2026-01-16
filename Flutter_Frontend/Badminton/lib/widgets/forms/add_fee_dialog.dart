@@ -171,7 +171,7 @@ class _AddFeeDialogState extends ConsumerState<AddFeeDialog> {
                   NeumorphicContainer(
                     padding: const EdgeInsets.all(AppDimensions.paddingM),
                     child: DropdownButtonFormField<int>(
-                      value: _selectedBatchId,
+                      initialValue: _selectedBatchId,
                       decoration: const InputDecoration(
                         labelText: '1. Select Batch',
                         labelStyle: TextStyle(color: AppColors.textSecondary),
@@ -209,7 +209,7 @@ class _AddFeeDialogState extends ConsumerState<AddFeeDialog> {
                     NeumorphicContainer(
                       padding: const EdgeInsets.all(AppDimensions.paddingM),
                       child: DropdownButtonFormField<int>(
-                        value: _selectedStudentId,
+                        initialValue: _selectedStudentId,
                         decoration: const InputDecoration(
                           labelText: '2. Select Student',
                           labelStyle: TextStyle(color: AppColors.textSecondary),
@@ -248,7 +248,7 @@ class _AddFeeDialogState extends ConsumerState<AddFeeDialog> {
                   NeumorphicContainer(
                     padding: const EdgeInsets.all(AppDimensions.paddingM),
                     child: DropdownButtonFormField<int>(
-                      value: _selectedPayeeId,
+                      initialValue: _selectedPayeeId,
                       decoration: const InputDecoration(
                         labelText: '3. Select Payee (Student from Batch)',
                         labelStyle: TextStyle(color: AppColors.textSecondary),
