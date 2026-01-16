@@ -9,6 +9,7 @@ import '../../providers/service_providers.dart';
 import 'coach_profile_screen.dart';
 import 'coach_announcements_screen.dart';
 import 'coach_schedule_screen.dart';
+import 'coach_calendar_screen.dart';
 import 'coach_settings_screen.dart';
 
 /// Coach More Screen - Navigation hub for additional features
@@ -78,6 +79,18 @@ class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (context) => const CoachScheduleScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.calendar_month_outlined,
+              title: 'Calendar',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const CoachCalendarScreen(),
                   ),
                 );
               },
