@@ -311,7 +311,7 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
                                       ),
                                     ),
                                     subtitle: Text(
-                                      '${_formatDate(payment.paidDate)}${payment.payeeStudentName != null ? ' • ${payment.payeeStudentName}' : ''}${payment.paymentMethod != null ? ' • ${payment.paymentMethod}' : ''}',
+                                      '${_formatDate(payment.paidDate)}${payment.payeeDisplayName != null ? ' • ${payment.payeeDisplayName}' : ''}${payment.paymentMethod != null ? ' • ${payment.paymentMethod}' : ''}',
                                       style: const TextStyle(fontSize: 12),
                                     ),
                                     trailing: IconButton(

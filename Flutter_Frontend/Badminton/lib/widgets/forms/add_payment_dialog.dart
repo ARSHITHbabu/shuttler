@@ -28,54 +28,60 @@ class AddPaymentDialog extends ConsumerStatefulWidget {
 class _AddPaymentDialogState extends ConsumerState<AddPaymentDialog> {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
+  final _payeeController = TextEditingController();
   int? _selectedPayeeId;
-  Student? _selectedPayee;
+  String? _customPayeeName;
   DateTime _paidDate = DateTime.now();
   String _selectedPaymentMethod = 'cash';
   bool _isLoading = false;
-  List<Student> _batchStudents = [];
-  bool _loadingStudents = true;
 
   @override
   void initState() {
     super.initState();
-    _loadBatchStudents();
+    // Pre-fill payee field with student name
+    final studentName = widget.fee.studentName ?? 'Student #${widget.fee.studentId}';
+    _payeeController.text = studentName;
+    _selectedPayeeId = widget.fee.studentId;
+    _customPayeeName = null;
   }
 
   @override
   void dispose() {
     _amountController.dispose();
+    _payeeController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadBatchStudents() async {
-    try {
-      final batchService = ref.read(batchServiceProvider);
-      final students = await batchService.getBatchStudents(widget.fee.batchId);
+  void _onPayeeTextChanged(String value) {
+    final trimmed = value.trim();
+    
+    if (trimmed.isEmpty) {
       setState(() {
-        _batchStudents = students;
-        _loadingStudents = false;
+        _selectedPayeeId = null;
+        _customPayeeName = null;
       });
-    } catch (e) {
+      return;
+    }
+    
+    // Check if it matches the student's name (case-insensitive)
+    final studentName = widget.fee.studentName?.trim().toLowerCase();
+    if (studentName != null && trimmed.toLowerCase() == studentName) {
+      // Matches student name - use student ID
       setState(() {
-        _loadingStudents = false;
+        _selectedPayeeId = widget.fee.studentId;
+        _customPayeeName = null;
       });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load students: $e')),
-        );
-      }
+    } else {
+      // Doesn't match - treat as custom name
+      setState(() {
+        _selectedPayeeId = null;
+        _customPayeeName = trimmed;
+      });
     }
   }
 
   Future<void> _handleSubmit() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedPayeeId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a payee')),
-      );
-      return;
-    }
 
     final paymentAmount = double.parse(_amountController.text.trim());
     if (paymentAmount > widget.fee.pendingAmount) {
@@ -91,9 +97,19 @@ class _AddPaymentDialogState extends ConsumerState<AddPaymentDialog> {
       final paymentData = {
         'amount': paymentAmount,
         'paid_date': _paidDate.toIso8601String().split('T')[0],
-        'payee_student_id': _selectedPayeeId,
         'payment_method': _selectedPaymentMethod,
       };
+      
+      // Add payee information (either student ID or custom name, not both)
+      if (_selectedPayeeId != null) {
+        paymentData['payee_student_id'] = _selectedPayeeId!;
+      } else {
+        // Use custom name from text field
+        final payeeName = _payeeController.text.trim();
+        if (payeeName.isNotEmpty) {
+          paymentData['payee_name'] = payeeName;
+        }
+      }
 
       if (widget.onSubmit != null) {
         await widget.onSubmit!(paymentData);
@@ -187,41 +203,19 @@ class _AddPaymentDialogState extends ConsumerState<AddPaymentDialog> {
                   },
                 ),
                 const SizedBox(height: AppDimensions.spacingM),
-                // Payee Selection
-                if (_loadingStudents)
-                  const LoadingSpinner()
-                else
-                  NeumorphicContainer(
-                    padding: const EdgeInsets.all(AppDimensions.paddingM),
-                    child: DropdownButtonFormField<int>(
-                      initialValue: _selectedPayeeId,
-                      decoration: const InputDecoration(
-                        labelText: 'Payee (Student from Batch)',
-                        labelStyle: TextStyle(color: AppColors.textSecondary),
-                        border: InputBorder.none,
-                      ),
-                      dropdownColor: AppColors.cardBackground,
-                      style: const TextStyle(color: AppColors.textPrimary),
-                      items: _batchStudents.map((student) {
-                        return DropdownMenuItem<int>(
-                          value: student.id,
-                          child: Text(student.name),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedPayeeId = value;
-                          _selectedPayee = _batchStudents.firstWhere((s) => s.id == value);
-                        });
-                      },
-                      validator: (value) {
-                        if (value == null) {
-                          return 'Please select a payee';
-                        }
-                        return null;
-                      },
-                    ),
-                  ),
+                // Payee Field
+                CustomTextField(
+                  controller: _payeeController,
+                  label: 'Payee',
+                  hint: 'Enter payee name',
+                  onChanged: _onPayeeTextChanged,
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter payee name';
+                    }
+                    return null;
+                  },
+                ),
                 const SizedBox(height: AppDimensions.spacingM),
                 // Payment Method
                 const Text(
