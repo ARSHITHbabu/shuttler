@@ -6,6 +6,7 @@ import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/loading_spinner.dart';
 import '../../providers/service_providers.dart';
+import '../../providers/auth_provider.dart';
 
 /// Student Attendance Screen - READ-ONLY view of attendance history
 /// Students can view their attendance records but cannot mark attendance
@@ -40,13 +41,34 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
     });
 
     try {
-      final storageService = ref.read(storageServiceProvider);
-      final apiService = ref.read(apiServiceProvider);
-      final userId = storageService.getUserId();
-
-      if (userId == null) {
-        throw Exception('User not logged in');
+      // Get user ID from auth provider (preferred) or storage (fallback)
+      int? userId;
+      
+      // Try to get from auth provider first
+      final authStateAsync = ref.read(authProvider);
+      final authState = authStateAsync.value;
+      
+      if (authState is Authenticated) {
+        userId = authState.userId;
       }
+      
+      // Fallback: try to get from storage if auth provider doesn't have it
+      if (userId == null) {
+        final storageService = ref.read(storageServiceProvider);
+        
+        // Ensure storage is initialized
+        if (!storageService.isInitialized) {
+          await storageService.init();
+        }
+        
+        userId = storageService.getUserId();
+      }
+      
+      if (userId == null) {
+        throw Exception('User not logged in. Please try logging in again.');
+      }
+
+      final apiService = ref.read(apiServiceProvider);
 
       // Load attendance records
       try {
