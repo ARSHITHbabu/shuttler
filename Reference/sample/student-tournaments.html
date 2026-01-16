@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tournaments - Student</title>
+    <link rel="stylesheet" href="student-styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="student-dashboard.html">📊 Dashboard</a>
+            <a href="student-invitations.html">📨 Invitations</a>
+            <a href="student-batches.html">📚 Batches</a>
+            <a href="student-attendance.html">📋 Attendance</a>
+            <a href="student-fees.html">💰 Fees</a>
+            <a href="student-performance.html">⭐ Performance</a>
+            <a href="student-bmi.html">📏 BMI</a>
+            <a href="student-schedule.html">📅 Schedule</a>
+            <a href="student-tournaments.html" class="active">🏆 Tournaments</a>
+            <a href="student-videos.html">🎥 Videos</a>
+            <a href="student-profile.html">👤 Profile</a>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+        
+        <h1>🏆 Tournaments</h1>
+        
+        <div class="tournament-grid" id="dataContainer"></div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        let currentStudent = null;
+
+        const loggedInStudent = sessionStorage.getItem('loggedInStudent');
+        if (!loggedInStudent) {
+            window.location.href = 'student.html';
+        } else {
+            currentStudent = JSON.parse(loggedInStudent);
+            loadData();
+        }
+
+        function getTournamentStatus(startDate, endDate) {
+            const now = new Date();
+            const start = new Date(startDate);
+            const end = new Date(endDate);
+            
+            if (now < start) return { text: 'Upcoming', class: 'upcoming' };
+            if (now > end) return { text: 'Completed', class: 'completed' };
+            return { text: 'Ongoing', class: 'ongoing' };
+        }
+
+        async function loadData() {
+            try {
+                const response = await fetch(`${API_URL}/tournaments/upcoming`);
+                const tournaments = await response.json();
+                
+                const container = document.getElementById('dataContainer');
+                
+                if (tournaments.length === 0) {
+                    container.innerHTML = '<div class="empty-state">🏆 No tournaments available at the moment</div>';
+                    return;
+                }
+
+                container.innerHTML = tournaments.map(tournament => {
+                    const status = getTournamentStatus(tournament.start_date, tournament.end_date);
+                    
+                    return `
+                        <div class="tournament-card">
+                            <span class="status-badge status-${status.class}">${status.text}</span>
+                            
+                            <div class="tournament-header">🏆 ${tournament.name}</div>
+                            
+                            <div class="tournament-info">
+                                <div class="info-item">
+                                    <span class="info-icon">📅</span>
+                                    <div>
+                                        <strong>Start Date:</strong> ${formatDate(tournament.start_date)}
+                                    </div>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-icon">🏁</span>
+                                    <div>
+                                        <strong>End Date:</strong> ${formatDate(tournament.end_date)}
+                                    </div>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-icon">📍</span>
+                                    <div>
+                                        <strong>Location:</strong> ${tournament.location || 'TBA'}
+                                    </div>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-icon">🏅</span>
+                                    <div>
+                                        <strong>Category:</strong> ${tournament.category || 'General'}
+                                    </div>
+                                </div>
+                                <div class="info-item">
+                                    <span class="info-icon">👥</span>
+                                    <div>
+                                        <strong>Max Participants:</strong> ${tournament.max_participants || 'No limit'}
+                                    </div>
+                                </div>
+                                ${tournament.prize_pool ? `
+                                    <div class="info-item">
+                                        <span class="info-icon">💰</span>
+                                        <div>
+                                            <strong>Prize Pool:</strong> ₹${tournament.prize_pool}
+                                        </div>
+                                    </div>
+                                ` : ''}
+                                ${tournament.description ? `
+                                    <div class="info-item" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(0,0,0,0.1);">
+                                        <span class="info-icon">📝</span>
+                                        <div>
+                                            <strong>Description:</strong><br>
+                                            ${tournament.description}
+                                        </div>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('dataContainer').innerHTML = '<div class="empty-state">⚠️ Error loading tournaments</div>';
+            }
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
+        }
+
+        function logout() {
+            sessionStorage.removeItem('loggedInStudent');
+            window.location.href = 'student.html';
+        }
+
+        setInterval(loadData, 30000);
+    </script>
+</body>
+</html>

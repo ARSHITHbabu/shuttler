@@ -1,0 +1,1658 @@
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, Text
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from pydantic import BaseModel
+from typing import List, Optional
+from datetime import datetime
+
+# Database setup
+SQLALCHEMY_DATABASE_URL = "sqlite:///./academy_portal.db"
+engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+# ==================== Database Models ====================
+
+class CoachDB(Base):
+    __tablename__ = "coaches"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    email = Column(String, nullable=False, unique=True)
+    phone = Column(String, nullable=False)
+    password = Column(String, nullable=False)
+    specialization = Column(String, nullable=True)
+    experience_years = Column(Integer, nullable=True)
+    status = Column(String, default="active")  # active, inactive
+
+class BatchDB(Base):
+    __tablename__ = "batches"
+    id = Column(Integer, primary_key=True, index=True)
+    batch_name = Column(String, nullable=False)
+    capacity = Column(Integer, nullable=False)
+    fees = Column(String, nullable=False)
+    start_date = Column(String, nullable=False)
+    timing = Column(String, nullable=False)
+    period = Column(String, nullable=False)
+    location = Column(String, nullable=True)
+    created_by = Column(String, nullable=False)
+    assigned_coach_id = Column(Integer, nullable=True)
+    assigned_coach_name = Column(String, nullable=True)
+
+class StudentDB(Base):
+    __tablename__ = "students"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    phone = Column(String, nullable=False)
+    email = Column(String, nullable=False, unique=True)
+    guardian_name = Column(String, nullable=False)
+    guardian_phone = Column(String, nullable=False)
+    password = Column(String, nullable=False)
+    added_by = Column(String, nullable=False)
+    date_of_birth = Column(String, nullable=True)
+    address = Column(Text, nullable=True)
+    status = Column(String, default="active")
+
+class BatchStudentDB(Base):
+    __tablename__ = "batch_students"
+    id = Column(Integer, primary_key=True, index=True)
+    batch_id = Column(Integer, nullable=False)
+    student_id = Column(Integer, nullable=False)
+    status = Column(String, default="pending") 
+
+class AttendanceDB(Base):
+    __tablename__ = "attendance"
+    id = Column(Integer, primary_key=True, index=True)
+    batch_id = Column(Integer, nullable=False)
+    student_id = Column(Integer, nullable=False)
+    date = Column(String, nullable=False)
+    status = Column(String, nullable=False)  
+    marked_by = Column(String, nullable=False)
+    remarks = Column(Text, nullable=True)
+
+class CoachAttendanceDB(Base):
+    __tablename__ = "coach_attendance"
+    id = Column(Integer, primary_key=True, index=True)
+    coach_id = Column(Integer, nullable=False)
+    date = Column(String, nullable=False)
+    status = Column(String, nullable=False)  
+    remarks = Column(Text, nullable=True)
+
+class FeeDB(Base):
+    __tablename__ = "fees"
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, nullable=False)
+    batch_id = Column(Integer, nullable=False)
+    amount = Column(Float, nullable=False)
+    due_date = Column(String, nullable=False)
+    paid_date = Column(String, nullable=True)
+    status = Column(String, nullable=False)  
+    payment_method = Column(String, nullable=True)
+    collected_by = Column(String, nullable=True)
+
+class PerformanceDB(Base):
+    __tablename__ = "performance"
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, nullable=False)
+    batch_id = Column(Integer, nullable=False)
+    date = Column(String, nullable=False)
+    skill = Column(String, nullable=False)
+    rating = Column(Integer, nullable=False)
+    comments = Column(Text, nullable=True)
+    recorded_by = Column(String, nullable=False)
+
+class BMIDB(Base):
+    __tablename__ = "bmi_records"
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, nullable=False)
+    height = Column(Float, nullable=False)  
+    weight = Column(Float, nullable=False)  
+    bmi = Column(Float, nullable=False)
+    date = Column(String, nullable=False)
+    recorded_by = Column(String, nullable=False)
+
+class EnquiryDB(Base):
+    __tablename__ = "enquiries"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    phone = Column(String, nullable=False)
+    email = Column(String, nullable=True)
+    message = Column(Text, nullable=False)
+    status = Column(String, nullable=False) 
+    created_at = Column(String, nullable=False)
+    followed_up_by = Column(String, nullable=True)
+    notes = Column(Text, nullable=True)
+    assigned_to = Column(String, nullable=True)
+
+class ScheduleDB(Base):
+    __tablename__ = "schedules"
+    id = Column(Integer, primary_key=True, index=True)
+    batch_id = Column(Integer, nullable=False)
+    date = Column(String, nullable=False)
+    activity = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    created_by = Column(String, nullable=False)
+
+class TournamentDB(Base):
+    __tablename__ = "tournaments"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    date = Column(String, nullable=False)
+    location = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    category = Column(String, nullable=True)
+
+class VideoResourceDB(Base):
+    __tablename__ = "video_resources"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    url = Column(String, nullable=False)
+    description = Column(Text, nullable=True)
+    category = Column(String, nullable=True)
+
+class InvitationDB(Base):
+    __tablename__ = "invitations"
+    id = Column(Integer, primary_key=True, index=True)
+    coach_id = Column(Integer, nullable=False)
+    coach_name = Column(String, nullable=False)
+    student_phone = Column(String, nullable=False)
+    student_email = Column(String, nullable=False)
+    batch_id = Column(Integer, nullable=False)
+    status = Column(String, default="pending") 
+    created_at = Column(String, nullable=False)
+
+# Create tables
+Base.metadata.create_all(bind=engine)
+
+# ==================== Pydantic Models ====================
+
+# Coach Models
+class CoachCreate(BaseModel):
+    name: str
+    email: str
+    phone: str
+    password: str
+    specialization: Optional[str] = None
+    experience_years: Optional[int] = None
+
+class Coach(BaseModel):
+    id: int
+    name: str
+    email: str
+    phone: str
+    password: str
+    specialization: Optional[str] = None
+    experience_years: Optional[int] = None
+    status: str = "active"
+    
+    class Config:
+        from_attributes = True
+
+class CoachLogin(BaseModel):
+    email: str
+    password: str
+
+class CoachUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    password: Optional[str] = None
+    specialization: Optional[str] = None
+    experience_years: Optional[int] = None
+    status: Optional[str] = None
+
+# Batch Models
+class BatchCreate(BaseModel):
+    batch_name: str
+    capacity: int
+    fees: str
+    start_date: str
+    timing: str
+    period: str
+    location: Optional[str] = None
+    created_by: str
+    assigned_coach_id: Optional[int] = None
+    assigned_coach_name: Optional[str] = None
+
+class Batch(BaseModel):
+    id: int
+    batch_name: str
+    capacity: int
+    fees: str
+    start_date: str
+    timing: str
+    period: str
+    location: Optional[str] = None
+    created_by: str
+    assigned_coach_id: Optional[int] = None
+    assigned_coach_name: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+class BatchUpdate(BaseModel):
+    batch_name: Optional[str] = None
+    capacity: Optional[int] = None
+    fees: Optional[str] = None
+    start_date: Optional[str] = None
+    timing: Optional[str] = None
+    period: Optional[str] = None
+    location: Optional[str] = None
+    assigned_coach_id: Optional[int] = None
+    assigned_coach_name: Optional[str] = None
+
+# Student Models
+class StudentCreate(BaseModel):
+    name: str
+    phone: str
+    email: str
+    guardian_name: str
+    guardian_phone: str
+    password: str
+    added_by: str
+    date_of_birth: Optional[str] = None
+    address: Optional[str] = None
+
+class Student(BaseModel):
+    id: int
+    name: str
+    phone: str
+    email: str
+    guardian_name: str
+    guardian_phone: str
+    password: str
+    added_by: str
+    date_of_birth: Optional[str] = None
+    address: Optional[str] = None
+    status: str = "active"
+    
+    class Config:
+        from_attributes = True
+
+class StudentLogin(BaseModel):
+    email: str
+    password: str
+
+class StudentUpdate(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    guardian_name: Optional[str] = None
+    guardian_phone: Optional[str] = None
+    password: Optional[str] = None
+    date_of_birth: Optional[str] = None
+    address: Optional[str] = None
+    status: Optional[str] = None
+
+# Attendance Models
+class AttendanceCreate(BaseModel):
+    batch_id: int
+    student_id: int
+    date: str
+    status: str
+    marked_by: str
+    remarks: Optional[str] = None
+
+class Attendance(BaseModel):
+    id: int
+    batch_id: int
+    student_id: int
+    date: str
+    status: str
+    marked_by: str
+    remarks: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+class CoachAttendanceCreate(BaseModel):
+    coach_id: int
+    date: str
+    status: str
+    remarks: Optional[str] = None
+
+class CoachAttendance(BaseModel):
+    id: int
+    coach_id: int
+    date: str
+    status: str
+    remarks: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+# Fee Models
+class FeeCreate(BaseModel):
+    student_id: int
+    batch_id: int
+    amount: float
+    due_date: str
+    status: str
+    payment_method: Optional[str] = None
+    collected_by: Optional[str] = None
+
+class Fee(BaseModel):
+    id: int
+    student_id: int
+    batch_id: int
+    amount: float
+    due_date: str
+    paid_date: Optional[str] = None
+    status: str
+    payment_method: Optional[str] = None
+    collected_by: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+class FeeUpdate(BaseModel):
+    paid_date: Optional[str] = None
+    status: Optional[str] = None
+    payment_method: Optional[str] = None
+    collected_by: Optional[str] = None
+
+# Performance Models
+class PerformanceCreate(BaseModel):
+    student_id: int
+    batch_id: int
+    date: str
+    skill: str
+    rating: int
+    comments: Optional[str] = None
+    recorded_by: str
+
+class Performance(BaseModel):
+    id: int
+    student_id: int
+    batch_id: int
+    date: str
+    skill: str
+    rating: int
+    comments: Optional[str] = None
+    recorded_by: str
+    
+    class Config:
+        from_attributes = True
+
+# BMI Models
+class BMICreate(BaseModel):
+    student_id: int
+    height: float
+    weight: float
+    date: str
+    recorded_by: str
+
+class BMI(BaseModel):
+    id: int
+    student_id: int
+    height: float
+    weight: float
+    bmi: float
+    date: str
+    recorded_by: str
+    
+    class Config:
+        from_attributes = True
+
+# Enquiry Models
+class EnquiryCreate(BaseModel):
+    name: str
+    phone: str
+    email: Optional[str] = None
+    message: str
+    status: str
+    assigned_to: Optional[str] = None
+
+class Enquiry(BaseModel):
+    id: int
+    name: str
+    phone: str
+    email: Optional[str] = None
+    message: str
+    status: str
+    created_at: str
+    followed_up_by: Optional[str] = None
+    notes: Optional[str] = None
+    assigned_to: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+class EnquiryUpdate(BaseModel):
+    status: Optional[str] = None
+    followed_up_by: Optional[str] = None
+    notes: Optional[str] = None
+    assigned_to: Optional[str] = None
+
+# Schedule Models
+class ScheduleCreate(BaseModel):
+    batch_id: int
+    date: str
+    activity: str
+    description: Optional[str] = None
+    created_by: str
+
+class Schedule(BaseModel):
+    id: int
+    batch_id: int
+    date: str
+    activity: str
+    description: Optional[str] = None
+    created_by: str
+    
+    class Config:
+        from_attributes = True
+
+# Tournament Models
+class TournamentCreate(BaseModel):
+    name: str
+    date: str
+    location: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+
+class Tournament(BaseModel):
+    id: int
+    name: str
+    date: str
+    location: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+# Video Resource Models
+class VideoResourceCreate(BaseModel):
+    title: str
+    url: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+
+class VideoResource(BaseModel):
+    id: int
+    title: str
+    url: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+# Invitation Models
+class InvitationCreate(BaseModel):
+    coach_id: int
+    coach_name: str
+    student_phone: str
+    student_email: str
+    batch_id: int
+
+class Invitation(BaseModel):
+    id: int
+    coach_id: int
+    coach_name: str
+    student_phone: str
+    student_email: str
+    batch_id: int
+    status: str
+    created_at: str
+    
+    class Config:
+        from_attributes = True
+
+class InvitationUpdate(BaseModel):
+    status: str  # approved, rejected
+
+# Other Models
+class BatchStudentAssign(BaseModel):
+    batch_id: int
+    student_id: int
+
+# ==================== FastAPI App ====================
+
+app = FastAPI(title="Badminton Academy Management System")
+
+# CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# ==================== Routes ====================
+
+@app.get("/")
+def read_root():
+    return {"message": "Badminton Academy Management System API", "version": "2.0"}
+
+# ==================== Coach Routes ====================
+
+@app.post("/coaches/", response_model=Coach)
+def create_coach(coach: CoachCreate):
+    db = SessionLocal()
+    try:
+        db_coach = CoachDB(**coach.dict())
+        db.add(db_coach)
+        db.commit()
+        db.refresh(db_coach)
+        return db_coach
+    finally:
+        db.close()
+
+@app.get("/coaches/", response_model=List[Coach])
+def get_coaches():
+    db = SessionLocal()
+    try:
+        coaches = db.query(CoachDB).all()
+        return coaches
+    finally:
+        db.close()
+
+@app.get("/coaches/{coach_id}", response_model=Coach)
+def get_coach(coach_id: int):
+    db = SessionLocal()
+    try:
+        coach = db.query(CoachDB).filter(CoachDB.id == coach_id).first()
+        if not coach:
+            raise HTTPException(status_code=404, detail="Coach not found")
+        return coach
+    finally:
+        db.close()
+
+@app.put("/coaches/{coach_id}", response_model=Coach)
+def update_coach(coach_id: int, coach_update: CoachUpdate):
+    db = SessionLocal()
+    try:
+        coach = db.query(CoachDB).filter(CoachDB.id == coach_id).first()
+        if not coach:
+            raise HTTPException(status_code=404, detail="Coach not found")
+        
+        update_data = coach_update.dict(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(coach, key, value)
+        
+        db.commit()
+        db.refresh(coach)
+        return coach
+    finally:
+        db.close()
+
+@app.delete("/coaches/{coach_id}")
+def delete_coach(coach_id: int):
+    db = SessionLocal()
+    try:
+        coach = db.query(CoachDB).filter(CoachDB.id == coach_id).first()
+        if not coach:
+            raise HTTPException(status_code=404, detail="Coach not found")
+        db.delete(coach)
+        db.commit()
+        return {"message": "Coach deleted"}
+    finally:
+        db.close()
+
+@app.post("/coaches/login")
+def login_coach(login_data: CoachLogin):
+    db = SessionLocal()
+    try:
+        coach = db.query(CoachDB).filter(
+            CoachDB.email == login_data.email,
+            CoachDB.password == login_data.password
+        ).first()
+        
+        if coach:
+            if coach.status == "inactive":
+                return {
+                    "success": False,
+                    "message": "Your account has been deactivated. Please contact the owner."
+                }
+            
+            return {
+                "success": True,
+                "message": "Login successful",
+                "coach": {
+                    "id": coach.id,
+                    "name": coach.name,
+                    "email": coach.email,
+                    "phone": coach.phone,
+                    "specialization": coach.specialization,
+                    "experience_years": coach.experience_years,
+                    "status": coach.status
+                }
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Invalid credentials"
+            }
+    finally:
+        db.close()
+
+# ==================== Batch Routes ====================
+
+@app.post("/batches/", response_model=Batch)
+def create_batch(batch: BatchCreate):
+    db = SessionLocal()
+    try:
+        db_batch = BatchDB(**batch.dict())
+        db.add(db_batch)
+        db.commit()
+        db.refresh(db_batch)
+        return db_batch
+    finally:
+        db.close()
+
+@app.get("/batches/", response_model=List[Batch])
+def get_batches():
+    db = SessionLocal()
+    try:
+        batches = db.query(BatchDB).all()
+        return batches
+    finally:
+        db.close()
+
+@app.get("/batches/coach/{coach_id}", response_model=List[Batch])
+def get_coach_batches(coach_id: int):
+    db = SessionLocal()
+    try:
+        batches = db.query(BatchDB).filter(BatchDB.assigned_coach_id == coach_id).all()
+        return batches
+    finally:
+        db.close()
+
+@app.put("/batches/{batch_id}", response_model=Batch)
+def update_batch(batch_id: int, batch_update: BatchUpdate):
+    db = SessionLocal()
+    try:
+        batch = db.query(BatchDB).filter(BatchDB.id == batch_id).first()
+        if not batch:
+            raise HTTPException(status_code=404, detail="Batch not found")
+        
+        update_data = batch_update.dict(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(batch, key, value)
+        
+        db.commit()
+        db.refresh(batch)
+        return batch
+    finally:
+        db.close()
+
+@app.delete("/batches/{batch_id}")
+def delete_batch(batch_id: int):
+    db = SessionLocal()
+    try:
+        batch = db.query(BatchDB).filter(BatchDB.id == batch_id).first()
+        if not batch:
+            raise HTTPException(status_code=404, detail="Batch not found")
+        db.delete(batch)
+        db.commit()
+        return {"message": "Batch deleted"}
+    finally:
+        db.close()
+
+@app.get("/batches/{batch_id}/available-students")
+def get_available_students_for_batch(batch_id: int):
+    """Get students not yet assigned to this batch"""
+    db = SessionLocal()
+    try:
+        # Get all students
+        all_students = db.query(StudentDB).filter(StudentDB.status == "active").all()
+        
+        # Get students already in this batch
+        assigned_students = db.query(BatchStudentDB).filter(
+            BatchStudentDB.batch_id == batch_id,
+            BatchStudentDB.status == "approved"
+        ).all()
+        assigned_student_ids = [bs.student_id for bs in assigned_students]
+        
+        # Filter out already assigned students
+        available_students = [s for s in all_students if s.id not in assigned_student_ids]
+        
+        return available_students
+    finally:
+        db.close()
+
+@app.get("/batches/{batch_id}/students")
+def get_batch_students(batch_id: int):
+    """Get all students assigned to this batch"""
+    db = SessionLocal()
+    try:
+        batch_students = db.query(BatchStudentDB).filter(
+            BatchStudentDB.batch_id == batch_id,
+            BatchStudentDB.status == "approved"
+        ).all()
+        
+        students = []
+        for bs in batch_students:
+            student = db.query(StudentDB).filter(StudentDB.id == bs.student_id).first()
+            if student:
+                students.append({
+                    "id": student.id,
+                    "name": student.name,
+                    "email": student.email,
+                    "phone": student.phone,
+                    "guardian_name": student.guardian_name,
+                    "guardian_phone": student.guardian_phone
+                })
+        
+        return students
+    finally:
+        db.close()
+
+@app.post("/batches/{batch_id}/students/{student_id}")
+def assign_student_to_batch(batch_id: int, student_id: int):
+    """Assign a student to a batch"""
+    db = SessionLocal()
+    try:
+        # Check if already assigned
+        existing = db.query(BatchStudentDB).filter(
+            BatchStudentDB.batch_id == batch_id,
+            BatchStudentDB.student_id == student_id
+        ).first()
+        
+        if existing:
+            raise HTTPException(status_code=400, detail="Student already assigned to this batch")
+        
+        # Create assignment
+        db_assignment = BatchStudentDB(
+            batch_id=batch_id,
+            student_id=student_id,
+            status="approved"
+        )
+        db.add(db_assignment)
+        db.commit()
+        
+        return {"message": "Student assigned successfully"}
+    finally:
+        db.close()
+
+@app.delete("/batches/{batch_id}/students/{student_id}")
+def remove_student_from_batch(batch_id: int, student_id: int):
+    """Remove a student from a batch"""
+    db = SessionLocal()
+    try:
+        assignment = db.query(BatchStudentDB).filter(
+            BatchStudentDB.batch_id == batch_id,
+            BatchStudentDB.student_id == student_id
+        ).first()
+        
+        if not assignment:
+            raise HTTPException(status_code=404, detail="Student not found in this batch")
+        
+        db.delete(assignment)
+        db.commit()
+        
+        return {"message": "Student removed successfully"}
+    finally:
+        db.close()
+
+# ==================== Student Routes ====================
+
+@app.post("/students/", response_model=Student)
+def create_student(student: StudentCreate):
+    db = SessionLocal()
+    try:
+        db_student = StudentDB(**student.dict())
+        db.add(db_student)
+        db.commit()
+        db.refresh(db_student)
+        return db_student
+    finally:
+        db.close()
+
+@app.get("/students/", response_model=List[Student])
+def get_students():
+    db = SessionLocal()
+    try:
+        students = db.query(StudentDB).all()
+        return students
+    finally:
+        db.close()
+
+@app.get("/students/{student_id}", response_model=Student)
+def get_student(student_id: int):
+    db = SessionLocal()
+    try:
+        student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found")
+        return student
+    finally:
+        db.close()
+
+@app.put("/students/{student_id}", response_model=Student)
+def update_student(student_id: int, student_update: StudentUpdate):
+    db = SessionLocal()
+    try:
+        student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found")
+        
+        update_data = student_update.dict(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(student, key, value)
+        
+        db.commit()
+        db.refresh(student)
+        return student
+    finally:
+        db.close()
+
+@app.delete("/students/{student_id}")
+def delete_student(student_id: int):
+    db = SessionLocal()
+    try:
+        student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found")
+        db.delete(student)
+        db.commit()
+        return {"message": "Student deleted"}
+    finally:
+        db.close()
+
+@app.post("/students/login")
+def login_student(login_data: StudentLogin):
+    db = SessionLocal()
+    try:
+        student = db.query(StudentDB).filter(
+            StudentDB.email == login_data.email,
+            StudentDB.password == login_data.password
+        ).first()
+        
+        if student:
+            # Check if student has any approved batches
+            approved_batches = db.query(BatchStudentDB).filter(
+                BatchStudentDB.student_id == student.id,
+                BatchStudentDB.status == "approved"
+            ).all()
+            
+            return {
+                "success": True,
+                "message": "Login successful",
+                "student": {
+                    "id": student.id,
+                    "name": student.name,
+                    "email": student.email,
+                    "phone": student.phone,
+                    "guardian_name": student.guardian_name,
+                    "guardian_phone": student.guardian_phone,
+                    "date_of_birth": student.date_of_birth,
+                    "address": student.address,
+                    "status": student.status,
+                    "is_linked": len(approved_batches) > 0
+                }
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Invalid credentials"
+            }
+    finally:
+        db.close()
+
+# ==================== Batch-Student Assignment Routes ====================
+
+@app.post("/batch-students/")
+def assign_student_to_batch(assignment: BatchStudentAssign):
+    db = SessionLocal()
+    try:
+        existing = db.query(BatchStudentDB).filter(
+            BatchStudentDB.batch_id == assignment.batch_id,
+            BatchStudentDB.student_id == assignment.student_id
+        ).first()
+        
+        if existing:
+            return {"message": "Student already assigned to this batch"}
+        
+        db_assignment = BatchStudentDB(**assignment.dict(), status="approved")
+        db.add(db_assignment)
+        db.commit()
+        return {"message": "Student assigned to batch successfully"}
+    finally:
+        db.close()
+
+@app.get("/batch-students/{batch_id}")
+def get_batch_students(batch_id: int):
+    db = SessionLocal()
+    try:
+        assignments = db.query(BatchStudentDB).filter(
+            BatchStudentDB.batch_id == batch_id,
+            BatchStudentDB.status == "approved"
+        ).all()
+        student_ids = [a.student_id for a in assignments]
+        students = db.query(StudentDB).filter(StudentDB.id.in_(student_ids)).all()
+        return students
+    finally:
+        db.close()
+
+@app.get("/student-batches/{student_id}")
+def get_student_batches(student_id: int):
+    db = SessionLocal()
+    try:
+        assignments = db.query(BatchStudentDB).filter(
+            BatchStudentDB.student_id == student_id,
+            BatchStudentDB.status == "approved"
+        ).all()
+        batch_ids = [a.batch_id for a in assignments]
+        batches = db.query(BatchDB).filter(BatchDB.id.in_(batch_ids)).all()
+        return batches
+    finally:
+        db.close()
+
+@app.delete("/batch-students/{batch_id}/{student_id}")
+def remove_student_from_batch(batch_id: int, student_id: int):
+    db = SessionLocal()
+    try:
+        assignment = db.query(BatchStudentDB).filter(
+            BatchStudentDB.batch_id == batch_id,
+            BatchStudentDB.student_id == student_id
+        ).first()
+        
+        if not assignment:
+            raise HTTPException(status_code=404, detail="Assignment not found")
+        
+        db.delete(assignment)
+        db.commit()
+        return {"message": "Student removed from batch"}
+    finally:
+        db.close()
+
+# ==================== Attendance Routes ====================
+
+@app.post("/attendance/", response_model=Attendance)
+def mark_attendance(attendance: AttendanceCreate):
+    db = SessionLocal()
+    try:
+        existing = db.query(AttendanceDB).filter(
+            AttendanceDB.batch_id == attendance.batch_id,
+            AttendanceDB.student_id == attendance.student_id,
+            AttendanceDB.date == attendance.date
+        ).first()
+        
+        if existing:
+            for key, value in attendance.dict().items():
+                setattr(existing, key, value)
+            db.commit()
+            db.refresh(existing)
+            return existing
+        else:
+            db_attendance = AttendanceDB(**attendance.dict())
+            db.add(db_attendance)
+            db.commit()
+            db.refresh(db_attendance)
+            return db_attendance
+    finally:
+        db.close()
+
+@app.get("/attendance/batch/{batch_id}/date/{date}")
+def get_batch_attendance(batch_id: int, date: str):
+    db = SessionLocal()
+    try:
+        attendance = db.query(AttendanceDB).filter(
+            AttendanceDB.batch_id == batch_id,
+            AttendanceDB.date == date
+        ).all()
+        return attendance
+    finally:
+        db.close()
+
+@app.get("/attendance/student/{student_id}")
+def get_student_attendance(student_id: int):
+    db = SessionLocal()
+    try:
+        attendance = db.query(AttendanceDB).filter(AttendanceDB.student_id == student_id).all()
+        return attendance
+    finally:
+        db.close()
+
+# Coach Attendance Routes
+@app.post("/coach-attendance/", response_model=CoachAttendance)
+def mark_coach_attendance(attendance: CoachAttendanceCreate):
+    db = SessionLocal()
+    try:
+        existing = db.query(CoachAttendanceDB).filter(
+            CoachAttendanceDB.coach_id == attendance.coach_id,
+            CoachAttendanceDB.date == attendance.date
+        ).first()
+        
+        if existing:
+            for key, value in attendance.dict().items():
+                setattr(existing, key, value)
+            db.commit()
+            db.refresh(existing)
+            return existing
+        else:
+            db_attendance = CoachAttendanceDB(**attendance.dict())
+            db.add(db_attendance)
+            db.commit()
+            db.refresh(db_attendance)
+            return db_attendance
+    finally:
+        db.close()
+
+@app.get("/coach-attendance/coach/{coach_id}")
+def get_coach_attendance_history(coach_id: int):
+    db = SessionLocal()
+    try:
+        attendance = db.query(CoachAttendanceDB).filter(CoachAttendanceDB.coach_id == coach_id).all()
+        return attendance
+    finally:
+        db.close()
+
+@app.get("/coach-attendance/date/{date}")
+def get_all_coach_attendance(date: str):
+    db = SessionLocal()
+    try:
+        attendance = db.query(CoachAttendanceDB).filter(CoachAttendanceDB.date == date).all()
+        return attendance
+    finally:
+        db.close()
+
+# ==================== Fee Routes ====================
+
+@app.post("/fees/", response_model=Fee)
+def create_fee(fee: FeeCreate):
+    db = SessionLocal()
+    try:
+        db_fee = FeeDB(**fee.dict())
+        db.add(db_fee)
+        db.commit()
+        db.refresh(db_fee)
+        return db_fee
+    finally:
+        db.close()
+
+@app.get("/fees/student/{student_id}")
+def get_student_fees(student_id: int):
+    db = SessionLocal()
+    try:
+        fees = db.query(FeeDB).filter(FeeDB.student_id == student_id).all()
+        return fees
+    finally:
+        db.close()
+
+@app.get("/fees/batch/{batch_id}")
+def get_batch_fees(batch_id: int):
+    db = SessionLocal()
+    try:
+        fees = db.query(FeeDB).filter(FeeDB.batch_id == batch_id).all()
+        return fees
+    finally:
+        db.close()
+
+@app.put("/fees/{fee_id}", response_model=Fee)
+def update_fee(fee_id: int, fee_update: FeeUpdate):
+    db = SessionLocal()
+    try:
+        fee = db.query(FeeDB).filter(FeeDB.id == fee_id).first()
+        if not fee:
+            raise HTTPException(status_code=404, detail="Fee not found")
+        
+        update_data = fee_update.dict(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(fee, key, value)
+        
+        db.commit()
+        db.refresh(fee)
+        return fee
+    finally:
+        db.close()
+
+# ==================== Performance Routes ====================
+
+@app.post("/performance/", response_model=Performance)
+def create_performance(performance: PerformanceCreate):
+    db = SessionLocal()
+    try:
+        db_performance = PerformanceDB(**performance.dict())
+        db.add(db_performance)
+        db.commit()
+        db.refresh(db_performance)
+        return db_performance
+    finally:
+        db.close()
+
+@app.get("/performance/student/{student_id}")
+def get_student_performance(student_id: int):
+    db = SessionLocal()
+    try:
+        performance = db.query(PerformanceDB).filter(PerformanceDB.student_id == student_id).all()
+        return performance
+    finally:
+        db.close()
+
+@app.get("/performance/grouped/student/{student_id}")
+def get_student_performance_grouped(student_id: int):
+    """Get student performance records grouped by date"""
+    db = SessionLocal()
+    try:
+        performance_records = db.query(PerformanceDB).filter(
+            PerformanceDB.student_id == student_id
+        ).order_by(PerformanceDB.date.desc()).all()
+        
+        # Group by date and batch
+        grouped = {}
+        for record in performance_records:
+            key = f"{record.date}_{record.batch_id}_{record.recorded_by}"
+            if key not in grouped:
+                # Get student and batch info
+                student = db.query(StudentDB).filter(StudentDB.id == record.student_id).first()
+                batch = db.query(BatchDB).filter(BatchDB.id == record.batch_id).first()
+                
+                grouped[key] = {
+                    "id": record.id,
+                    "date": record.date,
+                    "batch_id": record.batch_id,
+                    "batch_name": batch.batch_name if batch else "Unknown",
+                    "student_id": record.student_id,
+                    "student_name": student.name if student else "Unknown",
+                    "recorded_by": record.recorded_by,
+                    "skills": []
+                }
+            
+            grouped[key]["skills"].append({
+                "skill": record.skill,
+                "rating": record.rating,
+                "comments": record.comments
+            })
+        
+        return list(grouped.values())
+    finally:
+        db.close()
+
+@app.get("/performance/grouped/all")
+def get_all_performance_grouped():
+    """Get all performance records grouped by date for owner/coach view"""
+    db = SessionLocal()
+    try:
+        performance_records = db.query(PerformanceDB).order_by(PerformanceDB.date.desc()).all()
+        
+        # Group by date, student, and batch
+        grouped = {}
+        for record in performance_records:
+            key = f"{record.date}_{record.student_id}_{record.batch_id}_{record.recorded_by}"
+            if key not in grouped:
+                # Get student and batch info
+                student = db.query(StudentDB).filter(StudentDB.id == record.student_id).first()
+                batch = db.query(BatchDB).filter(BatchDB.id == record.batch_id).first()
+                
+                grouped[key] = {
+                    "id": record.id,
+                    "date": record.date,
+                    "batch_id": record.batch_id,
+                    "batch_name": batch.batch_name if batch else "Unknown",
+                    "student_id": record.student_id,
+                    "student_name": student.name if student else "Unknown",
+                    "recorded_by": record.recorded_by,
+                    "skills": []
+                }
+            
+            grouped[key]["skills"].append({
+                "skill": record.skill,
+                "rating": record.rating,
+                "comments": record.comments
+            })
+        
+        return list(grouped.values())
+    finally:
+        db.close()
+
+@app.get("/performance/grouped/coach/{coach_name}")
+def get_coach_performance_grouped(coach_name: str):
+    """Get performance records created by a specific coach"""
+    db = SessionLocal()
+    try:
+        performance_records = db.query(PerformanceDB).filter(
+            PerformanceDB.recorded_by == coach_name
+        ).order_by(PerformanceDB.date.desc()).all()
+        
+        # Group by date, student, and batch
+        grouped = {}
+        for record in performance_records:
+            key = f"{record.date}_{record.student_id}_{record.batch_id}"
+            if key not in grouped:
+                # Get student and batch info
+                student = db.query(StudentDB).filter(StudentDB.id == record.student_id).first()
+                batch = db.query(BatchDB).filter(BatchDB.id == record.batch_id).first()
+                
+                grouped[key] = {
+                    "id": record.id,
+                    "date": record.date,
+                    "batch_id": record.batch_id,
+                    "batch_name": batch.batch_name if batch else "Unknown",
+                    "student_id": record.student_id,
+                    "student_name": student.name if student else "Unknown",
+                    "recorded_by": record.recorded_by,
+                    "skills": []
+                }
+            
+            grouped[key]["skills"].append({
+                "skill": record.skill,
+                "rating": record.rating,
+                "comments": record.comments
+            })
+        
+        return list(grouped.values())
+    finally:
+        db.close()
+
+# ==================== BMI Routes ====================
+
+@app.post("/bmi/", response_model=BMI)
+def create_bmi_record(bmi_data: BMICreate):
+    db = SessionLocal()
+    try:
+        # Calculate BMI
+        height_m = bmi_data.height / 100
+        bmi_value = bmi_data.weight / (height_m ** 2)
+        
+        db_bmi = BMIDB(
+            **bmi_data.dict(),
+            bmi=round(bmi_value, 2)
+        )
+        db.add(db_bmi)
+        db.commit()
+        db.refresh(db_bmi)
+        return db_bmi
+    finally:
+        db.close()
+
+@app.get("/bmi/student/{student_id}")
+def get_student_bmi(student_id: int):
+    db = SessionLocal()
+    try:
+        bmi_records = db.query(BMIDB).filter(BMIDB.student_id == student_id).all()
+        return bmi_records
+    finally:
+        db.close()
+
+# ==================== Enquiry Routes ====================
+
+@app.post("/enquiries/", response_model=Enquiry)
+def create_enquiry(enquiry: EnquiryCreate):
+    db = SessionLocal()
+    try:
+        db_enquiry = EnquiryDB(
+            **enquiry.dict(),
+            created_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        )
+        db.add(db_enquiry)
+        db.commit()
+        db.refresh(db_enquiry)
+        return db_enquiry
+    finally:
+        db.close()
+
+@app.get("/enquiries/", response_model=List[Enquiry])
+def get_enquiries():
+    db = SessionLocal()
+    try:
+        enquiries = db.query(EnquiryDB).all()
+        return enquiries
+    finally:
+        db.close()
+
+@app.get("/enquiries/assigned/{assigned_to}")
+def get_assigned_enquiries(assigned_to: str):
+    db = SessionLocal()
+    try:
+        enquiries = db.query(EnquiryDB).filter(EnquiryDB.assigned_to == assigned_to).all()
+        return enquiries
+    finally:
+        db.close()
+
+@app.put("/enquiries/{enquiry_id}", response_model=Enquiry)
+def update_enquiry(enquiry_id: int, enquiry_update: EnquiryUpdate):
+    db = SessionLocal()
+    try:
+        enquiry = db.query(EnquiryDB).filter(EnquiryDB.id == enquiry_id).first()
+        if not enquiry:
+            raise HTTPException(status_code=404, detail="Enquiry not found")
+        
+        update_data = enquiry_update.dict(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(enquiry, key, value)
+        
+        db.commit()
+        db.refresh(enquiry)
+        return enquiry
+    finally:
+        db.close()
+
+@app.delete("/enquiries/{enquiry_id}")
+def delete_enquiry(enquiry_id: int):
+    db = SessionLocal()
+    try:
+        enquiry = db.query(EnquiryDB).filter(EnquiryDB.id == enquiry_id).first()
+        if not enquiry:
+            raise HTTPException(status_code=404, detail="Enquiry not found")
+        db.delete(enquiry)
+        db.commit()
+        return {"message": "Enquiry deleted"}
+    finally:
+        db.close()
+
+# ==================== Schedule Routes ====================
+
+@app.post("/schedules/", response_model=Schedule)
+def create_schedule(schedule: ScheduleCreate):
+    db = SessionLocal()
+    try:
+        db_schedule = ScheduleDB(**schedule.dict())
+        db.add(db_schedule)
+        db.commit()
+        db.refresh(db_schedule)
+        return db_schedule
+    finally:
+        db.close()
+
+@app.get("/schedules/batch/{batch_id}")
+def get_batch_schedules(batch_id: int):
+    db = SessionLocal()
+    try:
+        schedules = db.query(ScheduleDB).filter(ScheduleDB.batch_id == batch_id).all()
+        return schedules
+    finally:
+        db.close()
+
+@app.get("/schedules/date/{date}")
+def get_schedules_by_date(date: str):
+    db = SessionLocal()
+    try:
+        schedules = db.query(ScheduleDB).filter(ScheduleDB.date == date).all()
+        return schedules
+    finally:
+        db.close()
+
+@app.delete("/schedules/{schedule_id}")
+def delete_schedule(schedule_id: int):
+    db = SessionLocal()
+    try:
+        schedule = db.query(ScheduleDB).filter(ScheduleDB.id == schedule_id).first()
+        if not schedule:
+            raise HTTPException(status_code=404, detail="Schedule not found")
+        db.delete(schedule)
+        db.commit()
+        return {"message": "Schedule deleted"}
+    finally:
+        db.close()
+
+# ==================== Tournament Routes ====================
+
+@app.post("/tournaments/", response_model=Tournament)
+def create_tournament(tournament: TournamentCreate):
+    db = SessionLocal()
+    try:
+        db_tournament = TournamentDB(**tournament.dict())
+        db.add(db_tournament)
+        db.commit()
+        db.refresh(db_tournament)
+        return db_tournament
+    finally:
+        db.close()
+
+@app.get("/tournaments/", response_model=List[Tournament])
+def get_tournaments():
+    db = SessionLocal()
+    try:
+        tournaments = db.query(TournamentDB).all()
+        return tournaments
+    finally:
+        db.close()
+
+@app.get("/tournaments/upcoming")
+def get_upcoming_tournaments():
+    db = SessionLocal()
+    try:
+        today = datetime.now().strftime("%Y-%m-%d")
+        tournaments = db.query(TournamentDB).filter(TournamentDB.date >= today).all()
+        return tournaments
+    finally:
+        db.close()
+
+@app.delete("/tournaments/{tournament_id}")
+def delete_tournament(tournament_id: int):
+    db = SessionLocal()
+    try:
+        tournament = db.query(TournamentDB).filter(TournamentDB.id == tournament_id).first()
+        if not tournament:
+            raise HTTPException(status_code=404, detail="Tournament not found")
+        db.delete(tournament)
+        db.commit()
+        return {"message": "Tournament deleted"}
+    finally:
+        db.close()
+
+# ==================== Video Resource Routes ====================
+
+@app.post("/videos/", response_model=VideoResource)
+def create_video(video: VideoResourceCreate):
+    db = SessionLocal()
+    try:
+        db_video = VideoResourceDB(**video.dict())
+        db.add(db_video)
+        db.commit()
+        db.refresh(db_video)
+        return db_video
+    finally:
+        db.close()
+
+@app.get("/videos/", response_model=List[VideoResource])
+def get_videos():
+    db = SessionLocal()
+    try:
+        videos = db.query(VideoResourceDB).all()
+        return videos
+    finally:
+        db.close()
+
+@app.get("/videos/category/{category}")
+def get_videos_by_category(category: str):
+    db = SessionLocal()
+    try:
+        videos = db.query(VideoResourceDB).filter(VideoResourceDB.category == category).all()
+        return videos
+    finally:
+        db.close()
+
+@app.delete("/videos/{video_id}")
+def delete_video(video_id: int):
+    db = SessionLocal()
+    try:
+        video = db.query(VideoResourceDB).filter(VideoResourceDB.id == video_id).first()
+        if not video:
+            raise HTTPException(status_code=404, detail="Video not found")
+        db.delete(video)
+        db.commit()
+        return {"message": "Video deleted"}
+    finally:
+        db.close()
+
+# ==================== Invitation Routes ====================
+
+@app.post("/invitations/", response_model=Invitation)
+def create_invitation(invitation: InvitationCreate):
+    db = SessionLocal()
+    try:
+        db_invitation = InvitationDB(
+            **invitation.dict(),
+            created_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        )
+        db.add(db_invitation)
+        db.commit()
+        db.refresh(db_invitation)
+        return db_invitation
+    finally:
+        db.close()
+
+@app.get("/invitations/student/{student_email}")
+def get_student_invitations(student_email: str):
+    db = SessionLocal()
+    try:
+        invitations = db.query(InvitationDB).filter(
+            InvitationDB.student_email == student_email
+        ).all()
+        return invitations
+    finally:
+        db.close()
+
+@app.get("/invitations/coach/{coach_id}")
+def get_coach_invitations(coach_id: int):
+    db = SessionLocal()
+    try:
+        invitations = db.query(InvitationDB).filter(InvitationDB.coach_id == coach_id).all()
+        return invitations
+    finally:
+        db.close()
+
+@app.put("/invitations/{invitation_id}")
+def update_invitation(invitation_id: int, invitation_update: InvitationUpdate):
+    db = SessionLocal()
+    try:
+        invitation = db.query(InvitationDB).filter(InvitationDB.id == invitation_id).first()
+        if not invitation:
+            raise HTTPException(status_code=404, detail="Invitation not found")
+        
+        invitation.status = invitation_update.status
+        
+        # If approved, add student to batch
+        if invitation_update.status == "approved":
+            # Find student by email
+            student = db.query(StudentDB).filter(
+                StudentDB.email == invitation.student_email
+            ).first()
+            
+            if student:
+                # Check if already assigned
+                existing = db.query(BatchStudentDB).filter(
+                    BatchStudentDB.batch_id == invitation.batch_id,
+                    BatchStudentDB.student_id == student.id
+                ).first()
+                
+                if not existing:
+                    db_assignment = BatchStudentDB(
+                        batch_id=invitation.batch_id,
+                        student_id=student.id,
+                        status="approved"
+                    )
+                    db.add(db_assignment)
+        
+        db.commit()
+        db.refresh(invitation)
+        return invitation
+    finally:
+        db.close()
+
+# ==================== Analytics Routes ====================
+
+@app.get("/analytics/dashboard")
+def get_analytics_dashboard():
+    db = SessionLocal()
+    try:
+        total_students = db.query(StudentDB).count()
+        active_students = db.query(StudentDB).filter(StudentDB.status == "active").count()
+        total_batches = db.query(BatchDB).count()
+        total_coaches = db.query(CoachDB).count()
+        active_coaches = db.query(CoachDB).filter(CoachDB.status == "active").count()
+        
+        # Fee analytics
+        total_fees = db.query(FeeDB).all()
+        total_revenue = sum([f.amount for f in total_fees if f.status == "Paid"])
+        pending_fees = sum([f.amount for f in total_fees if f.status == "Pending"])
+        overdue_fees = sum([f.amount for f in total_fees if f.status == "Overdue"])
+        
+        # Attendance stats
+        today = datetime.now().strftime("%Y-%m-%d")
+        today_attendance = db.query(AttendanceDB).filter(AttendanceDB.date == today).all()
+        present_today = len([a for a in today_attendance if a.status == "Present"])
+        absent_today = len([a for a in today_attendance if a.status == "Absent"])
+        
+        # Coach attendance today
+        today_coach_attendance = db.query(CoachAttendanceDB).filter(CoachAttendanceDB.date == today).all()
+        coaches_present_today = len([a for a in today_coach_attendance if a.status == "Present"])
+        
+        # Enquiry stats
+        enquiries = db.query(EnquiryDB).all()
+        new_enquiries = len([e for e in enquiries if e.status == "New"])
+        converted_enquiries = len([e for e in enquiries if e.status == "Converted"])
+        
+        # Calculate attendance percentage
+        total_attendance_records = db.query(AttendanceDB).count()
+        present_records = db.query(AttendanceDB).filter(AttendanceDB.status == "Present").count()
+        attendance_percentage = (present_records / total_attendance_records * 100) if total_attendance_records > 0 else 0
+        
+        return {
+            "total_students": total_students,
+            "active_students": active_students,
+            "total_batches": total_batches,
+            "total_coaches": total_coaches,
+            "active_coaches": active_coaches,
+            "total_revenue": total_revenue,
+            "pending_fees": pending_fees,
+            "overdue_fees": overdue_fees,
+            "present_today": present_today,
+            "absent_today": absent_today,
+            "coaches_present_today": coaches_present_today,
+            "new_enquiries": new_enquiries,
+            "converted_enquiries": converted_enquiries,
+            "attendance_percentage": round(attendance_percentage, 2)
+        }
+    finally:
+        db.close()
+
+@app.get("/analytics/coach/{coach_id}")
+def get_coach_analytics(coach_id: int):
+    db = SessionLocal()
+    try:
+        # Get coach's batches
+        batches = db.query(BatchDB).filter(BatchDB.assigned_coach_id == coach_id).all()
+        batch_ids = [b.id for b in batches]
+        
+        # Get total students under this coach
+        total_students = 0
+        for batch_id in batch_ids:
+            count = db.query(BatchStudentDB).filter(
+                BatchStudentDB.batch_id == batch_id,
+                BatchStudentDB.status == "approved"
+            ).count()
+            total_students += count
+        
+        # Get attendance stats for coach's batches
+        attendance_records = db.query(AttendanceDB).filter(AttendanceDB.batch_id.in_(batch_ids)).all()
+        present = len([a for a in attendance_records if a.status == "Present"])
+        total_records = len(attendance_records)
+        attendance_percentage = (present / total_records * 100) if total_records > 0 else 0
+        
+        # Get fee stats for coach's students
+        fees = []
+        for batch_id in batch_ids:
+            batch_fees = db.query(FeeDB).filter(FeeDB.batch_id == batch_id).all()
+            fees.extend(batch_fees)
+        
+        pending_fees = sum([f.amount for f in fees if f.status == "Pending"])
+        collected_fees = sum([f.amount for f in fees if f.status == "Paid"])
+        
+        return {
+            "total_batches": len(batches),
+            "total_students": total_students,
+            "attendance_percentage": round(attendance_percentage, 2),
+            "pending_fees": pending_fees,
+            "collected_fees": collected_fees
+        }
+    finally:
+        db.close()
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8000)

@@ -1,0 +1,53 @@
+# Environment variables (contains sensitive data)
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# Database
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Alembic
+alembic/versions/*.pyc
+
+# Uploads (user uploaded files - don't commit personal data)
+uploads/*
+!uploads/.gitkeep
+
+# Image uploads
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.webp
+
+# Firebase credentials and sensitive JSON files
+firebase-credentials.json
+firebase-adminsdk*.json
+service-account*.json
+secrets.json
+credentials.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

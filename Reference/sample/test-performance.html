@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Test - Performance Debug</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background: #1e293b;
+            color: #e2e8f0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: #334155;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        button {
+            background: #06b6d4;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0891b2;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            background: #1e293b;
+            border-radius: 4px;
+        }
+        pre {
+            background: #0f172a;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            color: #10b981;
+        }
+        .error {
+            color: #ef4444;
+        }
+        .success {
+            color: #10b981;
+        }
+        input {
+            padding: 8px;
+            margin: 5px;
+            border-radius: 4px;
+            border: 1px solid #475569;
+            background: #1e293b;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Performance API Debugger</h1>
+        
+        <div class="section">
+            <h2>1. Test Backend Connection</h2>
+            <button onclick="testBackend()">Test Connection</button>
+            <pre id="backendResult">Click button to test...</pre>
+        </div>
+
+        <div class="section">
+            <h2>2. Get All Students</h2>
+            <button onclick="getAllStudents()">Get Students</button>
+            <pre id="studentsResult">Click button to get students...</pre>
+        </div>
+
+        <div class="section">
+            <h2>3. Get All Performance Records</h2>
+            <button onclick="getAllPerformance()">Get All Performance</button>
+            <pre id="performanceResult">Click button to get performance...</pre>
+        </div>
+
+        <div class="section">
+            <h2>4. Get Performance for Specific Student</h2>
+            <input type="number" id="studentId" placeholder="Enter Student ID" value="1">
+            <button onclick="getStudentPerformance()">Get Student Performance</button>
+            <pre id="studentPerformanceResult">Enter student ID and click button...</pre>
+        </div>
+
+        <div class="section">
+            <h2>5. Check Session Storage</h2>
+            <button onclick="checkSession()">Check Session</button>
+            <pre id="sessionResult">Click button to check session...</pre>
+        </div>
+
+        <div class="section">
+            <h2>6. Create Test Performance Record</h2>
+            <input type="number" id="testStudentId" placeholder="Student ID" value="1">
+            <input type="number" id="testBatchId" placeholder="Batch ID" value="1">
+            <button onclick="createTestPerformance()">Create Test Performance</button>
+            <pre id="createResult">Click button to create test data...</pre>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+
+        async function testBackend() {
+            const result = document.getElementById('backendResult');
+            try {
+                result.textContent = 'Testing connection...';
+                const response = await fetch(`${API_URL}/batches/`);
+                if (response.ok) {
+                    result.className = 'success';
+                    result.textContent = '✅ Backend is running!\nStatus: ' + response.status;
+                } else {
+                    result.className = 'error';
+                    result.textContent = '❌ Backend responded with error: ' + response.status;
+                }
+            } catch (error) {
+                result.className = 'error';
+                result.textContent = '❌ Cannot connect to backend!\nError: ' + error.message + '\n\nMake sure backend is running at ' + API_URL;
+            }
+        }
+
+        async function getAllStudents() {
+            const result = document.getElementById('studentsResult');
+            try {
+                result.textContent = 'Fetching students...';
+                const response = await fetch(`${API_URL}/students/`);
+                const data = await response.json();
+                result.className = 'success';
+                result.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                result.className = 'error';
+                result.textContent = '❌ Error: ' + error.message;
+            }
+        }
+
+        async function getAllPerformance() {
+            const result = document.getElementById('performanceResult');
+            try {
+                result.textContent = 'Fetching all performance records...';
+                const response = await fetch(`${API_URL}/performance/grouped/all`);
+                const data = await response.json();
+                result.className = 'success';
+                result.textContent = 'Found ' + data.length + ' records:\n\n' + JSON.stringify(data, null, 2);
+            } catch (error) {
+                result.className = 'error';
+                result.textContent = '❌ Error: ' + error.message;
+            }
+        }
+
+        async function getStudentPerformance() {
+            const result = document.getElementById('studentPerformanceResult');
+            const studentId = document.getElementById('studentId').value;
+            
+            if (!studentId) {
+                result.className = 'error';
+                result.textContent = '❌ Please enter a student ID';
+                return;
+            }
+
+            try {
+                result.textContent = 'Fetching performance for student ' + studentId + '...';
+                const response = await fetch(`${API_URL}/performance/grouped/student/${studentId}`);
+                
+                console.log('Response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error('HTTP ' + response.status);
+                }
+                
+                const data = await response.json();
+                result.className = 'success';
+                
+                if (data.length === 0) {
+                    result.textContent = '⚠️ No performance records found for student ' + studentId;
+                } else {
+                    result.textContent = '✅ Found ' + data.length + ' records for student ' + studentId + ':\n\n' + JSON.stringify(data, null, 2);
+                }
+            } catch (error) {
+                result.className = 'error';
+                result.textContent = '❌ Error: ' + error.message;
+            }
+        }
+
+        async function checkSession() {
+            const result = document.getElementById('sessionResult');
+            const sessionData = sessionStorage.getItem('loggedInStudent');
+            
+            if (!sessionData) {
+                result.className = 'error';
+                result.textContent = '❌ No student logged in!\n\nYou need to login via student.html first.';
+            } else {
+                try {
+                    const student = JSON.parse(sessionData);
+                    result.className = 'success';
+                    result.textContent = '✅ Student logged in:\n\n' + JSON.stringify(student, null, 2);
+                } catch (e) {
+                    result.className = 'error';
+                    result.textContent = '❌ Session data corrupted:\n\n' + sessionData;
+                }
+            }
+        }
+
+        async function createTestPerformance() {
+            const result = document.getElementById('createResult');
+            const studentId = document.getElementById('testStudentId').value;
+            const batchId = document.getElementById('testBatchId').value;
+
+            if (!studentId || !batchId) {
+                result.className = 'error';
+                result.textContent = '❌ Please enter both Student ID and Batch ID';
+                return;
+            }
+
+            const skills = [
+                { skill: 'Forehand', rating: 5, comments: 'Excellent technique! Your wrist action is perfect.' },
+                { skill: 'Backhand', rating: 4, comments: 'Good progress. Work on your follow-through.' },
+                { skill: 'Serve', rating: 4, comments: 'Service consistency has improved significantly.' },
+                { skill: 'Footwork', rating: 3, comments: 'Needs improvement. Practice split-step timing daily.' }
+            ];
+
+            try {
+                result.textContent = 'Creating test performance records...';
+                
+                const today = new Date().toISOString().split('T')[0];
+                let created = 0;
+
+                for (const skillData of skills) {
+                    const performanceData = {
+                        student_id: parseInt(studentId),
+                        batch_id: parseInt(batchId),
+                        date: today,
+                        skill: skillData.skill,
+                        rating: skillData.rating,
+                        comments: skillData.comments,
+                        recorded_by: 'Test Coach'
+                    };
+
+                    const response = await fetch(`${API_URL}/performance/`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(performanceData)
+                    });
+
+                    if (response.ok) {
+                        created++;
+                    }
+                }
+
+                result.className = 'success';
+                result.textContent = `✅ Created ${created} test performance records!\n\nStudent ID: ${studentId}\nBatch ID: ${batchId}\nDate: ${today}\n\nNow try loading student-performance.html`;
+            } catch (error) {
+                result.className = 'error';
+                result.textContent = '❌ Error: ' + error.message;
+            }
+        }
+
+        // Auto-test on load
+        window.onload = function() {
+            testBackend();
+        };
+    </script>
+</body>
+</html>

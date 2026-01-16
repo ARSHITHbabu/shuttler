@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Academy Schedule - Owner</title>
+    <link rel="stylesheet" href="owner-styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="owner-dashboard.html" >📊 Dashboard</a>
+            <a href="owner.html" >👨‍🏫 Coaches</a>
+            <a href="owner-batches.html" >📚 Batches</a>
+            <a href="owner-students.html" >🎓 Students</a>
+            <a href="owner-attendance.html" >📋 Attendance</a>
+            <a href="owner-coach-attendance.html" >👔 Coach Attendance</a>
+            <a href="owner-fees.html" >💰 Fees</a>
+            <a href="owner-performance.html" >⭐ Performance</a>
+            <a href="owner-bmi.html" >📏 BMI</a>
+            <a href="owner-schedule.html" class="active">📅 Schedule</a>
+            <a href="owner-enquiries.html" >📞 Enquiries</a>
+            <a href="owner-analytics.html" >📈 Analytics</a>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+        <h1>📅 Academy Schedule</h1>
+        <div id="scheduleContainer"></div>
+    </div>
+    <script>
+        const API_URL = 'http://localhost:8000';
+        loadSchedule();
+        async function loadSchedule() {
+            try {
+                const [batchesRes, coachesRes] = await Promise.all([
+                    fetch(`${API_URL}/batches/`),
+                    fetch(`${API_URL}/coaches/`)
+                ]);
+                const batches = await batchesRes.json();
+                const coaches = await coachesRes.json();
+                const container = document.getElementById('scheduleContainer');
+                if (batches.length === 0) {
+                    container.innerHTML = '<div style="text-align:center;padding:60px;color:#999;">No batches created yet</div>';
+                    return;
+                }
+                const coachMap = {};
+                coaches.forEach(c => coachMap[c.id] = c.name);
+                const morningBatches = batches.filter(b => b.period === 'Morning');
+                const eveningBatches = batches.filter(b => b.period === 'Evening');
+                container.innerHTML = `
+                    <h2 style="margin-top: 20px;">🌅 Morning Batches (${morningBatches.length})</h2>
+                    <div class="batches-grid">
+                        ${morningBatches.map(batch => `
+                            <div class="batch-card">
+                                <div class="batch-name">${batch.batch_name}</div>
+                                <div class="batch-info">
+                                    <div>👨‍🏫 <strong>Coach:</strong> ${coachMap[batch.assigned_coach_id] || 'Not Assigned'}</div>
+                                    <div>⏰ <strong>Timing:</strong> ${batch.timing}</div>
+                                    <div>📍 <strong>Location:</strong> ${batch.location || 'N/A'}</div>
+                                    <div>💰 <strong>Fees:</strong> ${batch.fees}</div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <h2 style="margin-top: 40px;">🌆 Evening Batches (${eveningBatches.length})</h2>
+                    <div class="batches-grid">
+                        ${eveningBatches.map(batch => `
+                            <div class="batch-card">
+                                <div class="batch-name">${batch.batch_name}</div>
+                                <div class="batch-info">
+                                    <div>👨‍🏫 <strong>Coach:</strong> ${coachMap[batch.assigned_coach_id] || 'Not Assigned'}</div>
+                                    <div>⏰ <strong>Timing:</strong> ${batch.timing}</div>
+                                    <div>📍 <strong>Location:</strong> ${batch.location || 'N/A'}</div>
+                                    <div>💰 <strong>Fees:</strong> ${batch.fees}</div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            } catch (error) { console.error('Error loading schedule:', error); }
+        }
+        function logout() { window.location.href = 'owner.html'; }
+        setInterval(loadSchedule, 30000);
+    </script>
+</body>
+</html>

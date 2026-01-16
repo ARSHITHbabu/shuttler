@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Dashboard</title>
+    <link rel="stylesheet" href="student-styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="student-dashboard.html" class="active">📊 Dashboard</a>
+            <a href="student-invitations.html">📨 Invitations</a>
+            <a href="student-batches.html">📚 Batches</a>
+            <a href="student-attendance.html">📋 Attendance</a>
+            <a href="student-fees.html">💰 Fees</a>
+            <a href="student-performance.html">⭐ Performance</a>
+            <a href="student-bmi.html">📏 BMI</a>
+            <a href="student-schedule.html">📅 Schedule</a>
+            <a href="student-tournaments.html">🏆 Tournaments</a>
+            <a href="student-videos.html">🎥 Videos</a>
+            <a href="student-profile.html">👤 Profile</a>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+
+        <h1>📊 Student Dashboard</h1>
+
+        <div class="student-info" id="studentInfo"></div>
+
+        <div class="section-title">📚 My Batches</div>
+        <div class="batches-grid" id="batchesList"></div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        let currentStudent = null;
+
+        const loggedInStudent = sessionStorage.getItem('loggedInStudent');
+        if (!loggedInStudent) {
+            window.location.href = 'student.html';
+        } else {
+            currentStudent = JSON.parse(loggedInStudent);
+            displayStudentInfo();
+            loadBatches();
+        }
+
+        function displayStudentInfo() {
+            const studentInfo = document.getElementById('studentInfo');
+            studentInfo.innerHTML = `
+                <div class="student-name">Welcome, ${currentStudent.name}! 👋</div>
+                <div class="student-details">
+                    📧 ${currentStudent.email} | 📱 ${currentStudent.phone}<br>
+                    👤 Guardian: ${currentStudent.guardian_name} | 📞 ${currentStudent.guardian_phone}
+                </div>
+            `;
+        }
+
+        async function loadBatches() {
+            try {
+                const response = await fetch(`${API_URL}/student-batches/${currentStudent.id}`);
+                const batches = await response.json();
+                
+                const batchesList = document.getElementById('batchesList');
+                
+                if (batches.length === 0) {
+                    batchesList.innerHTML = '<div class="empty-state">📚 You are not assigned to any batch yet.<br>Please check your invitations or contact your coach.</div>';
+                    return;
+                }
+
+                batchesList.innerHTML = batches.map(batch => `
+                    <div class="batch-card">
+                        <div class="batch-header">📚 ${batch.batch_name}</div>
+                        <div class="batch-info">
+                            <div class="info-item">
+                                <span class="info-icon">👥</span>
+                                <strong>Capacity:</strong> ${batch.capacity || batch.total_students}
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">💰</span>
+                                <strong>Fees:</strong> ${batch.fees}
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">📅</span>
+                                <strong>Start Date:</strong> ${formatDate(batch.start_date)}
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">⏰</span>
+                                <strong>Timing:</strong> ${batch.timing}
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">${batch.period === 'Morning' ? '🌅' : '🌆'}</span>
+                                <strong>Period:</strong> ${batch.period}
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">👨‍🏫</span>
+                                <strong>Coach:</strong> ${batch.assigned_coach_name || 'Not Assigned'}
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading batches:', error);
+            }
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+        }
+
+        function logout() {
+            sessionStorage.removeItem('loggedInStudent');
+            window.location.href = 'student.html';
+        }
+
+        setInterval(loadBatches, 5000);
+    </script>
+</body>
+</html>

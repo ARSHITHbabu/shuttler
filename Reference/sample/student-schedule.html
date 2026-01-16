@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Schedule - Student</title>
+    <link rel="stylesheet" href="student-styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="nav">
+            <a href="student-dashboard.html">📊 Dashboard</a>
+            <a href="student-invitations.html">📨 Invitations</a>
+            <a href="student-batches.html">📚 Batches</a>
+            <a href="student-attendance.html">📋 Attendance</a>
+            <a href="student-fees.html">💰 Fees</a>
+            <a href="student-performance.html">⭐ Performance</a>
+            <a href="student-bmi.html">📏 BMI</a>
+            <a href="student-schedule.html" class="active">📅 Schedule</a>
+            <a href="student-tournaments.html">🏆 Tournaments</a>
+            <a href="student-videos.html">🎥 Videos</a>
+            <a href="student-profile.html">👤 Profile</a>
+            <button class="logout-btn" onclick="logout()">Logout</button>
+        </div>
+        
+        <h1>📅 My Schedule</h1>
+        
+        <div class="schedule-grid" id="dataContainer"></div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        let currentStudent = null;
+
+        const loggedInStudent = sessionStorage.getItem('loggedInStudent');
+        if (!loggedInStudent) {
+            window.location.href = 'student.html';
+        } else {
+            currentStudent = JSON.parse(loggedInStudent);
+            loadData();
+        }
+
+        async function loadData() {
+            try {
+                // First get student's batches
+                const batchesResponse = await fetch(`${API_URL}/student-batches/${currentStudent.id}`);
+                const batches = await batchesResponse.json();
+                
+                const container = document.getElementById('dataContainer');
+                
+                if (batches.length === 0) {
+                    container.innerHTML = '<div class="empty-state">📅 No schedule available.<br>You need to be assigned to a batch first.</div>';
+                    return;
+                }
+
+                // Get schedules for each batch
+                const schedulePromises = batches.map(batch => 
+                    fetch(`${API_URL}/schedules/batch/${batch.id}`).then(r => r.json())
+                );
+                const scheduleArrays = await Promise.all(schedulePromises);
+                
+                let allSchedules = [];
+                scheduleArrays.forEach((schedules, index) => {
+                    schedules.forEach(schedule => {
+                        schedule.batchName = batches[index].batch_name;
+                    });
+                    allSchedules = allSchedules.concat(schedules);
+                });
+
+                if (allSchedules.length === 0) {
+                    container.innerHTML = '<div class="empty-state">📅 No schedule created yet for your batches</div>';
+                    return;
+                }
+
+                container.innerHTML = allSchedules.map(schedule => `
+                    <div class="schedule-card">
+                        <div class="schedule-header">📚 ${schedule.batchName}</div>
+                        <div class="schedule-info">
+                            <div class="info-item">
+                                <span class="info-icon">📅</span>
+                                <strong>Days:</strong>
+                                <div style="margin-left: 5px;">
+                                    ${schedule.days_of_week ? schedule.days_of_week.split(',').map(day => 
+                                        `<span class="day-badge">${day.trim()}</span>`
+                                    ).join('') : 'Not specified'}
+                                </div>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">⏰</span>
+                                <strong>Time:</strong> ${schedule.start_time} - ${schedule.end_time}
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">📍</span>
+                                <strong>Location:</strong> ${schedule.location || 'N/A'}
+                            </div>
+                            <div class="info-item">
+                                <span class="info-icon">💪</span>
+                                <strong>Activity:</strong> ${schedule.activity_type || 'Training'}
+                            </div>
+                            ${schedule.notes ? `
+                                <div class="info-item" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(0,0,0,0.1);">
+                                    <span class="info-icon">📝</span>
+                                    <strong>Notes:</strong> ${schedule.notes}
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('dataContainer').innerHTML = '<div class="empty-state">⚠️ Error loading schedule</div>';
+            }
+        }
+
+        function logout() {
+            sessionStorage.removeItem('loggedInStudent');
+            window.location.href = 'student.html';
+        }
+
+        setInterval(loadData, 30000);
+    </script>
+</body>
+</html>
