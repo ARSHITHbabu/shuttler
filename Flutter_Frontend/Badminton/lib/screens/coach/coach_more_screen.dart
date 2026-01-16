@@ -12,11 +12,16 @@ import 'coach_schedule_screen.dart';
 import 'coach_settings_screen.dart';
 
 /// Coach More Screen - Navigation hub for additional features
-class CoachMoreScreen extends ConsumerWidget {
+class CoachMoreScreen extends ConsumerStatefulWidget {
   const CoachMoreScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CoachMoreScreen> createState() => _CoachMoreScreenState();
+}
+
+class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
+  @override
+  Widget build(BuildContext context) {
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.all(AppDimensions.paddingL),
@@ -99,7 +104,7 @@ class CoachMoreScreen extends ConsumerWidget {
               icon: Icons.logout,
               title: 'Logout',
               isDestructive: true,
-              onTap: () => _showLogoutDialog(context, ref),
+              onTap: () => _showLogoutDialog(context),
             ),
 
             const SizedBox(height: 100), // Space for bottom nav
@@ -109,7 +114,7 @@ class CoachMoreScreen extends ConsumerWidget {
     );
   }
 
-  void _showLogoutDialog(BuildContext context, WidgetRef ref) {
+  void _showLogoutDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -140,7 +145,7 @@ class CoachMoreScreen extends ConsumerWidget {
           TextButton(
             onPressed: () async {
               Navigator.of(context).pop();
-              await _handleLogout(context, ref);
+              await _handleLogout(context);
             },
             child: const Text(
               'Logout',
@@ -152,7 +157,7 @@ class CoachMoreScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _handleLogout(BuildContext context, WidgetRef ref) async {
+  Future<void> _handleLogout(BuildContext context) async {
     try {
       final authService = ref.read(authServiceProvider);
       await authService.logout();
