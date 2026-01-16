@@ -7,6 +7,7 @@ import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/loading_spinner.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/auth_provider.dart';
+import '../../core/constants/api_endpoints.dart';
 
 /// Student Attendance Screen - READ-ONLY view of attendance history
 /// Students can view their attendance records but cannot mark attendance
@@ -72,16 +73,40 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
 
       // Load attendance records
       try {
+        final queryParams = <String, dynamic>{
+          'student_id': userId,
+          if (_selectedMonth != null) 'month': _selectedMonth!.month.toString(),
+          if (_selectedMonth != null) 'year': _selectedMonth!.year.toString(),
+        };
         final response = await apiService.get(
-          '/api/students/$userId/attendance',
-          queryParameters: {
-            if (_selectedMonth != null) 'month': _selectedMonth!.month.toString(),
-            if (_selectedMonth != null) 'year': _selectedMonth!.year.toString(),
-          },
+          ApiEndpoints.attendance,
+          queryParameters: queryParams,
         );
         if (response.statusCode == 200) {
-          _attendanceRecords = List<Map<String, dynamic>>.from(response.data['records'] ?? []);
-          _attendanceStats = Map<String, dynamic>.from(response.data['stats'] ?? {});
+          // Handle different response formats
+          if (response.data is List) {
+            _attendanceRecords = List<Map<String, dynamic>>.from(response.data);
+          } else if (response.data is Map) {
+            _attendanceRecords = List<Map<String, dynamic>>.from(
+              response.data['records'] ?? response.data['results'] ?? []
+            );
+            _attendanceStats = Map<String, dynamic>.from(response.data['stats'] ?? {});
+          }
+          
+          // Calculate stats if not provided
+          if (_attendanceStats.isEmpty && _attendanceRecords.isNotEmpty) {
+            final total = _attendanceRecords.length;
+            final present = _attendanceRecords.where((r) => 
+              (r['status']?.toString().toLowerCase() ?? '') == 'present'
+            ).length;
+            final absent = total - present;
+            _attendanceStats = {
+              'total_days': total,
+              'present_days': present,
+              'absent_days': absent,
+              'attendance_rate': total > 0 ? (present / total * 100) : 0.0,
+            };
+          }
         }
       } catch (e) {
         // Endpoint may not exist yet - use empty data

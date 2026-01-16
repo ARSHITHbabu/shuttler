@@ -7,6 +7,7 @@ import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/loading_spinner.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/auth_provider.dart';
+import '../../core/constants/api_endpoints.dart';
 
 /// Student Fees Screen - READ-ONLY view of fee status and payment history
 /// Students can view their fee records but cannot make payments
@@ -69,9 +70,19 @@ class _StudentFeesScreenState extends ConsumerState<StudentFeesScreen> {
       final apiService = ref.read(apiServiceProvider);
 
       try {
-        final response = await apiService.get('/api/students/$userId/fees');
+        final response = await apiService.get(
+          ApiEndpoints.fees,
+          queryParameters: {'student_id': userId},
+        );
         if (response.statusCode == 200) {
-          _feeRecords = List<Map<String, dynamic>>.from(response.data['records'] ?? []);
+          // Handle different response formats
+          if (response.data is List) {
+            _feeRecords = List<Map<String, dynamic>>.from(response.data);
+          } else if (response.data is Map) {
+            _feeRecords = List<Map<String, dynamic>>.from(
+              response.data['records'] ?? response.data['results'] ?? []
+            );
+          }
           _calculateStats();
         }
       } catch (e) {

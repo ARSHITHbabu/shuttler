@@ -7,6 +7,7 @@ import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/loading_spinner.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/auth_provider.dart';
+import '../../core/constants/api_endpoints.dart';
 
 /// Student Performance Screen - READ-ONLY view of performance records
 /// Students can view their skill ratings and progress but cannot edit
@@ -67,9 +68,20 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
 
       // Load performance records
       try {
-        final response = await apiService.get('/api/students/$userId/performance');
+        final response = await apiService.get(
+          ApiEndpoints.performance,
+          queryParameters: {'student_id': userId},
+        );
         if (response.statusCode == 200) {
-          _performanceRecords = List<Map<String, dynamic>>.from(response.data['records'] ?? []);
+          // Handle different response formats
+          if (response.data is List) {
+            _performanceRecords = List<Map<String, dynamic>>.from(response.data);
+          } else if (response.data is Map) {
+            _performanceRecords = List<Map<String, dynamic>>.from(
+              response.data['records'] ?? response.data['results'] ?? []
+            );
+          }
+          
           if (_performanceRecords.isNotEmpty) {
             _latestPerformance = _performanceRecords.first;
           }

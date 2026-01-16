@@ -129,8 +129,28 @@ class AuthService {
 
         // Return user data with profile completeness for students
         final result = {'user': userData};
-        if (userType == 'student' && data.containsKey('profile_complete')) {
-          result['profile_complete'] = data['profile_complete'];
+        if (userType == 'student') {
+          // Check profile completeness from backend response or student data
+          bool profileComplete = false;
+          
+          // First check if backend explicitly returns profile_complete
+          if (data.containsKey('profile_complete')) {
+            profileComplete = data['profile_complete'] == true;
+          } else {
+            // Otherwise, check if required profile fields are present
+            // Required fields: guardian_name, guardian_phone, date_of_birth, address, t_shirt_size
+            profileComplete = userData['guardian_name'] != null &&
+                userData['guardian_name'].toString().isNotEmpty &&
+                userData['guardian_phone'] != null &&
+                userData['guardian_phone'].toString().isNotEmpty &&
+                userData['date_of_birth'] != null &&
+                userData['address'] != null &&
+                userData['address'].toString().isNotEmpty &&
+                userData['t_shirt_size'] != null &&
+                userData['t_shirt_size'].toString().isNotEmpty;
+          }
+          
+          result['profile_complete'] = profileComplete;
         }
         return result;
       } else {

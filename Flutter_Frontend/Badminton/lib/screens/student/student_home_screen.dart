@@ -116,37 +116,43 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
             final batchId = batch['id'];
             if (batchId != null) {
               try {
-                final schedulesResponse = await apiService.get(
-                  ApiEndpoints.schedules,
-                  queryParameters: {'batch_id': batchId},
-                );
-                
-                if (schedulesResponse.statusCode == 200) {
-                  final schedules = schedulesResponse.data is List
-                      ? schedulesResponse.data
-                      : (schedulesResponse.data['results'] ?? schedulesResponse.data['schedules'] ?? []);
+                // Try to get schedules - handle 405 Method Not Allowed gracefully
+                try {
+                  final schedulesResponse = await apiService.get(
+                    ApiEndpoints.schedules,
+                    queryParameters: {'batch_id': batchId},
+                  );
                   
-                  for (var schedule in schedules) {
-                    final scheduleDate = schedule['date'] ?? schedule['session_date'];
-                    if (scheduleDate != null) {
-                      try {
-                        final date = DateTime.parse(scheduleDate.toString());
-                        if (date.isAfter(now)) {
-                          upcomingSessionsList.add({
-                            'batch_name': batch['name'] ?? 'Unknown Batch',
-                            'time': schedule['time'] ?? schedule['start_time'] ?? '',
-                            'location': schedule['location'] ?? schedule['venue'] ?? '',
-                            'date': scheduleDate,
-                          });
+                  if (schedulesResponse.statusCode == 200) {
+                    final schedules = schedulesResponse.data is List
+                        ? schedulesResponse.data
+                        : (schedulesResponse.data['results'] ?? schedulesResponse.data['schedules'] ?? []);
+                    
+                    for (var schedule in schedules) {
+                      final scheduleDate = schedule['date'] ?? schedule['session_date'];
+                      if (scheduleDate != null) {
+                        try {
+                          final date = DateTime.parse(scheduleDate.toString());
+                          if (date.isAfter(now)) {
+                            upcomingSessionsList.add({
+                              'batch_name': batch['name'] ?? 'Unknown Batch',
+                              'time': schedule['time'] ?? schedule['start_time'] ?? '',
+                              'location': schedule['location'] ?? schedule['venue'] ?? '',
+                              'date': scheduleDate,
+                            });
+                          }
+                        } catch (_) {
+                          // Skip invalid dates
                         }
-                      } catch (_) {
-                        // Skip invalid dates
                       }
                     }
                   }
+                } catch (_) {
+                  // If GET fails, try alternative endpoint or skip
+                  // Schedules endpoint might not support query parameters
                 }
               } catch (_) {
-                // Skip if schedule fetch fails
+                // Skip if schedule fetch fails (405 Method Not Allowed or other errors)
               }
             }
           }
