@@ -9,6 +9,7 @@ import 'student_fees_screen.dart';
 import 'student_bmi_screen.dart';
 import 'student_announcements_screen.dart';
 import 'student_schedule_screen.dart';
+import 'student_calendar_screen.dart';
 import 'student_profile_screen.dart';
 import 'student_settings_screen.dart';
 
@@ -97,6 +98,14 @@ class _StudentMoreScreenState extends ConsumerState<StudentMoreScreen> {
               isDark: isDark,
               onTap: () => setState(() => _currentView = 'schedule'),
             ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.calendar_month_outlined,
+              title: 'Calendar',
+              subtitle: 'View academy calendar events',
+              isDark: isDark,
+              onTap: () => setState(() => _currentView = 'calendar'),
+            ),
 
             const SizedBox(height: AppDimensions.spacingL),
 
@@ -147,6 +156,10 @@ class _StudentMoreScreenState extends ConsumerState<StudentMoreScreen> {
         );
       case 'schedule':
         return StudentScheduleScreen(
+          onBack: () => setState(() => _currentView = null),
+        );
+      case 'calendar':
+        return StudentCalendarScreen(
           onBack: () => setState(() => _currentView = null),
         );
       case 'settings':

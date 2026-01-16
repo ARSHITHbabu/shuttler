@@ -60,12 +60,14 @@ class AttendanceService {
   }
 
   /// Mark student attendance
+  /// [markedBy] can be 'Owner', coach name, or coach ID as string
   Future<Attendance> markStudentAttendance({
     required int studentId,
     required int batchId,
     required DateTime date,
     required String status,
     String? remarks,
+    String? markedBy, // Optional: 'Owner', coach name, or coach ID
   }) async {
     try {
       // Create request data with marked_by field (required by backend)
@@ -74,7 +76,7 @@ class AttendanceService {
         'batch_id': batchId,
         'date': date.toIso8601String().split('T')[0],
         'status': status,
-        'marked_by': 'Owner', // Required by backend, default to Owner
+        'marked_by': markedBy ?? 'Owner', // Use provided markedBy or default to Owner
         'remarks': remarks,
       };
 
@@ -89,7 +91,10 @@ class AttendanceService {
   }
 
   /// Mark multiple students' attendance at once
-  Future<void> markMultipleAttendance(List<Map<String, dynamic>> attendanceList) async {
+  Future<void> markMultipleAttendance(
+    List<Map<String, dynamic>> attendanceList, {
+    String? markedBy,
+  }) async {
     try {
       // Mark attendance for each student
       for (final attendance in attendanceList) {
@@ -99,6 +104,7 @@ class AttendanceService {
           date: attendance['date'] as DateTime,
           status: attendance['status'] as String,
           remarks: attendance['remarks'] as String?,
+          markedBy: markedBy ?? attendance['marked_by'] as String?,
         );
       }
     } catch (e) {

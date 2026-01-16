@@ -8,6 +8,7 @@ import '../../widgets/common/neumorphic_button.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/loading_spinner.dart';
 import '../../providers/service_providers.dart';
+import '../../providers/auth_provider.dart';
 
 /// Student Profile Screen - View and edit profile information
 /// Students can view all their profile data and edit certain fields
@@ -55,14 +56,34 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     });
 
     try {
-      final storageService = ref.read(storageServiceProvider);
-      final apiService = ref.read(apiServiceProvider);
-      final userId = storageService.getUserId();
-
+      // Get user ID from auth provider (preferred) or storage (fallback)
+      int? userId;
+      
+      // Try to get from auth provider first
+      final authStateAsync = ref.read(authProvider);
+      final authState = authStateAsync.value;
+      
+      if (authState is Authenticated) {
+        userId = authState.userId;
+      }
+      
+      // Fallback: try to get from storage if auth provider doesn't have it
       if (userId == null) {
-        throw Exception('User not logged in');
+        final storageService = ref.read(storageServiceProvider);
+        
+        // Ensure storage is initialized
+        if (!storageService.isInitialized) {
+          await storageService.init();
+        }
+        
+        userId = storageService.getUserId();
+      }
+      
+      if (userId == null) {
+        throw Exception('User not logged in. Please try logging in again.');
       }
 
+      final apiService = ref.read(apiServiceProvider);
       final response = await apiService.get('/api/students/$userId');
       if (response.statusCode == 200) {
         _studentData = Map<String, dynamic>.from(response.data);
@@ -95,14 +116,34 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     setState(() => _isSaving = true);
 
     try {
-      final storageService = ref.read(storageServiceProvider);
-      final apiService = ref.read(apiServiceProvider);
-      final userId = storageService.getUserId();
-
+      // Get user ID from auth provider (preferred) or storage (fallback)
+      int? userId;
+      
+      // Try to get from auth provider first
+      final authStateAsync = ref.read(authProvider);
+      final authState = authStateAsync.value;
+      
+      if (authState is Authenticated) {
+        userId = authState.userId;
+      }
+      
+      // Fallback: try to get from storage if auth provider doesn't have it
       if (userId == null) {
-        throw Exception('User not logged in');
+        final storageService = ref.read(storageServiceProvider);
+        
+        // Ensure storage is initialized
+        if (!storageService.isInitialized) {
+          await storageService.init();
+        }
+        
+        userId = storageService.getUserId();
+      }
+      
+      if (userId == null) {
+        throw Exception('User not logged in. Please try logging in again.');
       }
 
+      final apiService = ref.read(apiServiceProvider);
       final updateData = {
         'phone': _phoneController.text.trim(),
         'guardian_name': _guardianNameController.text.trim(),

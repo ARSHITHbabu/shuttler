@@ -6,6 +6,8 @@ import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/loading_spinner.dart';
 import '../../providers/service_providers.dart';
+import '../../providers/auth_provider.dart';
+import '../../core/constants/api_endpoints.dart';
 
 /// Student Performance Screen - READ-ONLY view of performance records
 /// Students can view their skill ratings and progress but cannot edit
@@ -35,19 +37,51 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
     });
 
     try {
-      final storageService = ref.read(storageServiceProvider);
-      final apiService = ref.read(apiServiceProvider);
-      final userId = storageService.getUserId();
-
-      if (userId == null) {
-        throw Exception('User not logged in');
+      // Get user ID from auth provider (preferred) or storage (fallback)
+      int? userId;
+      
+      // Try to get from auth provider first
+      final authStateAsync = ref.read(authProvider);
+      final authState = authStateAsync.value;
+      
+      if (authState is Authenticated) {
+        userId = authState.userId;
       }
+      
+      // Fallback: try to get from storage if auth provider doesn't have it
+      if (userId == null) {
+        final storageService = ref.read(storageServiceProvider);
+        
+        // Ensure storage is initialized
+        if (!storageService.isInitialized) {
+          await storageService.init();
+        }
+        
+        userId = storageService.getUserId();
+      }
+      
+      if (userId == null) {
+        throw Exception('User not logged in. Please try logging in again.');
+      }
+
+      final apiService = ref.read(apiServiceProvider);
 
       // Load performance records
       try {
-        final response = await apiService.get('/api/students/$userId/performance');
+        final response = await apiService.get(
+          ApiEndpoints.performance,
+          queryParameters: {'student_id': userId},
+        );
         if (response.statusCode == 200) {
-          _performanceRecords = List<Map<String, dynamic>>.from(response.data['records'] ?? []);
+          // Handle different response formats
+          if (response.data is List) {
+            _performanceRecords = List<Map<String, dynamic>>.from(response.data);
+          } else if (response.data is Map) {
+            _performanceRecords = List<Map<String, dynamic>>.from(
+              response.data['records'] ?? response.data['results'] ?? []
+            );
+          }
+          
           if (_performanceRecords.isNotEmpty) {
             _latestPerformance = _performanceRecords.first;
           }

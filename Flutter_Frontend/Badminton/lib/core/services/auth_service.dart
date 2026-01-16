@@ -129,8 +129,74 @@ class AuthService {
 
         // Return user data with profile completeness for students
         final result = {'user': userData};
-        if (userType == 'student' && data.containsKey('profile_complete')) {
-          result['profile_complete'] = data['profile_complete'];
+        if (userType == 'student') {
+          // Check profile completeness from backend response or student data
+          bool profileComplete = false;
+          
+          // First check if backend explicitly returns profile_complete (at top level)
+          if (data.containsKey('profile_complete')) {
+            final profileCompleteValue = data['profile_complete'];
+            // Handle both boolean and string representations
+            profileComplete = profileCompleteValue == true || 
+                            profileCompleteValue == 'true' ||
+                            profileCompleteValue == 1;
+          }
+          
+          // If not found in response, check required profile fields from student data
+          if (!profileComplete) {
+            // Required fields: guardian_name, guardian_phone, date_of_birth, address, t_shirt_size
+            final guardianName = userData['guardian_name'];
+            final guardianPhone = userData['guardian_phone'];
+            final dateOfBirth = userData['date_of_birth'];
+            final address = userData['address'];
+            final tShirtSize = userData['t_shirt_size'];
+            
+            profileComplete = guardianName != null &&
+                guardianName.toString().trim().isNotEmpty &&
+                guardianPhone != null &&
+                guardianPhone.toString().trim().isNotEmpty &&
+                dateOfBirth != null &&
+                dateOfBirth.toString().trim().isNotEmpty &&
+                address != null &&
+                address.toString().trim().isNotEmpty &&
+                tShirtSize != null &&
+                tShirtSize.toString().trim().isNotEmpty;
+          }
+          
+          // If still not complete, try fetching student profile directly as fallback
+          if (!profileComplete && userData['id'] != null) {
+            try {
+              final studentId = userData['id'] as int;
+              final studentResponse = await _apiService.get(
+                ApiEndpoints.studentById(studentId),
+              );
+              
+              if (studentResponse.statusCode == 200) {
+                final studentProfile = studentResponse.data;
+                final guardianName = studentProfile['guardian_name'];
+                final guardianPhone = studentProfile['guardian_phone'];
+                final dateOfBirth = studentProfile['date_of_birth'];
+                final address = studentProfile['address'];
+                final tShirtSize = studentProfile['t_shirt_size'];
+                
+                profileComplete = guardianName != null &&
+                    guardianName.toString().trim().isNotEmpty &&
+                    guardianPhone != null &&
+                    guardianPhone.toString().trim().isNotEmpty &&
+                    dateOfBirth != null &&
+                    dateOfBirth.toString().trim().isNotEmpty &&
+                    address != null &&
+                    address.toString().trim().isNotEmpty &&
+                    tShirtSize != null &&
+                    tShirtSize.toString().trim().isNotEmpty;
+              }
+            } catch (e) {
+              // If fetch fails, use the value we already determined
+              // This prevents blocking login if profile endpoint is unavailable
+            }
+          }
+          
+          result['profile_complete'] = profileComplete;
         }
         return result;
       } else {

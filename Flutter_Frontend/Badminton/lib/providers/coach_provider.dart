@@ -147,6 +147,42 @@ Future<List<Announcement>> coachAnnouncements(CoachAnnouncementsRef ref) async {
   }).toList();
 }
 
+/// Provider for coach's all sessions (upcoming and past)
+/// Gets schedules through coach's batches
+@riverpod
+Future<List<Schedule>> coachSchedule(CoachScheduleRef ref, int coachId) async {
+  final batchService = ref.watch(batchServiceProvider);
+  final scheduleService = ref.watch(scheduleServiceProvider);
+  
+  // Get coach's assigned batches
+  final coachBatches = await batchService.getBatchesByCoachId(coachId);
+  
+  // Get schedules for each batch
+  List<Schedule> allSessions = [];
+  for (var batch in coachBatches) {
+    try {
+      final batchSchedules = await scheduleService.getSchedules(batchId: batch.id);
+      // Add batch name and coach info to schedules
+      final sessionsWithInfo = batchSchedules.map((schedule) {
+        return schedule.copyWith(
+          batchName: batch.batchName,
+          coachId: coachId,
+          coachName: batch.assignedCoachName,
+        );
+      }).toList();
+      allSessions.addAll(sessionsWithInfo);
+    } catch (e) {
+      // Skip if error fetching schedules for this batch
+      continue;
+    }
+  }
+  
+  // Sort by date (newest first)
+  allSessions.sort((a, b) => b.date.compareTo(a.date));
+  
+  return allSessions;
+}
+
 /// Coach statistics model
 class CoachStats {
   final int assignedBatches;

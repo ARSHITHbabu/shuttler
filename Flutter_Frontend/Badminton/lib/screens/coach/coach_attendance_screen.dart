@@ -395,6 +395,13 @@ class _CoachAttendanceScreenState extends ConsumerState<CoachAttendanceScreen> {
     try {
       final attendanceService = ref.read(attendanceServiceProvider);
       final batchService = ref.read(batchServiceProvider);
+      final authState = ref.read(authProvider);
+      
+      // Get coach name for marked_by field
+      final coachName = authState.value is Authenticated 
+          ? (authState.value as Authenticated).userName 
+          : 'Coach';
+      
       final students = await batchService.getBatchStudents(_selectedBatchId!);
 
       // Mark attendance for all students (present, absent, or skip if not marked)
@@ -407,6 +414,7 @@ class _CoachAttendanceScreenState extends ConsumerState<CoachAttendanceScreen> {
             date: _selectedDate,
             status: status,
             remarks: _remarks[student.id],
+            markedBy: coachName, // Pass coach name to track who marked attendance
           );
         }
       }
