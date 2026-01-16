@@ -6,6 +6,7 @@ class FeePayment {
   final DateTime paidDate;
   final int? payeeStudentId;
   final String? payeeStudentName;
+  final String? payeeName;  // For non-student payees
   final String? paymentMethod;
   final String? collectedBy;
   final DateTime? createdAt;
@@ -17,6 +18,7 @@ class FeePayment {
     required this.paidDate,
     this.payeeStudentId,
     this.payeeStudentName,
+    this.payeeName,
     this.paymentMethod,
     this.collectedBy,
     this.createdAt,
@@ -31,6 +33,7 @@ class FeePayment {
       paidDate: DateTime.parse(json['paid_date'] as String),
       payeeStudentId: json['payee_student_id'] as int?,
       payeeStudentName: json['payee_student_name'] as String?,
+      payeeName: json['payee_name'] as String?,
       paymentMethod: json['payment_method'] as String?,
       collectedBy: json['collected_by'] as String?,
       createdAt: json['created_at'] != null && json['created_at'] is String
@@ -46,8 +49,17 @@ class FeePayment {
       'amount': amount,
       'paid_date': paidDate.toIso8601String().split('T')[0],
       'payee_student_id': payeeStudentId,
+      'payee_name': payeeName,
       'payment_method': paymentMethod,
       'collected_by': collectedBy,
     };
+  }
+  
+  /// Get display name for payee (student name or custom name)
+  String? get payeeDisplayName {
+    if (payeeStudentName != null && payeeStudentName!.isNotEmpty) {
+      return payeeStudentName;
+    }
+    return payeeName;
   }
 }

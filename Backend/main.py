@@ -194,6 +194,7 @@ class FeePaymentDB(Base):
     amount = Column(Float, nullable=False)
     paid_date = Column(String, nullable=False)
     payee_student_id = Column(Integer, ForeignKey("students.id"), nullable=True)
+    payee_name = Column(String, nullable=True)  # For non-student payees (parents, siblings, etc.)
     payment_method = Column(String, nullable=True)
     collected_by = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -435,6 +436,8 @@ def migrate_database_schema(engine):
             print("⚠️  If this persists, check that FeePaymentDB model is properly defined.")
         else:
             print("✅ fee_payments table exists")
+            # Migrate fee_payments table - add payee_name column
+            check_and_add_column(engine, 'fee_payments', 'payee_name', 'VARCHAR(255)', nullable=True)
         
         # Migrate schedules table - add capacity column
         if 'schedules' in tables:
@@ -720,6 +723,7 @@ class FeePaymentCreate(BaseModel):
     amount: float
     paid_date: str
     payee_student_id: Optional[int] = None
+    payee_name: Optional[str] = None  # For non-student payees
     payment_method: Optional[str] = None
     collected_by: Optional[str] = None
 
@@ -729,7 +733,8 @@ class FeePayment(BaseModel):
     amount: float
     paid_date: str
     payee_student_id: Optional[int] = None
-    payee_student_name: Optional[str] = None
+    payee_student_name: Optional[str] = None  # Student name if payee_student_id is set
+    payee_name: Optional[str] = None  # Custom name for non-student payees
     payment_method: Optional[str] = None
     collected_by: Optional[str] = None
     created_at: Optional[str] = None
@@ -1897,17 +1902,18 @@ def enrich_fee_with_payments(fee: FeeDB, db) -> dict:
     # Enrich payments with student names
     payment_list = []
     for payment in payments:
-        payee_name = None
+        payee_student_name = None
         if payment.payee_student_id:
             payee = db.query(StudentDB).filter(StudentDB.id == payment.payee_student_id).first()
-            payee_name = payee.name if payee else None
+            payee_student_name = payee.name if payee else None
         payment_list.append({
             "id": payment.id,
             "fee_id": payment.fee_id,
             "amount": payment.amount,
             "paid_date": payment.paid_date,
             "payee_student_id": payment.payee_student_id,
-            "payee_student_name": payee_name,
+            "payee_student_name": payee_student_name,
+            "payee_name": payment.payee_name,
             "payment_method": payment.payment_method,
             "collected_by": payment.collected_by,
             "created_at": payment.created_at.isoformat() if payment.created_at else None,
@@ -2064,6 +2070,12 @@ def create_fee_payment(fee_id: int, payment: FeePaymentCreate):
         if payment.amount > pending_amount:
             raise HTTPException(status_code=400, detail=f"Payment amount (₹{payment.amount}) exceeds pending amount (₹{pending_amount})")
         
+        # Validate payee: either payee_student_id or payee_name must be provided, but not both
+        if payment.payee_student_id and payment.payee_name:
+            raise HTTPException(status_code=400, detail="Cannot specify both payee_student_id and payee_name. Provide either a student ID or a custom payee name.")
+        if not payment.payee_student_id and not payment.payee_name:
+            raise HTTPException(status_code=400, detail="Either payee_student_id or payee_name must be provided.")
+        
         # Create payment
         payment_dict = payment.model_dump()
         payment_dict['fee_id'] = fee_id
@@ -2079,11 +2091,11 @@ def create_fee_payment(fee_id: int, payment: FeePaymentCreate):
         db.commit()
         db.refresh(fee)
         
-        # Enrich payment with payee name
-        payee_name = None
+        # Enrich payment with payee information
+        payee_student_name = None
         if db_payment.payee_student_id:
             payee = db.query(StudentDB).filter(StudentDB.id == db_payment.payee_student_id).first()
-            payee_name = payee.name if payee else None
+            payee_student_name = payee.name if payee else None
         
         return {
             "id": db_payment.id,
@@ -2091,7 +2103,8 @@ def create_fee_payment(fee_id: int, payment: FeePaymentCreate):
             "amount": db_payment.amount,
             "paid_date": db_payment.paid_date,
             "payee_student_id": db_payment.payee_student_id,
-            "payee_student_name": payee_name,
+            "payee_student_name": payee_student_name,
+            "payee_name": db_payment.payee_name,
             "payment_method": db_payment.payment_method,
             "collected_by": db_payment.collected_by,
             "created_at": db_payment.created_at.isoformat() if db_payment.created_at else None,
@@ -2107,17 +2120,18 @@ def get_fee_payments(fee_id: int):
         payments = db.query(FeePaymentDB).filter(FeePaymentDB.fee_id == fee_id).order_by(FeePaymentDB.created_at.desc()).all()
         result = []
         for payment in payments:
-            payee_name = None
+            payee_student_name = None
             if payment.payee_student_id:
                 payee = db.query(StudentDB).filter(StudentDB.id == payment.payee_student_id).first()
-                payee_name = payee.name if payee else None
+                payee_student_name = payee.name if payee else None
             result.append({
                 "id": payment.id,
                 "fee_id": payment.fee_id,
                 "amount": payment.amount,
                 "paid_date": payment.paid_date,
                 "payee_student_id": payment.payee_student_id,
-                "payee_student_name": payee_name,
+                "payee_student_name": payee_student_name,
+                "payee_name": payment.payee_name,
                 "payment_method": payment.payment_method,
                 "collected_by": payment.collected_by,
                 "created_at": payment.created_at.isoformat() if payment.created_at else None,
