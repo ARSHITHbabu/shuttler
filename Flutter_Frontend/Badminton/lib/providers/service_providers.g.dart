@@ -358,5 +358,25 @@ final connectivityServiceProvider =
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef ConnectivityServiceRef = AutoDisposeProviderRef<ConnectivityService>;
+String _$requestQueueHash() => r'162b38e9be3558221772227e935e1fd15405aa03';
+
+/// Provider for RequestQueue singleton
+/// Note: RequestQueue requires ConnectivityService and Dio from ApiService
+///
+/// Copied from [requestQueue].
+@ProviderFor(requestQueue)
+final requestQueueProvider = AutoDisposeProvider<RequestQueue>.internal(
+  requestQueue,
+  name: r'requestQueueProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$requestQueueHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef RequestQueueRef = AutoDisposeProviderRef<RequestQueue>;
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package
