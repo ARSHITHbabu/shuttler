@@ -9,6 +9,7 @@ import '../../widgets/common/error_widget.dart';
 import '../../providers/coach_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/schedule.dart';
+import '../../widgets/forms/add_student_dialog.dart';
 
 /// Coach Home Screen - Dashboard overview
 /// Shows coach's assigned batches, today's sessions, and quick stats
@@ -326,12 +327,9 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
                     children: [
                       Expanded(
                         child: _QuickActionButton(
-                          icon: Icons.check_circle_outline,
-                          label: 'Mark Attendance',
-                          onTap: () {
-                            // Switch to attendance tab - handled by parent dashboard
-                            // This would need to be passed via callback or state management
-                          },
+                          icon: Icons.add,
+                          label: 'Add Student',
+                          onTap: () => _showAddStudentDialog(context),
                         ),
                       ),
                       const SizedBox(width: AppDimensions.spacingM),
@@ -363,6 +361,13 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
     final months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
     return '${weekdays[now.weekday - 1]}, ${months[now.month - 1]} ${now.day}, ${now.year}';
+  }
+
+  void _showAddStudentDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => const AddStudentDialog(),
+    );
   }
 
   Color _getSessionStatusColor(Schedule session) {
