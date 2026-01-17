@@ -3,7 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
+import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/error_widget.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/auth_provider.dart';
 
@@ -135,12 +136,15 @@ class _StudentBMIScreenState extends ConsumerState<StudentBMIScreen> {
               child: _isLoading
                   ? const SizedBox(
                       height: 400,
-                      child: Center(child: LoadingSpinner()),
+                      child: ProfileSkeleton(),
                     )
                   : _error != null
-                      ? _buildErrorWidget(isDark)
+                      ? ErrorDisplay(
+                          message: _error!,
+                          onRetry: _loadData,
+                        )
                       : _bmiRecords.isEmpty
-                          ? _buildEmptyState(isDark)
+                          ? EmptyState.noBmiRecords()
                           : Column(
                               children: [
                                 // Current BMI Status
@@ -216,67 +220,6 @@ class _StudentBMIScreenState extends ConsumerState<StudentBMIScreen> {
     );
   }
 
-  Widget _buildErrorWidget(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.all(AppDimensions.paddingL),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.error_outline,
-            size: 48,
-            color: isDark ? AppColors.error : AppColorsLight.error,
-          ),
-          const SizedBox(height: AppDimensions.spacingM),
-          Text(
-            _error!,
-            style: TextStyle(
-              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: AppDimensions.spacingL),
-          ElevatedButton(
-            onPressed: _loadData,
-            child: const Text('Retry'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.all(AppDimensions.paddingXl),
-      child: Column(
-        children: [
-          const SizedBox(height: AppDimensions.spacingXxl),
-          Icon(
-            Icons.monitor_weight_outlined,
-            size: 64,
-            color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
-          ),
-          const SizedBox(height: AppDimensions.spacingM),
-          Text(
-            'No BMI records yet',
-            style: TextStyle(
-              fontSize: 16,
-              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-            ),
-          ),
-          const SizedBox(height: AppDimensions.spacingS),
-          Text(
-            'Your coach will record your BMI measurements during sessions',
-            style: TextStyle(
-              fontSize: 14,
-              color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildCurrentBMI(bool isDark) {
     final bmi = (_latestBMI['bmi'] ?? 0.0).toDouble();

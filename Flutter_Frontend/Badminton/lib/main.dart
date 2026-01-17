@@ -4,6 +4,7 @@ import 'core/theme/app_theme.dart';
 import 'core/services/storage_service.dart';
 import 'routes/app_router.dart';
 import 'providers/theme_provider.dart';
+import 'widgets/common/offline_indicator.dart';
 
 void main() async {
   // Ensure Flutter is initialized
@@ -38,13 +39,15 @@ class _MyAppState extends ConsumerState<MyApp> {
   Widget build(BuildContext context) {
     final themeMode = ref.watch(themeNotifierProvider);
 
-    return MaterialApp.router(
-      title: 'Badminton Academy',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
-      themeMode: themeMode,
-      routerConfig: router,
+    return OfflineIndicator(
+      child: MaterialApp.router(
+        title: 'Badminton Academy',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: themeMode,
+        routerConfig: router,
+      ),
     );
   }
 }

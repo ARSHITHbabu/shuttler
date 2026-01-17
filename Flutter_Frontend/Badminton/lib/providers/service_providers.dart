@@ -15,6 +15,10 @@ import '../core/services/schedule_service.dart';
 import '../core/services/announcement_service.dart';
 import '../core/services/calendar_service.dart';
 import '../core/services/invitation_service.dart';
+import '../core/services/notification_service.dart';
+import '../core/network/connectivity_service.dart';
+import '../core/network/request_queue.dart';
+import 'package:dio/dio.dart';
 
 part 'service_providers.g.dart';
 
@@ -134,6 +138,33 @@ CalendarService calendarService(CalendarServiceRef ref) {
 InvitationService invitationService(InvitationServiceRef ref) {
   final apiService = ref.watch(apiServiceProvider);
   return InvitationService(apiService);
+}
+
+/// Provider for NotificationService singleton
+@riverpod
+NotificationService notificationService(NotificationServiceRef ref) {
+  final apiService = ref.watch(apiServiceProvider);
+  return NotificationService(apiService);
+}
+
+/// Provider for ConnectivityService singleton
+@riverpod
+ConnectivityService connectivityService(ConnectivityServiceRef ref) {
+  return ConnectivityService();
+}
+
+/// Provider for RequestQueue singleton
+/// Note: RequestQueue requires ConnectivityService and Dio from ApiService
+@riverpod
+RequestQueue requestQueue(RequestQueueRef ref) {
+  final connectivityService = ref.watch(connectivityServiceProvider);
+  // Create a new Dio instance for the queue
+  // Note: This will need to be configured with the actual base URL when integrated
+  final dio = Dio(BaseOptions(baseUrl: 'http://localhost')); // Will be overridden by actual requests
+  return RequestQueue(
+    connectivityService: connectivityService,
+    dio: dio,
+  );
 }
 
 /// Provider for BatchEnrollmentService
