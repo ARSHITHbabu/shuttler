@@ -290,6 +290,20 @@ class InvitationDB(Base):
     status = Column(String, default="pending")
     created_at = Column(String, nullable=False)
 
+class CoachInvitationDB(Base):
+    """Invitations for coaches - sent by owners"""
+    __tablename__ = "coach_invitations"
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, nullable=False)  # Owner who sent the invitation
+    owner_name = Column(String, nullable=False)  # Owner name
+    coach_name = Column(String, nullable=True)  # Optional coach name
+    coach_phone = Column(String, nullable=True)  # At least one of phone or email required
+    coach_email = Column(String, nullable=True)  # At least one of phone or email required
+    experience_years = Column(Integer, nullable=True)  # Optional experience years
+    invite_token = Column(String, nullable=False, unique=True, index=True)
+    status = Column(String, default="pending")  # pending, approved, rejected
+    created_at = Column(String, nullable=False)
+
 # ==================== NEW MODELS FOR PHASE 0 ====================
 
 class AnnouncementDB(Base):
@@ -1038,6 +1052,34 @@ class Invitation(BaseModel):
         from_attributes = True
 
 class InvitationUpdate(BaseModel):
+    status: str  # approved, rejected
+
+# Coach Invitation Models
+class CoachInvitationCreate(BaseModel):
+    owner_id: int
+    owner_name: str
+    coach_name: Optional[str] = None  # Optional coach name
+    coach_phone: Optional[str] = None  # At least one of phone or email required
+    coach_email: Optional[str] = None  # At least one of phone or email required
+    experience_years: Optional[int] = None  # Optional experience years
+
+class CoachInvitation(BaseModel):
+    id: int
+    owner_id: int
+    owner_name: str
+    coach_name: Optional[str]
+    coach_phone: Optional[str]
+    coach_email: Optional[str]
+    experience_years: Optional[int]
+    invite_token: str
+    invite_link: Optional[str] = None
+    status: str
+    created_at: str
+    
+    class Config:
+        from_attributes = True
+
+class CoachInvitationUpdate(BaseModel):
     status: str  # approved, rejected
 
 # Other Models
@@ -3299,6 +3341,225 @@ def delete_video(video_id: int):
         db.close()
 
 # ==================== Invitation Routes ====================
+
+# ==================== Coach Invitation Routes ====================
+
+@app.post("/coach-invitations/", response_model=CoachInvitation)
+def create_coach_invitation(invitation: CoachInvitationCreate):
+    """Create a coach invitation - at least phone or email must be provided"""
+    # Validate that at least phone or email is provided
+    phone = (invitation.coach_phone or '').strip()
+    email = (invitation.coach_email or '').strip()
+    if not phone and not email:
+        raise HTTPException(
+            status_code=400,
+            detail="At least phone number or email address must be provided"
+        )
+    
+    db = SessionLocal()
+    try:
+        # Verify owner exists
+        owner = db.query(OwnerDB).filter(OwnerDB.id == invitation.owner_id).first()
+        if not owner:
+            raise HTTPException(status_code=404, detail="Owner not found")
+        
+        # Generate unique invite token
+        invite_token = secrets.token_urlsafe(32)
+        
+        # Create invitation record
+        invitation_dict = invitation.model_dump()
+        invitation_dict['invite_token'] = invite_token
+        invitation_dict['created_at'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        db_invitation = CoachInvitationDB(**invitation_dict)
+        db.add(db_invitation)
+        db.commit()
+        db.refresh(db_invitation)
+        
+        # Generate invite link (using a configurable base URL or default)
+        base_url = os.getenv("INVITE_BASE_URL", "https://academy.app")
+        invite_link = f"{base_url}/invite/coach/{invite_token}"
+        
+        # Convert to response model with invite link
+        invitation_response = CoachInvitation(
+            id=db_invitation.id,
+            owner_id=db_invitation.owner_id,
+            owner_name=db_invitation.owner_name,
+            coach_name=db_invitation.coach_name,
+            coach_phone=db_invitation.coach_phone,
+            coach_email=db_invitation.coach_email,
+            experience_years=db_invitation.experience_years,
+            invite_token=db_invitation.invite_token,
+            invite_link=invite_link,
+            status=db_invitation.status,
+            created_at=db_invitation.created_at
+        )
+        
+        return invitation_response
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error creating coach invitation: {str(e)}")
+    finally:
+        db.close()
+
+@app.get("/coach-invitations/", response_model=List[CoachInvitation])
+def get_all_coach_invitations(owner_id: Optional[int] = None):
+    """Get all coach invitations, optionally filtered by owner_id"""
+    db = SessionLocal()
+    try:
+        query = db.query(CoachInvitationDB)
+        if owner_id:
+            query = query.filter(CoachInvitationDB.owner_id == owner_id)
+        invitations = query.order_by(CoachInvitationDB.created_at.desc()).all()
+        
+        # Add invite links to responses
+        base_url = os.getenv("INVITE_BASE_URL", "https://academy.app")
+        result = []
+        for inv in invitations:
+            invite_link = f"{base_url}/invite/coach/{inv.invite_token}"
+            result.append(CoachInvitation(
+                id=inv.id,
+                owner_id=inv.owner_id,
+                owner_name=inv.owner_name,
+                coach_name=inv.coach_name,
+                coach_phone=inv.coach_phone,
+                coach_email=inv.coach_email,
+                experience_years=inv.experience_years,
+                invite_token=inv.invite_token,
+                invite_link=invite_link,
+                status=inv.status,
+                created_at=inv.created_at
+            ))
+        return result
+    finally:
+        db.close()
+
+@app.get("/coach-invitations/{coach_email}")
+def get_coach_invitations_by_email(coach_email: str):
+    """Get coach invitations by email address"""
+    db = SessionLocal()
+    try:
+        invitations = db.query(CoachInvitationDB).filter(
+            CoachInvitationDB.coach_email == coach_email
+        ).all()
+        
+        # Add invite links to responses
+        base_url = os.getenv("INVITE_BASE_URL", "https://academy.app")
+        result = []
+        for inv in invitations:
+            invite_link = f"{base_url}/invite/coach/{inv.invite_token}"
+            result.append(CoachInvitation(
+                id=inv.id,
+                owner_id=inv.owner_id,
+                owner_name=inv.owner_name,
+                coach_name=inv.coach_name,
+                coach_phone=inv.coach_phone,
+                coach_email=inv.coach_email,
+                experience_years=inv.experience_years,
+                invite_token=inv.invite_token,
+                invite_link=invite_link,
+                status=inv.status,
+                created_at=inv.created_at
+            ))
+        return result
+    finally:
+        db.close()
+
+@app.get("/coach-invitations/token/{invite_token}")
+def get_coach_invitation_by_token(invite_token: str):
+    """Get coach invitation by invite token"""
+    db = SessionLocal()
+    try:
+        invitation = db.query(CoachInvitationDB).filter(
+            CoachInvitationDB.invite_token == invite_token
+        ).first()
+        
+        if not invitation:
+            raise HTTPException(status_code=404, detail="Invitation not found")
+        
+        base_url = os.getenv("INVITE_BASE_URL", "https://academy.app")
+        invite_link = f"{base_url}/invite/coach/{invitation.invite_token}"
+        
+        return CoachInvitation(
+            id=invitation.id,
+            owner_id=invitation.owner_id,
+            owner_name=invitation.owner_name,
+            coach_name=invitation.coach_name,
+            coach_phone=invitation.coach_phone,
+            coach_email=invitation.coach_email,
+            experience_years=invitation.experience_years,
+            invite_token=invitation.invite_token,
+            invite_link=invite_link,
+            status=invitation.status,
+            created_at=invitation.created_at
+        )
+    finally:
+        db.close()
+
+@app.put("/coach-invitations/{invitation_id}")
+def update_coach_invitation(invitation_id: int, invitation_update: CoachInvitationUpdate):
+    """Update coach invitation status"""
+    db = SessionLocal()
+    try:
+        invitation = db.query(CoachInvitationDB).filter(CoachInvitationDB.id == invitation_id).first()
+        if not invitation:
+            raise HTTPException(status_code=404, detail="Invitation not found")
+        
+        invitation.status = invitation_update.status
+        
+        # If approved, automatically create coach account
+        if invitation_update.status == "approved":
+            # Check if coach already exists
+            existing_coach = None
+            if invitation.coach_email:
+                existing_coach = db.query(CoachDB).filter(CoachDB.email == invitation.coach_email).first()
+            elif invitation.coach_phone:
+                existing_coach = db.query(CoachDB).filter(CoachDB.phone == invitation.coach_phone).first()
+            
+            if not existing_coach:
+                # Create coach account with default password (coach will change it)
+                default_password = hash_password("Welcome123!")  # Default password
+                new_coach = CoachDB(
+                    name=invitation.coach_name or "Coach",
+                    email=invitation.coach_email or f"coach{invitation.id}@academy.com",
+                    phone=invitation.coach_phone or "",
+                    password=default_password,
+                    specialization=None,
+                    experience_years=invitation.experience_years,
+                    status="active"
+                )
+                db.add(new_coach)
+        
+        db.commit()
+        db.refresh(invitation)
+        
+        base_url = os.getenv("INVITE_BASE_URL", "https://academy.app")
+        invite_link = f"{base_url}/invite/coach/{invitation.invite_token}"
+        
+        return CoachInvitation(
+            id=invitation.id,
+            owner_id=invitation.owner_id,
+            owner_name=invitation.owner_name,
+            coach_name=invitation.coach_name,
+            coach_phone=invitation.coach_phone,
+            coach_email=invitation.coach_email,
+            experience_years=invitation.experience_years,
+            invite_token=invitation.invite_token,
+            invite_link=invite_link,
+            status=invitation.status,
+            created_at=invitation.created_at
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error updating invitation: {str(e)}")
+    finally:
+        db.close()
 
 @app.post("/invitations/", response_model=Invitation)
 def create_invitation(invitation: InvitationCreate):

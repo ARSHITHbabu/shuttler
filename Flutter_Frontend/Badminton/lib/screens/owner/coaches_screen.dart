@@ -84,7 +84,7 @@ class _CoachesScreenState extends ConsumerState<CoachesScreen> {
                   ElevatedButton.icon(
                     onPressed: () => _showAddCoachDialog(context),
                     icon: const Icon(Icons.add),
-                    label: const Text('Add Coach'),
+                    label: const Text('Invite Coach'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.accent,
                       foregroundColor: Colors.white,
@@ -268,8 +268,7 @@ class _CoachesScreenState extends ConsumerState<CoachesScreen> {
       context: context,
       builder: (context) => AddCoachDialog(
         onSubmit: (coachData) async {
-          final coachService = ref.read(coachServiceProvider);
-          await coachService.createCoach(coachData);
+          // Dialog handles invitation internally, just refresh the list
           if (mounted) {
             setState(() {});
           }

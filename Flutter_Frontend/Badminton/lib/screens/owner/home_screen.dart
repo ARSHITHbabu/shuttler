@@ -464,7 +464,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     Expanded(
                       child: _QuickActionButton(
                         icon: Icons.add,
-                        label: 'Add Coach',
+                        label: 'Invite Coach',
                         onTap: () => _showAddCoachDialog(context),
                       ),
                     ),
@@ -510,9 +510,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       context: context,
       builder: (context) => AddCoachDialog(
         onSubmit: (coachData) async {
-          final coachService = ref.read(coachServiceProvider);
-          await coachService.createCoach(coachData);
-          // Refresh dashboard stats
+          // Dialog handles invitation internally, just refresh the dashboard
           ref.invalidate(dashboardStatsProvider);
         },
       ),

@@ -95,4 +95,46 @@ class InvitationService {
       throw Exception('Failed to update invitation: ${_apiService.getErrorMessage(e)}');
     }
   }
+
+  /// Create a coach invitation (sent by owner)
+  /// Returns invitation data with invite_link
+  Future<Map<String, dynamic>> createCoachInvitation({
+    required int ownerId,
+    required String ownerName,
+    String? coachName,
+    String? coachPhone,
+    String? coachEmail,
+    int? experienceYears,
+  }) async {
+    try {
+      // Validate that at least phone or email is provided
+      if ((coachPhone == null || coachPhone.trim().isEmpty) &&
+          (coachEmail == null || coachEmail.trim().isEmpty)) {
+        throw Exception('At least phone number or email address must be provided');
+      }
+
+      final response = await _apiService.post(
+        '/coach-invitations/',
+        data: {
+          'owner_id': ownerId,
+          'owner_name': ownerName,
+          if (coachName != null && coachName.trim().isNotEmpty)
+            'coach_name': coachName.trim(),
+          if (coachPhone != null && coachPhone.trim().isNotEmpty)
+            'coach_phone': coachPhone.trim(),
+          if (coachEmail != null && coachEmail.trim().isNotEmpty)
+            'coach_email': coachEmail.trim(),
+          if (experienceYears != null) 'experience_years': experienceYears,
+        },
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return response.data as Map<String, dynamic>;
+      } else {
+        throw Exception('Failed to create coach invitation');
+      }
+    } catch (e) {
+      throw Exception('Failed to create coach invitation: ${_apiService.getErrorMessage(e)}');
+    }
+  }
 }
