@@ -1,7 +1,6 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../models/announcement.dart';
 import 'service_providers.dart';
-import 'notification_provider.dart';
 
 part 'announcement_provider.g.dart';
 

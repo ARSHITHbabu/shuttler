@@ -56,12 +56,13 @@ class ErrorDisplay extends StatelessWidget {
   }
 }
 
-/// Empty state widget
+/// Empty state widget with variants for different screens
 class EmptyState extends StatelessWidget {
   final String message;
   final IconData icon;
   final String? actionText;
   final VoidCallback? onAction;
+  final String? title;
 
   const EmptyState({
     super.key,
@@ -69,7 +70,99 @@ class EmptyState extends StatelessWidget {
     this.icon = Icons.inbox_outlined,
     this.actionText,
     this.onAction,
+    this.title,
   });
+
+  /// Empty state for students list
+  factory EmptyState.noStudents({VoidCallback? onAdd}) {
+    return EmptyState(
+      title: 'No Students Yet',
+      message: 'Start by adding your first student to the academy.',
+      icon: Icons.person_outline,
+      actionText: 'Add Student',
+      onAction: onAdd,
+    );
+  }
+
+  /// Empty state for batches list
+  factory EmptyState.noBatches({VoidCallback? onCreate}) {
+    return EmptyState(
+      title: 'No Batches Created',
+      message: 'Create your first batch to organize training sessions.',
+      icon: Icons.group_outlined,
+      actionText: 'Create Batch',
+      onAction: onCreate,
+    );
+  }
+
+  /// Empty state for attendance records
+  factory EmptyState.noAttendance({VoidCallback? onMark}) {
+    return EmptyState(
+      title: 'No Attendance Records',
+      message: 'Mark attendance for today to get started.',
+      icon: Icons.check_circle_outline,
+      actionText: 'Mark Attendance',
+      onAction: onMark,
+    );
+  }
+
+  /// Empty state for fees
+  factory EmptyState.noFees() {
+    return EmptyState(
+      title: 'No Fee Records',
+      message: 'Fee records will appear here once created.',
+      icon: Icons.payment_outlined,
+    );
+  }
+
+  /// Empty state for notifications
+  factory EmptyState.noNotifications() {
+    return EmptyState(
+      title: 'No Notifications',
+      message: 'You\'re all caught up! No new notifications.',
+      icon: Icons.notifications_none,
+    );
+  }
+
+  /// Empty state for events
+  factory EmptyState.noEvents({VoidCallback? onAdd}) {
+    return EmptyState(
+      title: 'No Events',
+      message: 'Add holidays, tournaments, or events to your calendar.',
+      icon: Icons.event_outlined,
+      actionText: 'Add Event',
+      onAction: onAdd,
+    );
+  }
+
+  /// Empty state for announcements
+  factory EmptyState.noAnnouncements({VoidCallback? onCreate}) {
+    return EmptyState(
+      title: 'No Announcements',
+      message: 'Create an announcement to notify students and coaches.',
+      icon: Icons.announcement_outlined,
+      actionText: 'Create Announcement',
+      onAction: onCreate,
+    );
+  }
+
+  /// Empty state for performance records
+  factory EmptyState.noPerformance() {
+    return EmptyState(
+      title: 'No Performance Records',
+      message: 'Performance tracking records will appear here.',
+      icon: Icons.trending_up_outlined,
+    );
+  }
+
+  /// Empty state for BMI records
+  factory EmptyState.noBmiRecords() {
+    return EmptyState(
+      title: 'No BMI Records',
+      message: 'BMI tracking records will appear here.',
+      icon: Icons.monitor_weight_outlined,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -85,6 +178,18 @@ class EmptyState extends StatelessWidget {
               color: AppColors.textSecondary,
             ),
             const SizedBox(height: AppDimensions.spacingM),
+            if (title != null) ...[
+              Text(
+                title!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: AppDimensions.spacingS),
+            ],
             Text(
               message,
               textAlign: TextAlign.center,
