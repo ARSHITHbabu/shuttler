@@ -158,7 +158,7 @@ class _StudentByIdProviderElement
   int get id => (origin as StudentByIdProvider).id;
 }
 
-String _$studentSearchHash() => r'c9a2893899f8dea5add2b8561b949f7fe70ba86a';
+String _$studentSearchHash() => r'75050da4a5f3be1fbe1eb62287bf3dd08d060c65';
 
 /// Provider for student search
 ///
@@ -422,7 +422,7 @@ class _StudentByBatchProviderElement
   int get batchId => (origin as StudentByBatchProvider).batchId;
 }
 
-String _$studentStatsHash() => r'55379df0c7d8ffb4bcc4f8cc7e297408239bde23';
+String _$studentStatsHash() => r'2101635509dd51900174c47592449fc653ecac80';
 
 /// Provider for student statistics
 ///
