@@ -178,7 +178,7 @@ final coachServiceProvider = AutoDisposeProvider<CoachService>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef CoachServiceRef = AutoDisposeProviderRef<CoachService>;
-String _$ownerServiceHash() => r'owner_service_hash_placeholder';
+String _$ownerServiceHash() => r'6cd62824db5c5b5f641022278bfa8f54c3c24600';
 
 /// Provider for OwnerService singleton
 ///
@@ -316,5 +316,26 @@ final invitationServiceProvider =
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef InvitationServiceRef = AutoDisposeProviderRef<InvitationService>;
+String _$notificationServiceHash() =>
+    r'841c588f74028a3fafda2fb906fcc13d92e49482';
+
+/// Provider for NotificationService singleton
+///
+/// Copied from [notificationService].
+@ProviderFor(notificationService)
+final notificationServiceProvider =
+    AutoDisposeProvider<NotificationService>.internal(
+      notificationService,
+      name: r'notificationServiceProvider',
+      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+          ? null
+          : _$notificationServiceHash,
+      dependencies: null,
+      allTransitiveDependencies: null,
+    );
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef NotificationServiceRef = AutoDisposeProviderRef<NotificationService>;
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package
