@@ -8,6 +8,7 @@ import '../core/services/fee_service.dart';
 import '../core/services/dashboard_service.dart';
 import '../core/services/student_service.dart';
 import '../core/services/coach_service.dart';
+import '../core/services/owner_service.dart';
 import '../core/services/performance_service.dart';
 import '../core/services/bmi_service.dart';
 import '../core/services/schedule_service.dart';
@@ -84,6 +85,13 @@ StudentService studentService(StudentServiceRef ref) {
 CoachService coachService(CoachServiceRef ref) {
   final apiService = ref.watch(apiServiceProvider);
   return CoachService(apiService);
+}
+
+/// Provider for OwnerService singleton
+@riverpod
+OwnerService ownerService(OwnerServiceRef ref) {
+  final apiService = ref.watch(apiServiceProvider);
+  return OwnerService(apiService);
 }
 
 /// Provider for PerformanceService singleton

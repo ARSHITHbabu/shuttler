@@ -178,6 +178,25 @@ final coachServiceProvider = AutoDisposeProvider<CoachService>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef CoachServiceRef = AutoDisposeProviderRef<CoachService>;
+String _$ownerServiceHash() => r'owner_service_hash_placeholder';
+
+/// Provider for OwnerService singleton
+///
+/// Copied from [ownerService].
+@ProviderFor(ownerService)
+final ownerServiceProvider = AutoDisposeProvider<OwnerService>.internal(
+  ownerService,
+  name: r'ownerServiceProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$ownerServiceHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef OwnerServiceRef = AutoDisposeProviderRef<OwnerService>;
 String _$performanceServiceHash() =>
     r'b092b9998588c68abb272ad6d6910a503a4e93b1';
 

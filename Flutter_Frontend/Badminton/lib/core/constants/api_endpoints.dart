@@ -17,6 +17,11 @@ class ApiEndpoints {
   static const String login = '/api/auth/login';
   static const String register = '/api/auth/register';
 
+  // Owners
+  static const String owners = '/owners/';
+  static String ownerById(int id) => '/owners/$id';
+  static const String ownerLogin = '/owners/login';
+
   // Coaches
   static const String coaches = '/coaches/';
   static String coachById(int id) => '/coaches/$id';
