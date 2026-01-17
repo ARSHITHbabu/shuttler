@@ -16,6 +16,7 @@ import '../core/services/announcement_service.dart';
 import '../core/services/calendar_service.dart';
 import '../core/services/invitation_service.dart';
 import '../core/services/notification_service.dart';
+import '../core/network/connectivity_service.dart';
 
 part 'service_providers.g.dart';
 
@@ -142,6 +143,12 @@ InvitationService invitationService(InvitationServiceRef ref) {
 NotificationService notificationService(NotificationServiceRef ref) {
   final apiService = ref.watch(apiServiceProvider);
   return NotificationService(apiService);
+}
+
+/// Provider for ConnectivityService singleton
+@riverpod
+ConnectivityService connectivityService(ConnectivityServiceRef ref) {
+  return ConnectivityService();
 }
 
 /// Provider for BatchEnrollmentService

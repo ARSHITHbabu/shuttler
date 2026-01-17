@@ -60,7 +60,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final result = await ref.read(authProvider.notifier).register(
+      await ref.read(authProvider.notifier).register(
         name: _nameController.text.trim(),
         email: _emailController.text.trim(),
         phone: _phoneController.text.trim(),

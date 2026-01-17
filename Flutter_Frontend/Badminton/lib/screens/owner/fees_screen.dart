@@ -456,11 +456,6 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
     return '${date.day}/${date.month}/${date.year}';
   }
 
-  void _showSendReminderDialog(BuildContext context, Fee fee) async {
-    // This is now handled by _showNotifyStudentDialog for overdue fees
-    // Keeping for backward compatibility if needed
-    _showNotifyStudentDialog(context, fee);
-  }
 
   void _showAddPaymentDialog(BuildContext context, Fee fee) {
     showDialog(
