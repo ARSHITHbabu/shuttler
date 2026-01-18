@@ -4,8 +4,10 @@ import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
+import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/success_snackbar.dart';
+import '../../widgets/common/confirmation_dialog.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../providers/batch_provider.dart';
 import '../../providers/service_providers.dart';
@@ -173,22 +175,16 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
     
     // Validate time fields
     if (_startTime == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select start time')),
-      );
+      SuccessSnackbar.showError(context, 'Please select start time');
       return;
     }
     if (_endTime == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select end time')),
-      );
+      SuccessSnackbar.showError(context, 'Please select end time');
       return;
     }
     
     if (_selectedDays.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select at least one day')),
-      );
+      SuccessSnackbar.showError(context, 'Please select at least one day');
       return;
     }
 
@@ -339,22 +335,12 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
               batchData,
             );
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Batch updated successfully'),
-              backgroundColor: AppColors.success,
-            ),
-          );
+          SuccessSnackbar.show(context, 'Batch updated successfully');
         }
       } else {
         await ref.read(batchListProvider.notifier).createBatch(batchData);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Batch created successfully'),
-              backgroundColor: AppColors.success,
-            ),
-          );
+          SuccessSnackbar.show(context, 'Batch created successfully');
         }
       }
 
@@ -366,65 +352,31 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SuccessSnackbar.showError(context, 'Error: ${e.toString()}');
       }
     }
   }
 
   Future<void> _deleteBatch(Batch batch) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.cardBackground,
-        title: const Text(
-          'Delete Batch',
-          style: TextStyle(color: AppColors.textPrimary),
-        ),
-        content: Text(
-          'Are you sure you want to delete "${batch.name}"?',
-          style: const TextStyle(color: AppColors.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final widgetRef = ref;
+    final isMounted = mounted;
+    
+    ConfirmationDialog.showDelete(
+      context,
+      batch.name,
+      onConfirm: () async {
+        try {
+          await widgetRef.read(batchListProvider.notifier).deleteBatch(batch.id);
+          if (isMounted && mounted) {
+            SuccessSnackbar.show(context, 'Batch deleted successfully');
+          }
+        } catch (e) {
+          if (isMounted && mounted) {
+            SuccessSnackbar.showError(context, 'Error: ${e.toString()}');
+          }
+        }
+      },
     );
-
-    if (confirmed == true) {
-      try {
-        await ref.read(batchListProvider.notifier).deleteBatch(batch.id);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Batch deleted successfully'),
-              backgroundColor: AppColors.success,
-            ),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error: ${e.toString()}'),
-              backgroundColor: AppColors.error,
-            ),
-          );
-        }
-      }
-    }
   }
 
   @override
@@ -915,7 +867,7 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
             },
             loading: () => const Padding(
               padding: EdgeInsets.all(AppDimensions.paddingL),
-              child: Center(child: LoadingSpinner()),
+              child: ListSkeleton(itemCount: 5),
             ),
             error: (error, stack) => Padding(
               padding: const EdgeInsets.all(AppDimensions.paddingL),

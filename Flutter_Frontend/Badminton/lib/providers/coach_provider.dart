@@ -2,6 +2,7 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../models/batch.dart';
 import '../models/schedule.dart';
 import '../models/announcement.dart';
+import '../models/coach.dart';
 import 'service_providers.dart';
 
 part 'coach_provider.g.dart';
@@ -181,6 +182,47 @@ Future<List<Schedule>> coachSchedule(CoachScheduleRef ref, int coachId) async {
   allSessions.sort((a, b) => b.date.compareTo(a.date));
   
   return allSessions;
+}
+
+/// Provider for coach list state
+@riverpod
+class CoachList extends _$CoachList {
+  @override
+  Future<List<Coach>> build() async {
+    final coachService = ref.watch(coachServiceProvider);
+    return coachService.getCoaches();
+  }
+
+  /// Refresh coach list
+  Future<void> refresh() async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(() async {
+      final coachService = ref.read(coachServiceProvider);
+      return coachService.getCoaches();
+    });
+  }
+
+  /// Update a coach
+  Future<void> updateCoach(int id, Map<String, dynamic> coachData) async {
+    try {
+      final coachService = ref.read(coachServiceProvider);
+      await coachService.updateCoach(id, coachData);
+      await refresh();
+    } catch (e) {
+      throw Exception('Failed to update coach: $e');
+    }
+  }
+
+  /// Delete a coach
+  Future<void> deleteCoach(int id) async {
+    try {
+      final coachService = ref.read(coachServiceProvider);
+      await coachService.deleteCoach(id);
+      await refresh();
+    } catch (e) {
+      throw Exception('Failed to delete coach: $e');
+    }
+  }
 }
 
 /// Coach statistics model

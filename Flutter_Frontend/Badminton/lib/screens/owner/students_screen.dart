@@ -134,7 +134,7 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
               loading: () => const ListSkeleton(itemCount: 5),
               error: (error, stack) => ErrorDisplay(
                 message: 'Failed to load students: ${error.toString()}',
-                onRetry: () => ref.refresh(studentListProvider),
+                onRetry: () => ref.invalidate(studentListProvider),
               ),
               data: (allStudents) {
                 // Apply status filter

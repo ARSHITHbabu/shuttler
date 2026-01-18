@@ -4,10 +4,13 @@ import 'package:fl_chart/fl_chart.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
+import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/success_snackbar.dart';
+import '../../widgets/common/confirmation_dialog.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../providers/service_providers.dart';
+import '../../providers/bmi_provider.dart';
 import '../../models/bmi_record.dart';
 import '../../models/student.dart';
 import 'package:intl/intl.dart';
@@ -69,9 +72,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
       if (!mounted) return;
       setState(() => _isInitializing = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to initialize: $e')),
-        );
+        SuccessSnackbar.showError(context, 'Failed to initialize: ${e.toString()}');
       }
     }
   }
@@ -134,18 +135,14 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
       if (!mounted) return;
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load BMI history: $e')),
-        );
+        SuccessSnackbar.showError(context, 'Failed to load BMI history: ${e.toString()}');
       }
     }
   }
 
   Future<void> _saveBMIRecord() async {
     if (_selectedStudentId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a student')),
-      );
+      SuccessSnackbar.showError(context, 'Please select a student');
       return;
     }
 
@@ -153,9 +150,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
     final weightText = _weightController.text.trim();
 
     if (heightText.isEmpty || weightText.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter height and weight')),
-      );
+      SuccessSnackbar.showError(context, 'Please enter height and weight');
       return;
     }
 
@@ -164,9 +159,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
       final weight = double.parse(weightText);
 
       if (height <= 0 || weight <= 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Height and weight must be greater than 0')),
-        );
+        SuccessSnackbar.showError(context, 'Height and weight must be greater than 0');
         return;
       }
 
@@ -186,11 +179,9 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_editingBMIRecordId != null
-              ? 'BMI record updated successfully'
-              : 'BMI record saved successfully')),
-        );
+        SuccessSnackbar.show(context, _editingBMIRecordId != null
+            ? 'BMI record updated successfully'
+            : 'BMI record saved successfully');
         setState(() {
           _showAddForm = false;
           _heightController.clear();
@@ -205,9 +196,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save BMI record: $e')),
-        );
+        SuccessSnackbar.showError(context, 'Failed to save BMI record: ${e.toString()}');
       }
     }
   }
@@ -238,7 +227,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
             ),
           ),
         ),
-        body: const Center(child: LoadingSpinner()),
+        body: const Center(child: ListSkeleton(itemCount: 3)),
       );
     }
 
@@ -264,9 +253,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
             icon: const Icon(Icons.add, color: AppColors.accent),
             onPressed: () {
               if (_selectedStudentId == null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please select a student first')),
-                );
+                SuccessSnackbar.showError(context, 'Please select a student first');
                 return;
               }
               setState(() => _showAddForm = true);
@@ -313,7 +300,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
                 const SizedBox(height: AppDimensions.spacingM),
 
                 if (_isLoading)
-                  const Center(child: LoadingSpinner())
+                  const Center(child: ListSkeleton(itemCount: 3))
                 else if (_bmiHistory.isEmpty)
                   Center(
                     child: Column(
@@ -349,7 +336,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
       future: ref.read(studentServiceProvider).getStudents(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const LoadingSpinner();
+          return const ListSkeleton(itemCount: 3);
         }
 
         if (snapshot.hasError) {
@@ -540,7 +527,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
                     padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingM),
                   ),
                   child: _isLoading
-                      ? const LoadingSpinner()
+                      ? const ListSkeleton(itemCount: 3)
                       : Text(
                           _editingBMIRecordId != null ? 'Update BMI Record' : 'Save BMI Record',
                           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
@@ -566,45 +553,35 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
   }
 
   Future<void> _deleteBMIRecord(BMIRecord record) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.cardBackground,
-        title: const Text('Delete BMI Record', style: TextStyle(color: AppColors.textPrimary)),
-        content: const Text('Are you sure you want to delete this BMI record?', style: TextStyle(color: AppColors.textSecondary)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: AppColors.error)),
-          ),
-        ],
-      ),
+    final widgetRef = ref;
+    final isMounted = mounted;
+    
+    ConfirmationDialog.showDelete(
+      context,
+      'BMI Record',
+      onConfirm: () async {
+        setState(() => _isLoading = true);
+        try {
+          final bmiService = widgetRef.read(bmiServiceProvider);
+          await bmiService.deleteBMIRecord(record.id);
+          // Invalidate related providers
+          if (_selectedStudentId != null) {
+            widgetRef.invalidate(bmiByStudentProvider(_selectedStudentId!));
+            widgetRef.invalidate(latestBmiProvider(_selectedStudentId!));
+            widgetRef.invalidate(bmiTrendProvider(_selectedStudentId!));
+          }
+          if (isMounted && mounted) {
+            SuccessSnackbar.show(context, 'BMI record deleted successfully');
+            _loadBMIHistory();
+          }
+        } catch (e) {
+          setState(() => _isLoading = false);
+          if (isMounted && mounted) {
+            SuccessSnackbar.showError(context, 'Failed to delete BMI record: ${e.toString()}');
+          }
+        }
+      },
     );
-
-    if (confirm == true && mounted) {
-      setState(() => _isLoading = true);
-      try {
-        final bmiService = ref.read(bmiServiceProvider);
-        await bmiService.deleteBMIRecord(record.id);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('BMI record deleted successfully')),
-          );
-          _loadBMIHistory();
-        }
-      } catch (e) {
-        setState(() => _isLoading = false);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to delete BMI record: $e')),
-          );
-        }
-      }
-    }
   }
 
   Widget _buildBMICard(BMIRecord record) {
