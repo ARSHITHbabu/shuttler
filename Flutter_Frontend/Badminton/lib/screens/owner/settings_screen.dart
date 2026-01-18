@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
+import '../../widgets/common/success_snackbar.dart';
+import '../../widgets/common/confirmation_dialog.dart';
 import '../../providers/theme_provider.dart';
 import '../../widgets/settings/shuttlecock_theme_toggle.dart';
 
@@ -119,9 +121,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 title: 'Change Password',
                 onTap: () {
                   // TODO: Navigate to change password
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Change password feature coming soon')),
-                  );
+                  SuccessSnackbar.showInfo(context, 'Change password feature coming soon');
                 },
               ),
 
@@ -158,9 +158,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 title: 'Export Data',
                 onTap: () {
                   // TODO: Export data
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Export data feature coming soon')),
-                  );
+                  SuccessSnackbar.showInfo(context, 'Export data feature coming soon');
                 },
               ),
 
@@ -168,30 +166,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 icon: Icons.delete_outline,
                 title: 'Clear Cache',
                 onTap: () async {
-                  final dialogTheme = Theme.of(context);
-                  final confirm = await showDialog<bool>(
-                    context: context,
-                    builder: (dialogContext) => AlertDialog(
-                      backgroundColor: dialogTheme.colorScheme.surface,
-                      title: Text('Clear Cache', style: TextStyle(color: dialogTheme.colorScheme.onSurface)),
-                      content: Text('Are you sure you want to clear all cached data?', style: TextStyle(color: dialogTheme.colorScheme.onSurface.withValues(alpha: 0.6))),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(dialogContext, false),
-                          child: const Text('Cancel'),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(dialogContext, true),
-                          child: Text('Clear', style: TextStyle(color: dialogTheme.colorScheme.error)),
-                        ),
-                      ],
-                    ),
+                  final confirm = await ConfirmationDialog.show(
+                    context,
+                    'Clear Cache',
+                    'Are you sure you want to clear all cached data?',
+                    confirmText: 'Clear',
+                    cancelText: 'Cancel',
+                    icon: Icons.delete_outline,
+                    isDestructive: true,
                   );
                   if (confirm == true && mounted) {
                     // TODO: Clear cache
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Cache cleared')),
-                    );
+                    SuccessSnackbar.show(context, 'Cache cleared');
                   }
                 },
               ),

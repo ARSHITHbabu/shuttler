@@ -131,15 +131,7 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
             : allFees;
 
         if (fees.isEmpty) {
-          return const Center(
-            child: Text(
-              'No fees records found',
-              style: TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 16,
-              ),
-            ),
-          );
+          return EmptyState.noFees();
         }
 
         return RefreshIndicator(

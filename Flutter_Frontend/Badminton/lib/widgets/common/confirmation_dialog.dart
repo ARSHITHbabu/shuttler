@@ -64,6 +64,7 @@ class ConfirmationDialog extends StatelessWidget {
     String confirmText = 'Confirm',
     String cancelText = 'Cancel',
     IconData icon = Icons.help_outline,
+    bool isDestructive = false,
     VoidCallback? onConfirm,
   }) async {
     bool confirmed = false;
@@ -76,6 +77,7 @@ class ConfirmationDialog extends StatelessWidget {
         confirmText: confirmText,
         cancelText: cancelText,
         icon: icon,
+        isDestructive: isDestructive,
         onConfirm: () {
           confirmed = true;
           Navigator.of(context).pop();

@@ -604,10 +604,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
         content: SizedBox(
           width: double.maxFinite,
           child: (history as List).isEmpty
-              ? const Text(
-                  'No attendance records found',
-                  style: TextStyle(color: AppColors.textSecondary),
-                )
+              ? EmptyState.noAttendance()
               : ListView.builder(
                   shrinkWrap: true,
                   itemCount: history.length > 10 ? 10 : history.length,

@@ -4,6 +4,7 @@ import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
+import '../../widgets/common/success_snackbar.dart';
 import '../../providers/service_providers.dart';
 
 /// Reports Screen - Generate and view reports
@@ -48,12 +49,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
   Future<void> _generateReport() async {
     if (_startDate == null || _endDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select start and end dates'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      SuccessSnackbar.showError(context, 'Please select start and end dates');
       return;
     }
 
@@ -145,21 +141,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Report generated successfully'),
-            backgroundColor: AppColors.success,
-          ),
-        );
+        SuccessSnackbar.show(context, 'Report generated successfully');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error generating report: ${e.toString()}'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SuccessSnackbar.showError(context, 'Error generating report: ${e.toString()}');
       }
     } finally {
       setState(() {
@@ -517,18 +503,39 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                   color: AppColors.textPrimary,
                                 ),
                               ),
-                              IconButton(
+                              PopupMenuButton<String>(
                                 icon: const Icon(
                                   Icons.download_outlined,
                                   color: AppColors.iconPrimary,
                                 ),
-                                onPressed: () {
-                                  // TODO: Implement export functionality
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Export functionality coming soon'),
+                                itemBuilder: (context) => [
+                                  const PopupMenuItem(
+                                    value: 'csv',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.table_chart, size: 18),
+                                        SizedBox(width: 8),
+                                        Text('Export as CSV'),
+                                      ],
                                     ),
-                                  );
+                                  ),
+                                  const PopupMenuItem(
+                                    value: 'pdf',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.picture_as_pdf, size: 18),
+                                        SizedBox(width: 8),
+                                        Text('Export as PDF'),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                                onSelected: (value) {
+                                  if (value == 'csv') {
+                                    _exportToCSV();
+                                  } else if (value == 'pdf') {
+                                    _exportToPDF();
+                                  }
                                 },
                               ),
                             ],
@@ -629,6 +636,106 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       return '${(amount / 1000).toStringAsFixed(1)}K';
     }
     return amount.toStringAsFixed(0);
+  }
+
+  Future<void> _exportToCSV() async {
+    if (_generatedReport == null) {
+      SuccessSnackbar.showError(context, 'Please generate a report first');
+      return;
+    }
+
+    try {
+      final reportType = _generatedReport!['type'] as String;
+      final data = _generatedReport!['data'] as Map<String, dynamic>;
+      final period = _generatedReport!['period'] as String;
+      
+      String csvContent = '';
+      
+      // CSV Header
+      csvContent += 'Report Type: $reportType\n';
+      csvContent += 'Period: $period\n';
+      csvContent += 'Generated On: ${_generatedReport!['generatedOn']}\n\n';
+      
+      if (_selectedType == 'attendance') {
+        // Attendance CSV
+        csvContent += 'Date,Student Name,Student ID,Batch,Status\n';
+        final attendance = data['attendance'] as List<dynamic>;
+        for (var att in attendance) {
+          final date = att.date?.toString() ?? 'N/A';
+          final studentName = att.studentName?.toString() ?? 'N/A';
+          final studentId = att.studentId?.toString() ?? 'N/A';
+          final batchName = att.batchName?.toString() ?? 'N/A';
+          final status = att.status?.toString() ?? 'N/A';
+          csvContent += '$date,$studentName,$studentId,$batchName,$status\n';
+        }
+        csvContent += '\nSummary\n';
+        csvContent += 'Total Days,${data['totalDays']}\n';
+        csvContent += 'Total Records,${data['totalRecords']}\n';
+        csvContent += 'Present,${data['presentCount']}\n';
+        csvContent += 'Absent,${data['absentCount']}\n';
+        csvContent += 'Attendance Rate,${(data['attendanceRate'] as double).toStringAsFixed(1)}%\n';
+      } else if (_selectedType == 'fee') {
+        // Fee CSV
+        csvContent += 'Student Name,Student ID,Amount,Status,Due Date,Paid Date\n';
+        final fees = data['fees'] as List<dynamic>;
+        for (var fee in fees) {
+          final studentName = fee.studentName?.toString() ?? 'N/A';
+          final studentId = fee.studentId?.toString() ?? 'N/A';
+          final amount = fee.amount?.toString() ?? '0';
+          final status = fee.status?.toString() ?? 'N/A';
+          final dueDate = fee.dueDate?.toString() ?? 'N/A';
+          final paidDate = fee.paidDate?.toString() ?? 'N/A';
+          csvContent += '$studentName,$studentId,$amount,$status,$dueDate,$paidDate\n';
+        }
+        csvContent += '\nSummary\n';
+        csvContent += 'Total Fees,${data['totalFees']}\n';
+        csvContent += 'Total Amount,${data['totalAmount']}\n';
+        csvContent += 'Paid Amount,${data['paidAmount']}\n';
+        csvContent += 'Pending Amount,${data['pendingAmount']}\n';
+      }
+      
+      // In a real implementation, you would save this to a file
+      // For now, we'll show it in a dialog or copy to clipboard
+      SuccessSnackbar.show(context, 'CSV data generated. File export requires path_provider package.');
+      
+      // TODO: Implement file saving with path_provider
+      // final directory = await getApplicationDocumentsDirectory();
+      // final file = File('${directory.path}/report_${DateTime.now().millisecondsSinceEpoch}.csv');
+      // await file.writeAsString(csvContent);
+      
+    } catch (e) {
+      SuccessSnackbar.showError(context, 'Failed to export CSV: ${e.toString()}');
+    }
+  }
+
+  Future<void> _exportToPDF() async {
+    if (_generatedReport == null) {
+      SuccessSnackbar.showError(context, 'Please generate a report first');
+      return;
+    }
+
+    try {
+      // PDF export requires pdf package
+      // This is a placeholder implementation
+      SuccessSnackbar.showInfo(context, 'PDF export requires pdf package. Add "pdf: ^3.10.0" to pubspec.yaml');
+      
+      // TODO: Implement PDF export with pdf package
+      // final pdf = Document();
+      // pdf.addPage(Page(
+      //   build: (context) => Column(
+      //     children: [
+      //       Text(_generatedReport!['type']),
+      //       Text('Period: ${_generatedReport!['period']}'),
+      //       // Add report content
+      //     ],
+      //   ),
+      // ));
+      // final bytes = await pdf.save();
+      // // Save to file
+      
+    } catch (e) {
+      SuccessSnackbar.showError(context, 'Failed to export PDF: ${e.toString()}');
+    }
   }
 }
 
