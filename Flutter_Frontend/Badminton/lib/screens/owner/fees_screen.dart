@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/success_snackbar.dart';
@@ -397,12 +396,9 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
                           ],
                         ),
                       );
-                    },
-                  ),
-                );
-              },
-            ),
-          );
+            },
+          ),
+        );
       },
     );
   }
