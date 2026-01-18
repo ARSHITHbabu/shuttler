@@ -86,4 +86,13 @@ class NotificationService {
       throw Exception('Failed to get unread count: ${_apiService.getErrorMessage(e)}');
     }
   }
+
+  /// Delete notification
+  Future<void> deleteNotification(int id) async {
+    try {
+      await _apiService.delete(ApiEndpoints.notificationById(id));
+    } catch (e) {
+      throw Exception('Failed to delete notification: ${_apiService.getErrorMessage(e)}');
+    }
+  }
 }

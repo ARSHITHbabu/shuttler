@@ -114,6 +114,24 @@ class NotificationManager extends _$NotificationManager {
     }
   }
 
+  /// Delete notification
+  Future<void> deleteNotification(int id) async {
+    try {
+      final notificationService = ref.read(notificationServiceProvider);
+      await notificationService.deleteNotification(id);
+      
+      // Invalidate related providers
+      ref.invalidate(notificationByIdProvider(id));
+      final userId = state.valueOrNull?.first.userId ?? 0;
+      final userType = state.valueOrNull?.first.userType ?? '';
+      ref.invalidate(unreadCountProvider(userId, userType));
+      
+      await refresh();
+    } catch (e) {
+      throw Exception('Failed to delete notification: $e');
+    }
+  }
+
   /// Refresh notification list
   Future<void> refresh() async {
     state = const AsyncValue.loading();
