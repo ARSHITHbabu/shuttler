@@ -183,35 +183,8 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
               ),
               data: (announcements) {
                 if (announcements.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.campaign_outlined,
-                          size: 64,
-                          color: AppColors.textSecondary,
-                        ),
-                        const SizedBox(height: AppDimensions.spacingM),
-                        const Text(
-                          'No announcements yet',
-                          style: TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 16,
-                          ),
-                        ),
-                        const SizedBox(height: AppDimensions.spacingL),
-                        ElevatedButton.icon(
-                          onPressed: () => setState(() => _showAddForm = true),
-                          icon: const Icon(Icons.add),
-                          label: const Text('Create Announcement'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.accent,
-                            foregroundColor: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
+                  return EmptyState.noAnnouncements(
+                    onCreate: () => setState(() => _showAddForm = true),
                   );
                 }
 
@@ -349,13 +322,14 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
                 padding: const EdgeInsets.all(AppDimensions.paddingM),
                 child: InkWell(
                   onTap: () async {
+                    if (!mounted) return;
                     final date = await showDatePicker(
                       context: context,
                       initialDate: _scheduledAt ?? DateTime.now(),
                       firstDate: DateTime.now(),
                       lastDate: DateTime.now().add(const Duration(days: 365)),
                     );
-                    if (date != null) {
+                    if (date != null && mounted) {
                       final time = await showTimePicker(
                         context: context,
                         initialTime: TimeOfDay.now(),

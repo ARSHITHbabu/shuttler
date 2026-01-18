@@ -462,25 +462,7 @@ class _PerformanceTrackingScreenState
                   if (_isLoading)
                     const Center(child: ListSkeleton(itemCount: 3))
                   else if (_performanceHistory.isEmpty)
-                    Center(
-                      child: Column(
-                        children: [
-                          const Icon(
-                            Icons.assessment_outlined,
-                            size: 64,
-                            color: AppColors.textSecondary,
-                          ),
-                          const SizedBox(height: AppDimensions.spacingM),
-                          const Text(
-                            'No performance records yet',
-                            style: TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
+                    EmptyState.noPerformance()
                   else
                     ..._performanceHistory.map(
                       (performance) => _buildPerformanceCard(performance),

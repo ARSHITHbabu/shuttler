@@ -765,29 +765,8 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
               }).toList();
 
               if (filteredBatches.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.all(AppDimensions.paddingL),
-                  child: Center(
-                    child: Column(
-                      children: [
-                        const Icon(
-                          Icons.inbox_outlined,
-                          size: 64,
-                          color: AppColors.textTertiary,
-                        ),
-                        const SizedBox(height: AppDimensions.spacingM),
-                        Text(
-                          _searchQuery.isEmpty
-                              ? 'No batches yet'
-                              : 'No batches found',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                return EmptyState.noBatches(
+                  onCreate: _searchQuery.isEmpty ? () => setState(() => _showAddForm = true) : null,
                 );
               }
 

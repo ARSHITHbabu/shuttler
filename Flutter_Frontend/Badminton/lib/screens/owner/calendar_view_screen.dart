@@ -476,25 +476,8 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
         const SizedBox(height: AppDimensions.spacingM),
         Expanded(
           child: (dayEvents.isEmpty && !hasHoliday)
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.event_outlined,
-                        size: 64,
-                        color: AppColors.textSecondary,
-                      ),
-                      const SizedBox(height: AppDimensions.spacingM),
-                      const Text(
-                        'No events on this day',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ],
-                  ),
+              ? EmptyState.noEvents(
+                  onAdd: () => setState(() => _showAddForm = true),
                 )
               : RefreshIndicator(
                   onRefresh: () async {
