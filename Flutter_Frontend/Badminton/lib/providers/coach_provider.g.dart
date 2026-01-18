@@ -590,5 +590,23 @@ class _CoachScheduleProviderElement
   int get coachId => (origin as CoachScheduleProvider).coachId;
 }
 
+String _$coachListHash() => r'5451a14ed89475defccca77a2a7065a15583b4e7';
+
+/// Provider for coach list state
+///
+/// Copied from [CoachList].
+@ProviderFor(CoachList)
+final coachListProvider =
+    AutoDisposeAsyncNotifierProvider<CoachList, List<Coach>>.internal(
+      CoachList.new,
+      name: r'coachListProvider',
+      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+          ? null
+          : _$coachListHash,
+      dependencies: null,
+      allTransitiveDependencies: null,
+    );
+
+typedef _$CoachList = AutoDisposeAsyncNotifier<List<Coach>>;
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package

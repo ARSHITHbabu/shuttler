@@ -4,8 +4,9 @@ import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
+import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/success_snackbar.dart';
 import '../../providers/batch_provider.dart';
 import '../../providers/attendance_provider.dart';
 import '../../providers/service_providers.dart';
@@ -313,7 +314,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       },
       loading: () => const Padding(
         padding: EdgeInsets.all(AppDimensions.paddingM),
-        child: Center(child: LoadingSpinner()),
+        child: ListSkeleton(itemCount: 3),
       ),
       error: (error, stack) => Padding(
         padding: const EdgeInsets.all(AppDimensions.paddingM),
@@ -419,7 +420,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       },
       loading: () => const Padding(
         padding: EdgeInsets.all(AppDimensions.paddingM),
-        child: Center(child: LoadingSpinner()),
+        child: ListSkeleton(itemCount: 3),
       ),
       error: (error, stack) => Padding(
         padding: const EdgeInsets.all(AppDimensions.paddingM),
@@ -478,7 +479,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       },
       loading: () => const Padding(
         padding: EdgeInsets.all(AppDimensions.paddingM),
-        child: Center(child: LoadingSpinner()),
+        child: ListSkeleton(itemCount: 3),
       ),
       error: (error, stack) => Padding(
         padding: const EdgeInsets.all(AppDimensions.paddingM),
@@ -520,12 +521,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Attendance saved successfully'),
-            backgroundColor: AppColors.success,
-          ),
-        );
+        SuccessSnackbar.show(context, 'Attendance saved successfully');
 
         // Clear attendance after saving
         setState(() {
@@ -546,12 +542,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SuccessSnackbar.showError(context, 'Error: ${e.toString()}');
       }
     }
   }
@@ -596,12 +587,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading history: ${e.toString()}'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SuccessSnackbar.showError(context, 'Error loading history: ${e.toString()}');
       }
     }
   }

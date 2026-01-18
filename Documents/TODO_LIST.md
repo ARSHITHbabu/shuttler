@@ -1,15 +1,15 @@
 # TODO List - Badminton Academy Management System
 
 **Last Updated**: 2026-01-XX
-**Status**: 2 of 35+ items completed
+**Status**: 7 of 35+ items completed
 
 ---
 
 ## Progress Summary
 
-- ✅ **Completed**: 2 items (students_screen.dart, fees_screen.dart)
+- ✅ **Completed**: 7 items (students_screen.dart, fees_screen.dart, coaches_screen.dart, batches_screen.dart, attendance_screen.dart, performance_tracking_screen.dart, bmi_tracking_screen.dart)
 - ⏳ **In Progress**: 0 items
-- ⬜ **Pending**: 33+ items
+- ⬜ **Pending**: 28+ items
 
 ---
 
@@ -35,30 +35,35 @@
 - [x] Replace AlertDialog with ConfirmationDialog for delete operations
 - **Status**: ✅ **COMPLETED**
 
-### ⬜ 3. Migrate `lib/screens/owner/coaches_screen.dart`
-- [ ] Replace direct service calls with providers
-- [ ] Integrate Phase 6 components
-- [ ] Update CRUD operations
+### ✅ 3. Migrate `lib/screens/owner/coaches_screen.dart`
+- [x] Replace direct service calls with providers
+- [x] Integrate Phase 6 components
+- [x] Update CRUD operations
+- **Status**: ✅ **COMPLETED**
 
-### ⬜ 4. Migrate `lib/screens/owner/batches_screen.dart`
-- [ ] Replace direct service calls with `batchListProvider`
-- [ ] Integrate Phase 6 components
-- [ ] Update CRUD operations
+### ✅ 4. Migrate `lib/screens/owner/batches_screen.dart`
+- [x] Replace direct service calls with `batchListProvider`
+- [x] Integrate Phase 6 components
+- [x] Update CRUD operations
+- **Status**: ✅ **COMPLETED**
 
-### ⬜ 5. Migrate `lib/screens/owner/attendance_screen.dart`
-- [ ] Replace direct service calls with providers
-- [ ] Integrate Phase 6 components
-- [ ] Update CRUD operations
+### ✅ 5. Migrate `lib/screens/owner/attendance_screen.dart`
+- [x] Replace direct service calls with providers
+- [x] Integrate Phase 6 components
+- [x] Update CRUD operations
+- **Status**: ✅ **COMPLETED**
 
-### ⬜ 6. Migrate `lib/screens/owner/performance_tracking_screen.dart`
-- [ ] Replace direct service calls with `performanceListProvider`
-- [ ] Integrate Phase 6 components
-- [ ] Update CRUD operations
+### ✅ 6. Migrate `lib/screens/owner/performance_tracking_screen.dart`
+- [x] Replace direct service calls with `performanceListProvider`
+- [x] Integrate Phase 6 components
+- [x] Update CRUD operations
+- **Status**: ✅ **COMPLETED**
 
-### ⬜ 7. Migrate `lib/screens/owner/bmi_tracking_screen.dart`
-- [ ] Replace direct service calls with `bmiListProvider`
-- [ ] Integrate Phase 6 components
-- [ ] Update CRUD operations
+### ✅ 7. Migrate `lib/screens/owner/bmi_tracking_screen.dart`
+- [x] Replace direct service calls with `bmiListProvider`
+- [x] Integrate Phase 6 components
+- [x] Update CRUD operations
+- **Status**: ✅ **COMPLETED**
 
 ### ⬜ 8. Migrate `lib/screens/owner/sessions_screen.dart`
 - [ ] Replace direct service calls with providers
@@ -226,5 +231,5 @@
 ---
 
 **Total Items**: 35+
-**Completed**: 2
-**Remaining**: 33+
+**Completed**: 7
+**Remaining**: 28+

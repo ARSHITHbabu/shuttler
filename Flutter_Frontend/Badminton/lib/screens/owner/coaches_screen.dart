@@ -3,9 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
-import '../../providers/service_providers.dart';
+import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/success_snackbar.dart';
+import '../../widgets/common/confirmation_dialog.dart';
+import '../../providers/coach_provider.dart';
+import '../../providers/batch_provider.dart';
 import '../../models/coach.dart';
 import '../../widgets/forms/add_coach_dialog.dart';
 import '../../widgets/forms/edit_coach_dialog.dart';
@@ -21,6 +24,8 @@ class CoachesScreen extends ConsumerStatefulWidget {
 class _CoachesScreenState extends ConsumerState<CoachesScreen> {
   @override
   Widget build(BuildContext context) {
+    final coachesAsync = ref.watch(coachListProvider);
+    
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -45,24 +50,17 @@ class _CoachesScreenState extends ConsumerState<CoachesScreen> {
           ),
         ],
       ),
-      body: FutureBuilder<List<Coach>>(
-        future: ref.read(coachServiceProvider).getCoaches(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: LoadingSpinner());
-          }
-
-          if (snapshot.hasError) {
-            return ErrorDisplay(
-              message: 'Failed to load coaches',
-              onRetry: () => setState(() {}),
-            );
-          }
-
-          final coaches = (snapshot.data ?? [])
+      body: coachesAsync.when(
+        loading: () => const ListSkeleton(itemCount: 5),
+        error: (error, stack) => ErrorDisplay(
+          message: 'Failed to load coaches: ${error.toString()}',
+          onRetry: () => ref.invalidate(coachListProvider),
+        ),
+        data: (coaches) {
+          final sortedCoaches = List<Coach>.from(coaches)
             ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
-          if (coaches.isEmpty) {
+          if (sortedCoaches.isEmpty) {
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -97,13 +95,14 @@ class _CoachesScreenState extends ConsumerState<CoachesScreen> {
 
           return RefreshIndicator(
             onRefresh: () async {
-              setState(() {});
+              ref.invalidate(coachListProvider);
+              return;
             },
             child: ListView.builder(
               padding: const EdgeInsets.all(AppDimensions.paddingL),
-              itemCount: coaches.length,
+              itemCount: sortedCoaches.length,
               itemBuilder: (context, index) {
-                final coach = coaches[index];
+                final coach = sortedCoaches[index];
                 return NeumorphicContainer(
                   key: ValueKey(coach.id),
                   padding: const EdgeInsets.all(AppDimensions.paddingM),
@@ -264,13 +263,17 @@ class _CoachesScreenState extends ConsumerState<CoachesScreen> {
   }
 
   void _showAddCoachDialog(BuildContext context) {
+    final widgetRef = ref;
+    final isMounted = mounted;
+    
     showDialog(
       context: context,
-      builder: (context) => AddCoachDialog(
+      builder: (dialogContext) => AddCoachDialog(
         onSubmit: (coachData) async {
           // Dialog handles invitation internally, just refresh the list
-          if (mounted) {
-            setState(() {});
+          if (isMounted && mounted) {
+            widgetRef.invalidate(coachListProvider);
+            SuccessSnackbar.show(context, 'Coach invitation sent successfully');
           }
         },
       ),
@@ -278,15 +281,24 @@ class _CoachesScreenState extends ConsumerState<CoachesScreen> {
   }
 
   void _showEditCoachDialog(BuildContext context, Coach coach) {
+    final widgetRef = ref;
+    final isMounted = mounted;
+    
     showDialog(
       context: context,
-      builder: (context) => EditCoachDialog(
+      builder: (dialogContext) => EditCoachDialog(
         coach: coach,
         onSubmit: (coachData) async {
-          final coachService = ref.read(coachServiceProvider);
-          await coachService.updateCoach(coach.id, coachData);
-          if (mounted) {
-            setState(() {});
+          try {
+            await widgetRef.read(coachListProvider.notifier).updateCoach(coach.id, coachData);
+            if (isMounted && mounted) {
+              Navigator.of(dialogContext).pop();
+              SuccessSnackbar.show(context, 'Coach updated successfully');
+            }
+          } catch (e) {
+            if (isMounted && mounted) {
+              SuccessSnackbar.showError(context, 'Failed to update coach: ${e.toString()}');
+            }
           }
         },
       ),
@@ -295,8 +307,7 @@ class _CoachesScreenState extends ConsumerState<CoachesScreen> {
 
   void _showCoachBatches(BuildContext context, Coach coach) async {
     try {
-      final batchService = ref.read(batchServiceProvider);
-      final allBatches = await batchService.getBatches();
+      final allBatches = await ref.read(batchListProvider.future);
       final assignedBatches = allBatches
           .where((batch) => batch.assignedCoachId == coach.id)
           .toList();
@@ -304,7 +315,7 @@ class _CoachesScreenState extends ConsumerState<CoachesScreen> {
       if (mounted) {
         showDialog(
           context: context,
-          builder: (context) => AlertDialog(
+          builder: (dialogContext) => AlertDialog(
             backgroundColor: AppColors.cardBackground,
             title: Text(
               'Batches Assigned to ${coach.name}',
@@ -337,7 +348,7 @@ class _CoachesScreenState extends ConsumerState<CoachesScreen> {
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: () => Navigator.of(dialogContext).pop(),
                 child: const Text('Close'),
               ),
             ],
@@ -346,72 +357,44 @@ class _CoachesScreenState extends ConsumerState<CoachesScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load batches: $e')),
-        );
+        SuccessSnackbar.showError(context, 'Failed to load batches: ${e.toString()}');
       }
     }
   }
 
   void _toggleCoachStatus(BuildContext context, Coach coach) async {
     try {
-      final coachService = ref.read(coachServiceProvider);
       final newStatus = coach.status == 'active' ? 'inactive' : 'active';
-      await coachService.updateCoach(coach.id, {'status': newStatus});
+      await ref.read(coachListProvider.notifier).updateCoach(coach.id, {'status': newStatus});
       if (mounted) {
-        setState(() {});
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Coach ${newStatus == 'active' ? 'activated' : 'deactivated'} successfully')),
-        );
+        SuccessSnackbar.show(context, 'Coach ${newStatus == 'active' ? 'activated' : 'deactivated'} successfully');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update coach status: $e')),
-        );
+        SuccessSnackbar.showError(context, 'Failed to update coach status: ${e.toString()}');
       }
     }
   }
 
   void _showDeleteConfirmation(BuildContext context, Coach coach) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.cardBackground,
-        title: const Text('Delete Coach', style: TextStyle(color: AppColors.textPrimary)),
-        content: Text(
-          'Are you sure you want to delete ${coach.name}? This action cannot be undone.',
-          style: const TextStyle(color: AppColors.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () async {
-              try {
-                final coachService = ref.read(coachServiceProvider);
-                await coachService.deleteCoach(coach.id);
-                if (mounted) {
-                  Navigator.of(context).pop();
-                  setState(() {});
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Coach deleted successfully')),
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Failed to delete coach: $e')),
-                  );
-                }
-              }
-            },
-            child: const Text('Delete', style: TextStyle(color: AppColors.error)),
-          ),
-        ],
-      ),
+    final widgetRef = ref;
+    final isMounted = mounted;
+    
+    ConfirmationDialog.showDelete(
+      context,
+      coach.name,
+      onConfirm: () async {
+        try {
+          await widgetRef.read(coachListProvider.notifier).deleteCoach(coach.id);
+          if (isMounted && mounted) {
+            SuccessSnackbar.show(context, 'Coach deleted successfully');
+          }
+        } catch (e) {
+          if (isMounted && mounted) {
+            SuccessSnackbar.showError(context, 'Failed to delete coach: ${e.toString()}');
+          }
+        }
+      },
     );
   }
 }
