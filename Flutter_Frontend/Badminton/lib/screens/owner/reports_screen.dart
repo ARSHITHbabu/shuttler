@@ -4,6 +4,7 @@ import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
+import '../../widgets/common/success_snackbar.dart';
 import '../../providers/service_providers.dart';
 
 /// Reports Screen - Generate and view reports
@@ -48,12 +49,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
   Future<void> _generateReport() async {
     if (_startDate == null || _endDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select start and end dates'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      SuccessSnackbar.showError(context, 'Please select start and end dates');
       return;
     }
 
@@ -145,21 +141,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Report generated successfully'),
-            backgroundColor: AppColors.success,
-          ),
-        );
+        SuccessSnackbar.show(context, 'Report generated successfully');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error generating report: ${e.toString()}'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SuccessSnackbar.showError(context, 'Error generating report: ${e.toString()}');
       }
     } finally {
       setState(() {
@@ -524,11 +510,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                 ),
                                 onPressed: () {
                                   // TODO: Implement export functionality
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Export functionality coming soon'),
-                                    ),
-                                  );
+                                  SuccessSnackbar.show(context, 'Export functionality coming soon');
                                 },
                               ),
                             ],

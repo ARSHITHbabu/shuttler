@@ -4,11 +4,14 @@ import 'package:table_calendar/table_calendar.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/custom_text_field.dart';
+import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/success_snackbar.dart';
+import '../../widgets/common/confirmation_dialog.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/calendar_provider.dart';
 import '../../models/calendar_event.dart';
 import '../../core/utils/canadian_holidays.dart';
 import 'package:intl/intl.dart';
@@ -42,21 +45,6 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
     super.dispose();
   }
 
-  Future<List<CalendarEvent>> _loadEvents() async {
-    try {
-      final calendarService = ref.read(calendarServiceProvider);
-      // Get events for the current month
-      final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
-      final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
-      final events = await calendarService.getCalendarEvents(
-        startDate: firstDay,
-        endDate: lastDay,
-      );
-      return events;
-    } catch (e) {
-      return [];
-    }
-  }
 
   Map<DateTime, List<CalendarEvent>> _groupEventsByDate(List<CalendarEvent> events) {
     final Map<DateTime, List<CalendarEvent>> grouped = {};
@@ -80,23 +68,17 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
 
   Future<void> _saveEvent() async {
     if (_titleController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter event title')),
-      );
+      SuccessSnackbar.showError(context, 'Please enter event title');
       return;
     }
 
     if (_eventDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select event date')),
-      );
+      SuccessSnackbar.showError(context, 'Please select event date');
       return;
     }
 
     setState(() => _isLoading = true);
     try {
-      final calendarService = ref.read(calendarServiceProvider);
-      
       // Get current auth state from AsyncValue instead of waiting for future
       final authAsync = ref.read(authProvider);
       AuthState? authState = authAsync.value;
@@ -135,9 +117,7 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
         // Auth state is still loading or not available
         setState(() => _isLoading = false);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Authentication state is loading. Please try again.')),
-          );
+          SuccessSnackbar.showError(context, 'Authentication state is loading. Please try again.');
         }
         return;
       }
@@ -145,9 +125,7 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
       if (authState is! Authenticated) {
         setState(() => _isLoading = false);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('You must be logged in to create events')),
-          );
+          SuccessSnackbar.showError(context, 'You must be logged in to create events');
         }
         return;
       }
@@ -157,9 +135,7 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
       if (userId <= 0) {
         setState(() => _isLoading = false);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Invalid user ID. Please log in again.')),
-          );
+          SuccessSnackbar.showError(context, 'Invalid user ID. Please log in again.');
         }
         return;
       }
@@ -178,18 +154,28 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
         eventData['description'] = description;
       }
 
+      // Get events for current month to determine date range
+      final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
+      final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
+      
+      final calendarEventList = ref.read(calendarEventListProvider(
+        startDate: firstDay,
+        endDate: lastDay,
+      ).notifier);
+
       if (_editingEvent != null) {
-        await calendarService.updateCalendarEvent(_editingEvent!.id, eventData);
+        await calendarEventList.updateEvent(_editingEvent!.id, eventData);
+        if (mounted) {
+          SuccessSnackbar.show(context, 'Event updated successfully');
+        }
       } else {
-        await calendarService.createCalendarEvent(eventData);
+        await calendarEventList.createEvent(eventData);
+        if (mounted) {
+          SuccessSnackbar.show(context, 'Event created successfully');
+        }
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_editingEvent != null
-              ? 'Event updated successfully'
-              : 'Event created successfully')),
-        );
         setState(() {
           _showAddForm = false;
           _titleController.clear();
@@ -197,53 +183,41 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
           _eventDate = null;
           _selectedEventType = 'holiday';
           _editingEvent = null;
+          _isLoading = false;
         });
       }
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to create event: $e')),
-        );
+        SuccessSnackbar.showError(context, 'Failed to ${_editingEvent != null ? 'update' : 'create'} event: ${e.toString()}');
       }
     }
   }
 
   Future<void> _deleteEvent(int id) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.cardBackground,
-        title: const Text('Delete Event', style: TextStyle(color: AppColors.textPrimary)),
-        content: const Text('Are you sure you want to delete this event?', style: TextStyle(color: AppColors.textSecondary)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: AppColors.error)),
-          ),
-        ],
-      ),
+    final confirmed = await ConfirmationDialog.showDelete(
+      context,
+      'Event',
     );
 
-    if (confirm == true && mounted) {
+    if (confirmed == true && mounted) {
       try {
-        final calendarService = ref.read(calendarServiceProvider);
-        await calendarService.deleteCalendarEvent(id);
+        // Get events for current month to determine date range
+        final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
+        final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
+        
+        final calendarEventList = ref.read(calendarEventListProvider(
+          startDate: firstDay,
+          endDate: lastDay,
+        ).notifier);
+        
+        await calendarEventList.deleteEvent(id);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Event deleted successfully')),
-          );
-          setState(() {});
+          SuccessSnackbar.show(context, 'Event deleted successfully');
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to delete event: $e')),
-          );
+          SuccessSnackbar.showError(context, 'Failed to delete event: ${e.toString()}');
         }
       }
     }
@@ -279,27 +253,33 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
           ),
         ],
       ),
-      body: FutureBuilder<List<CalendarEvent>>(
-        future: _loadEvents(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: LoadingSpinner());
-          }
-
-          if (snapshot.hasError) {
-            return ErrorDisplay(
-              message: 'Failed to load calendar events',
-              onRetry: () => setState(() {}),
-            );
-          }
-
-          final events = snapshot.data ?? [];
-          final groupedEvents = _groupEventsByDate(events);
+      body: Consumer(
+        builder: (context, ref, child) {
+          // Get events for the current month
+          final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
+          final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
           
-          // Get Canadian holidays for the focused year
-          final canadianHolidays = CanadianHolidays.getHolidaysForYear(_focusedDay.year);
+          final eventsAsync = ref.watch(calendarEventListProvider(
+            startDate: firstDay,
+            endDate: lastDay,
+          ));
+          
+          return eventsAsync.when(
+            loading: () => const Center(child: ListSkeleton(itemCount: 3)),
+            error: (error, stack) => ErrorDisplay(
+              message: 'Failed to load calendar events: ${error.toString()}',
+              onRetry: () => ref.invalidate(calendarEventListProvider(
+                startDate: firstDay,
+                endDate: lastDay,
+              )),
+            ),
+            data: (events) {
+              final groupedEvents = _groupEventsByDate(events);
+              
+              // Get Canadian holidays for the focused year
+              final canadianHolidays = CanadianHolidays.getHolidaysForYear(_focusedDay.year);
 
-          return Column(
+              return Column(
             children: [
               // Calendar
               NeumorphicContainer(
@@ -463,6 +443,8 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                 child: _buildSelectedDayEvents(groupedEvents),
               ),
             ],
+          );
+            },
           );
         },
       ),
@@ -810,7 +792,11 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                     padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingM),
                   ),
                   child: _isLoading
-                      ? const LoadingSpinner()
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
                       : Text(
                           _editingEvent != null ? 'Update Event' : 'Add Event',
                           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),

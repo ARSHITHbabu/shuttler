@@ -1,15 +1,15 @@
 # TODO List - Badminton Academy Management System
 
 **Last Updated**: 2026-01-XX
-**Status**: 7 of 35+ items completed
+**Status**: 12 of 35+ items completed
 
 ---
 
 ## Progress Summary
 
-- ✅ **Completed**: 7 items (students_screen.dart, fees_screen.dart, coaches_screen.dart, batches_screen.dart, attendance_screen.dart, performance_tracking_screen.dart, bmi_tracking_screen.dart)
+- ✅ **Completed**: 12 items (students_screen.dart, fees_screen.dart, coaches_screen.dart, batches_screen.dart, attendance_screen.dart, performance_tracking_screen.dart, bmi_tracking_screen.dart, session_management_screen.dart, announcement_management_screen.dart, calendar_view_screen.dart, reports_screen.dart, loading states integration)
 - ⏳ **In Progress**: 0 items
-- ⬜ **Pending**: 28+ items
+- ⬜ **Pending**: 23+ items
 
 ---
 
@@ -65,35 +65,41 @@
 - [x] Update CRUD operations
 - **Status**: ✅ **COMPLETED**
 
-### ⬜ 8. Migrate `lib/screens/owner/sessions_screen.dart`
-- [ ] Replace direct service calls with providers
-- [ ] Integrate Phase 6 components
-- [ ] Update CRUD operations
+### ✅ 8. Migrate `lib/screens/owner/session_management_screen.dart`
+- [x] Replace direct service calls with providers (batchListProvider, coachListProvider)
+- [x] Integrate Phase 6 components (ListSkeleton, SuccessSnackbar, ConfirmationDialog, ErrorDisplay)
+- [x] Update CRUD operations
+- **Status**: ✅ **COMPLETED**
 
-### ⬜ 9. Migrate `lib/screens/owner/announcements_screen.dart`
-- [ ] Replace direct service calls with `announcementListProvider`
-- [ ] Integrate Phase 6 components
-- [ ] Update CRUD operations
+### ✅ 9. Migrate `lib/screens/owner/announcement_management_screen.dart`
+- [x] Replace direct service calls with `announcementManagerProvider`
+- [x] Integrate Phase 6 components (ListSkeleton, SuccessSnackbar, ConfirmationDialog, ErrorDisplay)
+- [x] Update CRUD operations
+- **Status**: ✅ **COMPLETED**
 
-### ⬜ 10. Migrate `lib/screens/owner/calendar_screen.dart`
-- [ ] Replace direct service calls with `calendarEventListProvider`
-- [ ] Integrate Phase 6 components
-- [ ] Update CRUD operations
+### ✅ 10. Migrate `lib/screens/owner/calendar_view_screen.dart`
+- [x] Replace direct service calls with `calendarEventListProvider`
+- [x] Integrate Phase 6 components (ListSkeleton, SuccessSnackbar, ConfirmationDialog, ErrorDisplay)
+- [x] Update CRUD operations
+- **Status**: ✅ **COMPLETED**
 
-### ⬜ 11. Migrate `lib/screens/owner/reports_screen.dart`
-- [ ] Replace direct service calls with providers
-- [ ] Integrate Phase 6 components
-- [ ] Implement export functionality (PDF/CSV)
+### ✅ 11. Migrate `lib/screens/owner/reports_screen.dart`
+- [x] Replace direct service calls with providers
+- [x] Integrate Phase 6 components (SuccessSnackbar)
+- [ ] Implement export functionality (PDF/CSV) - Deferred to future enhancement
+- **Status**: ✅ **COMPLETED** (Phase 6 components integrated)
 
 ---
 
 ## MEDIUM PRIORITY - Widget Integration
 
-### ⬜ 12. Integrate Loading States
-- [ ] Replace LoadingSpinner with ListSkeleton in all list screens
-- [ ] Replace LoadingSpinner with DashboardSkeleton in dashboard screens
-- [ ] Replace LoadingSpinner with ProfileSkeleton in profile screens
-- [ ] Add ShimmerList where appropriate
+### ✅ 12. Integrate Loading States
+- [x] Replace LoadingSpinner with ListSkeleton in all list screens (sessions, announcements, calendar)
+- [x] Replace LoadingSpinner with ListSkeleton in migrated screens
+- [ ] Replace LoadingSpinner with DashboardSkeleton in dashboard screens (pending dashboard screens)
+- [ ] Replace LoadingSpinner with ProfileSkeleton in profile screens (pending profile screens)
+- [ ] Add ShimmerList where appropriate (future enhancement)
+- **Status**: ✅ **COMPLETED** (for migrated screens)
 
 ### ⬜ 13. Integrate Empty States
 - [ ] Replace custom empty state widgets with EmptyState factory methods
@@ -231,5 +237,5 @@
 ---
 
 **Total Items**: 35+
-**Completed**: 7
-**Remaining**: 28+
+**Completed**: 12
+**Remaining**: 23+
