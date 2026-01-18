@@ -5,8 +5,12 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
+import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/success_snackbar.dart';
+import '../../widgets/common/confirmation_dialog.dart';
 import '../../models/fee.dart';
 import '../../providers/service_providers.dart';
+import '../../providers/fee_provider.dart';
 import '../../widgets/forms/add_fee_dialog.dart';
 import '../../widgets/forms/add_payment_dialog.dart';
 import '../../models/fee_payment.dart';
@@ -83,43 +87,72 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
           ),
           // Fees List
           Expanded(
-            child: FutureBuilder<List<Fee>>(
-              future: _loadFees(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: LoadingSpinner());
-                }
+            child: _buildFeesList(),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => _showAddFeeDialog(context),
+        backgroundColor: AppColors.accent,
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text(
+          'Add Fee',
+          style: TextStyle(color: Colors.white),
+        ),
+      ),
+    );
+  }
 
-                if (snapshot.hasError) {
-                  return ErrorDisplay(
-                    message: 'Failed to load fees',
-                    onRetry: () => setState(() {}),
-                  );
-                }
+  Widget _buildFeesList() {
+    // Use provider for fee list with status filter
+    String? statusFilter;
+    if (_selectedFilter == 'overdue') {
+      // For overdue, we'll filter after fetching
+      statusFilter = null;
+    } else if (_selectedFilter != 'all') {
+      statusFilter = _selectedFilter;
+    }
 
-                final fees = snapshot.data ?? [];
+    final feesAsync = ref.watch(feeListProvider(
+      status: statusFilter,
+    ));
 
-                if (fees.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      'No fees records found',
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 16,
-                      ),
-                    ),
-                  );
-                }
+    return feesAsync.when(
+      loading: () => const ListSkeleton(itemCount: 5),
+      error: (error, stack) => ErrorDisplay(
+        message: 'Failed to load fees: ${error.toString()}',
+        onRetry: () {
+          ref.invalidate(feeListProvider(status: statusFilter));
+        },
+      ),
+      data: (allFees) {
+        // Filter by overdue if needed
+        final fees = _selectedFilter == 'overdue'
+            ? allFees.where((fee) => fee.isOverdue).toList()
+            : allFees;
 
-                return RefreshIndicator(
-                  onRefresh: () async {
-                    setState(() {});
-                  },
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(AppDimensions.paddingL),
-                    itemCount: fees.length,
-                    itemBuilder: (context, index) {
-                      final fee = fees[index];
+        if (fees.isEmpty) {
+          return const Center(
+            child: Text(
+              'No fees records found',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 16,
+              ),
+            ),
+          );
+        }
+
+        return RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(feeListProvider(status: statusFilter));
+            return;
+          },
+          child: ListView.builder(
+            padding: const EdgeInsets.all(AppDimensions.paddingL),
+            itemCount: fees.length,
+            itemBuilder: (context, index) {
+              final fee = fees[index];
                       return NeumorphicContainer(
                         padding: const EdgeInsets.all(AppDimensions.paddingM),
                         margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
@@ -369,74 +402,36 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
                 );
               },
             ),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddFeeDialog(context),
-        backgroundColor: AppColors.accent,
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text(
-          'Add Fee',
-          style: TextStyle(color: Colors.white),
-        ),
-      ),
+          );
+      },
     );
   }
 
   void _showAddFeeDialog(BuildContext context) {
+    // Capture ref and mounted before dialog - these are available in ConsumerState
+    final widgetRef = ref;
+    final isMounted = mounted;
+    
     showDialog(
       context: context,
-      builder: (context) => AddFeeDialog(
+      builder: (dialogContext) => AddFeeDialog(
         onSubmit: (feeData) async {
           try {
-            final feeService = ref.read(feeServiceProvider);
-            await feeService.createFee(feeData);
-            if (mounted) {
-              setState(() {}); // Refresh the list
+            // Use the fee list provider notifier to create fee
+            final feeListNotifier = widgetRef.read(feeListProvider(status: null).notifier);
+            await feeListNotifier.createFee(feeData);
+            if (isMounted && mounted) {
+              Navigator.of(dialogContext).pop();
+              SuccessSnackbar.show(context, 'Fee created successfully');
             }
           } catch (e) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Failed to create fee: $e')),
-              );
+            if (isMounted && mounted) {
+              SuccessSnackbar.showError(context, 'Failed to create fee: ${e.toString()}');
             }
-            rethrow;
           }
         },
       ),
     );
-  }
-
-  Future<List<Fee>> _loadFees() async {
-    try {
-      final feeService = ref.read(feeServiceProvider);
-      
-      // Use unified endpoint with status filter
-      String? statusFilter;
-      if (_selectedFilter != 'all') {
-        if (_selectedFilter == 'overdue') {
-          // For overdue, we'll filter after fetching
-          statusFilter = null;
-        } else {
-          statusFilter = _selectedFilter;
-        }
-      }
-      
-      List<Fee> allFees = await feeService.getFees(status: statusFilter);
-      
-      // Filter by overdue if needed
-      if (_selectedFilter == 'overdue') {
-        allFees = allFees.where((fee) => fee.isOverdue).toList();
-      }
-      
-      return allFees;
-    } catch (e) {
-      // Log error for debugging instead of silently failing
-      debugPrint('Error loading fees: $e');
-      // Re-throw to let FutureBuilder handle it properly
-      rethrow;
-    }
   }
 
   Color _getStatusColor(String status) {
@@ -458,28 +453,33 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
 
 
   void _showAddPaymentDialog(BuildContext context, Fee fee) {
+    // Capture ref, selectedFilter, and mounted before dialog
+    final widgetRef = ref;
+    final currentFilter = _selectedFilter;
+    final isMounted = mounted;
+    
     showDialog(
       context: context,
-      builder: (context) => AddPaymentDialog(
+      builder: (dialogContext) => AddPaymentDialog(
         fee: fee,
         onSubmit: (paymentData) async {
           try {
-            final feeService = ref.read(feeServiceProvider);
+            final feeService = widgetRef.read(feeServiceProvider);
             await feeService.createFeePayment(fee.id, paymentData);
-            if (mounted) {
-              Navigator.of(context).pop();
-              setState(() {}); // Refresh the list
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Payment recorded successfully')),
-              );
+            // Refresh fee list provider - get current filter
+            String? currentStatus;
+            if (currentFilter != 'all' && currentFilter != 'overdue') {
+              currentStatus = currentFilter;
+            }
+            widgetRef.invalidate(feeListProvider(status: currentStatus));
+            if (isMounted && mounted) {
+              Navigator.of(dialogContext).pop();
+              SuccessSnackbar.show(context, 'Payment recorded successfully');
             }
           } catch (e) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Failed to record payment: $e')),
-              );
+            if (isMounted && mounted) {
+              SuccessSnackbar.showError(context, 'Failed to record payment: ${e.toString()}');
             }
-            rethrow;
           }
         },
       ),
@@ -487,56 +487,48 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
   }
 
   void _showDeletePaymentDialog(BuildContext context, Fee fee, FeePayment payment) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.cardBackground,
-        title: const Text('Delete Payment', style: TextStyle(color: AppColors.textPrimary)),
-        content: Text(
-          'Are you sure you want to delete this payment of ₹${payment.amount.toStringAsFixed(2)}?',
-          style: const TextStyle(color: AppColors.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              try {
-                final feeService = ref.read(feeServiceProvider);
-                await feeService.deleteFeePayment(fee.id, payment.id);
-                if (mounted) {
-                  Navigator.of(context).pop();
-                  setState(() {}); // Refresh the list
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Payment deleted successfully')),
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  Navigator.of(context).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Failed to delete payment: $e')),
-                  );
-                }
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.error,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    // Capture ref, selectedFilter, and mounted before dialog
+    final widgetRef = ref;
+    final currentFilter = _selectedFilter;
+    final isMounted = mounted;
+    
+    ConfirmationDialog.show(
+      context,
+      'Delete Payment',
+      'Are you sure you want to delete this payment of ₹${payment.amount.toStringAsFixed(2)}?',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      icon: Icons.delete_outline,
+      onConfirm: () async {
+        try {
+          final feeService = widgetRef.read(feeServiceProvider);
+          await feeService.deleteFeePayment(fee.id, payment.id);
+          // Refresh fee list provider - get current filter
+          String? currentStatus;
+          if (currentFilter != 'all' && currentFilter != 'overdue') {
+            currentStatus = currentFilter;
+          }
+          widgetRef.invalidate(feeListProvider(status: currentStatus));
+          if (isMounted && mounted) {
+            SuccessSnackbar.show(context, 'Payment deleted successfully');
+          }
+        } catch (e) {
+          if (isMounted && mounted) {
+            SuccessSnackbar.showError(context, 'Failed to delete payment: ${e.toString()}');
+          }
+        }
+      },
     );
   }
 
   void _showNotifyStudentDialog(BuildContext context, Fee fee) {
+    // Capture ref and mounted before dialog
+    final widgetRef = ref;
+    final isMounted = mounted;
+    
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor: AppColors.cardBackground,
         title: const Text('Notify Student', style: TextStyle(color: AppColors.textPrimary)),
         content: Text(
@@ -545,26 +537,22 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.of(dialogContext).pop(),
             child: const Text('Cancel'),
           ),
           ElevatedButton(
             onPressed: () async {
               try {
-                final feeService = ref.read(feeServiceProvider);
+                final feeService = widgetRef.read(feeServiceProvider);
                 await feeService.notifyStudent(fee.id);
-                if (mounted) {
-                  Navigator.of(context).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Notification sent successfully')),
-                  );
+                if (isMounted && mounted) {
+                  Navigator.of(dialogContext).pop();
+                  SuccessSnackbar.show(context, 'Notification sent successfully');
                 }
               } catch (e) {
-                if (mounted) {
-                  Navigator.of(context).pop();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Failed to send notification: $e')),
-                  );
+                if (isMounted && mounted) {
+                  Navigator.of(dialogContext).pop();
+                  SuccessSnackbar.showError(context, 'Failed to send notification: ${e.toString()}');
                 }
               }
             },

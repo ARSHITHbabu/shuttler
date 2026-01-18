@@ -9,7 +9,6 @@ import '../../widgets/common/error_widget.dart';
 import '../../widgets/forms/add_student_dialog.dart';
 import '../../widgets/forms/add_coach_dialog.dart';
 import '../../providers/dashboard_provider.dart';
-import '../../providers/service_providers.dart';
 import '../../providers/batch_provider.dart';
 import '../../models/batch_attendance.dart';
 import 'students_screen.dart';

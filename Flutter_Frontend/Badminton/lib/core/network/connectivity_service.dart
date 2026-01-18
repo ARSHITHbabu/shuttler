@@ -30,8 +30,7 @@ class ConnectivityService {
 
   /// Stream of connectivity status changes
   Stream<bool> get onConnectivityChanged {
-    if (_subscription == null) {
-      _subscription = _connectivity.onConnectivityChanged.listen(
+    _subscription ??= _connectivity.onConnectivityChanged.listen(
         (ConnectivityResult result) {
           final isConnected = _hasConnection(result);
           _connectivityController?.add(isConnected);
@@ -40,7 +39,6 @@ class ConnectivityService {
           _connectivityController?.addError(error);
         },
       );
-    }
     return _connectivityController!.stream;
   }
 

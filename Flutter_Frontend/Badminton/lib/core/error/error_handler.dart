@@ -86,8 +86,7 @@ class ApiError extends AppError {
 class ValidationError extends AppError {
   final Map<String, String>? fieldErrors;
 
-  ValidationError(String message, [this.fieldErrors, dynamic originalError])
-      : super(message, originalError);
+  ValidationError(super.message, [this.fieldErrors, super.originalError]);
 
   /// Create ValidationError from API response
   factory ValidationError.fromApiResponse(Map<String, dynamic> responseData) {
