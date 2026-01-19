@@ -25,7 +25,7 @@ final storageServiceProvider = AutoDisposeProvider<StorageService>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef StorageServiceRef = AutoDisposeProviderRef<StorageService>;
-String _$apiServiceHash() => r'9b4009e95967c134aa85f6d7b03babac9bd77b41';
+String _$apiServiceHash() => r'9f8e1b5bd102cdebf892b65b0cfe2cbfeda0fb7b';
 
 /// Provider for ApiService singleton
 ///

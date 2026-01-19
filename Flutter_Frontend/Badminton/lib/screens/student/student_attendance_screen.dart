@@ -4,10 +4,11 @@ import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
-import '../../providers/service_providers.dart';
+import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/error_widget.dart';
 import '../../providers/auth_provider.dart';
-import '../../core/constants/api_endpoints.dart';
+import '../../providers/attendance_provider.dart';
+import '../../models/attendance.dart';
 
 /// Student Attendance Screen - READ-ONLY view of attendance history
 /// Students can view their attendance records but cannot mark attendance
@@ -19,11 +20,6 @@ class StudentAttendanceScreen extends ConsumerStatefulWidget {
 }
 
 class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScreen> {
-  bool _isLoading = true;
-  List<Map<String, dynamic>> _attendanceRecords = [];
-  Map<String, dynamic> _attendanceStats = {};
-  String? _error;
-
   // Filter options
   String _selectedFilter = 'all'; // 'all', 'present', 'absent'
   DateTime? _selectedMonth;
@@ -32,113 +28,36 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
   void initState() {
     super.initState();
     _selectedMonth = DateTime.now();
-    _loadData();
   }
 
-  Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    try {
-      // Get user ID from auth provider (preferred) or storage (fallback)
-      int? userId;
-      
-      // Try to get from auth provider first
-      final authStateAsync = ref.read(authProvider);
-      final authState = authStateAsync.value;
-      
-      if (authState is Authenticated) {
-        userId = authState.userId;
-      }
-      
-      // Fallback: try to get from storage if auth provider doesn't have it
-      if (userId == null) {
-        final storageService = ref.read(storageServiceProvider);
-        
-        // Ensure storage is initialized
-        if (!storageService.isInitialized) {
-          await storageService.init();
-        }
-        
-        userId = storageService.getUserId();
-      }
-      
-      if (userId == null) {
-        throw Exception('User not logged in. Please try logging in again.');
-      }
-
-      final apiService = ref.read(apiServiceProvider);
-
-      // Load attendance records
-      try {
-        final queryParams = <String, dynamic>{
-          'student_id': userId,
-          if (_selectedMonth != null) 'month': _selectedMonth!.month.toString(),
-          if (_selectedMonth != null) 'year': _selectedMonth!.year.toString(),
-        };
-        final response = await apiService.get(
-          ApiEndpoints.attendance,
-          queryParameters: queryParams,
-        );
-        if (response.statusCode == 200) {
-          // Handle different response formats
-          if (response.data is List) {
-            _attendanceRecords = List<Map<String, dynamic>>.from(response.data);
-          } else if (response.data is Map) {
-            _attendanceRecords = List<Map<String, dynamic>>.from(
-              response.data['records'] ?? response.data['results'] ?? []
-            );
-            _attendanceStats = Map<String, dynamic>.from(response.data['stats'] ?? {});
-          }
-          
-          // Calculate stats if not provided
-          if (_attendanceStats.isEmpty && _attendanceRecords.isNotEmpty) {
-            final total = _attendanceRecords.length;
-            final present = _attendanceRecords.where((r) => 
-              (r['status']?.toString().toLowerCase() ?? '') == 'present'
-            ).length;
-            final absent = total - present;
-            _attendanceStats = {
-              'total_days': total,
-              'present_days': present,
-              'absent_days': absent,
-              'attendance_rate': total > 0 ? (present / total * 100) : 0.0,
-            };
-          }
-        }
-      } catch (e) {
-        // Endpoint may not exist yet - use empty data
-        _attendanceRecords = [];
-        _attendanceStats = {
-          'total_days': 0,
-          'present_days': 0,
-          'absent_days': 0,
-          'attendance_rate': 0.0,
-        };
-      }
-
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _error = e.toString().replaceAll('Exception: ', '');
-        });
-      }
+  // Calculate stats from attendance records
+  Map<String, dynamic> _calculateStats(List<Attendance> records) {
+    if (records.isEmpty) {
+      return {
+        'total_days': 0,
+        'present_days': 0,
+        'absent_days': 0,
+        'attendance_rate': 0.0,
+      };
     }
+
+    final total = records.length;
+    final present = records.where((r) => r.status.toLowerCase() == 'present').length;
+    final absent = total - present;
+
+    return {
+      'total_days': total,
+      'present_days': present,
+      'absent_days': absent,
+      'attendance_rate': total > 0 ? (present / total * 100) : 0.0,
+    };
   }
 
-  List<Map<String, dynamic>> get _filteredRecords {
+  List<Attendance> _filterRecords(List<Attendance> records) {
     if (_selectedFilter == 'all') {
-      return _attendanceRecords;
+      return records;
     }
-    return _attendanceRecords.where((record) => record['status'] == _selectedFilter).toList();
+    return records.where((record) => record.status.toLowerCase() == _selectedFilter).toList();
   }
 
   @override
@@ -146,117 +65,151 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: RefreshIndicator(
-        onRefresh: _loadData,
-        child: CustomScrollView(
-          slivers: [
-            // App Bar
-            SliverAppBar(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              pinned: true,
-              title: Text(
-                'My Attendance',
-                style: TextStyle(
-                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                  fontWeight: FontWeight.w600,
+    // Get user ID from auth provider
+    final authStateAsync = ref.watch(authProvider);
+    
+    return authStateAsync.when(
+      loading: () => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: const Center(child: ListSkeleton(itemCount: 5)),
+      ),
+      error: (error, stack) => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: ErrorDisplay(
+          message: 'Failed to load user data: ${error.toString()}',
+          onRetry: () => ref.invalidate(authProvider),
+        ),
+      ),
+      data: (authState) {
+        if (authState is! Authenticated) {
+          return Scaffold(
+            backgroundColor: Colors.transparent,
+            body: ErrorDisplay(
+              message: 'Please log in to view attendance records',
+              onRetry: () => ref.invalidate(authProvider),
+            ),
+          );
+        }
+
+        final userId = authState.userId;
+        final attendanceAsync = ref.watch(attendanceByStudentProvider(
+          userId,
+          month: _selectedMonth?.month,
+          year: _selectedMonth?.year,
+        ));
+
+        return Scaffold(
+          backgroundColor: Colors.transparent,
+          body: RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(attendanceByStudentProvider(
+                userId,
+                month: _selectedMonth?.month,
+                year: _selectedMonth?.year,
+              ));
+            },
+            child: CustomScrollView(
+              slivers: [
+                // App Bar
+                SliverAppBar(
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  pinned: true,
+                  title: Text(
+                    'My Attendance',
+                    style: TextStyle(
+                      color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  centerTitle: true,
                 ),
-              ),
-              centerTitle: true,
-            ),
 
-            // Content
-            SliverToBoxAdapter(
-              child: _isLoading
-                  ? const SizedBox(
+                // Content
+                SliverToBoxAdapter(
+                  child: attendanceAsync.when(
+                    loading: () => const SizedBox(
                       height: 400,
-                      child: Center(child: LoadingSpinner()),
-                    )
-                  : _error != null
-                      ? _buildErrorWidget(isDark)
-                      : Column(
-                          children: [
-                            // Stats Summary
-                            _buildStatsSummary(isDark),
+                      child: ListSkeleton(itemCount: 3),
+                    ),
+                    error: (error, stack) => ErrorDisplay(
+                      message: 'Failed to load attendance records: ${error.toString()}',
+                      onRetry: () => ref.invalidate(attendanceByStudentProvider(
+                        userId,
+                        month: _selectedMonth?.month,
+                        year: _selectedMonth?.year,
+                      )),
+                    ),
+                    data: (attendanceRecords) {
+                      final attendanceStats = _calculateStats(attendanceRecords);
 
-                            const SizedBox(height: AppDimensions.spacingL),
+                      return Column(
+                        children: [
+                          // Stats Summary
+                          _buildStatsSummary(isDark, attendanceStats),
 
-                            // Month Selector
-                            _buildMonthSelector(isDark),
+                          const SizedBox(height: AppDimensions.spacingL),
 
-                            const SizedBox(height: AppDimensions.spacingM),
+                          // Month Selector
+                          _buildMonthSelector(isDark),
 
-                            // Filter Tabs
-                            _buildFilterTabs(isDark),
+                          const SizedBox(height: AppDimensions.spacingM),
 
-                            const SizedBox(height: AppDimensions.spacingM),
-                          ],
-                        ),
-            ),
+                          // Filter Tabs
+                          _buildFilterTabs(isDark),
 
-            // Attendance Records List
-            if (!_isLoading && _error == null)
-              _filteredRecords.isEmpty
-                  ? SliverToBoxAdapter(child: _buildEmptyState(isDark))
-                  : SliverList(
+                          const SizedBox(height: AppDimensions.spacingM),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+
+                // Attendance Records List
+                attendanceAsync.when(
+                  loading: () => const SliverToBoxAdapter(child: SizedBox()),
+                  error: (_, __) => const SliverToBoxAdapter(child: SizedBox()),
+                  data: (attendanceRecords) {
+                    final filteredRecords = _filterRecords(attendanceRecords);
+                    
+                    if (filteredRecords.isEmpty) {
+                      return SliverToBoxAdapter(
+                        child: EmptyState.noAttendance(),
+                      );
+                    }
+
+                    return SliverList(
                       delegate: SliverChildBuilderDelegate(
                         (context, index) {
-                          final record = _filteredRecords[index];
+                          final record = filteredRecords[index];
                           return _AttendanceRecordCard(
                             record: record,
                             isDark: isDark,
                           );
                         },
-                        childCount: _filteredRecords.length,
+                        childCount: filteredRecords.length,
                       ),
-                    ),
+                    );
+                  },
+                ),
 
-            // Bottom spacing
-            const SliverToBoxAdapter(
-              child: SizedBox(height: 100),
+                // Bottom spacing
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 100),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildErrorWidget(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.all(AppDimensions.paddingL),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.error_outline,
-            size: 48,
-            color: isDark ? AppColors.error : AppColorsLight.error,
-          ),
-          const SizedBox(height: AppDimensions.spacingM),
-          Text(
-            _error!,
-            style: TextStyle(
-              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: AppDimensions.spacingL),
-          ElevatedButton(
-            onPressed: _loadData,
-            child: const Text('Retry'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatsSummary(bool isDark) {
-    final totalDays = _attendanceStats['total_days'] ?? 0;
-    final presentDays = _attendanceStats['present_days'] ?? 0;
-    final absentDays = _attendanceStats['absent_days'] ?? 0;
-    final attendanceRate = (_attendanceStats['attendance_rate'] ?? 0.0).toDouble();
+  Widget _buildStatsSummary(bool isDark, Map<String, dynamic> attendanceStats) {
+    final totalDays = (attendanceStats['total_days'] ?? 0) as int;
+    final presentDays = (attendanceStats['present_days'] ?? 0) as int;
+    final absentDays = (attendanceStats['absent_days'] ?? 0) as int;
+    final attendanceRate = (attendanceStats['attendance_rate'] ?? 0.0).toDouble();
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
@@ -359,7 +312,7 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
                   setState(() {
                     _selectedMonth = DateTime(currentMonth.year, currentMonth.month - 1);
                   });
-                  _loadData();
+                  // Provider will automatically refresh
                 },
               ),
               Text(
@@ -382,7 +335,7 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
                     setState(() {
                       _selectedMonth = DateTime(currentMonth.year, currentMonth.month + 1);
                     });
-                    _loadData();
+                    // Provider will automatically refresh
                   }
                 },
               ),
@@ -422,7 +375,7 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
       setState(() {
         _selectedMonth = picked;
       });
-      _loadData();
+      // Provider will automatically refresh
     }
   }
 
@@ -462,39 +415,7 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
     );
   }
 
-  Widget _buildEmptyState(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.all(AppDimensions.paddingXl),
-      child: Column(
-        children: [
-          Icon(
-            Icons.event_available,
-            size: 64,
-            color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
-          ),
-          const SizedBox(height: AppDimensions.spacingM),
-          Text(
-            'No attendance records found',
-            style: TextStyle(
-              fontSize: 16,
-              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-            ),
-          ),
-          const SizedBox(height: AppDimensions.spacingS),
-          Text(
-            _selectedFilter == 'all'
-                ? 'Your attendance will appear here once recorded'
-                : 'No $_selectedFilter records for this month',
-            style: TextStyle(
-              fontSize: 14,
-              color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
+  // Removed _buildEmptyState - using EmptyState.noAttendance() instead
 
   Color _getAttendanceColor(double rate, bool isDark) {
     if (rate >= 80) {
@@ -599,7 +520,7 @@ class _FilterTab extends StatelessWidget {
 }
 
 class _AttendanceRecordCard extends StatelessWidget {
-  final Map<String, dynamic> record;
+  final Attendance record;
   final bool isDark;
 
   const _AttendanceRecordCard({
@@ -609,10 +530,10 @@ class _AttendanceRecordCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final status = record['status']?.toString() ?? 'unknown';
-    final date = record['date']?.toString() ?? '';
-    final batchName = record['batch_name']?.toString() ?? 'Unknown Batch';
-    final remarks = record['remarks']?.toString() ?? '';
+    final status = record.status;
+    final date = record.date;
+    final batchName = record.batchName ?? 'Unknown Batch';
+    final remarks = record.remarks ?? '';
 
     final isPresent = status.toLowerCase() == 'present';
 
@@ -651,7 +572,7 @@ class _AttendanceRecordCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    _formatDate(date),
+                    _formatDate(date.toIso8601String()),
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,

@@ -442,6 +442,141 @@ final studentStatsProvider =
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef StudentStatsRef = AutoDisposeFutureProviderRef<Map<String, dynamic>>;
+String _$studentDashboardHash() => r'9120f524f3a236d21f9ca60802c4462157b91c5a';
+
+/// Provider for student dashboard data (stats and upcoming sessions)
+///
+/// Copied from [studentDashboard].
+@ProviderFor(studentDashboard)
+const studentDashboardProvider = StudentDashboardFamily();
+
+/// Provider for student dashboard data (stats and upcoming sessions)
+///
+/// Copied from [studentDashboard].
+class StudentDashboardFamily extends Family<AsyncValue<StudentDashboardData>> {
+  /// Provider for student dashboard data (stats and upcoming sessions)
+  ///
+  /// Copied from [studentDashboard].
+  const StudentDashboardFamily();
+
+  /// Provider for student dashboard data (stats and upcoming sessions)
+  ///
+  /// Copied from [studentDashboard].
+  StudentDashboardProvider call(int studentId) {
+    return StudentDashboardProvider(studentId);
+  }
+
+  @override
+  StudentDashboardProvider getProviderOverride(
+    covariant StudentDashboardProvider provider,
+  ) {
+    return call(provider.studentId);
+  }
+
+  static const Iterable<ProviderOrFamily>? _dependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get dependencies => _dependencies;
+
+  static const Iterable<ProviderOrFamily>? _allTransitiveDependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get allTransitiveDependencies =>
+      _allTransitiveDependencies;
+
+  @override
+  String? get name => r'studentDashboardProvider';
+}
+
+/// Provider for student dashboard data (stats and upcoming sessions)
+///
+/// Copied from [studentDashboard].
+class StudentDashboardProvider
+    extends AutoDisposeFutureProvider<StudentDashboardData> {
+  /// Provider for student dashboard data (stats and upcoming sessions)
+  ///
+  /// Copied from [studentDashboard].
+  StudentDashboardProvider(int studentId)
+    : this._internal(
+        (ref) => studentDashboard(ref as StudentDashboardRef, studentId),
+        from: studentDashboardProvider,
+        name: r'studentDashboardProvider',
+        debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+            ? null
+            : _$studentDashboardHash,
+        dependencies: StudentDashboardFamily._dependencies,
+        allTransitiveDependencies:
+            StudentDashboardFamily._allTransitiveDependencies,
+        studentId: studentId,
+      );
+
+  StudentDashboardProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.studentId,
+  }) : super.internal();
+
+  final int studentId;
+
+  @override
+  Override overrideWith(
+    FutureOr<StudentDashboardData> Function(StudentDashboardRef provider)
+    create,
+  ) {
+    return ProviderOverride(
+      origin: this,
+      override: StudentDashboardProvider._internal(
+        (ref) => create(ref as StudentDashboardRef),
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        studentId: studentId,
+      ),
+    );
+  }
+
+  @override
+  AutoDisposeFutureProviderElement<StudentDashboardData> createElement() {
+    return _StudentDashboardProviderElement(this);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is StudentDashboardProvider && other.studentId == studentId;
+  }
+
+  @override
+  int get hashCode {
+    var hash = _SystemHash.combine(0, runtimeType.hashCode);
+    hash = _SystemHash.combine(hash, studentId.hashCode);
+
+    return _SystemHash.finish(hash);
+  }
+}
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+mixin StudentDashboardRef
+    on AutoDisposeFutureProviderRef<StudentDashboardData> {
+  /// The parameter `studentId` of this provider.
+  int get studentId;
+}
+
+class _StudentDashboardProviderElement
+    extends AutoDisposeFutureProviderElement<StudentDashboardData>
+    with StudentDashboardRef {
+  _StudentDashboardProviderElement(super.provider);
+
+  @override
+  int get studentId => (origin as StudentDashboardProvider).studentId;
+}
+
 String _$studentListHash() => r'34ee8a637f622f49796dd3b3f756b2629273a38d';
 
 /// Provider for student list state
