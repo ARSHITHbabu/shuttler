@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:badminton/providers/student_provider.dart';
-import 'package:badminton/models/student.dart';
 
 /// Integration tests for provider integration in migrated screens
 /// These tests verify that providers work correctly with screen components

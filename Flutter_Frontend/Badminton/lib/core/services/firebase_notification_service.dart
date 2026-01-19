@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'storage_service.dart';
 import 'api_service.dart';
-import '../constants/api_endpoints.dart';
 
 /// Top-level function for handling background messages
 /// Must be top-level or static to be accessible from isolate

@@ -61,6 +61,7 @@ class _OfflineIndicatorState extends ConsumerState<OfflineIndicator> {
   @override
   Widget build(BuildContext context) {
     return Stack(
+      alignment: Alignment.topLeft,
       children: [
         widget.child,
         if (!_isConnected)
