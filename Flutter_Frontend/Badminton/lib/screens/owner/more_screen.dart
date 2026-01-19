@@ -14,6 +14,7 @@ import 'bmi_tracking_screen.dart';
 import 'performance_tracking_screen.dart';
 import 'fees_screen.dart';
 import 'settings_screen.dart';
+import 'notifications_screen.dart';
 
 /// More Screen - Settings and additional features
 /// Matches React reference: MoreScreen.tsx
@@ -157,6 +158,18 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (context) => const FeesScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.notifications_outlined,
+              title: 'Notifications',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const NotificationsScreen(),
                   ),
                 );
               },
