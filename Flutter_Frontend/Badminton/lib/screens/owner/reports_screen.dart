@@ -1,5 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:path_provider/path_provider.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
@@ -715,26 +719,282 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     }
 
     try {
-      // PDF export requires pdf package
-      // This is a placeholder implementation
-      SuccessSnackbar.showInfo(context, 'PDF export requires pdf package. Add "pdf: ^3.10.0" to pubspec.yaml');
-      
-      // TODO: Implement PDF export with pdf package
-      // final pdf = Document();
-      // pdf.addPage(Page(
-      //   build: (context) => Column(
-      //     children: [
-      //       Text(_generatedReport!['type']),
-      //       Text('Period: ${_generatedReport!['period']}'),
-      //       // Add report content
-      //     ],
-      //   ),
-      // ));
-      // final bytes = await pdf.save();
-      // // Save to file
-      
+      final pdf = pw.Document();
+      final reportType = _generatedReport!['type'] as String;
+      final period = _generatedReport!['period'] as String;
+      final generatedOn = _generatedReport!['generatedOn'] as String;
+      final data = _generatedReport!['data'] as Map<String, dynamic>;
+
+      // Build PDF content based on report type
+      if (reportType == 'Attendance Report') {
+        pdf.addPage(
+          pw.MultiPage(
+            pageFormat: PdfPageFormat.a4,
+            margin: const pw.EdgeInsets.all(40),
+            build: (pw.Context context) {
+              return [
+                // Header
+                pw.Header(
+                  level: 0,
+                  child: pw.Text(
+                    reportType,
+                    style: pw.TextStyle(
+                      fontSize: 24,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                ),
+                pw.SizedBox(height: 20),
+                
+                // Report Info
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('Period: $period'),
+                    pw.Text('Generated: $generatedOn'),
+                  ],
+                ),
+                pw.SizedBox(height: 30),
+                
+                // Summary Statistics
+                pw.Text(
+                  'Summary',
+                  style: pw.TextStyle(
+                    fontSize: 18,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 10),
+                pw.Table(
+                  border: pw.TableBorder.all(),
+                  children: [
+                    pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('Total Days'),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('${data['totalDays']}'),
+                        ),
+                      ],
+                    ),
+                    pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('Total Records'),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('${data['totalRecords']}'),
+                        ),
+                      ],
+                    ),
+                    pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('Present'),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('${data['presentCount']}'),
+                        ),
+                      ],
+                    ),
+                    pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('Absent'),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('${data['absentCount']}'),
+                        ),
+                      ],
+                    ),
+                    pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('Attendance Rate'),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('${(data['attendanceRate'] as num).toStringAsFixed(1)}%'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ];
+            },
+          ),
+        );
+      } else if (reportType == 'Fee Report') {
+        pdf.addPage(
+          pw.MultiPage(
+            pageFormat: PdfPageFormat.a4,
+            margin: const pw.EdgeInsets.all(40),
+            build: (pw.Context context) {
+              return [
+                // Header
+                pw.Header(
+                  level: 0,
+                  child: pw.Text(
+                    reportType,
+                    style: pw.TextStyle(
+                      fontSize: 24,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                ),
+                pw.SizedBox(height: 20),
+                
+                // Report Info
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('Period: $period'),
+                    pw.Text('Generated: $generatedOn'),
+                  ],
+                ),
+                pw.SizedBox(height: 30),
+                
+                // Summary Statistics
+                pw.Text(
+                  'Summary',
+                  style: pw.TextStyle(
+                    fontSize: 18,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 10),
+                pw.Table(
+                  border: pw.TableBorder.all(),
+                  children: [
+                    pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('Total Amount'),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('₹${data['totalAmount']}'),
+                        ),
+                      ],
+                    ),
+                    pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('Paid Amount'),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('₹${data['paidAmount']}'),
+                        ),
+                      ],
+                    ),
+                    pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('Pending Amount'),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('₹${data['pendingAmount']}'),
+                        ),
+                      ],
+                    ),
+                    pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('Overdue Amount'),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('₹${data['overdueAmount']}'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ];
+            },
+          ),
+        );
+      } else if (reportType == 'Performance Report') {
+        pdf.addPage(
+          pw.MultiPage(
+            pageFormat: PdfPageFormat.a4,
+            margin: const pw.EdgeInsets.all(40),
+            build: (pw.Context context) {
+              return [
+                // Header
+                pw.Header(
+                  level: 0,
+                  child: pw.Text(
+                    reportType,
+                    style: pw.TextStyle(
+                      fontSize: 24,
+                      fontWeight: pw.FontWeight.bold,
+                    ),
+                  ),
+                ),
+                pw.SizedBox(height: 20),
+                
+                // Report Info
+                pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('Period: $period'),
+                    pw.Text('Generated: $generatedOn'),
+                  ],
+                ),
+                pw.SizedBox(height: 30),
+                
+                // Summary
+                pw.Text(
+                  'Performance Summary',
+                  style: pw.TextStyle(
+                    fontSize: 18,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 10),
+                pw.Text('Total Students: ${data['totalStudents']}'),
+                pw.SizedBox(height: 10),
+                pw.Text('Average Performance: ${(data['averagePerformance'] as num).toStringAsFixed(1)}'),
+              ];
+            },
+          ),
+        );
+      }
+
+      // Save PDF to file
+      final bytes = await pdf.save();
+      final directory = await getApplicationDocumentsDirectory();
+      final fileName = 'report_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      final file = File('${directory.path}/$fileName');
+      await file.writeAsBytes(bytes);
+
+      if (mounted) {
+        SuccessSnackbar.show(
+          context,
+          'PDF exported successfully to: ${file.path}',
+        );
+      }
     } catch (e) {
-      SuccessSnackbar.showError(context, 'Failed to export PDF: ${e.toString()}');
+      if (mounted) {
+        SuccessSnackbar.showError(context, 'Failed to export PDF: ${e.toString()}');
+      }
     }
   }
 }

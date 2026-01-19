@@ -6,6 +6,7 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
+import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/neumorphic_button.dart';
 import '../../widgets/common/profile_image_picker.dart';
@@ -107,7 +108,7 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
         future: coachFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: LoadingSpinner());
+            return const ProfileSkeleton();
           }
 
           if (snapshot.hasError) {
@@ -279,7 +280,7 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
                     ],
                   ),
                 ),
-                loading: () => const Center(child: LoadingSpinner()),
+                loading: () => const Center(child: ListSkeleton(itemCount: 3)),
                 error: (error, stack) => const SizedBox(),
               ),
 

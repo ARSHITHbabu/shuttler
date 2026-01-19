@@ -73,6 +73,8 @@ dependencies:
   url_launcher: ^6.2.2
   connectivity_plus: ^5.0.2
   shimmer: 3.0.0
+  pdf: ^3.10.0
+  path_provider: ^2.1.1
 
 dev_dependencies:
   flutter_test:

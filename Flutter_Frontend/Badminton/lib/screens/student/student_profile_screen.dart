@@ -8,6 +8,7 @@ import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/neumorphic_button.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/loading_spinner.dart';
+import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/profile_image_picker.dart';
 import '../../widgets/common/cached_profile_image.dart';
 import '../../providers/service_providers.dart';
@@ -326,7 +327,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
               child: _isLoading
                   ? const SizedBox(
                       height: 400,
-                      child: Center(child: LoadingSpinner()),
+                      child: ProfileSkeleton(),
                     )
                   : _error != null
                       ? _buildErrorWidget(isDark)
