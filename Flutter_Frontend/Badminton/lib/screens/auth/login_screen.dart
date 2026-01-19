@@ -280,11 +280,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 const SizedBox(height: AppDimensions.spacingXl),
 
                 // Login Button
-                NeumorphicButton(
-                  text: _isLoading ? 'Signing In...' : 'Sign In',
-                  onPressed: _isLoading ? null : _handleLogin,
-                  isAccent: true,
-                  icon: _isLoading ? null : Icons.login,
+                SizedBox(
+                  width: double.infinity,
+                  child: NeumorphicButton(
+                    text: _isLoading ? 'Signing In...' : 'Sign In',
+                    onPressed: _isLoading ? null : _handleLogin,
+                    isAccent: true,
+                    icon: _isLoading ? null : Icons.login,
+                  ),
                 ),
                 const SizedBox(height: AppDimensions.spacingL),
 

@@ -246,11 +246,14 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 const SizedBox(height: AppDimensions.spacingXl),
 
                 // Signup Button
-                NeumorphicButton(
-                  text: _isLoading ? 'Creating Account...' : 'Create Account',
-                  onPressed: _isLoading ? null : _handleSignup,
-                  isAccent: true,
-                  icon: _isLoading ? null : Icons.person_add,
+                SizedBox(
+                  width: double.infinity,
+                  child: NeumorphicButton(
+                    text: _isLoading ? 'Creating Account...' : 'Create Account',
+                    onPressed: _isLoading ? null : _handleSignup,
+                    isAccent: true,
+                    icon: _isLoading ? null : Icons.person_add,
+                  ),
                 ),
                 const SizedBox(height: AppDimensions.spacingL),
 

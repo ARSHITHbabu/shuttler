@@ -60,6 +60,9 @@ class _NeumorphicButtonState extends State<NeumorphicButton> {
         duration: const Duration(milliseconds: 150),
         width: widget.width,
         height: widget.height ?? AppDimensions.buttonHeightM,
+        constraints: widget.width == null
+            ? const BoxConstraints(minWidth: 120)
+            : null,
         padding: widget.padding ??
             const EdgeInsets.symmetric(
               horizontal: AppDimensions.paddingL,
@@ -140,12 +143,17 @@ class _NeumorphicButtonState extends State<NeumorphicButton> {
             size: widget.fontSize + 4,
           ),
           const SizedBox(width: AppDimensions.spacingS),
-          Text(
-            widget.text,
-            style: TextStyle(
-              color: textColor,
-              fontSize: widget.fontSize,
-              fontWeight: widget.fontWeight,
+          Flexible(
+            child: Text(
+              widget.text,
+              style: TextStyle(
+                color: textColor,
+                fontSize: widget.fontSize,
+                fontWeight: widget.fontWeight,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
             ),
           ),
         ],
@@ -160,6 +168,9 @@ class _NeumorphicButtonState extends State<NeumorphicButton> {
           fontSize: widget.fontSize,
           fontWeight: widget.fontWeight,
         ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
       ),
     );
   }
