@@ -6,6 +6,7 @@ import '../screens/auth/signup_screen.dart';
 import '../screens/auth/forgot_password_screen.dart';
 import '../screens/student/profile_completion_screen.dart';
 import '../screens/student/student_dashboard.dart';
+import '../screens/owner/academy_setup_screen.dart';
 import '../screens/owner/owner_dashboard.dart';
 import '../screens/coach/coach_dashboard.dart';
 
@@ -79,6 +80,13 @@ class AppRouter {
           path: '/student-dashboard',
           name: 'student-dashboard',
           builder: (context, state) => const StudentDashboard(),
+        ),
+
+        // Academy Setup route
+        GoRoute(
+          path: '/academy-setup',
+          name: 'academy-setup',
+          builder: (context, state) => const AcademySetupScreen(),
         ),
       ],
 

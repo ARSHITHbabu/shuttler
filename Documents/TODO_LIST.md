@@ -1,7 +1,7 @@
 # TODO List - Badminton Academy Management System
 
 **Last Updated**: 2026-01-XX
-**Status**: 17 of 35+ items completed
+**Status**: 19 of 35+ items completed
 
 ---
 
@@ -145,19 +145,21 @@
 - [ ] Implement PDF export for performance reports (requires pdf package)
 - **Status**: ✅ **COMPLETED** (CSV export implemented, PDF export structure ready - requires pdf package dependency)
 
-### ⬜ 18. Implement Notifications Screen
-- [ ] Create notifications_screen.dart
-- [ ] Integrate with notificationListProvider
-- [ ] Add mark as read functionality
-- [ ] Add delete functionality
-- [ ] Add filter by type
+### ✅ 18. Implement Notifications Screen
+- [x] Create notifications_screen.dart
+- [x] Integrate with notificationListProvider
+- [x] Add mark as read functionality
+- [x] Add delete functionality
+- [x] Add filter by type
+- **Status**: ✅ **COMPLETED**
 
-### ⬜ 19. Implement Academy Setup Screen
-- [ ] Create academy_setup_screen.dart
-- [ ] Add route in app_router.dart
-- [ ] Implement academy information form
-- [ ] Add image upload for academy logo
-- [ ] Integrate with backend API
+### ✅ 19. Implement Academy Setup Screen
+- [x] Create academy_setup_screen.dart
+- [x] Add route in app_router.dart
+- [x] Implement academy information form
+- [x] Add image upload for academy logo
+- [x] Integrate with backend API
+- **Status**: ✅ **COMPLETED**
 
 ### ⬜ 20. Complete Offline Support
 - [ ] Integrate RequestQueue in API service
@@ -244,5 +246,5 @@
 ---
 
 **Total Items**: 35+
-**Completed**: 17
-**Remaining**: 18+
+**Completed**: 19
+**Remaining**: 16+
