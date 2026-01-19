@@ -6,6 +6,7 @@ import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
+import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/forms/add_student_dialog.dart';
 import '../../widgets/forms/add_coach_dialog.dart';
 import '../../providers/dashboard_provider.dart';
@@ -135,10 +136,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
               );
             },
-            loading: () => const Padding(
-              padding: EdgeInsets.all(AppDimensions.spacingL),
-              child: Center(child: LoadingSpinner()),
-            ),
+            loading: () => const DashboardSkeleton(),
             error: (error, stack) => Padding(
               padding: const EdgeInsets.all(AppDimensions.spacingM),
               child: Text(
@@ -376,7 +374,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ),
                     ),
                   ),
-                  loading: () => const SizedBox(height: 80, child: Center(child: LoadingSpinner())),
+                  loading: () => const SizedBox(height: 80, child: Center(child: ListSkeleton(itemCount: 1))),
                   error: (error, stack) => const SizedBox.shrink(),
                 ),
                 const SizedBox(height: AppDimensions.spacingM),
@@ -680,7 +678,7 @@ class _UpcomingBatchItem extends ConsumerWidget {
           const SizedBox(
             width: 60,
             height: 20,
-            child: Center(child: LoadingSpinner()),
+            child: Center(child: ListSkeleton(itemCount: 1)),
           ),
         ],
       ),

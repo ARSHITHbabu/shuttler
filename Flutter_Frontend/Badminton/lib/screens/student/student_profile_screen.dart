@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/colors.dart';
@@ -7,8 +8,12 @@ import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/neumorphic_button.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/loading_spinner.dart';
+import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/profile_image_picker.dart';
+import '../../widgets/common/cached_profile_image.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/auth_provider.dart';
+import '../../core/constants/api_endpoints.dart';
 
 /// Student Profile Screen - View and edit profile information
 /// Students can view all their profile data and edit certain fields
@@ -25,8 +30,11 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
   bool _isLoading = true;
   bool _isSaving = false;
   bool _isEditing = false;
+  bool _isUploadingImage = false;
   Map<String, dynamic> _studentData = {};
   String? _error;
+  File? _selectedImage;
+  String? _profilePhotoUrl;
 
   // Controllers for editable fields
   final _phoneController = TextEditingController();
@@ -87,6 +95,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
       final response = await apiService.get('/api/students/$userId');
       if (response.statusCode == 200) {
         _studentData = Map<String, dynamic>.from(response.data);
+        _profilePhotoUrl = _studentData['profile_photo']?.toString();
         _populateControllers();
       }
 
@@ -110,6 +119,77 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     _guardianNameController.text = _studentData['guardian_name']?.toString() ?? '';
     _guardianPhoneController.text = _studentData['guardian_phone']?.toString() ?? '';
     _addressController.text = _studentData['address']?.toString() ?? '';
+  }
+
+  Future<void> _handleImagePicked(File? image) async {
+    if (image == null) {
+      setState(() {
+        _selectedImage = null;
+        _profilePhotoUrl = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _selectedImage = image;
+      _isUploadingImage = true;
+    });
+
+    try {
+      // Get user ID
+      int? userId;
+      final authStateAsync = ref.read(authProvider);
+      final authState = authStateAsync.value;
+      
+      if (authState is Authenticated) {
+        userId = authState.userId;
+      } else {
+        final storageService = ref.read(storageServiceProvider);
+        if (!storageService.isInitialized) await storageService.init();
+        userId = storageService.getUserId();
+      }
+
+      if (userId == null) {
+        throw Exception('User not logged in');
+      }
+
+      // Upload image
+      final apiService = ref.read(apiServiceProvider);
+      final imageUrl = await apiService.uploadImage(image.path);
+
+      // Update profile with new image URL
+      await apiService.put(
+        '/api/students/$userId',
+        data: {'profile_photo': imageUrl},
+      );
+
+      setState(() {
+        _profilePhotoUrl = imageUrl;
+        _studentData['profile_photo'] = imageUrl;
+        _isUploadingImage = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Profile photo updated successfully'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _isUploadingImage = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to upload image: ${e.toString()}'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _saveProfile() async {
@@ -247,7 +327,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
               child: _isLoading
                   ? const SizedBox(
                       height: 400,
-                      child: Center(child: LoadingSpinner()),
+                      child: ProfileSkeleton(),
                     )
                   : _error != null
                       ? _buildErrorWidget(isDark)
@@ -434,25 +514,12 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
       padding: const EdgeInsets.all(AppDimensions.paddingL),
       child: Column(
         children: [
-          // Avatar
-          Container(
-            width: 100,
-            height: 100,
-            decoration: BoxDecoration(
-              color: isDark ? AppColors.accent : AppColorsLight.accent,
-              shape: BoxShape.circle,
-              boxShadow: NeumorphicStyles.getElevatedShadow(),
-            ),
-            child: Center(
-              child: Text(
-                initials,
-                style: const TextStyle(
-                  fontSize: 36,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-            ),
+          // Profile Image Picker
+          ProfileImagePicker(
+            initialImageUrl: _profilePhotoUrl,
+            size: 100,
+            onImagePicked: _handleImagePicked,
+            isLoading: _isUploadingImage,
           ),
           const SizedBox(height: AppDimensions.spacingM),
 

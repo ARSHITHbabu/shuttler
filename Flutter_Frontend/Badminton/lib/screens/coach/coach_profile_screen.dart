@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/colors.dart';
@@ -5,8 +6,10 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
+import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/neumorphic_button.dart';
+import '../../widgets/common/profile_image_picker.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/coach_provider.dart';
@@ -32,10 +35,12 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
   
   bool _isSaving = false;
   bool _isChangingPassword = false;
+  bool _isUploadingImage = false;
   bool _obscureCurrentPassword = true;
   bool _obscureNewPassword = true;
   bool _obscureConfirmPassword = true;
   Coach? _coach;
+  File? _selectedImage;
 
   @override
   void dispose() {
@@ -103,7 +108,7 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
         future: coachFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: LoadingSpinner());
+            return const ProfileSkeleton();
           }
 
           if (snapshot.hasError) {
@@ -143,22 +148,11 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
               Center(
                 child: Column(
                   children: [
-                    CircleAvatar(
-                      radius: 50,
-                      backgroundColor: AppColors.background,
-                      backgroundImage: coach.profilePhoto != null
-                          ? NetworkImage(coach.profilePhoto!)
-                          : null,
-                      child: coach.profilePhoto == null
-                          ? Text(
-                              coach.name.isNotEmpty ? coach.name[0].toUpperCase() : 'C',
-                              style: const TextStyle(
-                                fontSize: 36,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textPrimary,
-                              ),
-                            )
-                          : null,
+                    ProfileImagePicker(
+                      initialImageUrl: coach.profilePhoto,
+                      size: 100,
+                      onImagePicked: _handleImagePicked,
+                      isLoading: _isUploadingImage,
                     ),
                     const SizedBox(height: AppDimensions.spacingM),
                     Text(
@@ -286,7 +280,7 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
                     ],
                   ),
                 ),
-                loading: () => const Center(child: LoadingSpinner()),
+                loading: () => const Center(child: ListSkeleton(itemCount: 3)),
                 error: (error, stack) => const SizedBox(),
               ),
 
@@ -379,6 +373,65 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _handleImagePicked(File? image) async {
+    if (image == null) {
+      setState(() {
+        _selectedImage = null;
+      });
+      return;
+    }
+
+    setState(() {
+      _selectedImage = image;
+      _isUploadingImage = true;
+    });
+
+    try {
+      final authState = ref.read(authProvider);
+      if (authState.value is! Authenticated) {
+        throw Exception('Not authenticated');
+      }
+
+      final coachId = (authState.value as Authenticated).userId;
+      final apiService = ref.read(apiServiceProvider);
+      
+      // Upload image
+      final imageUrl = await apiService.uploadImage(image.path);
+
+      // Update profile with new image URL
+      final coachService = ref.read(coachServiceProvider);
+      await coachService.updateCoach(coachId, {
+        'profile_photo': imageUrl,
+      });
+
+      setState(() {
+        _isUploadingImage = false;
+        _coach = null; // Force refresh
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Profile photo updated successfully'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _isUploadingImage = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to upload image: ${e.toString()}'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _saveProfile() async {
