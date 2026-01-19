@@ -1,11 +1,15 @@
 import 'package:dio/dio.dart';
 import '../constants/api_endpoints.dart';
 import 'storage_service.dart';
+import '../network/request_queue.dart';
+import '../network/connectivity_service.dart';
 
 /// API service for making HTTP requests to the backend
 class ApiService {
   late final Dio _dio;
   final StorageService _storageService;
+  RequestQueue? _requestQueue;
+  ConnectivityService? _connectivityService;
 
   ApiService(this._storageService) {
     _dio = Dio(
@@ -24,6 +28,17 @@ class ApiService {
     _dio.interceptors.add(_authInterceptor());
     _dio.interceptors.add(_loggingInterceptor());
     _dio.interceptors.add(_errorInterceptor());
+  }
+
+  /// Initialize offline support with RequestQueue
+  void initializeOfflineSupport({
+    required ConnectivityService connectivityService,
+  }) {
+    _connectivityService = connectivityService;
+    _requestQueue = RequestQueue(
+      connectivityService: connectivityService,
+      dio: _dio,
+    );
   }
 
   /// Auth interceptor - adds token to requests
@@ -100,8 +115,24 @@ class ApiService {
     String path, {
     Map<String, dynamic>? queryParameters,
     Options? options,
+    RequestPriority priority = RequestPriority.normal,
   }) async {
     try {
+      // Use RequestQueue if available and offline
+      if (_requestQueue != null) {
+        final isConnected = await _connectivityService!.isConnected();
+        if (!isConnected) {
+          // Queue the request for later execution
+          return await _requestQueue!.queueRequest(
+            method: 'GET',
+            path: path,
+            queryParameters: queryParameters,
+            options: options,
+            priority: priority,
+          );
+        }
+      }
+      
       final response = await _dio.get(
         path,
         queryParameters: queryParameters,
@@ -109,6 +140,19 @@ class ApiService {
       );
       return response;
     } catch (e) {
+      // If request fails and we have RequestQueue, try queuing it
+      if (_requestQueue != null && e is DioException) {
+        if (e.type == DioExceptionType.unknown || 
+            e.type == DioExceptionType.connectionTimeout) {
+          return await _requestQueue!.queueRequest(
+            method: 'GET',
+            path: path,
+            queryParameters: queryParameters,
+            options: options,
+            priority: priority,
+          );
+        }
+      }
       rethrow;
     }
   }
@@ -119,8 +163,25 @@ class ApiService {
     dynamic data,
     Map<String, dynamic>? queryParameters,
     Options? options,
+    RequestPriority priority = RequestPriority.normal,
   }) async {
     try {
+      // Use RequestQueue if available and offline
+      if (_requestQueue != null) {
+        final isConnected = await _connectivityService!.isConnected();
+        if (!isConnected) {
+          // Queue the request for later execution
+          return await _requestQueue!.queueRequest(
+            method: 'POST',
+            path: path,
+            data: data,
+            queryParameters: queryParameters,
+            options: options,
+            priority: priority,
+          );
+        }
+      }
+      
       final response = await _dio.post(
         path,
         data: data,
@@ -129,6 +190,20 @@ class ApiService {
       );
       return response;
     } catch (e) {
+      // If request fails and we have RequestQueue, try queuing it
+      if (_requestQueue != null && e is DioException) {
+        if (e.type == DioExceptionType.unknown || 
+            e.type == DioExceptionType.connectionTimeout) {
+          return await _requestQueue!.queueRequest(
+            method: 'POST',
+            path: path,
+            data: data,
+            queryParameters: queryParameters,
+            options: options,
+            priority: priority,
+          );
+        }
+      }
       rethrow;
     }
   }
@@ -139,8 +214,25 @@ class ApiService {
     dynamic data,
     Map<String, dynamic>? queryParameters,
     Options? options,
+    RequestPriority priority = RequestPriority.normal,
   }) async {
     try {
+      // Use RequestQueue if available and offline
+      if (_requestQueue != null) {
+        final isConnected = await _connectivityService!.isConnected();
+        if (!isConnected) {
+          // Queue the request for later execution
+          return await _requestQueue!.queueRequest(
+            method: 'PUT',
+            path: path,
+            data: data,
+            queryParameters: queryParameters,
+            options: options,
+            priority: priority,
+          );
+        }
+      }
+      
       final response = await _dio.put(
         path,
         data: data,
@@ -149,6 +241,20 @@ class ApiService {
       );
       return response;
     } catch (e) {
+      // If request fails and we have RequestQueue, try queuing it
+      if (_requestQueue != null && e is DioException) {
+        if (e.type == DioExceptionType.unknown || 
+            e.type == DioExceptionType.connectionTimeout) {
+          return await _requestQueue!.queueRequest(
+            method: 'PUT',
+            path: path,
+            data: data,
+            queryParameters: queryParameters,
+            options: options,
+            priority: priority,
+          );
+        }
+      }
       rethrow;
     }
   }
@@ -159,8 +265,25 @@ class ApiService {
     dynamic data,
     Map<String, dynamic>? queryParameters,
     Options? options,
+    RequestPriority priority = RequestPriority.normal,
   }) async {
     try {
+      // Use RequestQueue if available and offline
+      if (_requestQueue != null) {
+        final isConnected = await _connectivityService!.isConnected();
+        if (!isConnected) {
+          // Queue the request for later execution
+          return await _requestQueue!.queueRequest(
+            method: 'DELETE',
+            path: path,
+            data: data,
+            queryParameters: queryParameters,
+            options: options,
+            priority: priority,
+          );
+        }
+      }
+      
       final response = await _dio.delete(
         path,
         data: data,
@@ -169,6 +292,20 @@ class ApiService {
       );
       return response;
     } catch (e) {
+      // If request fails and we have RequestQueue, try queuing it
+      if (_requestQueue != null && e is DioException) {
+        if (e.type == DioExceptionType.unknown || 
+            e.type == DioExceptionType.connectionTimeout) {
+          return await _requestQueue!.queueRequest(
+            method: 'DELETE',
+            path: path,
+            data: data,
+            queryParameters: queryParameters,
+            options: options,
+            priority: priority,
+          );
+        }
+      }
       rethrow;
     }
   }
@@ -198,6 +335,35 @@ class ApiService {
         onSendProgress: onSendProgress,
       );
       return response;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// Upload image file (convenience method for profile images)
+  /// Returns the image URL from the response
+  Future<String> uploadImage(String filePath) async {
+    try {
+      final response = await uploadFile(
+        ApiEndpoints.uploadImage,
+        filePath,
+        fieldName: 'file',
+      );
+      
+      if (response.statusCode == 200) {
+        final data = response.data;
+        if (data is Map<String, dynamic> && data.containsKey('url')) {
+          // Return full URL
+          final url = data['url'] as String;
+          if (url.startsWith('http')) {
+            return url;
+          } else {
+            // Prepend base URL if relative
+            return '${ApiEndpoints.baseUrl}$url';
+          }
+        }
+      }
+      throw Exception('Failed to upload image: Invalid response');
     } catch (e) {
       rethrow;
     }
@@ -265,5 +431,18 @@ class ApiService {
 
     // Return status code message
     return 'Error ${response.statusCode}: ${response.statusMessage ?? "Unknown error"}';
+  }
+
+  /// Get queue size (for offline requests)
+  int get queueSize => _requestQueue?.queueSize ?? 0;
+
+  /// Clear request queue
+  void clearQueue() {
+    _requestQueue?.clearQueue();
+  }
+
+  /// Dispose resources
+  void dispose() {
+    _requestQueue?.dispose();
   }
 }

@@ -35,7 +35,13 @@ StorageService storageService(StorageServiceRef ref) {
 @riverpod
 ApiService apiService(ApiServiceRef ref) {
   final storageService = ref.watch(storageServiceProvider);
-  return ApiService(storageService);
+  final apiService = ApiService(storageService);
+  
+  // Initialize offline support
+  final connectivityService = ref.watch(connectivityServiceProvider);
+  apiService.initializeOfflineSupport(connectivityService: connectivityService);
+  
+  return apiService;
 }
 
 /// Provider for AuthService singleton
