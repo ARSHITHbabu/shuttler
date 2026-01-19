@@ -7,13 +7,10 @@ import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/neumorphic_button.dart';
 import '../../widgets/common/custom_text_field.dart';
-import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/profile_image_picker.dart';
-import '../../widgets/common/cached_profile_image.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/auth_provider.dart';
-import '../../core/constants/api_endpoints.dart';
 
 /// Student Profile Screen - View and edit profile information
 /// Students can view all their profile data and edit certain fields

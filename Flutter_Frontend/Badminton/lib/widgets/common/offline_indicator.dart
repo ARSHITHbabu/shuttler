@@ -61,6 +61,7 @@ class _OfflineIndicatorState extends ConsumerState<OfflineIndicator> {
   @override
   Widget build(BuildContext context) {
     return Stack(
+      alignment: Alignment.topLeft,
       children: [
         widget.child,
         if (!_isConnected)
@@ -68,10 +69,13 @@ class _OfflineIndicatorState extends ConsumerState<OfflineIndicator> {
             top: 0,
             left: 0,
             right: 0,
-            child: _OfflineBanner(
-              onRetry: () {
-                _checkConnectivity();
-              },
+            child: Directionality(
+              textDirection: TextDirection.ltr,
+              child: _OfflineBanner(
+                onRetry: () {
+                  _checkConnectivity();
+                },
+              ),
             ),
           ),
       ],

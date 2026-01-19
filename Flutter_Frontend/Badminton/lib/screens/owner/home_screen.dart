@@ -220,7 +220,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 physics: const NeverScrollableScrollPhysics(),
                 crossAxisSpacing: AppDimensions.spacingM,
                 mainAxisSpacing: AppDimensions.spacingM,
-                childAspectRatio: 1.1,
+                childAspectRatio: 0.85,
                 children: [
                   _StatCard(
                     icon: Icons.people_outline,
@@ -534,6 +534,7 @@ class _StatCard extends StatelessWidget {
       padding: const EdgeInsets.all(AppDimensions.paddingM),
       onTap: onTap,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -561,22 +562,30 @@ class _StatCard extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: AppDimensions.spacingM),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
+          const SizedBox(height: AppDimensions.spacingS),
+          Flexible(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+                height: 1.2,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Text(
             label,
             style: const TextStyle(
-              fontSize: 14,
+              fontSize: 13,
               color: AppColors.textSecondary,
+              height: 1.2,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

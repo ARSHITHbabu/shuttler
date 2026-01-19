@@ -10,7 +10,6 @@ import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/profile_image_picker.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/service_providers.dart';
-import '../../core/services/api_service.dart';
 import 'package:dio/dio.dart';
 
 /// Academy Setup Screen - Initial academy configuration
@@ -225,20 +224,28 @@ class _AcademySetupScreenState extends ConsumerState<AcademySetupScreen> {
               const SizedBox(height: AppDimensions.spacingL),
 
               // Action Buttons
-              NeumorphicButton(
-                text: _currentStep == 3 ? 'Complete Setup' : 'Continue',
-                onPressed: _isLoading ? null : _nextStep,
-                isLoading: _isLoading,
-                isAccent: true,
+              Row(
+                children: [
+                  if (_currentStep > 1) ...[
+                    Expanded(
+                      child: NeumorphicButton(
+                        text: 'Back',
+                        onPressed: _previousStep,
+                        isAccent: false,
+                      ),
+                    ),
+                    const SizedBox(width: AppDimensions.spacingM),
+                  ],
+                  Expanded(
+                    child: NeumorphicButton(
+                      text: _currentStep == 3 ? 'Complete Setup' : 'Continue',
+                      onPressed: _isLoading ? null : _nextStep,
+                      isLoading: _isLoading,
+                      isAccent: true,
+                    ),
+                  ),
+                ],
               ),
-              if (_currentStep > 1) ...[
-                const SizedBox(height: AppDimensions.spacingM),
-                NeumorphicButton(
-                  text: 'Back',
-                  onPressed: _previousStep,
-                  isAccent: false,
-                ),
-              ],
             ],
           ),
         ),

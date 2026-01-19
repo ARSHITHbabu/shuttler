@@ -182,8 +182,23 @@ class ErrorHandler {
 
       case DioExceptionType.unknown:
         // Check if it's a network error
-        if (error.message?.contains('SocketException') == true ||
-            error.message?.contains('Network') == true) {
+        final errorMessage = error.message?.toLowerCase() ?? '';
+        if (errorMessage.contains('socketexception') == true ||
+            errorMessage.contains('network') == true ||
+            errorMessage.contains('no route to host') == true ||
+            errorMessage.contains('connection refused') == true ||
+            errorMessage.contains('connection reset') == true) {
+          // Provide more specific error message for "No route to host"
+          if (errorMessage.contains('no route to host') == true) {
+            return NetworkError(
+              'Cannot connect to server. Please ensure:\n'
+              '1. Backend server is running\n'
+              '2. Your device and computer are on the same network\n'
+              '3. The IP address in api_endpoints.dart is correct\n'
+              '4. Firewall is not blocking the connection',
+              error,
+            );
+          }
           return NetworkError('Network error. Please check your internet connection.', error);
         }
         return UnknownError('Network error. Please check your connection.', error);
@@ -192,6 +207,17 @@ class ErrorHandler {
         return UnknownError('Certificate error. Please contact support.', error);
 
       case DioExceptionType.connectionError:
+        final errorMessage = error.message?.toLowerCase() ?? '';
+        if (errorMessage.contains('no route to host') == true) {
+          return NetworkError(
+            'Cannot connect to server. Please ensure:\n'
+            '1. Backend server is running\n'
+            '2. Your device and computer are on the same network\n'
+            '3. The IP address in api_endpoints.dart is correct\n'
+            '4. Firewall is not blocking the connection',
+            error,
+          );
+        }
         return NetworkError('Connection error. Please check your internet connection.', error);
     }
   }

@@ -246,11 +246,14 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                   const SizedBox(height: AppDimensions.spacingXxl),
 
                   // Request Reset Button
-                  NeumorphicButton(
-                    text: _isLoading ? 'Sending...' : 'Send Reset Token',
-                    onPressed: _isLoading ? null : _requestReset,
-                    isAccent: true,
-                    icon: _isLoading ? null : Icons.send,
+                  SizedBox(
+                    width: double.infinity,
+                    child: NeumorphicButton(
+                      text: _isLoading ? 'Sending...' : 'Send Reset Token',
+                      onPressed: _isLoading ? null : _requestReset,
+                      isAccent: true,
+                      icon: _isLoading ? null : Icons.send,
+                    ),
                   ),
                 ] else ...[
                   // Reset Token Field
@@ -322,11 +325,14 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                   const SizedBox(height: AppDimensions.spacingXxl),
 
                   // Reset Password Button
-                  NeumorphicButton(
-                    text: _isLoading ? 'Resetting...' : 'Reset Password',
-                    onPressed: _isLoading ? null : _resetPassword,
-                    isAccent: true,
-                    icon: _isLoading ? null : Icons.check_circle,
+                  SizedBox(
+                    width: double.infinity,
+                    child: NeumorphicButton(
+                      text: _isLoading ? 'Resetting...' : 'Reset Password',
+                      onPressed: _isLoading ? null : _resetPassword,
+                      isAccent: true,
+                      icon: _isLoading ? null : Icons.check_circle,
+                    ),
                   ),
 
                   const SizedBox(height: AppDimensions.spacingL),

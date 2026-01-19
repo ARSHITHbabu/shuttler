@@ -159,9 +159,11 @@ class _AddCoachDialogState extends ConsumerState<AddCoachDialog> {
           'Send Invite Link',
           style: TextStyle(color: AppColors.textPrimary),
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 300),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
             if (hasPhone && hasEmail) ...[
               _InviteOption(
                 icon: Icons.chat,
@@ -218,6 +220,7 @@ class _AddCoachDialogState extends ConsumerState<AddCoachDialog> {
               ),
             ],
           ],
+          ),
         ),
         actions: [
           TextButton(
@@ -297,9 +300,14 @@ class _AddCoachDialogState extends ConsumerState<AddCoachDialog> {
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: Colors.transparent,
-      child: NeumorphicContainer(
-        padding: const EdgeInsets.all(AppDimensions.paddingL),
-        child: SingleChildScrollView(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.9,
+          maxHeight: MediaQuery.of(context).size.height * 0.9,
+        ),
+        child: NeumorphicContainer(
+          padding: const EdgeInsets.all(AppDimensions.paddingL),
+          child: SingleChildScrollView(
           child: Form(
             key: _formKey,
             child: Column(
@@ -371,14 +379,18 @@ class _AddCoachDialogState extends ConsumerState<AddCoachDialog> {
                   keyboardType: TextInputType.number,
                 ),
                 const SizedBox(height: AppDimensions.spacingL),
-                NeumorphicButton(
-                  text: _isLoading ? 'Sending...' : 'Invite Coach',
-                  onPressed: _isLoading ? null : _handleSendInvite,
-                  isAccent: true,
+                SizedBox(
+                  width: double.infinity,
+                  child: NeumorphicButton(
+                    text: _isLoading ? 'Sending...' : 'Invite Coach',
+                    onPressed: _isLoading ? null : _handleSendInvite,
+                    isAccent: true,
+                  ),
                 ),
               ],
             ),
           ),
+        ),
         ),
       ),
     );
@@ -427,21 +439,29 @@ class _InviteOption extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.all(AppDimensions.spacingM),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppDimensions.paddingM,
+          vertical: AppDimensions.paddingS,
+        ),
         decoration: BoxDecoration(
           color: AppColors.cardBackground,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: AppColors.border),
         ),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: AppColors.iconPrimary),
-            const SizedBox(width: AppDimensions.spacingM),
-            Text(
-              label,
-              style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 16,
+            Icon(icon, color: AppColors.iconPrimary, size: 20),
+            const SizedBox(width: AppDimensions.spacingS),
+            Flexible(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 14,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
