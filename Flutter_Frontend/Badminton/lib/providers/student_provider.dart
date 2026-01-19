@@ -3,6 +3,10 @@ import '../models/student.dart';
 import 'service_providers.dart';
 import 'batch_provider.dart';
 import 'dashboard_provider.dart';
+import 'attendance_provider.dart';
+import 'performance_provider.dart';
+import 'bmi_provider.dart';
+import 'fee_provider.dart';
 
 part 'student_provider.g.dart';
 
@@ -117,4 +121,121 @@ Future<Map<String, dynamic>> studentStats(StudentStatsRef ref) async {
     'active': students.where((s) => s.status == 'active').length,
     'inactive': students.where((s) => s.status != 'active').length,
   };
+}
+
+/// Provider for student dashboard data (stats and upcoming sessions)
+@riverpod
+Future<StudentDashboardData> studentDashboard(StudentDashboardRef ref, int studentId) async {
+  // Get student info
+  final student = await ref.watch(studentByIdProvider(studentId).future);
+  
+  // Get student batches
+  final batches = await ref.watch(studentBatchesProvider(studentId).future);
+  
+  // Calculate attendance rate
+  final attendanceRecords = await ref.watch(attendanceByStudentProvider(studentId).future);
+  double attendanceRate = 0.0;
+  if (attendanceRecords.isNotEmpty) {
+    final present = attendanceRecords.where((r) => r.status.toLowerCase() == 'present').length;
+    attendanceRate = (present / attendanceRecords.length) * 100;
+  }
+  
+  // Get latest performance
+  final performanceRecords = await ref.watch(performanceByStudentProvider(studentId).future);
+  double performanceScore = 0.0;
+  if (performanceRecords.isNotEmpty) {
+    performanceRecords.sort((a, b) => b.date.compareTo(a.date));
+    performanceScore = performanceRecords.first.averageRating;
+  }
+  
+  // Get latest BMI
+  final bmiRecords = await ref.watch(bmiByStudentProvider(studentId).future);
+  String bmiStatus = 'N/A';
+  if (bmiRecords.isNotEmpty) {
+    bmiRecords.sort((a, b) => b.date.compareTo(a.date));
+    final latestBmi = bmiRecords.first.bmi;
+    if (latestBmi < 18.5) {
+      bmiStatus = 'Underweight';
+    } else if (latestBmi < 25) {
+      bmiStatus = 'Normal';
+    } else if (latestBmi < 30) {
+      bmiStatus = 'Overweight';
+    } else {
+      bmiStatus = 'Obese';
+    }
+  }
+  
+  // Get fee status
+  final fees = await ref.watch(feeListProvider(studentId: studentId).future);
+  String feeStatus = 'N/A';
+  if (fees.isNotEmpty) {
+    final pendingFees = fees.where((f) => f.status != 'paid').length;
+    if (pendingFees == 0) {
+      feeStatus = 'All Paid';
+    } else {
+      feeStatus = '$pendingFees Pending';
+    }
+  }
+  
+  // Get upcoming sessions
+  final scheduleService = ref.watch(scheduleServiceProvider);
+  final now = DateTime.now();
+  final upcomingSessions = <Map<String, dynamic>>[];
+  
+  for (var batch in batches) {
+    try {
+      final schedules = await scheduleService.getSchedules(batchId: batch.id);
+      for (var schedule in schedules) {
+        if (schedule.date.isAfter(now)) {
+          upcomingSessions.add({
+            'batch_name': batch.name,
+            'time': schedule.startTime ?? '',
+            'location': schedule.location ?? '',
+            'date': schedule.date.toIso8601String(),
+          });
+        }
+      }
+    } catch (e) {
+      // Skip if error
+    }
+  }
+  
+  // Sort by date and limit to 5
+  upcomingSessions.sort((a, b) {
+    try {
+      final dateA = DateTime.parse(a['date'] as String);
+      final dateB = DateTime.parse(b['date'] as String);
+      return dateA.compareTo(dateB);
+    } catch (_) {
+      return 0;
+    }
+  });
+  
+  return StudentDashboardData(
+    studentName: student.name,
+    attendanceRate: attendanceRate,
+    performanceScore: performanceScore,
+    bmiStatus: bmiStatus,
+    feeStatus: feeStatus,
+    upcomingSessions: upcomingSessions.take(5).toList(),
+  );
+}
+
+/// Student dashboard data class
+class StudentDashboardData {
+  final String studentName;
+  final double attendanceRate;
+  final double performanceScore;
+  final String bmiStatus;
+  final String feeStatus;
+  final List<Map<String, dynamic>> upcomingSessions;
+  
+  StudentDashboardData({
+    required this.studentName,
+    required this.attendanceRate,
+    required this.performanceScore,
+    required this.bmiStatus,
+    required this.feeStatus,
+    required this.upcomingSessions,
+  });
 }

@@ -4,10 +4,11 @@ import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
-import '../../providers/service_providers.dart';
+import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/error_widget.dart';
 import '../../providers/auth_provider.dart';
-import '../../core/constants/api_endpoints.dart';
+import '../../providers/performance_provider.dart';
+import '../../models/performance.dart';
 
 /// Student Performance Screen - READ-ONLY view of performance records
 /// Students can view their skill ratings and progress but cannot edit
@@ -19,265 +20,175 @@ class StudentPerformanceScreen extends ConsumerStatefulWidget {
 }
 
 class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScreen> {
-  bool _isLoading = true;
-  List<Map<String, dynamic>> _performanceRecords = [];
-  Map<String, dynamic> _latestPerformance = {};
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadData();
-  }
-
-  Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    try {
-      // Get user ID from auth provider (preferred) or storage (fallback)
-      int? userId;
-      
-      // Try to get from auth provider first
-      final authStateAsync = ref.read(authProvider);
-      final authState = authStateAsync.value;
-      
-      if (authState is Authenticated) {
-        userId = authState.userId;
-      }
-      
-      // Fallback: try to get from storage if auth provider doesn't have it
-      if (userId == null) {
-        final storageService = ref.read(storageServiceProvider);
-        
-        // Ensure storage is initialized
-        if (!storageService.isInitialized) {
-          await storageService.init();
-        }
-        
-        userId = storageService.getUserId();
-      }
-      
-      if (userId == null) {
-        throw Exception('User not logged in. Please try logging in again.');
-      }
-
-      final apiService = ref.read(apiServiceProvider);
-
-      // Load performance records
-      try {
-        final response = await apiService.get(
-          ApiEndpoints.performance,
-          queryParameters: {'student_id': userId},
-        );
-        if (response.statusCode == 200) {
-          // Handle different response formats
-          if (response.data is List) {
-            _performanceRecords = List<Map<String, dynamic>>.from(response.data);
-          } else if (response.data is Map) {
-            _performanceRecords = List<Map<String, dynamic>>.from(
-              response.data['records'] ?? response.data['results'] ?? []
-            );
-          }
-          
-          if (_performanceRecords.isNotEmpty) {
-            _latestPerformance = _performanceRecords.first;
-          }
-        }
-      } catch (e) {
-        // Endpoint may not exist yet - use empty data
-        _performanceRecords = [];
-        _latestPerformance = {};
-      }
-
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _error = e.toString().replaceAll('Exception: ', '');
-        });
-      }
-    }
-  }
+  // Removed manual state management - using providers instead
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: RefreshIndicator(
-        onRefresh: _loadData,
-        child: CustomScrollView(
-          slivers: [
-            // App Bar
-            SliverAppBar(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              pinned: true,
-              title: Text(
-                'My Performance',
-                style: TextStyle(
-                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              centerTitle: true,
-            ),
-
-            // Content
-            SliverToBoxAdapter(
-              child: _isLoading
-                  ? const SizedBox(
-                      height: 400,
-                      child: Center(child: LoadingSpinner()),
-                    )
-                  : _error != null
-                      ? _buildErrorWidget(isDark)
-                      : _performanceRecords.isEmpty
-                          ? _buildEmptyState(isDark)
-                          : Column(
-                              children: [
-                                // Latest Performance Overview
-                                _buildLatestPerformance(isDark),
-
-                                const SizedBox(height: AppDimensions.spacingL),
-
-                                // Skill Breakdown
-                                _buildSkillBreakdown(isDark),
-
-                                const SizedBox(height: AppDimensions.spacingL),
-
-                                // Performance History Header
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: AppDimensions.paddingL,
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        'Performance History',
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w600,
-                                          color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                                        ),
-                                      ),
-                                      Text(
-                                        '${_performanceRecords.length} records',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-
-                                const SizedBox(height: AppDimensions.spacingM),
-                              ],
-                            ),
-            ),
-
-            // Performance Records List
-            if (!_isLoading && _error == null && _performanceRecords.isNotEmpty)
-              SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final record = _performanceRecords[index];
-                    return _PerformanceRecordCard(
-                      record: record,
-                      isDark: isDark,
-                    );
-                  },
-                  childCount: _performanceRecords.length,
-                ),
-              ),
-
-            // Bottom spacing
-            const SliverToBoxAdapter(
-              child: SizedBox(height: 100),
-            ),
-          ],
+    // Get user ID from auth provider
+    final authStateAsync = ref.watch(authProvider);
+    
+    return authStateAsync.when(
+      loading: () => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: const Center(child: ListSkeleton(itemCount: 5)),
+      ),
+      error: (error, stack) => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: ErrorDisplay(
+          message: 'Failed to load user data: ${error.toString()}',
+          onRetry: () => ref.invalidate(authProvider),
         ),
       ),
+      data: (authState) {
+        if (authState is! Authenticated) {
+          return Scaffold(
+            backgroundColor: Colors.transparent,
+            body: ErrorDisplay(
+              message: 'Please log in to view performance records',
+              onRetry: () => ref.invalidate(authProvider),
+            ),
+          );
+        }
+
+        final userId = authState.userId;
+        final performanceAsync = ref.watch(performanceByStudentProvider(userId));
+
+        return Scaffold(
+          backgroundColor: Colors.transparent,
+          body: RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(performanceByStudentProvider(userId));
+            },
+            child: CustomScrollView(
+              slivers: [
+                // App Bar
+                SliverAppBar(
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  pinned: true,
+                  title: Text(
+                    'My Performance',
+                    style: TextStyle(
+                      color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  centerTitle: true,
+                ),
+
+                // Content
+                SliverToBoxAdapter(
+                  child: performanceAsync.when(
+                    loading: () => const SizedBox(
+                      height: 400,
+                      child: ListSkeleton(itemCount: 3),
+                    ),
+                    error: (error, stack) => ErrorDisplay(
+                      message: 'Failed to load performance records: ${error.toString()}',
+                      onRetry: () => ref.invalidate(performanceByStudentProvider(userId)),
+                    ),
+                    data: (performanceRecords) {
+                      if (performanceRecords.isEmpty) {
+                        return EmptyState.noPerformance();
+                      }
+
+                      // Sort by date descending (latest first)
+                      final sortedRecords = List<Performance>.from(performanceRecords)
+                        ..sort((a, b) => b.date.compareTo(a.date));
+                      final latestPerformance = sortedRecords.first;
+
+                      return Column(
+                        children: [
+                          // Latest Performance Overview
+                          _buildLatestPerformance(isDark, latestPerformance),
+
+                          const SizedBox(height: AppDimensions.spacingL),
+
+                          // Skill Breakdown
+                          _buildSkillBreakdown(isDark, latestPerformance),
+
+                          const SizedBox(height: AppDimensions.spacingL),
+
+                          // Performance History Header
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppDimensions.paddingL,
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Performance History',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                                  ),
+                                ),
+                                Text(
+                                  '${sortedRecords.length} records',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: AppDimensions.spacingM),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+
+                // Performance Records List
+                performanceAsync.when(
+                  loading: () => const SliverToBoxAdapter(child: SizedBox()),
+                  error: (_, __) => const SliverToBoxAdapter(child: SizedBox()),
+                  data: (performanceRecords) {
+                    if (performanceRecords.isEmpty) {
+                      return const SliverToBoxAdapter(child: SizedBox());
+                    }
+
+                    // Sort by date descending (latest first)
+                    final sortedRecords = List<Performance>.from(performanceRecords)
+                      ..sort((a, b) => b.date.compareTo(a.date));
+
+                    return SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final record = sortedRecords[index];
+                          return _PerformanceRecordCard(
+                            record: record,
+                            isDark: isDark,
+                          );
+                        },
+                        childCount: sortedRecords.length,
+                      ),
+                    );
+                  },
+                ),
+
+                // Bottom spacing
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 100),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildErrorWidget(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.all(AppDimensions.paddingL),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.error_outline,
-            size: 48,
-            color: isDark ? AppColors.error : AppColorsLight.error,
-          ),
-          const SizedBox(height: AppDimensions.spacingM),
-          Text(
-            _error!,
-            style: TextStyle(
-              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: AppDimensions.spacingL),
-          ElevatedButton(
-            onPressed: _loadData,
-            child: const Text('Retry'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.all(AppDimensions.paddingXl),
-      child: Column(
-        children: [
-          const SizedBox(height: AppDimensions.spacingXxl),
-          Icon(
-            Icons.trending_up,
-            size: 64,
-            color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
-          ),
-          const SizedBox(height: AppDimensions.spacingM),
-          Text(
-            'No performance records yet',
-            style: TextStyle(
-              fontSize: 16,
-              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-            ),
-          ),
-          const SizedBox(height: AppDimensions.spacingS),
-          Text(
-            'Your coach will record your performance after sessions',
-            style: TextStyle(
-              fontSize: 14,
-              color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLatestPerformance(bool isDark) {
-    final avgScore = _calculateAverageScore(_latestPerformance);
-    final date = _latestPerformance['date']?.toString() ?? '';
+  Widget _buildLatestPerformance(bool isDark, Performance latestPerformance) {
+    final avgScore = latestPerformance.averageRating;
+    final date = latestPerformance.date;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
@@ -336,7 +247,7 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
             const SizedBox(height: AppDimensions.spacingM),
 
             Text(
-              _formatDate(date),
+              _formatDate(date.toIso8601String()),
               style: TextStyle(
                 fontSize: 12,
                 color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
@@ -348,13 +259,13 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
     );
   }
 
-  Widget _buildSkillBreakdown(bool isDark) {
+  Widget _buildSkillBreakdown(bool isDark, Performance latestPerformance) {
     final skills = [
-      {'name': 'Serve', 'key': 'serve_rating', 'icon': Icons.sports_tennis},
-      {'name': 'Smash', 'key': 'smash_rating', 'icon': Icons.bolt},
-      {'name': 'Footwork', 'key': 'footwork_rating', 'icon': Icons.directions_run},
-      {'name': 'Defense', 'key': 'defense_rating', 'icon': Icons.shield},
-      {'name': 'Stamina', 'key': 'stamina_rating', 'icon': Icons.favorite},
+      {'name': 'Serve', 'rating': latestPerformance.serve, 'icon': Icons.sports_tennis},
+      {'name': 'Smash', 'rating': latestPerformance.smash, 'icon': Icons.bolt},
+      {'name': 'Footwork', 'rating': latestPerformance.footwork, 'icon': Icons.directions_run},
+      {'name': 'Defense', 'rating': latestPerformance.defense, 'icon': Icons.shield},
+      {'name': 'Stamina', 'rating': latestPerformance.stamina, 'icon': Icons.favorite},
     ];
 
     return Padding(
@@ -375,7 +286,7 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
             padding: const EdgeInsets.all(AppDimensions.paddingM),
             child: Column(
               children: skills.map((skill) {
-                final rating = (_latestPerformance[skill['key']] ?? 0).toDouble();
+                final rating = (skill['rating'] as int).toDouble();
                 return _SkillBar(
                   name: skill['name'] as String,
                   rating: rating,
@@ -390,21 +301,7 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
     );
   }
 
-  double _calculateAverageScore(Map<String, dynamic> record) {
-    final skills = ['serve_rating', 'smash_rating', 'footwork_rating', 'defense_rating', 'stamina_rating'];
-    double total = 0;
-    int count = 0;
-
-    for (var skill in skills) {
-      final value = record[skill];
-      if (value != null) {
-        total += (value as num).toDouble();
-        count++;
-      }
-    }
-
-    return count > 0 ? total / count : 0;
-  }
+  // Removed _calculateAverageScore - using Performance.averageRating instead
 
   Color _getScoreColor(double score, bool isDark) {
     if (score >= 4) {
@@ -528,7 +425,7 @@ class _SkillBar extends StatelessWidget {
 }
 
 class _PerformanceRecordCard extends StatelessWidget {
-  final Map<String, dynamic> record;
+  final Performance record;
   final bool isDark;
 
   const _PerformanceRecordCard({
@@ -538,9 +435,9 @@ class _PerformanceRecordCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final date = record['date']?.toString() ?? '';
-    final comments = record['comments']?.toString() ?? '';
-    final avgScore = _calculateAverageScore(record);
+    final date = record.date;
+    final comments = record.comments ?? '';
+    final avgScore = record.averageRating;
 
     return Padding(
       padding: const EdgeInsets.symmetric(
@@ -556,7 +453,7 @@ class _PerformanceRecordCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  _formatDate(date),
+                  _formatDate(date.toIso8601String()),
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -592,27 +489,27 @@ class _PerformanceRecordCard extends StatelessWidget {
               children: [
                 _MiniSkillRating(
                   label: 'Serve',
-                  rating: (record['serve_rating'] ?? 0).toDouble(),
+                  rating: record.serve.toDouble(),
                   isDark: isDark,
                 ),
                 _MiniSkillRating(
                   label: 'Smash',
-                  rating: (record['smash_rating'] ?? 0).toDouble(),
+                  rating: record.smash.toDouble(),
                   isDark: isDark,
                 ),
                 _MiniSkillRating(
                   label: 'Footwork',
-                  rating: (record['footwork_rating'] ?? 0).toDouble(),
+                  rating: record.footwork.toDouble(),
                   isDark: isDark,
                 ),
                 _MiniSkillRating(
                   label: 'Defense',
-                  rating: (record['defense_rating'] ?? 0).toDouble(),
+                  rating: record.defense.toDouble(),
                   isDark: isDark,
                 ),
                 _MiniSkillRating(
                   label: 'Stamina',
-                  rating: (record['stamina_rating'] ?? 0).toDouble(),
+                  rating: record.stamina.toDouble(),
                   isDark: isDark,
                 ),
               ],
@@ -657,21 +554,7 @@ class _PerformanceRecordCard extends StatelessWidget {
     );
   }
 
-  double _calculateAverageScore(Map<String, dynamic> record) {
-    final skills = ['serve_rating', 'smash_rating', 'footwork_rating', 'defense_rating', 'stamina_rating'];
-    double total = 0;
-    int count = 0;
-
-    for (var skill in skills) {
-      final value = record[skill];
-      if (value != null) {
-        total += (value as num).toDouble();
-        count++;
-      }
-    }
-
-    return count > 0 ? total / count : 0;
-  }
+  // Removed _calculateAverageScore - using Performance.averageRating instead
 
   Color _getScoreColor(double score, bool isDark) {
     if (score >= 4) {

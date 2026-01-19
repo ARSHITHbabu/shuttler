@@ -4,10 +4,10 @@ import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
-import '../../providers/service_providers.dart';
+import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/error_widget.dart';
 import '../../providers/auth_provider.dart';
-import '../../core/constants/api_endpoints.dart';
+import '../../providers/student_provider.dart';
 
 /// Student Home Screen - Dashboard overview
 /// READ-ONLY view of student's personal statistics and upcoming sessions
@@ -19,244 +19,95 @@ class StudentHomeScreen extends ConsumerStatefulWidget {
 }
 
 class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
-  bool _isLoading = true;
-  String _studentName = '';
-  Map<String, dynamic> _stats = {};
-  List<Map<String, dynamic>> _upcomingSessions = [];
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadData();
-  }
-
-  Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    try {
-      // Get user ID from auth provider (preferred) or storage (fallback)
-      int? userId;
-      
-      // Try to get from auth provider first
-      final authStateAsync = ref.read(authProvider);
-      final authState = authStateAsync.value;
-      
-      if (authState is Authenticated) {
-        userId = authState.userId;
-      }
-      
-      // Fallback: try to get from storage if auth provider doesn't have it
-      if (userId == null) {
-        final storageService = ref.read(storageServiceProvider);
-        
-        // Ensure storage is initialized
-        if (!storageService.isInitialized) {
-          await storageService.init();
-        }
-        
-        userId = storageService.getUserId();
-      }
-      
-      if (userId == null) {
-        throw Exception('User not logged in. Please try logging in again.');
-      }
-
-      final apiService = ref.read(apiServiceProvider);
-
-      // Load student details
-      try {
-        final studentResponse = await apiService.get(ApiEndpoints.studentById(userId));
-        if (studentResponse.statusCode == 200) {
-          final studentData = studentResponse.data;
-          _studentName = studentData['name'] ?? 'Student';
-        }
-      } catch (e) {
-        // Student endpoint may not exist or student not found, use default name
-        _studentName = 'Student';
-      }
-
-      // Load student stats - calculate from available data instead of using stats endpoint
-      // Stats endpoint may not exist, so we'll calculate from other endpoints
-      try {
-        // Try to get stats from a dedicated endpoint if it exists
-        final statsResponse = await apiService.get('${ApiEndpoints.studentById(userId)}/stats');
-        if (statsResponse.statusCode == 200) {
-          _stats = Map<String, dynamic>.from(statsResponse.data);
-        } else {
-          // Calculate stats from other endpoints
-          _stats = await _calculateStats(apiService, userId);
-        }
-      } catch (e) {
-        // Stats endpoint doesn't exist, calculate from other data
-        _stats = await _calculateStats(apiService, userId);
-      }
-
-      // Load upcoming sessions - get from schedules endpoint
-      try {
-        // Get student's batches first
-        final batchesResponse = await apiService.get(
-          ApiEndpoints.batches,
-          queryParameters: {'student_id': userId},
-        );
-        
-        if (batchesResponse.statusCode == 200) {
-          final batches = batchesResponse.data is List 
-              ? batchesResponse.data 
-              : (batchesResponse.data['results'] ?? batchesResponse.data['batches'] ?? []);
-          
-          // Get upcoming sessions from all batches
-          final now = DateTime.now();
-          final upcomingSessionsList = <Map<String, dynamic>>[];
-          
-          for (var batch in batches) {
-            final batchId = batch['id'];
-            if (batchId != null) {
-              try {
-                // Use correct endpoint: /schedules/batch/{batch_id} instead of /schedules/?batch_id={id}
-                final schedulesResponse = await apiService.get(
-                  '/schedules/batch/$batchId',
-                );
-                  
-                if (schedulesResponse.statusCode == 200) {
-                  final schedules = schedulesResponse.data is List
-                      ? schedulesResponse.data
-                      : (schedulesResponse.data['results'] ?? schedulesResponse.data['schedules'] ?? []);
-                  
-                  for (var schedule in schedules) {
-                    final scheduleDate = schedule['date'] ?? schedule['session_date'];
-                    if (scheduleDate != null) {
-                      try {
-                        final date = DateTime.parse(scheduleDate.toString());
-                        if (date.isAfter(now)) {
-                          upcomingSessionsList.add({
-                            'batch_name': batch['name'] ?? 'Unknown Batch',
-                            'time': schedule['time'] ?? schedule['start_time'] ?? '',
-                            'location': schedule['location'] ?? schedule['venue'] ?? '',
-                            'date': scheduleDate,
-                          });
-                        }
-                      } catch (_) {
-                        // Skip invalid dates
-                      }
-                    }
-                  }
-                }
-              } catch (_) {
-                // Skip if schedule fetch fails (endpoint might not exist or other errors)
-              }
-            }
-          }
-          
-          // Sort by date and limit to next 5
-          upcomingSessionsList.sort((a, b) {
-            try {
-              final dateA = DateTime.parse(a['date'].toString());
-              final dateB = DateTime.parse(b['date'].toString());
-              return dateA.compareTo(dateB);
-            } catch (_) {
-              return 0;
-            }
-          });
-          
-          _upcomingSessions = upcomingSessionsList.take(5).toList();
-        }
-      } catch (e) {
-        // Sessions endpoint may not exist yet
-        _upcomingSessions = [];
-      }
-
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _error = e.toString().replaceAll('Exception: ', '');
-        });
-      }
-    }
-  }
+  // Removed manual state management - using providers instead
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    if (_isLoading) {
-      return const Center(child: LoadingSpinner());
-    }
-
-    if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 48,
-              color: isDark ? AppColors.error : AppColorsLight.error,
-            ),
-            const SizedBox(height: AppDimensions.spacingM),
-            Text(
-              _error!,
-              style: TextStyle(
-                color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppDimensions.spacingL),
-            ElevatedButton(
-              onPressed: _loadData,
-              child: const Text('Retry'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: _loadData,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            _buildHeader(isDark),
-
-            // Stats Grid
-            _buildStatsGrid(isDark),
-
-            const SizedBox(height: AppDimensions.spacingL),
-
-            // Today's Insights
-            _buildTodaysInsights(isDark),
-
-            const SizedBox(height: AppDimensions.spacingL),
-
-            // Upcoming Sessions
-            _buildUpcomingSessions(isDark),
-
-            const SizedBox(height: AppDimensions.spacingL),
-
-            // Quick Actions
-            _buildQuickActions(isDark),
-
-            const SizedBox(height: 100), // Space for bottom nav
-          ],
+    // Get user ID from auth provider
+    final authStateAsync = ref.watch(authProvider);
+    
+    return authStateAsync.when(
+      loading: () => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: const Center(child: DashboardSkeleton()),
+      ),
+      error: (error, stack) => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: ErrorDisplay(
+          message: 'Failed to load user data: ${error.toString()}',
+          onRetry: () => ref.invalidate(authProvider),
         ),
       ),
+      data: (authState) {
+        if (authState is! Authenticated) {
+          return Scaffold(
+            backgroundColor: Colors.transparent,
+            body: ErrorDisplay(
+              message: 'Please log in to view dashboard',
+              onRetry: () => ref.invalidate(authProvider),
+            ),
+          );
+        }
+
+        final userId = authState.userId;
+        final dashboardAsync = ref.watch(studentDashboardProvider(userId));
+
+        return RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(studentDashboardProvider(userId));
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: dashboardAsync.when(
+              loading: () => const DashboardSkeleton(),
+              error: (error, stack) => ErrorDisplay(
+                message: 'Failed to load dashboard: ${error.toString()}',
+                onRetry: () => ref.invalidate(studentDashboardProvider(userId)),
+              ),
+              data: (dashboardData) => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  _buildHeader(isDark, dashboardData.studentName),
+
+                  // Stats Grid
+                  _buildStatsGrid(
+                    isDark,
+                    dashboardData.attendanceRate,
+                    dashboardData.performanceScore,
+                    dashboardData.bmiStatus,
+                    dashboardData.feeStatus,
+                  ),
+
+                  const SizedBox(height: AppDimensions.spacingL),
+
+                  // Today's Insights
+                  _buildTodaysInsights(isDark, dashboardData.attendanceRate),
+
+                  const SizedBox(height: AppDimensions.spacingL),
+
+                  // Upcoming Sessions
+                  _buildUpcomingSessions(isDark, dashboardData.upcomingSessions),
+
+                  const SizedBox(height: AppDimensions.spacingL),
+
+                  // Quick Actions
+                  _buildQuickActions(isDark),
+
+                  const SizedBox(height: 100), // Space for bottom nav
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildHeader(bool isDark) {
+  Widget _buildHeader(bool isDark, String studentName) {
     return Padding(
       padding: const EdgeInsets.all(AppDimensions.paddingL),
       child: Column(
@@ -271,7 +122,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            _studentName,
+            studentName,
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w600,
@@ -291,11 +142,13 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
     );
   }
 
-  Widget _buildStatsGrid(bool isDark) {
-    final attendanceRate = (_stats['attendance_rate'] ?? 0.0).toDouble();
-    final performanceScore = (_stats['performance_score'] ?? 0.0).toDouble();
-    final bmiStatus = _stats['bmi_status']?.toString() ?? 'N/A';
-    final feeStatus = _stats['fee_status']?.toString() ?? 'N/A';
+  Widget _buildStatsGrid(
+    bool isDark,
+    double attendanceRate,
+    double performanceScore,
+    String bmiStatus,
+    String feeStatus,
+  ) {
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
@@ -339,8 +192,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
     );
   }
 
-  Widget _buildTodaysInsights(bool isDark) {
-    final attendanceRate = (_stats['attendance_rate'] ?? 0.0).toDouble();
+  Widget _buildTodaysInsights(bool isDark, double attendanceRate) {
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
@@ -429,7 +281,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
     );
   }
 
-  Widget _buildUpcomingSessions(bool isDark) {
+  Widget _buildUpcomingSessions(bool isDark, List<Map<String, dynamic>> upcomingSessions) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
       child: Column(
@@ -446,7 +298,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
           const SizedBox(height: AppDimensions.spacingM),
           NeumorphicContainer(
             padding: const EdgeInsets.all(AppDimensions.paddingM),
-            child: _upcomingSessions.isEmpty
+            child: upcomingSessions.isEmpty
                 ? Padding(
                     padding: const EdgeInsets.all(AppDimensions.spacingM),
                     child: Center(
@@ -470,9 +322,9 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                     ),
                   )
                 : Column(
-                    children: _upcomingSessions.asMap().entries.map((entry) {
+                    children: upcomingSessions.asMap().entries.map((entry) {
                       final session = entry.value;
-                      final isLast = entry.key == _upcomingSessions.length - 1;
+                      final isLast = entry.key == upcomingSessions.length - 1;
                       return Column(
                         children: [
                           _UpcomingSessionItem(
@@ -543,122 +395,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
     );
   }
 
-  Future<Map<String, dynamic>> _calculateStats(dynamic apiService, int userId) async {
-    // Default stats
-    final stats = {
-      'attendance_rate': 0.0,
-      'performance_score': 0.0,
-      'bmi_status': 'N/A',
-      'fee_status': 'N/A',
-      'pending_fees': 0.0,
-    };
-
-    try {
-      // Calculate attendance rate
-      try {
-        final attendanceResponse = await apiService.get(
-          ApiEndpoints.attendance,
-          queryParameters: {'student_id': userId},
-        );
-        if (attendanceResponse.statusCode == 200) {
-          final records = attendanceResponse.data is List
-              ? attendanceResponse.data
-              : (attendanceResponse.data['results'] ?? attendanceResponse.data['records'] ?? []);
-          
-          if (records.isNotEmpty) {
-            final total = records.length;
-            final present = records.where((r) => 
-              (r['status']?.toString().toLowerCase() ?? '') == 'present'
-            ).length;
-            stats['attendance_rate'] = total > 0 ? (present / total * 100) : 0.0;
-          }
-        }
-      } catch (_) {
-        // Attendance endpoint may not exist
-      }
-
-      // Calculate performance score
-      try {
-        final performanceResponse = await apiService.get(
-          ApiEndpoints.performance,
-          queryParameters: {'student_id': userId},
-        );
-        if (performanceResponse.statusCode == 200) {
-          final records = performanceResponse.data is List
-              ? performanceResponse.data
-              : (performanceResponse.data['results'] ?? performanceResponse.data['records'] ?? []);
-          
-          if (records.isNotEmpty) {
-            // Get latest performance record
-            final latest = records.first;
-            final skills = ['serve_rating', 'smash_rating', 'footwork_rating', 'defense_rating', 'stamina_rating'];
-            double total = 0;
-            int count = 0;
-            
-            for (var skill in skills) {
-              final value = latest[skill];
-              if (value != null) {
-                total += (value as num).toDouble();
-                count++;
-              }
-            }
-            
-            stats['performance_score'] = count > 0 ? (total / count) : 0.0;
-          }
-        }
-      } catch (_) {
-        // Performance endpoint may not exist
-      }
-
-      // Get BMI status
-      try {
-        final bmiResponse = await apiService.get(
-          ApiEndpoints.bmiRecords,
-          queryParameters: {'student_id': userId},
-        );
-        if (bmiResponse.statusCode == 200) {
-          final records = bmiResponse.data is List
-              ? bmiResponse.data
-              : (bmiResponse.data['results'] ?? bmiResponse.data['records'] ?? []);
-          
-          if (records.isNotEmpty) {
-            final latest = records.first;
-            stats['bmi_status'] = latest['status']?.toString() ?? 'N/A';
-          }
-        }
-      } catch (_) {
-        // BMI endpoint may not exist
-      }
-
-      // Get fee status
-      try {
-        final feesResponse = await apiService.get(
-          ApiEndpoints.fees,
-          queryParameters: {'student_id': userId},
-        );
-        if (feesResponse.statusCode == 200) {
-          final records = feesResponse.data is List
-              ? feesResponse.data
-              : (feesResponse.data['results'] ?? feesResponse.data['records'] ?? []);
-          
-          if (records.isNotEmpty) {
-            final pendingFees = records.where((f) => 
-              (f['status']?.toString().toLowerCase() ?? '') != 'paid'
-            ).length;
-            
-            stats['fee_status'] = pendingFees > 0 ? 'Pending' : 'Paid';
-            stats['pending_fees'] = pendingFees.toDouble();
-          }
-        }
-      } catch (_) {
-        // Fees endpoint may not exist
-      }
-    } catch (_) {
-      // If any calculation fails, return defaults
-    }
-
-    return stats;
-  }
+  // Removed _calculateStats - now handled by studentDashboardProvider
 
   String _getFormattedDate() {
     final now = DateTime.now();
