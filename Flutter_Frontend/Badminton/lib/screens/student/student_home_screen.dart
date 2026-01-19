@@ -158,7 +158,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
         physics: const NeverScrollableScrollPhysics(),
         crossAxisSpacing: AppDimensions.spacingM,
         mainAxisSpacing: AppDimensions.spacingM,
-        childAspectRatio: 1.1,
+        childAspectRatio: 0.85,
         children: [
           _StatCard(
             icon: Icons.check_circle_outline,
@@ -465,6 +465,7 @@ class _StatCard extends StatelessWidget {
     return NeumorphicContainer(
       padding: const EdgeInsets.all(AppDimensions.paddingM),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
@@ -481,22 +482,30 @@ class _StatCard extends StatelessWidget {
               color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
             ),
           ),
-          const SizedBox(height: AppDimensions.spacingM),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w600,
-              color: valueColor ?? (isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
+          const SizedBox(height: AppDimensions.spacingS),
+          Flexible(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w600,
+                color: valueColor ?? (isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
+                height: 1.2,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Text(
             label,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 13,
               color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+              height: 1.2,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

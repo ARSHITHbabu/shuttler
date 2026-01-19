@@ -9,8 +9,9 @@ class ApiEndpoints {
       return 'http://localhost:8000';
     }
     // Use your computer's local network IP address
-    // Your computer IP: 192.168.1.7 (as of Jan 12, 2026)
-    return 'http://192.168.1.7:8000';
+    // Run get_local_ip.ps1 to find your current IP address
+    // Current IP: 192.168.1.6 (detected automatically)
+    return 'http://192.168.1.6:8000';
   }
 
   // Authentication
