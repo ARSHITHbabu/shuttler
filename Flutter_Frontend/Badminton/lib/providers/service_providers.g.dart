@@ -337,6 +337,26 @@ final notificationServiceProvider =
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef NotificationServiceRef = AutoDisposeProviderRef<NotificationService>;
+String _$tournamentServiceHash() => r'e001e925ec2be8b52f463cc0b28b6faca649f290';
+
+/// Provider for TournamentService singleton
+///
+/// Copied from [tournamentService].
+@ProviderFor(tournamentService)
+final tournamentServiceProvider =
+    AutoDisposeProvider<TournamentService>.internal(
+      tournamentService,
+      name: r'tournamentServiceProvider',
+      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+          ? null
+          : _$tournamentServiceHash,
+      dependencies: null,
+      allTransitiveDependencies: null,
+    );
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef TournamentServiceRef = AutoDisposeProviderRef<TournamentService>;
 String _$connectivityServiceHash() =>
     r'2514faa3d7f3227d473e300af7d0188339855ef3';
 
