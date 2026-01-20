@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import 'cached_profile_image.dart';
@@ -88,17 +89,20 @@ class _ProfileImagePickerState extends State<ProfileImagePicker> {
     try {
       final XFile? image = await _picker.pickImage(
         source: source,
-        maxWidth: 1024,
-        maxHeight: 1024,
-        imageQuality: 85,
+        maxWidth: 2048,
+        maxHeight: 2048,
+        imageQuality: 90,
       );
 
       if (image != null) {
-        final file = File(image.path);
-        setState(() {
-          _pickedImage = file;
-        });
-        widget.onImagePicked?.call(file);
+        // Crop the image
+        final croppedFile = await _cropImage(File(image.path));
+        if (croppedFile != null) {
+          setState(() {
+            _pickedImage = croppedFile;
+          });
+          widget.onImagePicked?.call(croppedFile);
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -109,6 +113,47 @@ class _ProfileImagePickerState extends State<ProfileImagePicker> {
           ),
         );
       }
+    }
+  }
+
+  Future<File?> _cropImage(File imageFile) async {
+    try {
+      final croppedFile = await ImageCropper().cropImage(
+        sourcePath: imageFile.path,
+        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Crop Image',
+            toolbarColor: AppColors.accent,
+            toolbarWidgetColor: Colors.white,
+            initAspectRatio: CropAspectRatioPreset.square,
+            lockAspectRatio: true,
+          ),
+          IOSUiSettings(
+            title: 'Crop Image',
+            aspectRatioLockEnabled: true,
+          ),
+        ],
+        compressFormat: ImageCompressFormat.jpg,
+        compressQuality: 85,
+      );
+
+      if (croppedFile != null) {
+        return File(croppedFile.path);
+      }
+      return null;
+    } catch (e) {
+      // If cropping fails, return original image
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error cropping image: $e. Using original image.'),
+            backgroundColor: AppColors.warning,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+      return imageFile;
     }
   }
 

@@ -698,14 +698,18 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         csvContent += 'Pending Amount,${data['pendingAmount']}\n';
       }
       
-      // In a real implementation, you would save this to a file
-      // For now, we'll show it in a dialog or copy to clipboard
-      SuccessSnackbar.show(context, 'CSV data generated. File export requires path_provider package.');
-      
-      // TODO: Implement file saving with path_provider
-      // final directory = await getApplicationDocumentsDirectory();
-      // final file = File('${directory.path}/report_${DateTime.now().millisecondsSinceEpoch}.csv');
-      // await file.writeAsString(csvContent);
+      // Save CSV to file
+      final directory = await getApplicationDocumentsDirectory();
+      final fileName = 'report_${DateTime.now().millisecondsSinceEpoch}.csv';
+      final file = File('${directory.path}/$fileName');
+      await file.writeAsString(csvContent);
+
+      if (mounted) {
+        SuccessSnackbar.show(
+          context,
+          'CSV exported successfully to: ${file.path}',
+        );
+      }
       
     } catch (e) {
       SuccessSnackbar.showError(context, 'Failed to export CSV: ${e.toString()}');

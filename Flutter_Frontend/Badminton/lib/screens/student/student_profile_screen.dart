@@ -8,9 +8,13 @@ import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/neumorphic_button.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/error_widget.dart';
+import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/profile_image_picker.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/student_provider.dart';
+import '../../models/student.dart';
 
 /// Student Profile Screen - View and edit profile information
 /// Students can view all their profile data and edit certain fields
@@ -24,26 +28,15 @@ class StudentProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
-  bool _isLoading = true;
   bool _isSaving = false;
   bool _isEditing = false;
   bool _isUploadingImage = false;
-  Map<String, dynamic> _studentData = {};
-  String? _error;
-  File? _selectedImage;
-  String? _profilePhotoUrl;
 
   // Controllers for editable fields
   final _phoneController = TextEditingController();
   final _guardianNameController = TextEditingController();
   final _guardianPhoneController = TextEditingController();
   final _addressController = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _loadData();
-  }
 
   @override
   void dispose() {
@@ -54,81 +47,19 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     super.dispose();
   }
 
-  Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    try {
-      // Get user ID from auth provider (preferred) or storage (fallback)
-      int? userId;
-      
-      // Try to get from auth provider first
-      final authStateAsync = ref.read(authProvider);
-      final authState = authStateAsync.value;
-      
-      if (authState is Authenticated) {
-        userId = authState.userId;
-      }
-      
-      // Fallback: try to get from storage if auth provider doesn't have it
-      if (userId == null) {
-        final storageService = ref.read(storageServiceProvider);
-        
-        // Ensure storage is initialized
-        if (!storageService.isInitialized) {
-          await storageService.init();
-        }
-        
-        userId = storageService.getUserId();
-      }
-      
-      if (userId == null) {
-        throw Exception('User not logged in. Please try logging in again.');
-      }
-
-      final apiService = ref.read(apiServiceProvider);
-      final response = await apiService.get('/api/students/$userId');
-      if (response.statusCode == 200) {
-        _studentData = Map<String, dynamic>.from(response.data);
-        _profilePhotoUrl = _studentData['profile_photo']?.toString();
-        _populateControllers();
-      }
-
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _error = e.toString().replaceAll('Exception: ', '');
-        });
-      }
-    }
-  }
-
-  void _populateControllers() {
-    _phoneController.text = _studentData['phone']?.toString() ?? '';
-    _guardianNameController.text = _studentData['guardian_name']?.toString() ?? '';
-    _guardianPhoneController.text = _studentData['guardian_phone']?.toString() ?? '';
-    _addressController.text = _studentData['address']?.toString() ?? '';
+  void _populateControllers(Student student) {
+    _phoneController.text = student.phone;
+    _guardianNameController.text = student.guardianName ?? '';
+    _guardianPhoneController.text = student.guardianPhone ?? '';
+    _addressController.text = student.address ?? '';
   }
 
   Future<void> _handleImagePicked(File? image) async {
     if (image == null) {
-      setState(() {
-        _selectedImage = null;
-        _profilePhotoUrl = null;
-      });
       return;
     }
 
     setState(() {
-      _selectedImage = image;
       _isUploadingImage = true;
     });
 
@@ -154,42 +85,31 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
       final apiService = ref.read(apiServiceProvider);
       final imageUrl = await apiService.uploadImage(image.path);
 
-      // Update profile with new image URL
-      await apiService.put(
-        '/api/students/$userId',
-        data: {'profile_photo': imageUrl},
-      );
+      // Update profile with new image URL using provider
+      final studentList = ref.read(studentListProvider.notifier);
+      await studentList.updateStudent(userId, {'profile_photo': imageUrl});
 
       setState(() {
-        _profilePhotoUrl = imageUrl;
-        _studentData['profile_photo'] = imageUrl;
         _isUploadingImage = false;
       });
 
+      // Invalidate to refresh data
+      ref.invalidate(studentByIdProvider(userId));
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Profile photo updated successfully'),
-            backgroundColor: AppColors.success,
-          ),
-        );
+        SuccessSnackbar.show(context, 'Profile photo updated successfully');
       }
     } catch (e) {
       setState(() {
         _isUploadingImage = false;
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to upload image: ${e.toString()}'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SuccessSnackbar.showError(context, 'Failed to upload image: ${e.toString()}');
       }
     }
   }
 
-  Future<void> _saveProfile() async {
+  Future<void> _saveProfile(int userId) async {
     setState(() => _isSaving = true);
 
     try {
@@ -220,7 +140,6 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
         throw Exception('User not logged in. Please try logging in again.');
       }
 
-      final apiService = ref.read(apiServiceProvider);
       final updateData = {
         'phone': _phoneController.text.trim(),
         'guardian_name': _guardianNameController.text.trim(),
@@ -228,37 +147,22 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
         'address': _addressController.text.trim(),
       };
 
-      final response = await apiService.put(
-        '/api/students/$userId',
-        data: updateData,
-      );
+      // Update using provider
+      final studentList = ref.read(studentListProvider.notifier);
+      await studentList.updateStudent(userId, updateData);
 
-      if (response.statusCode == 200) {
-        // Update local data
-        _studentData = {..._studentData, ...updateData};
+      // Invalidate to refresh data
+      ref.invalidate(studentByIdProvider(userId));
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Profile updated successfully'),
-              backgroundColor: AppColors.success,
-            ),
-          );
-          setState(() {
-            _isEditing = false;
-          });
-        }
-      } else {
-        throw Exception('Failed to update profile');
+      if (mounted) {
+        SuccessSnackbar.show(context, 'Profile updated successfully');
+        setState(() {
+          _isEditing = false;
+        });
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString().replaceAll('Exception: ', '')),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SuccessSnackbar.showError(context, e.toString().replaceAll('Exception: ', ''));
       }
     } finally {
       if (mounted) {
@@ -267,8 +171,8 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     }
   }
 
-  void _cancelEditing() {
-    _populateControllers();
+  void _cancelEditing(Student student) {
+    _populateControllers(student);
     setState(() {
       _isEditing = false;
     });
@@ -279,233 +183,243 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: RefreshIndicator(
-        onRefresh: _loadData,
-        child: CustomScrollView(
-          slivers: [
-            // App Bar
-            SliverAppBar(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              pinned: true,
-              leading: widget.onBack != null
-                  ? IconButton(
-                      icon: Icon(
-                        Icons.arrow_back,
-                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                      ),
-                      onPressed: widget.onBack,
-                    )
-                  : null,
-              title: Text(
-                'My Profile',
-                style: TextStyle(
-                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              centerTitle: true,
-              actions: [
-                if (!_isLoading && _error == null)
-                  IconButton(
-                    icon: Icon(
-                      _isEditing ? Icons.close : Icons.edit,
-                      color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                    ),
-                    onPressed: _isEditing ? _cancelEditing : () => setState(() => _isEditing = true),
-                  ),
-              ],
-            ),
-
-            // Content
-            SliverToBoxAdapter(
-              child: _isLoading
-                  ? const SizedBox(
-                      height: 400,
-                      child: ProfileSkeleton(),
-                    )
-                  : _error != null
-                      ? _buildErrorWidget(isDark)
-                      : Padding(
-                          padding: const EdgeInsets.all(AppDimensions.paddingL),
-                          child: Column(
-                            children: [
-                              // Profile Header
-                              _buildProfileHeader(isDark),
-
-                              const SizedBox(height: AppDimensions.spacingL),
-
-                              // Personal Information Section
-                              _buildSection(
-                                title: 'Personal Information',
-                                icon: Icons.person_outline,
-                                isDark: isDark,
-                                children: [
-                                  _buildInfoRow('Name', _studentData['name']?.toString() ?? 'N/A', isDark),
-                                  _buildInfoRow('Email', _studentData['email']?.toString() ?? 'N/A', isDark),
-                                  if (_isEditing)
-                                    _buildEditableField(
-                                      controller: _phoneController,
-                                      label: 'Phone',
-                                      icon: Icons.phone_outlined,
-                                      isDark: isDark,
-                                      keyboardType: TextInputType.phone,
-                                    )
-                                  else
-                                    _buildInfoRow('Phone', _studentData['phone']?.toString() ?? 'Not set', isDark),
-                                  _buildInfoRow(
-                                    'Date of Birth',
-                                    _formatDate(_studentData['date_of_birth']?.toString() ?? ''),
-                                    isDark,
-                                  ),
-                                  _buildInfoRow('Gender', _capitalize(_studentData['gender']?.toString() ?? 'Not set'), isDark),
-                                  _buildInfoRow('Blood Group', _studentData['blood_group']?.toString() ?? 'Not set', isDark),
-                                ],
-                              ),
-
-                              const SizedBox(height: AppDimensions.spacingL),
-
-                              // Guardian Information Section
-                              _buildSection(
-                                title: 'Guardian Information',
-                                icon: Icons.family_restroom,
-                                isDark: isDark,
-                                children: [
-                                  if (_isEditing) ...[
-                                    _buildEditableField(
-                                      controller: _guardianNameController,
-                                      label: 'Guardian Name',
-                                      icon: Icons.person_outline,
-                                      isDark: isDark,
-                                    ),
-                                    const SizedBox(height: AppDimensions.spacingM),
-                                    _buildEditableField(
-                                      controller: _guardianPhoneController,
-                                      label: 'Guardian Phone',
-                                      icon: Icons.phone_outlined,
-                                      isDark: isDark,
-                                      keyboardType: TextInputType.phone,
-                                    ),
-                                  ] else ...[
-                                    _buildInfoRow('Name', _studentData['guardian_name']?.toString() ?? 'Not set', isDark),
-                                    _buildInfoRow('Phone', _studentData['guardian_phone']?.toString() ?? 'Not set', isDark),
-                                  ],
-                                  _buildInfoRow(
-                                    'Relationship',
-                                    _capitalize(_studentData['guardian_relationship']?.toString() ?? 'Not set'),
-                                    isDark,
-                                  ),
-                                ],
-                              ),
-
-                              const SizedBox(height: AppDimensions.spacingL),
-
-                              // Address Section
-                              _buildSection(
-                                title: 'Address',
-                                icon: Icons.location_on_outlined,
-                                isDark: isDark,
-                                children: [
-                                  if (_isEditing)
-                                    _buildEditableField(
-                                      controller: _addressController,
-                                      label: 'Address',
-                                      icon: Icons.home_outlined,
-                                      isDark: isDark,
-                                      maxLines: 3,
-                                    )
-                                  else
-                                    _buildInfoRow('Address', _studentData['address']?.toString() ?? 'Not set', isDark, isFullWidth: true),
-                                ],
-                              ),
-
-                              const SizedBox(height: AppDimensions.spacingL),
-
-                              // Account Status Section
-                              _buildSection(
-                                title: 'Account Status',
-                                icon: Icons.verified_user_outlined,
-                                isDark: isDark,
-                                children: [
-                                  _buildStatusRow(
-                                    'Account Status',
-                                    _studentData['is_active'] == true ? 'Active' : 'Inactive',
-                                    _studentData['is_active'] == true,
-                                    isDark,
-                                  ),
-                                  _buildStatusRow(
-                                    'Batch Linked',
-                                    _studentData['is_linked'] == true ? 'Yes' : 'No',
-                                    _studentData['is_linked'] == true,
-                                    isDark,
-                                  ),
-                                  _buildInfoRow(
-                                    'Member Since',
-                                    _formatDate(_studentData['created_at']?.toString() ?? ''),
-                                    isDark,
-                                  ),
-                                ],
-                              ),
-
-                              const SizedBox(height: AppDimensions.spacingXl),
-
-                              // Save Button
-                              if (_isEditing)
-                                NeumorphicButton(
-                                  text: _isSaving ? 'Saving...' : 'Save Changes',
-                                  onPressed: _isSaving ? null : _saveProfile,
-                                  icon: Icons.save,
-                                  isAccent: true,
-                                ),
-
-                              const SizedBox(height: 100),
-                            ],
-                          ),
-                        ),
-            ),
-          ],
+    // Get user ID from auth provider
+    final authStateAsync = ref.watch(authProvider);
+    
+    return authStateAsync.when(
+      loading: () => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: const Center(child: ProfileSkeleton()),
+      ),
+      error: (error, stack) => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: ErrorDisplay(
+          message: 'Failed to load user data: ${error.toString()}',
+          onRetry: () => ref.invalidate(authProvider),
         ),
       ),
-    );
-  }
-
-  Widget _buildErrorWidget(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.all(AppDimensions.paddingL),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.error_outline,
-            size: 48,
-            color: isDark ? AppColors.error : AppColorsLight.error,
-          ),
-          const SizedBox(height: AppDimensions.spacingM),
-          Text(
-            _error!,
-            style: TextStyle(
-              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+      data: (authState) {
+        if (authState is! Authenticated) {
+          return Scaffold(
+            backgroundColor: Colors.transparent,
+            body: ErrorDisplay(
+              message: 'Please log in to view profile',
+              onRetry: () => ref.invalidate(authProvider),
             ),
-            textAlign: TextAlign.center,
+          );
+        }
+
+        final userId = authState.userId;
+        final studentAsync = ref.watch(studentByIdProvider(userId));
+
+        return Scaffold(
+          backgroundColor: Colors.transparent,
+          body: RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(studentByIdProvider(userId));
+            },
+            child: CustomScrollView(
+              slivers: [
+                // App Bar
+                SliverAppBar(
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  pinned: true,
+                  leading: widget.onBack != null
+                      ? IconButton(
+                          icon: Icon(
+                            Icons.arrow_back,
+                            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                          ),
+                          onPressed: widget.onBack,
+                        )
+                      : null,
+                  title: Text(
+                    'My Profile',
+                    style: TextStyle(
+                      color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  centerTitle: true,
+                  actions: [
+                    studentAsync.when(
+                      data: (student) => IconButton(
+                        icon: Icon(
+                          _isEditing ? Icons.close : Icons.edit,
+                          color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                        ),
+                        onPressed: _isEditing 
+                            ? () => _cancelEditing(student)
+                            : () => setState(() {
+                              _populateControllers(student);
+                              _isEditing = true;
+                            }),
+                      ),
+                      loading: () => const SizedBox.shrink(),
+                      error: (_, __) => const SizedBox.shrink(),
+                    ),
+                  ],
+                ),
+
+                // Content
+                SliverToBoxAdapter(
+                  child: studentAsync.when(
+                    loading: () => const SizedBox(
+                      height: 400,
+                      child: ProfileSkeleton(),
+                    ),
+                    error: (error, stack) => Padding(
+                      padding: const EdgeInsets.all(AppDimensions.paddingL),
+                      child: ErrorDisplay(
+                        message: 'Failed to load profile: ${error.toString()}',
+                        onRetry: () => ref.invalidate(studentByIdProvider(userId)),
+                      ),
+                    ),
+                    data: (student) {
+                      // Populate controllers on first load
+                      if (!_isEditing && _phoneController.text.isEmpty) {
+                        _populateControllers(student);
+                      }
+                      
+                      return Padding(
+                        padding: const EdgeInsets.all(AppDimensions.paddingL),
+                        child: Column(
+                          children: [
+                            // Profile Header
+                            _buildProfileHeader(isDark, student),
+
+                            const SizedBox(height: AppDimensions.spacingL),
+
+                            // Personal Information Section
+                            _buildSection(
+                              title: 'Personal Information',
+                              icon: Icons.person_outline,
+                              isDark: isDark,
+                              children: [
+                                _buildInfoRow('Name', student.name, isDark),
+                                _buildInfoRow('Email', student.email, isDark),
+                                if (_isEditing)
+                                  _buildEditableField(
+                                    controller: _phoneController,
+                                    label: 'Phone',
+                                    icon: Icons.phone_outlined,
+                                    isDark: isDark,
+                                    keyboardType: TextInputType.phone,
+                                  )
+                                else
+                                  _buildInfoRow('Phone', student.phone, isDark),
+                                _buildInfoRow(
+                                  'Date of Birth',
+                                  student.dateOfBirth != null ? _formatDate(student.dateOfBirth!) : 'Not set',
+                                  isDark,
+                                ),
+                                _buildInfoRow('Age', student.age?.toString() ?? 'Not set', isDark),
+                              ],
+                            ),
+
+                            const SizedBox(height: AppDimensions.spacingL),
+
+                            // Guardian Information Section
+                            _buildSection(
+                              title: 'Guardian Information',
+                              icon: Icons.family_restroom,
+                              isDark: isDark,
+                              children: [
+                                if (_isEditing) ...[
+                                  _buildEditableField(
+                                    controller: _guardianNameController,
+                                    label: 'Guardian Name',
+                                    icon: Icons.person_outline,
+                                    isDark: isDark,
+                                  ),
+                                  const SizedBox(height: AppDimensions.spacingM),
+                                  _buildEditableField(
+                                    controller: _guardianPhoneController,
+                                    label: 'Guardian Phone',
+                                    icon: Icons.phone_outlined,
+                                    isDark: isDark,
+                                    keyboardType: TextInputType.phone,
+                                  ),
+                                ] else ...[
+                                  _buildInfoRow('Name', student.guardianName ?? 'Not set', isDark),
+                                  _buildInfoRow('Phone', student.guardianPhone ?? 'Not set', isDark),
+                                ],
+                              ],
+                            ),
+
+                            const SizedBox(height: AppDimensions.spacingL),
+
+                            // Address Section
+                            _buildSection(
+                              title: 'Address',
+                              icon: Icons.location_on_outlined,
+                              isDark: isDark,
+                              children: [
+                                if (_isEditing)
+                                  _buildEditableField(
+                                    controller: _addressController,
+                                    label: 'Address',
+                                    icon: Icons.home_outlined,
+                                    isDark: isDark,
+                                    maxLines: 3,
+                                  )
+                                else
+                                  _buildInfoRow('Address', student.address ?? 'Not set', isDark, isFullWidth: true),
+                              ],
+                            ),
+
+                            const SizedBox(height: AppDimensions.spacingL),
+
+                            // Account Status Section
+                            _buildSection(
+                              title: 'Account Status',
+                              icon: Icons.verified_user_outlined,
+                              isDark: isDark,
+                              children: [
+                                _buildStatusRow(
+                                  'Account Status',
+                                  student.status == 'active' ? 'Active' : 'Inactive',
+                                  student.status == 'active',
+                                  isDark,
+                                ),
+                                _buildInfoRow(
+                                  'Status',
+                                  student.status == 'active' ? 'Active' : 'Inactive',
+                                  isDark,
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: AppDimensions.spacingXl),
+
+                            // Save Button
+                            if (_isEditing)
+                              NeumorphicButton(
+                                text: _isSaving ? 'Saving...' : 'Save Changes',
+                                onPressed: _isSaving ? null : () => _saveProfile(userId),
+                                icon: Icons.save,
+                                isAccent: true,
+                              ),
+
+                            const SizedBox(height: 100),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: AppDimensions.spacingL),
-          ElevatedButton(
-            onPressed: _loadData,
-            child: const Text('Retry'),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildProfileHeader(bool isDark) {
-    final name = _studentData['name']?.toString() ?? 'Student';
-    final email = _studentData['email']?.toString() ?? '';
-    final initials = name.isNotEmpty
-        ? name.split(' ').map((n) => n.isNotEmpty ? n[0] : '').take(2).join().toUpperCase()
-        : 'S';
+  Widget _buildProfileHeader(bool isDark, Student student) {
+    final name = student.name;
+    final email = student.email;
 
     return NeumorphicContainer(
       padding: const EdgeInsets.all(AppDimensions.paddingL),
@@ -513,7 +427,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
         children: [
           // Profile Image Picker
           ProfileImagePicker(
-            initialImageUrl: _profilePhotoUrl,
+            initialImageUrl: student.profilePhoto,
             size: 100,
             onImagePicked: _handleImagePicked,
             isLoading: _isUploadingImage,
@@ -731,8 +645,4 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     }
   }
 
-  String _capitalize(String text) {
-    if (text.isEmpty) return text;
-    return text[0].toUpperCase() + text.substring(1);
-  }
 }
