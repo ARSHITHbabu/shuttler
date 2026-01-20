@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
+import '../../core/utils/theme_colors.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/forms/add_student_dialog.dart';
@@ -33,11 +33,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppColors.cardBackground,
-        title: const Text(
+        backgroundColor: context.cardBackgroundColor,
+        title: Text(
           'Today\'s Batch Attendance',
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: context.textPrimaryColor,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -46,12 +46,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           child: finishedBatchesAsync.when(
             data: (batches) {
               if (batches.isEmpty) {
-                return const Padding(
-                  padding: EdgeInsets.all(AppDimensions.spacingM),
-                  child: Text(
-                    'No batches have finished today yet.',
-                    style: TextStyle(color: AppColors.textSecondary),
-                    textAlign: TextAlign.center,
+                return Padding(
+                  padding: const EdgeInsets.all(AppDimensions.spacingM),
+                  child: Builder(
+                    builder: (context) => Text(
+                      'No batches have finished today yet.',
+                      style: TextStyle(color: context.textSecondaryColor),
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                 );
               }
@@ -65,70 +67,72 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       child: Container(
                         padding: const EdgeInsets.all(AppDimensions.paddingM),
                         decoration: BoxDecoration(
-                          color: AppColors.background,
+                          color: context.backgroundColor,
                           borderRadius: BorderRadius.circular(AppDimensions.radiusM),
                           boxShadow: NeumorphicStyles.getSmallInsetShadow(),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              batch.batchName,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                            const SizedBox(height: AppDimensions.spacingS),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  batch.timing,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                                Text(
-                                  '${batch.attendanceRate.toStringAsFixed(1)}%',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: batch.attendanceRate >= 80
-                                        ? AppColors.success
-                                        : batch.attendanceRate >= 60
-                                            ? Colors.orange
-                                            : AppColors.error,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: AppDimensions.spacingS),
-                            Container(
-                              width: double.infinity,
-                              height: 6,
-                              decoration: BoxDecoration(
-                                color: AppColors.cardBackground,
-                                borderRadius: BorderRadius.circular(3),
-                              ),
-                              child: FractionallySizedBox(
-                                alignment: Alignment.centerLeft,
-                                widthFactor: (batch.attendanceRate / 100).clamp(0.0, 1.0),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: batch.attendanceRate >= 80
-                                        ? AppColors.success
-                                        : batch.attendanceRate >= 60
-                                            ? Colors.orange
-                                            : AppColors.error,
-                                    borderRadius: BorderRadius.circular(3),
-                                  ),
+                        child: Builder(
+                          builder: (context) => Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                batch.batchName,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: context.textPrimaryColor,
                                 ),
                               ),
-                            ),
-                          ],
+                              const SizedBox(height: AppDimensions.spacingS),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    batch.timing,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: context.textSecondaryColor,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${batch.attendanceRate.toStringAsFixed(1)}%',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: batch.attendanceRate >= 80
+                                          ? context.successColor
+                                          : batch.attendanceRate >= 60
+                                              ? Colors.orange
+                                              : context.errorColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: AppDimensions.spacingS),
+                              Container(
+                                width: double.infinity,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  color: context.cardBackgroundColor,
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                                child: FractionallySizedBox(
+                                  alignment: Alignment.centerLeft,
+                                  widthFactor: (batch.attendanceRate / 100).clamp(0.0, 1.0),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      color: batch.attendanceRate >= 80
+                                          ? context.successColor
+                                          : batch.attendanceRate >= 60
+                                              ? Colors.orange
+                                              : context.errorColor,
+                                      borderRadius: BorderRadius.circular(3),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     );
@@ -139,9 +143,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             loading: () => const DashboardSkeleton(),
             error: (error, stack) => Padding(
               padding: const EdgeInsets.all(AppDimensions.spacingM),
-              child: Text(
-                'Error loading attendance: ${error.toString()}',
-                style: const TextStyle(color: AppColors.error),
+              child: Builder(
+                builder: (context) => Text(
+                  'Error loading attendance: ${error.toString()}',
+                  style: TextStyle(color: context.errorColor),
+                ),
               ),
             ),
           ),
@@ -149,9 +155,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text(
-              'Close',
-              style: TextStyle(color: AppColors.textPrimary),
+            child: Builder(
+              builder: (context) => Text(
+                'Close',
+                style: TextStyle(color: context.textPrimaryColor),
+              ),
             ),
           ),
         ],
@@ -182,28 +190,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Welcome back,',
                   style: TextStyle(
                     fontSize: 14,
-                    color: AppColors.textSecondary,
+                    color: context.textSecondaryColor,
                   ),
                 ),
                 const SizedBox(height: 4),
-                const Text(
+                Text(
                   'Ace Badminton Academy',
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
+                    color: context.textPrimaryColor,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   _getFormattedDate(),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
-                    color: AppColors.textSecondary,
+                    color: context.textSecondaryColor,
                   ),
                 ),
               ],
@@ -288,12 +296,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   "Today's Insights",
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
+                    color: context.textPrimaryColor,
                   ),
                 ),
                 const SizedBox(height: AppDimensions.spacingM),
@@ -310,14 +318,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 width: 40,
                                 height: 40,
                                 decoration: BoxDecoration(
-                                  color: AppColors.background,
+                                  color: context.backgroundColor,
                                   borderRadius: BorderRadius.circular(AppDimensions.radiusM),
                                   boxShadow: NeumorphicStyles.getInsetShadow(),
                                 ),
-                                child: const Icon(
+                                child: Icon(
                                   Icons.trending_up,
                                   size: 20,
-                                  color: AppColors.iconPrimary,
+                                  color: context.iconPrimaryColor,
                                 ),
                               ),
                               const SizedBox(width: AppDimensions.spacingM),
@@ -325,28 +333,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Text(
+                                    Text(
                                       'Attendance Rate',
                                       style: TextStyle(
                                         fontSize: 14,
-                                        color: AppColors.textSecondary,
+                                        color: context.textSecondaryColor,
                                       ),
                                     ),
                                     Text(
                                       '${stats.todayAttendanceRate.toStringAsFixed(0)}%',
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 20,
                                         fontWeight: FontWeight.w600,
-                                        color: AppColors.textPrimary,
+                                        color: context.textPrimaryColor,
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
-                              const Icon(
+                              Icon(
                                 Icons.arrow_forward_ios,
                                 size: 16,
-                                color: AppColors.textSecondary,
+                                color: context.textSecondaryColor,
                               ),
                             ],
                           ),
@@ -355,7 +363,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             width: double.infinity,
                             height: 8,
                             decoration: BoxDecoration(
-                              color: AppColors.background,
+                              color: context.backgroundColor,
                               borderRadius: BorderRadius.circular(4),
                               boxShadow: NeumorphicStyles.getSmallInsetShadow(),
                             ),
@@ -384,22 +392,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'Upcoming Batches',
                           style: TextStyle(
                             fontSize: 14,
-                            color: AppColors.textSecondary,
+                            color: context.textSecondaryColor,
                           ),
                         ),
                         const SizedBox(height: AppDimensions.spacingM),
                         if (batches.isEmpty)
-                          const Padding(
-                            padding: EdgeInsets.all(AppDimensions.spacingM),
-                            child: Text(
-                              'No upcoming batches today',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textSecondary,
+                          Padding(
+                            padding: const EdgeInsets.all(AppDimensions.spacingM),
+                            child: Builder(
+                              builder: (context) => Text(
+                                'No upcoming batches today',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: context.textSecondaryColor,
+                                ),
                               ),
                             ),
                           )
@@ -439,12 +449,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Quick Actions',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
+                    color: context.textPrimaryColor,
                   ),
                 ),
                 const SizedBox(height: AppDimensions.spacingM),
@@ -544,21 +554,21 @@ class _StatCard extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: AppColors.background,
+                  color: context.backgroundColor,
                   borderRadius: BorderRadius.circular(AppDimensions.radiusM),
                   boxShadow: NeumorphicStyles.getInsetShadow(),
                 ),
                 child: Icon(
                   icon,
                   size: 20,
-                  color: AppColors.iconPrimary,
+                  color: context.iconPrimaryColor,
                 ),
               ),
               if (onTap != null)
-                const Icon(
+                Icon(
                   Icons.chevron_right,
                   size: 16,
-                  color: AppColors.textTertiary,
+                  color: context.textTertiaryColor,
                 ),
             ],
           ),
@@ -566,10 +576,10 @@ class _StatCard extends StatelessWidget {
           Flexible(
             child: Text(
               value,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
+                color: context.textPrimaryColor,
                 height: 1.2,
               ),
               maxLines: 1,
@@ -579,9 +589,9 @@ class _StatCard extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
-              color: AppColors.textSecondary,
+              color: context.textSecondaryColor,
               height: 1.2,
             ),
             maxLines: 1,
@@ -627,16 +637,16 @@ class _UpcomingBatchItem extends ConsumerWidget {
               children: [
                 Text(
                   name,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
-                    color: AppColors.textPrimary,
+                    color: context.textPrimaryColor,
                   ),
                 ),
                 Text(
                   time,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
-                    color: AppColors.textSecondary,
+                    color: context.textSecondaryColor,
                   ),
                 ),
               ],
@@ -647,15 +657,15 @@ class _UpcomingBatchItem extends ConsumerWidget {
                 vertical: AppDimensions.spacingS,
               ),
               decoration: BoxDecoration(
-                color: AppColors.background,
+                color: context.backgroundColor,
                 borderRadius: BorderRadius.circular(AppDimensions.radiusS),
                 boxShadow: NeumorphicStyles.getSmallInsetShadow(),
               ),
               child: Text(
                 '$studentCount ${studentCount == 1 ? 'student' : 'students'}',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
-                  color: AppColors.iconPrimary,
+                  color: context.iconPrimaryColor,
                 ),
               ),
             ),
@@ -670,16 +680,16 @@ class _UpcomingBatchItem extends ConsumerWidget {
             children: [
               Text(
                 name,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
-                  color: AppColors.textPrimary,
+                  color: context.textPrimaryColor,
                 ),
               ),
               Text(
                 time,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
-                  color: AppColors.textSecondary,
+                  color: context.textSecondaryColor,
                 ),
               ),
             ],
@@ -699,25 +709,27 @@ class _UpcomingBatchItem extends ConsumerWidget {
             children: [
               Text(
                 name,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
-                  color: AppColors.textPrimary,
+                  color: context.textPrimaryColor,
                 ),
               ),
               Text(
                 time,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
-                  color: AppColors.textSecondary,
+                  color: context.textSecondaryColor,
                 ),
               ),
             ],
           ),
-          const Text(
-            '0 students',
-            style: TextStyle(
-              fontSize: 12,
-              color: AppColors.textSecondary,
+          Builder(
+            builder: (context) => Text(
+              '0 students',
+              style: TextStyle(
+                fontSize: 12,
+                color: context.textSecondaryColor,
+              ),
             ),
           ),
         ],
@@ -748,14 +760,14 @@ class _QuickActionButton extends StatelessWidget {
             Icon(
               icon,
               size: 24,
-              color: AppColors.iconPrimary,
+              color: context.iconPrimaryColor,
             ),
             const SizedBox(height: AppDimensions.spacingS),
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
-                color: AppColors.textPrimary,
+                color: context.textPrimaryColor,
               ),
             ),
           ],

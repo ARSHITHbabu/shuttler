@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
+import '../../core/utils/theme_colors.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
@@ -29,10 +29,10 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
     return authState.when(
       data: (authValue) {
         if (authValue is! Authenticated) {
-          return const Center(
+          return Center(
             child: Text(
               'Please login',
-              style: TextStyle(color: AppColors.error),
+              style: TextStyle(color: context.errorColor),
             ),
           );
         }
@@ -44,7 +44,7 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
       error: (error, stack) => Center(
         child: Text(
           'Error: ${error.toString()}',
-          style: const TextStyle(color: AppColors.error),
+          style: TextStyle(color: context.errorColor),
         ),
       ),
     );
@@ -71,28 +71,28 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Welcome back,',
                     style: TextStyle(
                       fontSize: 14,
-                      color: AppColors.textSecondary,
+                      color: context.textSecondaryColor,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     coachName,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+                      color: context.textPrimaryColor,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     _getFormattedDate(),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
-                      color: AppColors.textSecondary,
+                      color: context.textSecondaryColor,
                     ),
                   ),
                 ],
@@ -159,12 +159,12 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     "Today's Sessions",
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+                      color: context.textPrimaryColor,
                     ),
                   ),
                   const SizedBox(height: AppDimensions.spacingM),
@@ -173,12 +173,12 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
                       if (sessions.isEmpty) {
                         return NeumorphicContainer(
                           padding: const EdgeInsets.all(AppDimensions.paddingL),
-                          child: const Center(
+                          child: Center(
                             child: Text(
                               'No sessions scheduled for today',
                               style: TextStyle(
                                 fontSize: 14,
-                                color: AppColors.textSecondary,
+                                color: context.textSecondaryColor,
                               ),
                             ),
                           ),
@@ -197,7 +197,7 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
                                     width: 60,
                                     height: 60,
                                     decoration: BoxDecoration(
-                                      color: AppColors.background,
+                                      color: context.backgroundColor,
                                       borderRadius: BorderRadius.circular(AppDimensions.radiusM),
                                       boxShadow: NeumorphicStyles.getInsetShadow(),
                                     ),
@@ -206,17 +206,17 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
                                       children: [
                                         Text(
                                           session.startTime?.split(':')[0] ?? '--',
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontSize: 18,
                                             fontWeight: FontWeight.w600,
-                                            color: AppColors.textPrimary,
+                                            color: context.textPrimaryColor,
                                           ),
                                         ),
                                         Text(
                                           session.startTime?.split(':')[1] ?? '--',
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontSize: 12,
-                                            color: AppColors.textSecondary,
+                                            color: context.textSecondaryColor,
                                           ),
                                         ),
                                       ],
@@ -229,35 +229,35 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
                                       children: [
                                         Text(
                                           session.batchName ?? session.title,
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w600,
-                                            color: AppColors.textPrimary,
+                                            color: context.textPrimaryColor,
                                           ),
                                         ),
                                         const SizedBox(height: 4),
                                         Text(
                                           '${session.startTime ?? '--'} - ${session.endTime ?? '--'}',
-                                          style: const TextStyle(
+                                          style: TextStyle(
                                             fontSize: 12,
-                                            color: AppColors.textSecondary,
+                                            color: context.textSecondaryColor,
                                           ),
                                         ),
                                         if (session.location != null) ...[
                                           const SizedBox(height: 4),
                                           Row(
                                             children: [
-                                              const Icon(
+                                              Icon(
                                                 Icons.location_on_outlined,
                                                 size: 12,
-                                                color: AppColors.textSecondary,
+                                                color: context.textSecondaryColor,
                                               ),
                                               const SizedBox(width: 4),
                                               Text(
                                                 session.location!,
-                                                style: const TextStyle(
+                                                style: TextStyle(
                                                   fontSize: 12,
-                                                  color: AppColors.textSecondary,
+                                                  color: context.textSecondaryColor,
                                                 ),
                                               ),
                                             ],
@@ -272,7 +272,7 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
                                       vertical: AppDimensions.spacingS,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: _getSessionStatusColor(session),
+                                      color: _getSessionStatusColor(session, context),
                                       borderRadius: BorderRadius.circular(AppDimensions.radiusS),
                                     ),
                                     child: Text(
@@ -315,12 +315,12 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Quick Actions',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+                      color: context.textPrimaryColor,
                     ),
                   ),
                   const SizedBox(height: AppDimensions.spacingM),
@@ -371,13 +371,13 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
     );
   }
 
-  Color _getSessionStatusColor(Schedule session) {
+  Color _getSessionStatusColor(Schedule session, BuildContext context) {
     final now = DateTime.now();
     final sessionDate = DateTime(session.date.year, session.date.month, session.date.day);
     final today = DateTime(now.year, now.month, now.day);
 
     if (sessionDate.isBefore(today)) {
-      return AppColors.textSecondary; // Completed
+      return context.textSecondaryColor; // Completed
     } else if (sessionDate.isAtSameMomentAs(today)) {
       // Check if session time has passed
       if (session.startTime != null) {
@@ -388,13 +388,13 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
           final sessionDateTime = DateTime(now.year, now.month, now.day, sessionHour, sessionMinute);
           
           if (now.isAfter(sessionDateTime)) {
-            return AppColors.success; // Ongoing
+            return context.successColor; // Ongoing
           }
         }
       }
-      return AppColors.accent; // Upcoming
+      return context.accentColor; // Upcoming
     } else {
-      return AppColors.accent; // Upcoming
+      return context.accentColor; // Upcoming
     }
   }
 
@@ -454,21 +454,21 @@ class _StatCard extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: AppColors.background,
+                  color: context.backgroundColor,
                   borderRadius: BorderRadius.circular(AppDimensions.radiusM),
                   boxShadow: NeumorphicStyles.getInsetShadow(),
                 ),
                 child: Icon(
                   icon,
                   size: 20,
-                  color: AppColors.iconPrimary,
+                  color: context.iconPrimaryColor,
                 ),
               ),
               if (onTap != null)
-                const Icon(
+                Icon(
                   Icons.chevron_right,
                   size: 16,
-                  color: AppColors.textTertiary,
+                  color: context.textTertiaryColor,
                 ),
             ],
           ),
@@ -476,10 +476,10 @@ class _StatCard extends StatelessWidget {
           Flexible(
             child: Text(
               value,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
+                color: context.textPrimaryColor,
                 height: 1.2,
               ),
               maxLines: 1,
@@ -489,9 +489,9 @@ class _StatCard extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
-              color: AppColors.textSecondary,
+              color: context.textSecondaryColor,
               height: 1.2,
             ),
             maxLines: 1,
@@ -532,14 +532,14 @@ class _QuickActionButton extends StatelessWidget {
             Icon(
               icon,
               size: 24,
-              color: AppColors.iconPrimary,
+              color: context.iconPrimaryColor,
             ),
             const SizedBox(height: AppDimensions.spacingS),
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
-                color: AppColors.textPrimary,
+                color: context.textPrimaryColor,
               ),
               textAlign: TextAlign.center,
             ),
