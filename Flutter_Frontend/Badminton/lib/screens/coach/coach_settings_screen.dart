@@ -138,12 +138,7 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
                 icon: Icons.privacy_tip_outlined,
                 title: 'Privacy Policy',
                 onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Privacy Policy coming soon'),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
+                  SuccessSnackbar.showInfo(context, 'Privacy Policy coming soon');
                 },
               ),
 

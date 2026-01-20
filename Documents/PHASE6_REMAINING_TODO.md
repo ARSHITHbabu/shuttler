@@ -1,270 +1,257 @@
 # Phase 6 Remaining TODO List
 
 **Last Updated**: 2026-01-XX  
-**Status**: Phase 6 is ~85% complete  
-**Remaining Work**: Student/Coach Portal Migration + Minor Fixes
+**Status**: Phase 6 is 100% complete  
+**Remaining Work**: None - All migration tasks completed
 
 ---
 
 ## Progress Summary
 
-- ✅ **Completed**: Owner Portal (11/11 screens migrated), Phase 6 Components Created (100%), Testing (100%)
+- ✅ **Completed**: Owner Portal (11/11 screens migrated), Phase 6 Components Created (100%), Testing (100%), Student Portal (13/13 screens migrated), Coach Portal (10/10 screens migrated), Loading State Fixes (3/3 completed)
 - ⏳ **In Progress**: 0 items
-- ⬜ **Pending**: 23 screens + 3 loading state fixes
+- ⬜ **Pending**: 0 items
 
 ---
 
 ## HIGH PRIORITY - Student Portal Screen Migration
 
-### ⬜ 1. Migrate `lib/screens/student/student_attendance_screen.dart`
-- [ ] Replace direct API calls with `attendanceProvider` or `studentAttendanceProvider`
-- [ ] Use `AsyncValue.when` pattern instead of `FutureBuilder`
-- [ ] Replace `LoadingSpinner` with `ListSkeleton` or `ProfileSkeleton`
-- [ ] Replace custom error handling with `ErrorDisplay` widget
-- [ ] Replace custom empty state with `EmptyState.noAttendance()`
-- [ ] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show`
-- [ ] Add refresh functionality using provider invalidation
-- **Estimated Time**: 2-3 hours
+### ✅ 1. Migrate `lib/screens/student/student_attendance_screen.dart`
+- [x] Replace direct API calls with `attendanceProvider` or `studentAttendanceProvider`
+- [x] Use `AsyncValue.when` pattern instead of `FutureBuilder`
+- [x] Replace `LoadingSpinner` with `ListSkeleton` or `ProfileSkeleton`
+- [x] Replace custom error handling with `ErrorDisplay` widget
+- [x] Replace custom empty state with `EmptyState.noAttendance()`
+- [x] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show`
+- [x] Add refresh functionality using provider invalidation
+- **Status**: ✅ **COMPLETED**
 - **Reference**: `lib/screens/owner/attendance_screen.dart`
 
-### ⬜ 2. Migrate `lib/screens/student/student_fees_screen.dart`
-- [ ] Replace direct API calls with `feeByStudentProvider(studentId)`
-- [ ] Use `AsyncValue.when` pattern instead of `FutureBuilder`
-- [ ] Replace `LoadingSpinner` with `ListSkeleton`
-- [ ] Replace custom error handling with `ErrorDisplay` widget
-- [ ] Replace custom empty state with `EmptyState.noFees()`
-- [ ] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show`
-- [ ] Add refresh functionality using provider invalidation
-- **Estimated Time**: 2-3 hours
+### ✅ 2. Migrate `lib/screens/student/student_fees_screen.dart`
+- [x] Replace direct API calls with `feeByStudentProvider(studentId)`
+- [x] Use `AsyncValue.when` pattern instead of `FutureBuilder`
+- [x] Replace `LoadingSpinner` with `ListSkeleton`
+- [x] Replace custom error handling with `ErrorDisplay` widget
+- [x] Replace custom empty state with `EmptyState.noFees()`
+- [x] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show`
+- [x] Add refresh functionality using provider invalidation
+- **Status**: ✅ **COMPLETED**
 - **Reference**: `lib/screens/owner/fees_screen.dart`
 
-### ⬜ 3. Migrate `lib/screens/student/student_performance_screen.dart`
-- [ ] Replace direct API calls with `performanceByStudentProvider(studentId)`
-- [ ] Use `AsyncValue.when` pattern instead of `FutureBuilder`
-- [ ] Replace `LoadingSpinner` with `ProfileSkeleton` (for chart loading)
-- [ ] Replace custom error handling with `ErrorDisplay` widget
-- [ ] Replace custom empty state with `EmptyState.noPerformance()`
-- [ ] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show`
-- [ ] Add refresh functionality using provider invalidation
-- **Estimated Time**: 2-3 hours
+### ✅ 3. Migrate `lib/screens/student/student_performance_screen.dart`
+- [x] Replace direct API calls with `performanceByStudentProvider(studentId)`
+- [x] Use `AsyncValue.when` pattern instead of `FutureBuilder`
+- [x] Replace `LoadingSpinner` with `ProfileSkeleton` (for chart loading)
+- [x] Replace custom error handling with `ErrorDisplay` widget
+- [x] Replace custom empty state with `EmptyState.noPerformance()`
+- [x] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show`
+- [x] Add refresh functionality using provider invalidation
+- **Status**: ✅ **COMPLETED**
 - **Reference**: `lib/screens/owner/performance_tracking_screen.dart`
 
-### ⬜ 4. Migrate `lib/screens/student/student_bmi_screen.dart`
-- [ ] Replace direct API calls with `bmiByStudentProvider(studentId)`
-- [ ] Use `AsyncValue.when` pattern (already partially done)
-- [ ] Ensure `ProfileSkeleton` is used consistently (already done ✅)
-- [ ] Ensure `ErrorDisplay` is used consistently (already done ✅)
-- [ ] Ensure `EmptyState.noBmiRecords()` is used (already done ✅)
-- [ ] Replace any remaining `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show`
-- [ ] Add refresh functionality using provider invalidation
-- **Estimated Time**: 1-2 hours (mostly cleanup)
+### ✅ 4. Migrate `lib/screens/student/student_bmi_screen.dart`
+- [x] Replace direct API calls with `bmiByStudentProvider(studentId)`
+- [x] Use `AsyncValue.when` pattern (already partially done)
+- [x] Ensure `ProfileSkeleton` is used consistently (already done ✅)
+- [x] Ensure `ErrorDisplay` is used consistently (already done ✅)
+- [x] Ensure `EmptyState.noBmiRecords()` is used (already done ✅)
+- [x] Replace any remaining `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show`
+- [x] Add refresh functionality using provider invalidation
+- **Status**: ✅ **COMPLETED**
 - **Reference**: `lib/screens/owner/bmi_tracking_screen.dart`
 
-### ⬜ 5. Migrate `lib/screens/student/student_announcements_screen.dart`
-- [ ] Replace direct API calls with `announcementListProvider` (filtered by audience)
-- [ ] Use `AsyncValue.when` pattern instead of `FutureBuilder`
-- [ ] Replace `LoadingSpinner` with `ListSkeleton`
-- [ ] Replace custom error handling with `ErrorDisplay` widget
-- [ ] Replace custom empty state with `EmptyState.noAnnouncements()`
-- [ ] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show`
-- [ ] Add refresh functionality using provider invalidation
-- **Estimated Time**: 2-3 hours
+### ✅ 5. Migrate `lib/screens/student/student_announcements_screen.dart`
+- [x] Replace direct API calls with `announcementListProvider` (filtered by audience)
+- [x] Use `AsyncValue.when` pattern instead of `FutureBuilder`
+- [x] Replace `LoadingSpinner` with `ListSkeleton`
+- [x] Replace custom error handling with `ErrorDisplay` widget
+- [x] Replace custom empty state with `EmptyState.noAnnouncements()`
+- [x] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show`
+- [x] Add refresh functionality using provider invalidation
+- **Status**: ✅ **COMPLETED**
 - **Reference**: `lib/screens/owner/announcement_management_screen.dart`
 
-### ⬜ 6. Migrate `lib/screens/student/student_schedule_screen.dart`
-- [ ] Replace direct API calls with appropriate schedule provider
-- [ ] Use `AsyncValue.when` pattern instead of `FutureBuilder`
-- [ ] Replace `LoadingSpinner` with `ListSkeleton`
-- [ ] Replace custom error handling with `ErrorDisplay` widget
-- [ ] Replace custom empty state with appropriate `EmptyState` variant
-- [ ] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show`
-- [ ] Add refresh functionality using provider invalidation
-- **Estimated Time**: 2-3 hours
+### ✅ 6. Migrate `lib/screens/student/student_schedule_screen.dart`
+- [x] Replace direct API calls with appropriate schedule provider
+- [x] Use `AsyncValue.when` pattern instead of `FutureBuilder`
+- [x] Replace `LoadingSpinner` with `ListSkeleton`
+- [x] Replace custom error handling with `ErrorDisplay` widget
+- [x] Replace custom empty state with appropriate `EmptyState` variant
+- [x] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show`
+- [x] Add refresh functionality using provider invalidation
+- **Status**: ✅ **COMPLETED**
 - **Reference**: `lib/screens/owner/session_management_screen.dart`
 
-### ⬜ 7. Migrate `lib/screens/student/student_calendar_screen.dart`
-- [ ] Replace direct API calls with `calendarEventsProvider(startDate, endDate)`
-- [ ] Use `AsyncValue.when` pattern instead of `FutureBuilder`
-- [ ] Replace `LoadingSpinner` with `ListSkeleton`
-- [ ] Replace custom error handling with `ErrorDisplay` widget
-- [ ] Replace custom empty state with `EmptyState.noEvents()`
-- [ ] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show`
-- [ ] Add refresh functionality using provider invalidation
-- **Estimated Time**: 2-3 hours
+### ✅ 7. Migrate `lib/screens/student/student_calendar_screen.dart`
+- [x] Replace direct API calls with `calendarEventsProvider(startDate, endDate)`
+- [x] Use `AsyncValue.when` pattern instead of `FutureBuilder`
+- [x] Replace `LoadingSpinner` with `ListSkeleton`
+- [x] Replace custom error handling with `ErrorDisplay` widget
+- [x] Replace custom empty state with `EmptyState.noEvents()`
+- [x] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show`
+- [x] Add refresh functionality using provider invalidation
+- **Status**: ✅ **COMPLETED**
 - **Reference**: `lib/screens/owner/calendar_view_screen.dart`
 
-### ⬜ 8. Migrate `lib/screens/student/student_profile_screen.dart`
-- [ ] Replace direct API calls with `studentByIdProvider(userId)` for reading
-- [ ] Use `AsyncValue.when` pattern for loading profile data
-- [ ] Replace `LoadingSpinner` with `ProfileSkeleton` (1 instance found)
-- [ ] Replace custom error handling with `ErrorDisplay` widget
-- [ ] Keep using `studentListProvider.notifier` for updates (already done ✅)
-- [ ] Ensure `SuccessSnackbar` is used consistently (already done ✅)
-- [ ] Add refresh functionality using provider invalidation
-- **Estimated Time**: 1-2 hours (mostly cleanup)
+### ✅ 8. Migrate `lib/screens/student/student_profile_screen.dart`
+- [x] Replace direct API calls with `studentByIdProvider(userId)` for reading
+- [x] Use `AsyncValue.when` pattern for loading profile data
+- [x] Replace `LoadingSpinner` with `ProfileSkeleton` (1 instance found)
+- [x] Replace custom error handling with `ErrorDisplay` widget
+- [x] Keep using `studentListProvider.notifier` for updates (already done ✅)
+- [x] Ensure `SuccessSnackbar` is used consistently (already done ✅)
+- [x] Add refresh functionality using provider invalidation
+- **Status**: ✅ **COMPLETED**
 - **Reference**: `lib/screens/owner/students_screen.dart` (edit functionality)
 
-### ⬜ 9. Migrate `lib/screens/student/student_settings_screen.dart`
-- [ ] Review if any API calls need provider migration
-- [ ] Use `AsyncValue.when` pattern if applicable
-- [ ] Replace `LoadingSpinner` with appropriate skeleton if needed
-- [ ] Replace custom error handling with `ErrorDisplay` widget
-- [ ] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show`
-- **Estimated Time**: 1-2 hours
-- **Note**: May not need provider migration if it's just settings storage
+### ✅ 9. Migrate `lib/screens/student/student_settings_screen.dart`
+- [x] Review if any API calls need provider migration
+- [x] Use `AsyncValue.when` pattern if applicable
+- [x] Replace `LoadingSpinner` with appropriate skeleton if needed
+- [x] Replace custom error handling with `ErrorDisplay` widget
+- [x] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show`
+- **Status**: ✅ **COMPLETED** (No API calls - uses local storage only)
+- **Note**: No provider migration needed - uses local storage for settings
 
-### ⬜ 10. Migrate `lib/screens/student/student_more_screen.dart`
-- [ ] Review if any API calls need provider migration
-- [ ] Use `AsyncValue.when` pattern if applicable
-- [ ] Replace `LoadingSpinner` with appropriate skeleton if needed
-- [ ] Replace custom error handling with `ErrorDisplay` widget
-- [ ] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show`
-- **Estimated Time**: 1-2 hours
-- **Note**: May not need provider migration if it's just navigation
+### ✅ 10. Migrate `lib/screens/student/student_more_screen.dart`
+- [x] Review if any API calls need provider migration
+- [x] Use `AsyncValue.when` pattern if applicable
+- [x] Replace `LoadingSpinner` with appropriate skeleton if needed
+- [x] Replace custom error handling with `ErrorDisplay` widget
+- [x] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show`
+- **Status**: ✅ **COMPLETED** (No API calls - navigation only)
+- **Note**: No provider migration needed - navigation hub only
 
-### ⬜ 11. Review `lib/screens/student/student_home_screen.dart`
-- [ ] Verify all providers are used correctly (already uses `studentDashboardProvider` ✅)
-- [ ] Verify `DashboardSkeleton` is used (already done ✅)
-- [ ] Verify `ErrorDisplay` is used (already done ✅)
-- [ ] Ensure `SuccessSnackbar` is used if needed
-- **Estimated Time**: 30 minutes (verification only)
-- **Status**: Mostly complete, just needs verification
+### ✅ 11. Review `lib/screens/student/student_home_screen.dart`
+- [x] Verify all providers are used correctly (already uses `studentDashboardProvider` ✅)
+- [x] Verify `DashboardSkeleton` is used (already done ✅)
+- [x] Verify `ErrorDisplay` is used (already done ✅)
+- [x] Ensure `SuccessSnackbar` is used if needed
+- **Status**: ✅ **COMPLETED** (All requirements met)
 
-### ⬜ 12. Review `lib/screens/student/profile_completion_screen.dart`
-- [ ] Verify provider usage (already uses `studentListProvider.notifier` ✅)
-- [ ] Verify `SuccessSnackbar` is used (already done ✅)
-- [ ] Ensure proper error handling with `ErrorDisplay` if needed
-- **Estimated Time**: 30 minutes (verification only)
-- **Status**: Mostly complete, just needs verification
+### ✅ 12. Review `lib/screens/student/profile_completion_screen.dart`
+- [x] Verify provider usage (already uses `studentListProvider.notifier` ✅)
+- [x] Verify `SuccessSnackbar` is used (already done ✅)
+- [x] Ensure proper error handling with `ErrorDisplay` if needed
+- [x] Removed `LoadingSpinner` - replaced with button disabled state
+- **Status**: ✅ **COMPLETED** (All requirements met)
 
-### ⬜ 13. Review `lib/screens/student/student_dashboard.dart`
-- [ ] Verify navigation and routing
-- [ ] Ensure all child screens use providers (covered by above items)
-- **Estimated Time**: 15 minutes (verification only)
+### ✅ 13. Review `lib/screens/student/student_dashboard.dart`
+- [x] Verify navigation and routing
+- [x] Ensure all child screens use providers (covered by above items)
+- **Status**: ✅ **COMPLETED** (Navigation hub - all child screens migrated)
 
 ---
 
 ## HIGH PRIORITY - Coach Portal Screen Migration
 
-### ⬜ 14. Migrate `lib/screens/coach/coach_attendance_screen.dart`
-- [ ] Replace direct API calls with `attendanceProvider` or `coachAttendanceProvider`
-- [ ] Use `AsyncValue.when` pattern instead of `FutureBuilder`
-- [ ] Replace `LoadingSpinner` with `ListSkeleton`
-- [ ] Replace custom error handling with `ErrorDisplay` widget
-- [ ] Replace custom empty state with `EmptyState.noAttendance()`
-- [ ] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show`
-- [ ] Add refresh functionality using provider invalidation
-- **Estimated Time**: 2-3 hours
-- **Reference**: `lib/screens/owner/attendance_screen.dart`
+### ✅ 14. Migrate `lib/screens/coach/coach_attendance_screen.dart`
+- [x] Replace direct API calls with `batchStudentsForAttendanceProvider(batchId)`
+- [x] Use `AsyncValue.when` pattern instead of `FutureBuilder`
+- [x] Replace `LoadingSpinner` with `ListSkeleton`
+- [x] Replace custom error handling with `ErrorDisplay` widget
+- [x] Replace custom empty state with `EmptyState.noStudents()`
+- [x] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show` (already done ✅)
+- [x] Add refresh functionality using provider invalidation
+- **Status**: ✅ **COMPLETED**
 
-### ⬜ 15. Migrate `lib/screens/coach/coach_batches_screen.dart`
-- [ ] Replace direct API calls with `batchListProvider` (filtered by coach)
-- [ ] Use `AsyncValue.when` pattern instead of `FutureBuilder`
-- [ ] Replace `LoadingSpinner` with `ListSkeleton`
-- [ ] Replace custom error handling with `ErrorDisplay` widget
-- [ ] Replace custom empty state with `EmptyState.noBatches()`
-- [ ] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show`
-- [ ] Add refresh functionality using provider invalidation
-- **Estimated Time**: 2-3 hours
-- **Reference**: `lib/screens/owner/batches_screen.dart`
+### ✅ 15. Migrate `lib/screens/coach/coach_batches_screen.dart`
+- [x] Replace direct API calls with `coachBatchesProvider(coachId)` and `batchStudentsProvider(batchId)`
+- [x] Use `AsyncValue.when` pattern instead of `FutureBuilder`
+- [x] Replace `LoadingSpinner` with `ListSkeleton`
+- [x] Replace custom error handling with `ErrorDisplay` widget
+- [x] Replace custom empty state with `EmptyState.noStudents()`
+- [x] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show` (already done ✅)
+- [x] Add refresh functionality using provider invalidation
+- **Status**: ✅ **COMPLETED**
 
-### ⬜ 16. Migrate `lib/screens/coach/coach_schedule_screen.dart`
-- [ ] Replace direct API calls with appropriate schedule provider
-- [ ] Use `AsyncValue.when` pattern instead of `FutureBuilder`
-- [ ] Replace `LoadingSpinner` with `ListSkeleton`
-- [ ] Replace custom error handling with `ErrorDisplay` widget
-- [ ] Replace custom empty state with appropriate `EmptyState` variant
-- [ ] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show`
-- [ ] Add refresh functionality using provider invalidation
-- **Estimated Time**: 2-3 hours
-- **Reference**: `lib/screens/owner/session_management_screen.dart`
+### ✅ 16. Migrate `lib/screens/coach/coach_schedule_screen.dart`
+- [x] Replace direct API calls with `coachScheduleProvider(coachId)`
+- [x] Use `AsyncValue.when` pattern instead of `FutureBuilder` (already done ✅)
+- [x] Replace `LoadingSpinner` with `ListSkeleton` (already done ✅)
+- [x] Replace custom error handling with `ErrorDisplay` widget (already done ✅)
+- [x] Replace custom empty state with appropriate `EmptyState` variant
+- [x] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show` (already done ✅)
+- [x] Add refresh functionality using provider invalidation (already done ✅)
+- **Status**: ✅ **COMPLETED**
 
-### ⬜ 17. Migrate `lib/screens/coach/coach_announcements_screen.dart`
-- [ ] Replace direct API calls with `announcementListProvider` (filtered by audience)
-- [ ] Use `AsyncValue.when` pattern instead of `FutureBuilder`
-- [ ] Replace `LoadingSpinner` with `ListSkeleton`
-- [ ] Replace custom error handling with `ErrorDisplay` widget
-- [ ] Replace custom empty state with `EmptyState.noAnnouncements()`
-- [ ] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show`
-- [ ] Add refresh functionality using provider invalidation
-- **Estimated Time**: 2-3 hours
-- **Reference**: `lib/screens/owner/announcement_management_screen.dart`
+### ✅ 17. Migrate `lib/screens/coach/coach_announcements_screen.dart`
+- [x] Replace direct API calls with `coachAnnouncementsProvider` (already done ✅)
+- [x] Use `AsyncValue.when` pattern instead of `FutureBuilder` (already done ✅)
+- [x] Replace `LoadingSpinner` with `ListSkeleton` (already done ✅)
+- [x] Replace custom error handling with `ErrorDisplay` widget (already done ✅)
+- [x] Replace custom empty state with `EmptyState.noAnnouncements()` (already done ✅)
+- [x] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show` (already done ✅)
+- [x] Add refresh functionality using provider invalidation (already done ✅)
+- **Status**: ✅ **COMPLETED**
 
-### ⬜ 18. Migrate `lib/screens/coach/coach_calendar_screen.dart`
-- [ ] Replace direct API calls with `calendarEventsProvider(startDate, endDate)`
-- [ ] Use `AsyncValue.when` pattern instead of `FutureBuilder`
-- [ ] Replace `LoadingSpinner` with `ListSkeleton`
-- [ ] Replace custom error handling with `ErrorDisplay` widget
-- [ ] Replace custom empty state with `EmptyState.noEvents()`
-- [ ] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show`
-- [ ] Add refresh functionality using provider invalidation
-- **Estimated Time**: 2-3 hours
-- **Reference**: `lib/screens/owner/calendar_view_screen.dart`
+### ✅ 18. Migrate `lib/screens/coach/coach_calendar_screen.dart`
+- [x] Replace direct API calls with `calendarEventsProvider(startDate, endDate)`
+- [x] Use `AsyncValue.when` pattern instead of `FutureBuilder`
+- [x] Replace `LoadingSpinner` with `ListSkeleton`
+- [x] Replace custom error handling with `ErrorDisplay` widget
+- [x] Replace custom empty state with `EmptyState.noEvents()`
+- [x] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show` (already done ✅)
+- [x] Add refresh functionality using provider invalidation
+- **Status**: ✅ **COMPLETED**
 
-### ⬜ 19. Migrate `lib/screens/coach/coach_profile_screen.dart`
-- [ ] Replace direct API calls with `coachByIdProvider(coachId)` for reading
-- [ ] Use `AsyncValue.when` pattern for loading profile data
-- [ ] Replace `LoadingSpinner` with `ProfileSkeleton` (3 instances found)
-- [ ] Replace custom error handling with `ErrorDisplay` widget
-- [ ] Replace direct `coachService.updateCoach` with `coachListProvider.notifier` if available
-- [ ] Ensure `SuccessSnackbar` is used consistently (already done ✅)
-- [ ] Add refresh functionality using provider invalidation
-- **Estimated Time**: 2-3 hours
-- **Reference**: `lib/screens/owner/coaches_screen.dart` (edit functionality)
+### ✅ 19. Migrate `lib/screens/coach/coach_profile_screen.dart`
+- [x] Replace direct API calls with `coachByIdProvider(coachId)` for reading
+- [x] Use `AsyncValue.when` pattern for loading profile data
+- [x] Replace `LoadingSpinner` with `ProfileSkeleton` (removed all instances)
+- [x] Replace custom error handling with `ErrorDisplay` widget
+- [x] Keep using `coachService.updateCoach` (appropriate for updates)
+- [x] Ensure `SuccessSnackbar` is used consistently (already done ✅)
+- [x] Add refresh functionality using provider invalidation
+- **Status**: ✅ **COMPLETED**
 
-### ⬜ 20. Review `lib/screens/coach/coach_home_screen.dart`
-- [ ] Verify all providers are used correctly (already uses `coachStatsProvider` ✅)
-- [ ] Verify `GridSkeleton` is used (already done ✅)
-- [ ] Verify `ErrorDisplay` is used (already done ✅)
-- [ ] Ensure `SuccessSnackbar` is used if needed
-- **Estimated Time**: 30 minutes (verification only)
-- **Status**: Mostly complete, just needs verification
+### ✅ 20. Review `lib/screens/coach/coach_home_screen.dart`
+- [x] Verify all providers are used correctly (already uses `coachStatsProvider` ✅)
+- [x] Verify `GridSkeleton` is used (already done ✅)
+- [x] Verify `ErrorDisplay` is used (already done ✅)
+- [x] Ensure `SuccessSnackbar` is used if needed (not needed - no user actions)
+- **Status**: ✅ **COMPLETED**
 
-### ⬜ 21. Review `lib/screens/coach/coach_settings_screen.dart`
-- [ ] Review if any API calls need provider migration
-- [ ] Use `AsyncValue.when` pattern if applicable
-- [ ] Replace `LoadingSpinner` with appropriate skeleton if needed
-- [ ] Replace custom error handling with `ErrorDisplay` widget
-- [ ] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show`
-- **Estimated Time**: 1-2 hours
-- **Note**: May not need provider migration if it's just settings storage
+### ✅ 21. Review `lib/screens/coach/coach_settings_screen.dart`
+- [x] Review if any API calls need provider migration (no API calls - uses local storage)
+- [x] Use `AsyncValue.when` pattern if applicable (not applicable)
+- [x] Replace `LoadingSpinner` with appropriate skeleton if needed (not needed)
+- [x] Replace custom error handling with `ErrorDisplay` widget (not needed)
+- [x] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show`
+- **Status**: ✅ **COMPLETED**
 
-### ⬜ 22. Review `lib/screens/coach/coach_more_screen.dart`
-- [ ] Review if any API calls need provider migration
-- [ ] Use `AsyncValue.when` pattern if applicable
-- [ ] Replace `LoadingSpinner` with appropriate skeleton if needed
-- [ ] Replace custom error handling with `ErrorDisplay` widget
-- [ ] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show`
-- **Estimated Time**: 1-2 hours
-- **Note**: May not need provider migration if it's just navigation
+### ✅ 22. Review `lib/screens/coach/coach_more_screen.dart`
+- [x] Review if any API calls need provider migration (no API calls - navigation only)
+- [x] Use `AsyncValue.when` pattern if applicable (not applicable)
+- [x] Replace `LoadingSpinner` with appropriate skeleton if needed (not needed)
+- [x] Replace custom error handling with `ErrorDisplay` widget (not needed)
+- [x] Replace `ScaffoldMessenger.showSnackBar` with `SuccessSnackbar.show` (already done ✅)
+- **Status**: ✅ **COMPLETED**
 
-### ⬜ 23. Review `lib/screens/coach/coach_dashboard.dart`
-- [ ] Verify navigation and routing
-- [ ] Ensure all child screens use providers (covered by above items)
-- **Estimated Time**: 15 minutes (verification only)
+### ✅ 23. Review `lib/screens/coach/coach_dashboard.dart`
+- [x] Verify navigation and routing
+- [x] Ensure all child screens use providers (covered by above items)
+- **Status**: ✅ **COMPLETED**
 
 ---
 
 ## MEDIUM PRIORITY - Loading State Fixes
 
-### ⬜ 24. Fix `lib/screens/owner/home_screen.dart`
-- [ ] Replace all `LoadingSpinner` instances with `DashboardSkeleton`
-- [ ] Verify `AsyncValue.when` pattern is used correctly
-- [ ] Ensure consistent loading states throughout the screen
-- **Estimated Time**: 1 hour
-- **Current Status**: Uses `DashboardSkeleton` in some places, but may have `LoadingSpinner` in others
+### ✅ 24. Fix `lib/screens/owner/home_screen.dart`
+- [x] Replace all `LoadingSpinner` instances with `DashboardSkeleton` (no instances found - already using skeletons)
+- [x] Verify `AsyncValue.when` pattern is used correctly (already done ✅)
+- [x] Ensure consistent loading states throughout the screen (already done ✅)
+- **Status**: ✅ **COMPLETED** (No changes needed - already compliant)
 
-### ⬜ 25. Fix `lib/screens/coach/coach_profile_screen.dart`
-- [ ] Replace 3 instances of `LoadingSpinner` with `ProfileSkeleton`
-- [ ] Verify loading states are consistent
-- **Estimated Time**: 30 minutes
-- **Current Status**: Already uses `ProfileSkeleton` in one place, but has 3 `LoadingSpinner` instances
+### ✅ 25. Fix `lib/screens/coach/coach_profile_screen.dart`
+- [x] Replace `LoadingSpinner` instances with `ProfileSkeleton` (all removed during migration)
+- [x] Verify loading states are consistent (using `ProfileSkeleton` and `AsyncValue.when`)
+- **Status**: ✅ **COMPLETED**
 
-### ⬜ 26. Fix `lib/screens/student/student_profile_screen.dart`
-- [ ] Replace 1 instance of `LoadingSpinner` with `ProfileSkeleton`
-- [ ] Verify loading states are consistent
-- **Estimated Time**: 15 minutes
-- **Current Status**: Mostly uses providers, but has 1 `LoadingSpinner` instance
+### ✅ 26. Fix `lib/screens/student/student_profile_screen.dart`
+- [x] Replace `LoadingSpinner` instances with `ProfileSkeleton` (no instances found - already compliant)
+- [x] Verify loading states are consistent (already using `ProfileSkeleton`)
+- **Status**: ✅ **COMPLETED** (No changes needed - already compliant)
 
 ---
 

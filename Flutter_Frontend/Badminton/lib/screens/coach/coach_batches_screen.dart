@@ -3,14 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../providers/coach_provider.dart';
 import '../../providers/auth_provider.dart';
-import '../../providers/service_providers.dart';
+import '../../providers/batch_provider.dart';
 import '../../models/batch.dart';
-import '../../models/student.dart';
 
 /// Coach Batches Screen - View assigned batches (READ-ONLY)
 class CoachBatchesScreen extends ConsumerStatefulWidget {
@@ -343,19 +341,6 @@ class _BatchStudentsSheet extends ConsumerStatefulWidget {
 }
 
 class _BatchStudentsSheetState extends ConsumerState<_BatchStudentsSheet> {
-  late Future<List<Student>> _studentsFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadStudents();
-  }
-
-  void _loadStudents() {
-    final batchService = ref.read(batchServiceProvider);
-    _studentsFuture = batchService.getBatchStudents(widget.batch.id);
-  }
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -403,97 +388,85 @@ class _BatchStudentsSheetState extends ConsumerState<_BatchStudentsSheet> {
 
           // Students List
           Expanded(
-            child: FutureBuilder<List<Student>>(
-              future: _studentsFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: ListSkeleton(itemCount: 5));
-                }
-
-                if (snapshot.hasError) {
-                  return ErrorDisplay(
-                    message: 'Failed to load students',
-                    onRetry: () {
-                      setState(() {
-                        _loadStudents();
-                      });
-                    },
-                  );
-                }
-
-                final students = snapshot.data ?? [];
-                if (students.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      'No students enrolled in this batch',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  );
-                }
-
-                return ListView.builder(
-                  padding: const EdgeInsets.all(AppDimensions.paddingL),
-                  itemCount: students.length,
-                  itemBuilder: (context, index) {
-                    final student = students[index];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
-                      child: NeumorphicContainer(
-                        padding: const EdgeInsets.all(AppDimensions.paddingM),
-                        child: Row(
-                          children: [
-                            CircleAvatar(
-                              radius: 24,
-                              backgroundColor: AppColors.background,
-                              child: Text(
-                                student.name.isNotEmpty ? student.name[0].toUpperCase() : '?',
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: AppDimensions.spacingM),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    student.name,
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppColors.textPrimary,
-                                    ),
-                                  ),
-                                  if (student.phone.isNotEmpty) ...[
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      student.phone,
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        color: AppColors.textSecondary,
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
+            child: _buildStudentsList(),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildStudentsList() {
+    final studentsAsync = ref.watch(batchStudentsProvider(widget.batch.id));
+
+    return studentsAsync.when(
+      loading: () => const Center(child: ListSkeleton(itemCount: 5)),
+      error: (error, stack) => ErrorDisplay(
+        message: 'Failed to load students: ${error.toString()}',
+        onRetry: () => ref.invalidate(batchStudentsProvider(widget.batch.id)),
+      ),
+      data: (students) {
+        if (students.isEmpty) {
+          return Center(
+            child: EmptyState.noStudents(),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(AppDimensions.paddingL),
+          itemCount: students.length,
+          itemBuilder: (context, index) {
+            final student = students[index];
+            return Padding(
+              padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
+              child: NeumorphicContainer(
+                padding: const EdgeInsets.all(AppDimensions.paddingM),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 24,
+                      backgroundColor: AppColors.background,
+                      child: Text(
+                        student.name.isNotEmpty ? student.name[0].toUpperCase() : '?',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppDimensions.spacingM),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            student.name,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          if (student.phone.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              student.phone,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

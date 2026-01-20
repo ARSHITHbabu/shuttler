@@ -106,13 +106,13 @@ class _StudentFeesScreenState extends ConsumerState<StudentFeesScreen> {
         }
 
         final userId = authState.userId;
-        final feesAsync = ref.watch(feeListProvider(studentId: userId));
+        final feesAsync = ref.watch(feeByStudentProvider(userId));
 
         return Scaffold(
           backgroundColor: Colors.transparent,
           body: RefreshIndicator(
             onRefresh: () async {
-              ref.invalidate(feeListProvider(studentId: userId));
+              ref.invalidate(feeByStudentProvider(userId));
             },
             child: CustomScrollView(
               slivers: [
@@ -149,7 +149,7 @@ class _StudentFeesScreenState extends ConsumerState<StudentFeesScreen> {
                     ),
                     error: (error, stack) => ErrorDisplay(
                       message: 'Failed to load fee records: ${error.toString()}',
-                      onRetry: () => ref.invalidate(feeListProvider(studentId: userId)),
+                      onRetry: () => ref.invalidate(feeByStudentProvider(userId)),
                     ),
                     data: (fees) {
                       if (fees.isEmpty) {

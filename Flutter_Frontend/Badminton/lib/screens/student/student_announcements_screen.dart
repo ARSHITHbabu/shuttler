@@ -4,11 +4,8 @@ import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/error_widget.dart';
-import '../../widgets/common/success_snackbar.dart';
-import '../../providers/service_providers.dart';
 import '../../providers/announcement_provider.dart';
 import '../../models/announcement.dart';
 
@@ -76,13 +73,13 @@ class _StudentAnnouncementsScreenState extends ConsumerState<StudentAnnouncement
     final isDark = theme.brightness == Brightness.dark;
 
     // Get announcements for students using provider
-    final announcementsAsync = ref.watch(announcementByAudienceProvider('students'));
+    final announcementsAsync = ref.watch(announcementListProvider(targetAudience: 'students'));
 
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: RefreshIndicator(
         onRefresh: () async {
-          ref.invalidate(announcementByAudienceProvider('students'));
+          ref.invalidate(announcementListProvider(targetAudience: 'students'));
         },
         child: CustomScrollView(
           slivers: [
@@ -121,7 +118,7 @@ class _StudentAnnouncementsScreenState extends ConsumerState<StudentAnnouncement
                   padding: const EdgeInsets.all(AppDimensions.paddingL),
                   child: ErrorDisplay(
                     message: 'Failed to load announcements: ${error.toString()}',
-                    onRetry: () => ref.invalidate(announcementByAudienceProvider('students')),
+                    onRetry: () => ref.invalidate(announcementListProvider(targetAudience: 'students')),
                   ),
                 ),
                 data: (announcements) {
@@ -331,43 +328,6 @@ class _StudentAnnouncementsScreenState extends ConsumerState<StudentAnnouncement
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.all(AppDimensions.paddingXl),
-      child: Column(
-        children: [
-          const SizedBox(height: AppDimensions.spacingXxl),
-          Icon(
-            Icons.campaign_outlined,
-            size: 64,
-            color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
-          ),
-          const SizedBox(height: AppDimensions.spacingM),
-          Text(
-            _searchQuery.isNotEmpty
-                ? 'No announcements match your search'
-                : _selectedFilter != 'all'
-                    ? 'No $_selectedFilter priority announcements'
-                    : 'No announcements yet',
-            style: TextStyle(
-              fontSize: 16,
-              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-            ),
-          ),
-          const SizedBox(height: AppDimensions.spacingS),
-          Text(
-            'Academy announcements will appear here',
-            style: TextStyle(
-              fontSize: 14,
-              color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
       ),
     );
   }

@@ -4,13 +4,13 @@ import 'package:intl/intl.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/neumorphic_button.dart';
 import '../../providers/coach_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/attendance_provider.dart';
 import '../../providers/service_providers.dart';
 import '../../models/student.dart';
 
@@ -227,38 +227,23 @@ class _CoachAttendanceScreenState extends ConsumerState<CoachAttendanceScreen> {
   }
 
   Widget _buildStudentsList() {
-    final batchService = ref.watch(batchServiceProvider);
-    final studentsFuture = batchService.getBatchStudents(_selectedBatchId!);
+    if (_selectedBatchId == null) {
+      return const SizedBox.shrink();
+    }
 
-    return FutureBuilder<List<Student>>(
-      future: studentsFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: ListSkeleton(itemCount: 5));
-        }
+    final studentsAsync = ref.watch(batchStudentsForAttendanceProvider(_selectedBatchId!));
 
-        if (snapshot.hasError) {
-          return ErrorDisplay(
-            message: 'Failed to load students',
-            onRetry: () {
-              setState(() {});
-            },
-          );
-        }
-
-        final students = snapshot.data ?? [];
+    return studentsAsync.when(
+      loading: () => const Center(child: ListSkeleton(itemCount: 5)),
+      error: (error, stack) => ErrorDisplay(
+        message: 'Failed to load students: ${error.toString()}',
+        onRetry: () => ref.invalidate(batchStudentsForAttendanceProvider(_selectedBatchId!)),
+      ),
+      data: (students) {
         if (students.isEmpty) {
-          return NeumorphicContainer(
+          return Padding(
             padding: const EdgeInsets.all(AppDimensions.paddingL),
-            child: const Center(
-              child: Text(
-                'No students enrolled in this batch',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ),
+            child: EmptyState.noStudents(),
           );
         }
 
