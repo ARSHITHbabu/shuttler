@@ -33,6 +33,11 @@ class ApiEndpoints {
   static String studentAttendance(int id) => '/students/$id/attendance';
   static String studentPerformance(int id) => '/students/$id/performance';
 
+  // Sessions (Seasons)
+  static const String sessions = '/sessions/';
+  static String sessionById(int id) => '/sessions/$id';
+  static String sessionBatches(int id) => '/sessions/$id/batches';
+
   // Batches
   static const String batches = '/batches/';
   static String batchById(int id) => '/batches/$id';

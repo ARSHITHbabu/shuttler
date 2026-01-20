@@ -135,6 +135,17 @@ class OwnerDB(Base):
     # RELATIONSHIPS (will be defined after the related models are created):
     # Note: Announcements and calendar events now support both coaches and owners via polymorphic relationships
 
+class SessionDB(Base):
+    """Session/Season entity that groups multiple batches"""
+    __tablename__ = "sessions"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)  # e.g., "Fall 2026", "Winter 2026"
+    start_date = Column(String, nullable=False)
+    end_date = Column(String, nullable=False)
+    status = Column(String, default="active")  # "active" or "archived"
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
 class BatchDB(Base):
     __tablename__ = "batches"
     id = Column(Integer, primary_key=True, index=True)
@@ -148,6 +159,7 @@ class BatchDB(Base):
     created_by = Column(String, nullable=False)
     assigned_coach_id = Column(Integer, nullable=True)
     assigned_coach_name = Column(String, nullable=True)
+    session_id = Column(Integer, ForeignKey("sessions.id"), nullable=True)  # Link to session
 
 class StudentDB(Base):
     __tablename__ = "students"
@@ -675,6 +687,33 @@ class OwnerUpdate(BaseModel):
     fcm_token: Optional[str] = None
 
 # Batch Models
+# Session Models
+class SessionCreate(BaseModel):
+    name: str
+    start_date: str
+    end_date: str
+    status: Optional[str] = "active"
+
+class SessionUpdate(BaseModel):
+    name: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    status: Optional[str] = None
+
+class Session(BaseModel):
+    id: int
+    name: str
+    start_date: str
+    end_date: str
+    status: str
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+        # Allow population by field name or alias
+        populate_by_name = True
+
 class BatchCreate(BaseModel):
     batch_name: str
     capacity: int
@@ -686,6 +725,7 @@ class BatchCreate(BaseModel):
     created_by: str
     assigned_coach_id: Optional[int] = None
     assigned_coach_name: Optional[str] = None
+    session_id: Optional[int] = None
 
 class Batch(BaseModel):
     id: int
@@ -699,6 +739,7 @@ class Batch(BaseModel):
     created_by: str
     assigned_coach_id: Optional[int] = None
     assigned_coach_name: Optional[str] = None
+    session_id: Optional[int] = None
     
     class Config:
         from_attributes = True
@@ -713,6 +754,7 @@ class BatchUpdate(BaseModel):
     location: Optional[str] = None
     assigned_coach_id: Optional[int] = None
     assigned_coach_name: Optional[str] = None
+    session_id: Optional[int] = None
 
 # Student Models
 class StudentCreate(BaseModel):
@@ -2468,6 +2510,148 @@ def delete_fee_payment(fee_id: int, payment_id: int):
             db.commit()
         
         return {"message": "Payment deleted successfully"}
+    finally:
+        db.close()
+
+# ==================== Session Routes ====================
+
+@app.post("/sessions/", response_model=Session)
+def create_session(session: SessionCreate):
+    """Create a new session/season"""
+    db = SessionLocal()
+    try:
+        db_session = SessionDB(**session.model_dump())
+        db.add(db_session)
+        db.commit()
+        db.refresh(db_session)
+        # Convert to response format
+        return Session(
+            id=db_session.id,
+            name=db_session.name,
+            start_date=db_session.start_date,
+            end_date=db_session.end_date,
+            status=db_session.status,
+            created_at=db_session.created_at.isoformat() if db_session.created_at else None,
+            updated_at=db_session.updated_at.isoformat() if db_session.updated_at else None,
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        db.close()
+
+@app.get("/sessions/", response_model=List[Session])
+def get_sessions(status: Optional[str] = None):
+    """Get all sessions, optionally filtered by status"""
+    db = SessionLocal()
+    try:
+        query = db.query(SessionDB)
+        if status:
+            query = query.filter(SessionDB.status == status)
+        sessions = query.order_by(SessionDB.start_date.desc()).all()
+        return [
+            Session(
+                id=s.id,
+                name=s.name,
+                start_date=s.start_date,
+                end_date=s.end_date,
+                status=s.status,
+                created_at=s.created_at.isoformat() if s.created_at else None,
+                updated_at=s.updated_at.isoformat() if s.updated_at else None,
+            )
+            for s in sessions
+        ]
+    finally:
+        db.close()
+
+@app.get("/sessions/{session_id}", response_model=Session)
+def get_session(session_id: int):
+    """Get a specific session by ID"""
+    db = SessionLocal()
+    try:
+        session = db.query(SessionDB).filter(SessionDB.id == session_id).first()
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        return Session(
+            id=session.id,
+            name=session.name,
+            start_date=session.start_date,
+            end_date=session.end_date,
+            status=session.status,
+            created_at=session.created_at.isoformat() if session.created_at else None,
+            updated_at=session.updated_at.isoformat() if session.updated_at else None,
+        )
+    finally:
+        db.close()
+
+@app.put("/sessions/{session_id}", response_model=Session)
+def update_session(session_id: int, session_update: SessionUpdate):
+    """Update a session"""
+    db = SessionLocal()
+    try:
+        session = db.query(SessionDB).filter(SessionDB.id == session_id).first()
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        update_data = session_update.model_dump(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(session, key, value)
+        
+        # Update updated_at timestamp
+        session.updated_at = datetime.now()
+        
+        db.commit()
+        db.refresh(session)
+        return Session(
+            id=session.id,
+            name=session.name,
+            start_date=session.start_date,
+            end_date=session.end_date,
+            status=session.status,
+            created_at=session.created_at.isoformat() if session.created_at else None,
+            updated_at=session.updated_at.isoformat() if session.updated_at else None,
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        db.close()
+
+@app.delete("/sessions/{session_id}")
+def delete_session(session_id: int):
+    """Delete a session (only if no batches are assigned)"""
+    db = SessionLocal()
+    try:
+        session = db.query(SessionDB).filter(SessionDB.id == session_id).first()
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        # Check if any batches are assigned to this session
+        batches_count = db.query(BatchDB).filter(BatchDB.session_id == session_id).count()
+        if batches_count > 0:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Cannot delete session. {batches_count} batch(es) are assigned to this session."
+            )
+        
+        db.delete(session)
+        db.commit()
+        return {"message": "Session deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        db.close()
+
+@app.get("/sessions/{session_id}/batches", response_model=List[Batch])
+def get_session_batches(session_id: int):
+    """Get all batches assigned to a session"""
+    db = SessionLocal()
+    try:
+        batches = db.query(BatchDB).filter(BatchDB.session_id == session_id).all()
+        return batches
     finally:
         db.close()
 

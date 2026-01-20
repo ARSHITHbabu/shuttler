@@ -16,6 +16,8 @@ import '../core/services/announcement_service.dart';
 import '../core/services/calendar_service.dart';
 import '../core/services/invitation_service.dart';
 import '../core/services/notification_service.dart';
+import '../core/services/tournament_service.dart';
+import '../core/services/session_service.dart';
 import '../core/network/connectivity_service.dart';
 import '../core/network/request_queue.dart';
 import 'package:dio/dio.dart';
@@ -151,6 +153,20 @@ InvitationService invitationService(InvitationServiceRef ref) {
 NotificationService notificationService(NotificationServiceRef ref) {
   final apiService = ref.watch(apiServiceProvider);
   return NotificationService(apiService);
+}
+
+/// Provider for TournamentService singleton
+@riverpod
+TournamentService tournamentService(TournamentServiceRef ref) {
+  final apiService = ref.watch(apiServiceProvider);
+  return TournamentService(apiService);
+}
+
+/// Provider for SessionService singleton
+@riverpod
+SessionService sessionService(SessionServiceRef ref) {
+  final apiService = ref.watch(apiServiceProvider);
+  return SessionService(apiService);
 }
 
 /// Provider for ConnectivityService singleton

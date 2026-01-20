@@ -7,6 +7,7 @@ import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../providers/auth_provider.dart';
 import 'session_management_screen.dart';
+import 'session_season_management_screen.dart';
 import 'announcement_management_screen.dart';
 import 'calendar_view_screen.dart';
 import 'reports_screen.dart';
@@ -81,11 +82,23 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
             const SizedBox(height: AppDimensions.spacingM),
             _MenuItem(
               icon: Icons.access_time_outlined,
-              title: 'Sessions',
+              title: 'Practice Sessions',
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (context) => const SessionManagementScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.event_note_outlined,
+              title: 'Session/Season Management',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const SessionSeasonManagementScreen(),
                   ),
                 );
               },

@@ -11,6 +11,7 @@ class Batch {
   final String? assignedCoachName;
   final String? location;
   final String createdBy;
+  final int? sessionId; // Link to session/season
 
   Batch({
     required this.id,
@@ -24,6 +25,7 @@ class Batch {
     this.assignedCoachName,
     this.location,
     required this.createdBy,
+    this.sessionId,
   });
 
   /// Create Batch instance from JSON
@@ -40,6 +42,7 @@ class Batch {
       assignedCoachName: json['assigned_coach_name'] as String?,
       location: json['location'] as String?,
       createdBy: json['created_by'] as String,
+      sessionId: json['session_id'] as int?,
     );
   }
 
@@ -56,6 +59,7 @@ class Batch {
       'assigned_coach_name': assignedCoachName,
       'location': location,
       'created_by': createdBy,
+      'session_id': sessionId,
     };
   }
 
@@ -72,6 +76,7 @@ class Batch {
     String? assignedCoachName,
     String? location,
     String? createdBy,
+    int? sessionId,
   }) {
     return Batch(
       id: id ?? this.id,
@@ -85,6 +90,7 @@ class Batch {
       assignedCoachName: assignedCoachName ?? this.assignedCoachName,
       location: location ?? this.location,
       createdBy: createdBy ?? this.createdBy,
+      sessionId: sessionId ?? this.sessionId,
     );
   }
 
