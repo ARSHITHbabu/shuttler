@@ -1704,8 +1704,43 @@ def create_batch(batch: BatchCreate):
 def get_batches():
     db = SessionLocal()
     try:
-        batches = db.query(BatchDB).all()
-        return batches
+        # Try normal query first
+        try:
+            batches = db.query(BatchDB).all()
+            return batches
+        except Exception as e:
+            # If error is about missing session_id column, rollback and use raw SQL
+            if "session_id" in str(e) or "UndefinedColumn" in str(e):
+                # Rollback the failed transaction
+                db.rollback()
+                from sqlalchemy import text
+                result = db.execute(text("""
+                    SELECT id, batch_name, capacity, fees, start_date, timing, period, 
+                           location, created_by, assigned_coach_id, assigned_coach_name
+                    FROM batches
+                """))
+                batches = []
+                for row in result:
+                    # Create Batch response model directly (not BatchDB)
+                    batch = Batch(
+                        id=row[0],
+                        batch_name=row[1],
+                        capacity=row[2],
+                        fees=row[3],
+                        start_date=row[4],
+                        timing=row[5],
+                        period=row[6],
+                        location=row[7],
+                        created_by=row[8],
+                        assigned_coach_id=row[9],
+                        assigned_coach_name=row[10],
+                        session_id=None,  # Default to None if column doesn't exist
+                    )
+                    batches.append(batch)
+                return batches
+            else:
+                # Re-raise if it's a different error
+                raise
     finally:
         db.close()
 
@@ -1713,8 +1748,40 @@ def get_batches():
 def get_coach_batches(coach_id: int):
     db = SessionLocal()
     try:
-        batches = db.query(BatchDB).filter(BatchDB.assigned_coach_id == coach_id).all()
-        return batches
+        try:
+            batches = db.query(BatchDB).filter(BatchDB.assigned_coach_id == coach_id).all()
+            return batches
+        except Exception as e:
+            # If error is about missing session_id column, rollback and use raw SQL
+            if "session_id" in str(e) or "UndefinedColumn" in str(e):
+                db.rollback()
+                from sqlalchemy import text
+                result = db.execute(text("""
+                    SELECT id, batch_name, capacity, fees, start_date, timing, period, 
+                           location, created_by, assigned_coach_id, assigned_coach_name
+                    FROM batches
+                    WHERE assigned_coach_id = :coach_id
+                """), {"coach_id": coach_id})
+                batches = []
+                for row in result:
+                    batch = Batch(
+                        id=row[0],
+                        batch_name=row[1],
+                        capacity=row[2],
+                        fees=row[3],
+                        start_date=row[4],
+                        timing=row[5],
+                        period=row[6],
+                        location=row[7],
+                        created_by=row[8],
+                        assigned_coach_id=row[9],
+                        assigned_coach_name=row[10],
+                        session_id=None,
+                    )
+                    batches.append(batch)
+                return batches
+            else:
+                raise
     finally:
         db.close()
 
@@ -2055,8 +2122,42 @@ def get_student_batches(student_id: int):
             BatchStudentDB.status == "approved"
         ).all()
         batch_ids = [a.batch_id for a in assignments]
-        batches = db.query(BatchDB).filter(BatchDB.id.in_(batch_ids)).all()
-        return batches
+        if not batch_ids:
+            return []
+        try:
+            batches = db.query(BatchDB).filter(BatchDB.id.in_(batch_ids)).all()
+            return batches
+        except Exception as e:
+            # If error is about missing session_id column, rollback and use raw SQL
+            if "session_id" in str(e) or "UndefinedColumn" in str(e):
+                db.rollback()
+                from sqlalchemy import text
+                result = db.execute(text("""
+                    SELECT id, batch_name, capacity, fees, start_date, timing, period, 
+                           location, created_by, assigned_coach_id, assigned_coach_name
+                    FROM batches
+                    WHERE id = ANY(:batch_ids)
+                """), {"batch_ids": batch_ids})
+                batches = []
+                for row in result:
+                    batch = Batch(
+                        id=row[0],
+                        batch_name=row[1],
+                        capacity=row[2],
+                        fees=row[3],
+                        start_date=row[4],
+                        timing=row[5],
+                        period=row[6],
+                        location=row[7],
+                        created_by=row[8],
+                        assigned_coach_id=row[9],
+                        assigned_coach_name=row[10],
+                        session_id=None,
+                    )
+                    batches.append(batch)
+                return batches
+            else:
+                raise
     finally:
         db.close()
 
@@ -2267,7 +2368,26 @@ def enrich_fee_with_payments(fee: FeeDB, db) -> dict:
     
     # Get student and batch names
     student = db.query(StudentDB).filter(StudentDB.id == fee.student_id).first()
-    batch = db.query(BatchDB).filter(BatchDB.id == fee.batch_id).first()
+    # Try to get batch, handle missing session_id column gracefully
+    batch = None
+    try:
+        batch = db.query(BatchDB).filter(BatchDB.id == fee.batch_id).first()
+    except Exception as e:
+        if "session_id" in str(e) or "UndefinedColumn" in str(e):
+            db.rollback()
+            from sqlalchemy import text
+            result = db.execute(text("""
+                SELECT id, batch_name, capacity, fees, start_date, timing, period, 
+                       location, created_by, assigned_coach_id, assigned_coach_name
+                FROM batches
+                WHERE id = :batch_id
+            """), {"batch_id": fee.batch_id}).first()
+            if result:
+                # Create a minimal Batch object for batch_name
+                batch = type('Batch', (), {
+                    'batch_name': result[1],
+                    'id': result[0]
+                })()
     payee_student = None
     payee_name = None
     if fee.payee_student_id:
@@ -2650,8 +2770,17 @@ def get_session_batches(session_id: int):
     """Get all batches assigned to a session"""
     db = SessionLocal()
     try:
-        batches = db.query(BatchDB).filter(BatchDB.session_id == session_id).all()
-        return batches
+        try:
+            batches = db.query(BatchDB).filter(BatchDB.session_id == session_id).all()
+            return batches
+        except Exception as e:
+            # If error is about missing session_id column, return empty list
+            # (can't filter by session_id if column doesn't exist)
+            if "session_id" in str(e) or "UndefinedColumn" in str(e):
+                db.rollback()
+                return []  # No batches can be assigned if session_id column doesn't exist
+            else:
+                raise
     finally:
         db.close()
 
@@ -2742,13 +2871,29 @@ def get_student_performance_grouped(student_id: int):
             if key not in grouped:
                 # Get student and batch info
                 student = db.query(StudentDB).filter(StudentDB.id == record.student_id).first()
-                batch = db.query(BatchDB).filter(BatchDB.id == record.batch_id).first()
+                # Try to get batch, handle missing session_id column gracefully
+                batch = None
+                batch_name = "Unknown"
+                try:
+                    batch = db.query(BatchDB).filter(BatchDB.id == record.batch_id).first()
+                    batch_name = batch.batch_name if batch else "Unknown"
+                except Exception as e:
+                    if "session_id" in str(e) or "UndefinedColumn" in str(e):
+                        db.rollback()
+                        from sqlalchemy import text
+                        result = db.execute(text("""
+                            SELECT batch_name
+                            FROM batches
+                            WHERE id = :batch_id
+                        """), {"batch_id": record.batch_id}).first()
+                        if result:
+                            batch_name = result[0]
                 
                 grouped[key] = {
                     "id": record.id,
                     "date": record.date,
                     "batch_id": record.batch_id,
-                    "batch_name": batch.batch_name if batch else "Unknown",
+                    "batch_name": batch_name,
                     "student_id": record.student_id,
                     "student_name": student.name if student else "Unknown",
                     "recorded_by": record.recorded_by,
@@ -2779,13 +2924,29 @@ def get_all_performance_grouped():
             if key not in grouped:
                 # Get student and batch info
                 student = db.query(StudentDB).filter(StudentDB.id == record.student_id).first()
-                batch = db.query(BatchDB).filter(BatchDB.id == record.batch_id).first()
+                # Try to get batch, handle missing session_id column gracefully
+                batch = None
+                batch_name = "Unknown"
+                try:
+                    batch = db.query(BatchDB).filter(BatchDB.id == record.batch_id).first()
+                    batch_name = batch.batch_name if batch else "Unknown"
+                except Exception as e:
+                    if "session_id" in str(e) or "UndefinedColumn" in str(e):
+                        db.rollback()
+                        from sqlalchemy import text
+                        result = db.execute(text("""
+                            SELECT batch_name
+                            FROM batches
+                            WHERE id = :batch_id
+                        """), {"batch_id": record.batch_id}).first()
+                        if result:
+                            batch_name = result[0]
                 
                 grouped[key] = {
                     "id": record.id,
                     "date": record.date,
                     "batch_id": record.batch_id,
-                    "batch_name": batch.batch_name if batch else "Unknown",
+                    "batch_name": batch_name,
                     "student_id": record.student_id,
                     "student_name": student.name if student else "Unknown",
                     "recorded_by": record.recorded_by,
@@ -2818,13 +2979,29 @@ def get_coach_performance_grouped(coach_name: str):
             if key not in grouped:
                 # Get student and batch info
                 student = db.query(StudentDB).filter(StudentDB.id == record.student_id).first()
-                batch = db.query(BatchDB).filter(BatchDB.id == record.batch_id).first()
+                # Try to get batch, handle missing session_id column gracefully
+                batch = None
+                batch_name = "Unknown"
+                try:
+                    batch = db.query(BatchDB).filter(BatchDB.id == record.batch_id).first()
+                    batch_name = batch.batch_name if batch else "Unknown"
+                except Exception as e:
+                    if "session_id" in str(e) or "UndefinedColumn" in str(e):
+                        db.rollback()
+                        from sqlalchemy import text
+                        result = db.execute(text("""
+                            SELECT batch_name
+                            FROM batches
+                            WHERE id = :batch_id
+                        """), {"batch_id": record.batch_id}).first()
+                        if result:
+                            batch_name = result[0]
                 
                 grouped[key] = {
                     "id": record.id,
                     "date": record.date,
                     "batch_id": record.batch_id,
-                    "batch_name": batch.batch_name if batch else "Unknown",
+                    "batch_name": batch_name,
                     "student_id": record.student_id,
                     "student_name": student.name if student else "Unknown",
                     "recorded_by": record.recorded_by,

@@ -396,11 +396,16 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
 
     return RefreshIndicator(
       onRefresh: () => ref.read(batchListProvider.notifier).refresh(),
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            physics: const ClampingScrollPhysics(),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: IntrinsicHeight(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
           // Header
           Padding(
             padding: const EdgeInsets.all(AppDimensions.paddingL),
@@ -755,7 +760,7 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                             data: (sessions) => NeumorphicContainer(
                               padding: const EdgeInsets.all(AppDimensions.paddingM),
                               child: DropdownButtonFormField<int>(
-                                value: _selectedSessionId,
+                                initialValue: _selectedSessionId,
                                 decoration: const InputDecoration(
                                   labelText: 'Session',
                                   labelStyle: TextStyle(color: AppColors.textSecondary),
@@ -876,6 +881,7 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                                               )
                                             : ListView.builder(
                                                 shrinkWrap: true,
+                                                physics: const NeverScrollableScrollPhysics(),
                                                 itemCount: students.length,
                                                 itemBuilder: (context, index) {
                                                   final student = students[index];
@@ -919,15 +925,19 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
             error: (error, stack) => Padding(
               padding: const EdgeInsets.all(AppDimensions.paddingL),
               child: ErrorDisplay(
-                message: 'Failed to load batches',
+                message: 'Failed to load batches. Please check your connection and try again.',
                 onRetry: () => ref.read(batchListProvider.notifier).refresh(),
               ),
             ),
           ),
 
           const SizedBox(height: 100), // Space for bottom nav
-        ],
-      ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

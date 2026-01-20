@@ -46,7 +46,7 @@ def check_and_add_column(engine, table_name: str, column_name: str, column_type:
         columns = [col['name'] for col in inspector.get_columns(table_name)]
         
         if column_name not in columns:
-            print(f"⚠️  Column '{column_name}' missing in '{table_name}' table. Adding...")
+            print(f"WARNING: Column '{column_name}' missing in '{table_name}' table. Adding...")
             try:
                 with engine.begin() as conn:
                     alter_sql = f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"
@@ -55,13 +55,13 @@ def check_and_add_column(engine, table_name: str, column_name: str, column_type:
                     if foreign_key:
                         alter_sql += f" {foreign_key}"
                     conn.execute(text(alter_sql))
-                print(f"✅ Added column '{column_name}' to '{table_name}' table")
+                print(f"SUCCESS: Added column '{column_name}' to '{table_name}' table")
                 return True
             except Exception as e:
-                print(f"❌ Error adding column '{column_name}': {e}")
+                print(f"ERROR: Error adding column '{column_name}': {e}")
                 return False
         else:
-            print(f"✅ Column '{column_name}' already exists in '{table_name}' table")
+            print(f"SUCCESS: Column '{column_name}' already exists in '{table_name}' table")
             return False
     except Exception as e:
         print(f"⚠️  Could not check columns for '{table_name}': {e}")
@@ -81,13 +81,13 @@ def create_index(engine, index_name: str, table_name: str, column_name: str):
             result = conn.execute(text(check_sql)).scalar()
             
             if not result:
-                print(f"⚠️  Index '{index_name}' missing. Creating...")
+                print(f"WARNING: Index '{index_name}' missing. Creating...")
                 create_index_sql = f"CREATE INDEX {index_name} ON {table_name}({column_name})"
                 conn.execute(text(create_index_sql))
-                print(f"✅ Created index '{index_name}'")
+                print(f"SUCCESS: Created index '{index_name}'")
                 return True
             else:
-                print(f"✅ Index '{index_name}' already exists")
+                print(f"SUCCESS: Index '{index_name}' already exists")
                 return False
     except Exception as e:
         print(f"⚠️  Could not create index '{index_name}': {e}")
@@ -106,8 +106,8 @@ def main():
         db_name = os.getenv("DB_NAME", "badminton_academy")
         database_url = f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
     
-    print("🔄 Starting Session/Season Schema Migration...")
-    print(f"📊 Database: {database_url.split('@')[1] if '@' in database_url else 'unknown'}")
+    print("Starting Session/Season Schema Migration...")
+    print(f"Database: {database_url.split('@')[1] if '@' in database_url else 'unknown'}")
     
     try:
         engine = create_engine(database_url)
@@ -139,14 +139,14 @@ def main():
         # Create index on session_id
         create_index(engine, "idx_batches_session_id", "batches", "session_id")
         
-        print("\n✅ Session/Season Schema Migration Completed Successfully!")
-        print("\n📝 Next Steps:")
+        print("\nSUCCESS: Session/Season Schema Migration Completed Successfully!")
+        print("\nNext Steps:")
         print("   1. Restart your backend server")
         print("   2. Sessions can now be created and batches can be assigned to sessions")
         print("   3. Use the Session/Season Management screen in the owner portal")
         
     except Exception as e:
-        print(f"\n❌ Migration failed: {e}")
+        print(f"\nERROR: Migration failed: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

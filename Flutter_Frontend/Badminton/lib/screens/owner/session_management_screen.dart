@@ -275,9 +275,12 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
                 
                 return batchesAsync.when(
                   loading: () => const ListSkeleton(itemCount: 5),
-                  error: (error, stack) => ErrorDisplay(
-                    message: 'Failed to load batches: ${error.toString()}',
-                    onRetry: () => ref.invalidate(batchListProvider),
+                  error: (error, stack) => Padding(
+                    padding: const EdgeInsets.all(AppDimensions.paddingL),
+                    child: ErrorDisplay(
+                      message: 'Failed to load batches: ${error.toString()}',
+                      onRetry: () => ref.invalidate(batchListProvider),
+                    ),
                   ),
                   data: (batches) {
                     // Load sessions for all batches
@@ -302,25 +305,28 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
 
                         if (sessions.isEmpty) {
                           return Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(
-                                  Icons.event_outlined,
-                                  size: 64,
-                                  color: AppColors.textSecondary,
-                                ),
-                                const SizedBox(height: AppDimensions.spacingM),
-                                Text(
-                                  _selectedTab == 'upcoming'
-                                      ? 'No upcoming sessions'
-                                      : 'No past sessions',
-                                  style: const TextStyle(
+                            child: Padding(
+                              padding: const EdgeInsets.all(AppDimensions.paddingL),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(
+                                    Icons.event_outlined,
+                                    size: 64,
                                     color: AppColors.textSecondary,
-                                    fontSize: 16,
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(height: AppDimensions.spacingM),
+                                  Text(
+                                    _selectedTab == 'upcoming'
+                                        ? 'No upcoming sessions'
+                                        : 'No past sessions',
+                                    style: const TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           );
                         }

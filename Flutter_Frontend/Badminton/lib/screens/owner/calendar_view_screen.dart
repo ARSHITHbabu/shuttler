@@ -439,7 +439,7 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
               ),
 
               // Selected Day Events
-              Expanded(
+              Flexible(
                 child: _buildSelectedDayEvents(groupedEvents),
               ),
             ],
@@ -484,7 +484,12 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                     setState(() {});
                   },
                   child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+                    shrinkWrap: false,
+                    padding: EdgeInsets.only(
+                      left: AppDimensions.paddingL,
+                      right: AppDimensions.paddingL,
+                      bottom: AppDimensions.paddingL + 80, // Extra space for bottom nav
+                    ),
                     itemCount: (hasHoliday ? 1 : 0) + dayEvents.length,
                     itemBuilder: (context, index) {
                       // Show holiday first if it exists
@@ -786,6 +791,7 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                         ),
                 ),
               ),
+              const SizedBox(height: 100), // Space for bottom nav
             ],
           ),
         ),
