@@ -442,7 +442,7 @@ final studentStatsProvider =
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef StudentStatsRef = AutoDisposeFutureProviderRef<Map<String, dynamic>>;
-String _$studentDashboardHash() => r'9120f524f3a236d21f9ca60802c4462157b91c5a';
+String _$studentDashboardHash() => r'9a5fa11942b04b570659301fa7fa85fb32741a70';
 
 /// Provider for student dashboard data (stats and upcoming sessions)
 ///

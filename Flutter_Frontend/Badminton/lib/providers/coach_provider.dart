@@ -7,6 +7,13 @@ import 'service_providers.dart';
 
 part 'coach_provider.g.dart';
 
+/// Provider for coach by ID
+@riverpod
+Future<Coach> coachById(CoachByIdRef ref, int id) async {
+  final coachService = ref.watch(coachServiceProvider);
+  return coachService.getCoachById(id);
+}
+
 /// Provider for coach's assigned batches
 @riverpod
 Future<List<Batch>> coachBatches(CoachBatchesRef ref, int coachId) async {

@@ -5,7 +5,12 @@ import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/loading_spinner.dart';
+import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/error_widget.dart';
+import '../../widgets/common/success_snackbar.dart';
 import '../../providers/service_providers.dart';
+import '../../providers/announcement_provider.dart';
+import '../../models/announcement.dart';
 
 /// Student Announcements Screen - READ-ONLY view of academy announcements
 /// Students can view announcements targeted to them or all students
@@ -19,18 +24,9 @@ class StudentAnnouncementsScreen extends ConsumerStatefulWidget {
 }
 
 class _StudentAnnouncementsScreenState extends ConsumerState<StudentAnnouncementsScreen> {
-  bool _isLoading = true;
-  List<Map<String, dynamic>> _announcements = [];
-  String? _error;
-  String _selectedFilter = 'all'; // 'all', 'high', 'normal', 'low'
+  String _selectedFilter = 'all'; // 'all', 'urgent', 'high', 'normal', 'low'
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-    _loadData();
-  }
 
   @override
   void dispose() {
@@ -38,65 +34,13 @@ class _StudentAnnouncementsScreenState extends ConsumerState<StudentAnnouncement
     super.dispose();
   }
 
-  Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    try {
-      final apiService = ref.read(apiServiceProvider);
-
-      try {
-        final response = await apiService.get('/api/announcements', queryParameters: {
-          'target_audience': 'students',
-        });
-        if (response.statusCode == 200) {
-          _announcements = List<Map<String, dynamic>>.from(
-            response.data['announcements'] ?? response.data ?? [],
-          );
-          // Sort by date (newest first) and priority
-          _announcements.sort((a, b) {
-            final priorityOrder = {'high': 0, 'normal': 1, 'low': 2};
-            final aPriority = priorityOrder[a['priority']?.toString().toLowerCase()] ?? 1;
-            final bPriority = priorityOrder[b['priority']?.toString().toLowerCase()] ?? 1;
-
-            if (aPriority != bPriority) {
-              return aPriority.compareTo(bPriority);
-            }
-
-            final aDate = DateTime.tryParse(a['created_at']?.toString() ?? '') ?? DateTime(2000);
-            final bDate = DateTime.tryParse(b['created_at']?.toString() ?? '') ?? DateTime(2000);
-            return bDate.compareTo(aDate);
-          });
-        }
-      } catch (e) {
-        // Endpoint may not exist yet - use empty data
-        _announcements = [];
-      }
-
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _error = e.toString().replaceAll('Exception: ', '');
-        });
-      }
-    }
-  }
-
-  List<Map<String, dynamic>> get _filteredAnnouncements {
-    var filtered = _announcements;
+  List<Announcement> _filterAnnouncements(List<Announcement> announcements) {
+    var filtered = announcements;
 
     // Filter by priority
     if (_selectedFilter != 'all') {
       filtered = filtered.where((a) {
-        final priority = a['priority']?.toString().toLowerCase() ?? 'normal';
+        final priority = a.priority.toLowerCase();
         return priority == _selectedFilter;
       }).toList();
     }
@@ -105,11 +49,23 @@ class _StudentAnnouncementsScreenState extends ConsumerState<StudentAnnouncement
     if (_searchQuery.isNotEmpty) {
       final query = _searchQuery.toLowerCase();
       filtered = filtered.where((a) {
-        final title = a['title']?.toString().toLowerCase() ?? '';
-        final message = a['message']?.toString().toLowerCase() ?? '';
-        return title.contains(query) || message.contains(query);
+        return a.title.toLowerCase().contains(query) ||
+            a.message.toLowerCase().contains(query);
       }).toList();
     }
+
+    // Sort by priority and date
+    filtered.sort((a, b) {
+      final priorityOrder = {'urgent': 0, 'high': 1, 'normal': 2, 'low': 3};
+      final aPriority = priorityOrder[a.priority.toLowerCase()] ?? 2;
+      final bPriority = priorityOrder[b.priority.toLowerCase()] ?? 2;
+
+      if (aPriority != bPriority) {
+        return aPriority.compareTo(bPriority);
+      }
+
+      return b.createdAt.compareTo(a.createdAt);
+    });
 
     return filtered;
   }
@@ -119,10 +75,15 @@ class _StudentAnnouncementsScreenState extends ConsumerState<StudentAnnouncement
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
+    // Get announcements for students using provider
+    final announcementsAsync = ref.watch(announcementByAudienceProvider('students'));
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: RefreshIndicator(
-        onRefresh: _loadData,
+        onRefresh: () async {
+          ref.invalidate(announcementByAudienceProvider('students'));
+        },
         child: CustomScrollView(
           slivers: [
             // App Bar
@@ -151,96 +112,118 @@ class _StudentAnnouncementsScreenState extends ConsumerState<StudentAnnouncement
 
             // Content
             SliverToBoxAdapter(
-              child: _isLoading
-                  ? const SizedBox(
-                      height: 400,
-                      child: Center(child: LoadingSpinner()),
-                    )
-                  : _error != null
-                      ? _buildErrorWidget(isDark)
-                      : Column(
+              child: announcementsAsync.when(
+                loading: () => const SizedBox(
+                  height: 400,
+                  child: Center(child: ListSkeleton(itemCount: 5)),
+                ),
+                error: (error, stack) => Padding(
+                  padding: const EdgeInsets.all(AppDimensions.paddingL),
+                  child: ErrorDisplay(
+                    message: 'Failed to load announcements: ${error.toString()}',
+                    onRetry: () => ref.invalidate(announcementByAudienceProvider('students')),
+                  ),
+                ),
+                data: (announcements) {
+                  final filtered = _filterAnnouncements(announcements);
+                  final urgentCount = announcements.where((a) => a.priority.toLowerCase() == 'urgent' || a.priority.toLowerCase() == 'high').length;
+
+                  return Column(
+                    children: [
+                      // Search Bar
+                      _buildSearchBar(isDark),
+
+                      const SizedBox(height: AppDimensions.spacingM),
+
+                      // Filter Chips
+                      _buildFilterChips(isDark),
+
+                      const SizedBox(height: AppDimensions.spacingM),
+
+                      // Announcement Count
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppDimensions.paddingL,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            // Search Bar
-                            _buildSearchBar(isDark),
-
-                            const SizedBox(height: AppDimensions.spacingM),
-
-                            // Filter Chips
-                            _buildFilterChips(isDark),
-
-                            const SizedBox(height: AppDimensions.spacingM),
-
-                            // Announcement Count
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: AppDimensions.paddingL,
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    '${_filteredAnnouncements.length} announcements',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-                                    ),
-                                  ),
-                                  if (_announcements.any((a) => a['priority']?.toString().toLowerCase() == 'high'))
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: (isDark ? AppColors.error : AppColorsLight.error).withValues(alpha: 0.1),
-                                        borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            Icons.priority_high,
-                                            size: 14,
-                                            color: isDark ? AppColors.error : AppColorsLight.error,
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            '${_announcements.where((a) => a['priority']?.toString().toLowerCase() == 'high').length} important',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.w600,
-                                              color: isDark ? AppColors.error : AppColorsLight.error,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                ],
+                            Text(
+                              '${filtered.length} announcements',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                               ),
                             ),
-
-                            const SizedBox(height: AppDimensions.spacingM),
+                            if (urgentCount > 0)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: (isDark ? AppColors.error : AppColorsLight.error).withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.priority_high,
+                                      size: 14,
+                                      color: isDark ? AppColors.error : AppColorsLight.error,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '$urgentCount important',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: isDark ? AppColors.error : AppColorsLight.error,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                           ],
                         ),
+                      ),
+
+                      const SizedBox(height: AppDimensions.spacingM),
+                    ],
+                  );
+                },
+              ),
             ),
 
             // Announcements List
-            if (!_isLoading && _error == null)
-              _filteredAnnouncements.isEmpty
-                  ? SliverToBoxAdapter(child: _buildEmptyState(isDark))
-                  : SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          final announcement = _filteredAnnouncements[index];
-                          return _AnnouncementCard(
-                            announcement: announcement,
-                            isDark: isDark,
-                            onTap: () => _showAnnouncementDetail(announcement, isDark),
-                          );
-                        },
-                        childCount: _filteredAnnouncements.length,
-                      ),
-                    ),
+            announcementsAsync.when(
+              loading: () => const SliverToBoxAdapter(child: SizedBox.shrink()),
+              error: (_, __) => const SliverToBoxAdapter(child: SizedBox.shrink()),
+              data: (announcements) {
+                final filtered = _filterAnnouncements(announcements);
+                return filtered.isEmpty
+                    ? SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.all(AppDimensions.paddingL),
+                          child: EmptyState.noAnnouncements(),
+                        ),
+                      )
+                    : SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                            final announcement = filtered[index];
+                            return _AnnouncementCard(
+                              announcement: announcement,
+                              isDark: theme.brightness == Brightness.dark,
+                              onTap: () => _showAnnouncementDetail(announcement, theme.brightness == Brightness.dark),
+                            );
+                          },
+                          childCount: filtered.length,
+                        ),
+                      );
+              },
+            ),
 
             // Bottom spacing
             const SliverToBoxAdapter(
@@ -248,35 +231,6 @@ class _StudentAnnouncementsScreenState extends ConsumerState<StudentAnnouncement
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildErrorWidget(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.all(AppDimensions.paddingL),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.error_outline,
-            size: 48,
-            color: isDark ? AppColors.error : AppColorsLight.error,
-          ),
-          const SizedBox(height: AppDimensions.spacingM),
-          Text(
-            _error!,
-            style: TextStyle(
-              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: AppDimensions.spacingL),
-          ElevatedButton(
-            onPressed: _loadData,
-            child: const Text('Retry'),
-          ),
-        ],
       ),
     );
   }
@@ -418,7 +372,7 @@ class _StudentAnnouncementsScreenState extends ConsumerState<StudentAnnouncement
     );
   }
 
-  void _showAnnouncementDetail(Map<String, dynamic> announcement, bool isDark) {
+  void _showAnnouncementDetail(Announcement announcement, bool isDark) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -480,7 +434,7 @@ class _FilterChip extends StatelessWidget {
 }
 
 class _AnnouncementCard extends StatelessWidget {
-  final Map<String, dynamic> announcement;
+  final Announcement announcement;
   final bool isDark;
   final VoidCallback onTap;
 
@@ -492,13 +446,13 @@ class _AnnouncementCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = announcement['title']?.toString() ?? 'Announcement';
-    final message = announcement['message']?.toString() ?? '';
-    final priority = announcement['priority']?.toString().toLowerCase() ?? 'normal';
-    final createdAt = DateTime.tryParse(announcement['created_at']?.toString() ?? '');
-    final author = announcement['author']?.toString() ?? announcement['created_by']?.toString() ?? '';
+    final title = announcement.title;
+    final message = announcement.message;
+    final priority = announcement.priority.toLowerCase();
+    final createdAt = announcement.createdAt;
+    final author = announcement.createdBy?.toString() ?? '';
 
-    final isHighPriority = priority == 'high';
+    final isHighPriority = priority == 'urgent' || priority == 'high';
 
     Color priorityColor;
     IconData priorityIcon;
@@ -670,7 +624,7 @@ class _AnnouncementCard extends StatelessWidget {
 }
 
 class _AnnouncementDetailSheet extends StatelessWidget {
-  final Map<String, dynamic> announcement;
+  final Announcement announcement;
   final bool isDark;
 
   const _AnnouncementDetailSheet({
@@ -680,11 +634,11 @@ class _AnnouncementDetailSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = announcement['title']?.toString() ?? 'Announcement';
-    final message = announcement['message']?.toString() ?? '';
-    final priority = announcement['priority']?.toString().toLowerCase() ?? 'normal';
-    final createdAt = DateTime.tryParse(announcement['created_at']?.toString() ?? '');
-    final author = announcement['author']?.toString() ?? announcement['created_by']?.toString() ?? '';
+    final title = announcement.title;
+    final message = announcement.message;
+    final priority = announcement.priority.toLowerCase();
+    final createdAt = announcement.createdAt;
+    final author = announcement.createdBy?.toString() ?? '';
 
     Color priorityColor;
     String priorityLabel;
