@@ -8,9 +8,10 @@ import '../../core/utils/validators.dart';
 import '../../widgets/common/neumorphic_button.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/loading_spinner.dart';
+import '../../widgets/common/success_snackbar.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/auth_provider.dart';
-import '../../core/constants/api_endpoints.dart';
+import '../../providers/student_provider.dart';
 
 /// Profile completion screen for students
 /// Students must fill all required profile fields before accessing the dashboard
@@ -90,12 +91,7 @@ class _ProfileCompletionScreenState
     }
 
     if (_selectedTShirtSize == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select a T-shirt size'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      SuccessSnackbar.showError(context, 'Please select a T-shirt size');
       return;
     }
 
@@ -129,8 +125,6 @@ class _ProfileCompletionScreenState
         throw Exception('User not logged in. Please try logging in again.');
       }
 
-      final apiService = ref.read(apiServiceProvider);
-      
       // Prepare update data
       final updateData = {
         'guardian_name': _guardianNameController.text.trim(),
@@ -141,35 +135,23 @@ class _ProfileCompletionScreenState
         if (_profilePhotoUrl != null) 'profile_photo': _profilePhotoUrl,
       };
 
-      // Update student profile
-      final response = await apiService.put(
-        ApiEndpoints.studentById(userId),
-        data: updateData,
-      );
+      // Update student profile using provider
+      final studentList = ref.read(studentListProvider.notifier);
+      await studentList.updateStudent(userId, updateData);
 
-      if (response.statusCode == 200) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Profile completed successfully!'),
-              backgroundColor: AppColors.success,
-            ),
-          );
-          
-          // Navigate to student dashboard
-          context.go('/student-dashboard');
-        }
-      } else {
-        throw Exception('Failed to update profile');
+      // Invalidate to refresh data
+      ref.invalidate(studentByIdProvider(userId));
+      ref.invalidate(studentDashboardProvider(userId));
+
+      if (mounted) {
+        SuccessSnackbar.show(context, 'Profile completed successfully!');
+        
+        // Navigate to student dashboard
+        context.go('/student-dashboard');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString().replaceAll('Exception: ', '')),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SuccessSnackbar.showError(context, e.toString().replaceAll('Exception: ', ''));
       }
     } finally {
       if (mounted) {

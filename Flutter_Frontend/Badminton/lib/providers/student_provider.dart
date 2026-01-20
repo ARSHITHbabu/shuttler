@@ -1,5 +1,6 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../models/student.dart';
+import '../models/schedule.dart';
 import 'service_providers.dart';
 import 'batch_provider.dart';
 import 'dashboard_provider.dart';
@@ -219,6 +220,37 @@ Future<StudentDashboardData> studentDashboard(StudentDashboardRef ref, int stude
     feeStatus: feeStatus,
     upcomingSessions: upcomingSessions.take(5).toList(),
   );
+}
+
+/// Provider for student schedules (all schedules for batches student is enrolled in)
+@riverpod
+Future<List<Schedule>> studentSchedules(StudentSchedulesRef ref, int studentId) async {
+  final scheduleService = ref.watch(scheduleServiceProvider);
+  final batches = await ref.watch(studentBatchesProvider(studentId).future);
+  
+  List<Schedule> allSchedules = [];
+  
+  for (var batch in batches) {
+    try {
+      final batchSchedules = await scheduleService.getSchedules(batchId: batch.id);
+      // Add batch name to schedules for display
+      final schedulesWithBatchName = batchSchedules.map((schedule) {
+        return schedule.copyWith(
+          batchName: batch.name,
+          batchId: batch.id,
+        );
+      }).toList();
+      allSchedules.addAll(schedulesWithBatchName);
+    } catch (e) {
+      // Skip if error fetching schedules for this batch
+      continue;
+    }
+  }
+  
+  // Sort by date (newest first)
+  allSchedules.sort((a, b) => b.date.compareTo(a.date));
+  
+  return allSchedules;
 }
 
 /// Student dashboard data class

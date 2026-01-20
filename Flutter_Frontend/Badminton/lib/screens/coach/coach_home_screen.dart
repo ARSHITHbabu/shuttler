@@ -6,6 +6,7 @@ import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
+import '../../widgets/common/skeleton_screen.dart';
 import '../../providers/coach_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/schedule.dart';
@@ -39,7 +40,7 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
         final coachId = authValue.userId;
         return _buildContent(coachId, authValue.userName);
       },
-      loading: () => const Center(child: LoadingSpinner()),
+      loading: () => const Center(child: DashboardSkeleton()),
       error: (error, stack) => Center(
         child: Text(
           'Error: ${error.toString()}',
@@ -139,7 +140,7 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
               ),
               loading: () => const Padding(
                 padding: EdgeInsets.all(AppDimensions.paddingL),
-                child: Center(child: LoadingSpinner()),
+                child: GridSkeleton(itemCount: 4, crossAxisCount: 2),
               ),
               error: (error, stack) => Padding(
                 padding: const EdgeInsets.all(AppDimensions.paddingL),
@@ -292,7 +293,7 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
                     },
                     loading: () => const NeumorphicContainer(
                       padding: EdgeInsets.all(AppDimensions.paddingL),
-                      child: Center(child: LoadingSpinner()),
+                      child: ListSkeleton(itemCount: 3),
                     ),
                     error: (error, stack) => NeumorphicContainer(
                       padding: const EdgeInsets.all(AppDimensions.paddingL),

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
+import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/settings/shuttlecock_theme_toggle.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/service_providers.dart';
@@ -127,12 +128,7 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
                 icon: Icons.help_outline,
                 title: 'Help & Support',
                 onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Help & Support coming soon'),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
+                  SuccessSnackbar.showInfo(context, 'Help & Support coming soon');
                 },
               ),
 
@@ -157,12 +153,7 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
                 icon: Icons.description_outlined,
                 title: 'Terms & Conditions',
                 onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Terms & Conditions coming soon'),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
+                  SuccessSnackbar.showInfo(context, 'Terms & Conditions coming soon');
                 },
               ),
 
@@ -264,13 +255,7 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
           TextButton(
             onPressed: () {
               Navigator.of(context).pop();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Cache cleared'),
-                  backgroundColor: AppColors.success,
-                  duration: Duration(seconds: 2),
-                ),
-              );
+              SuccessSnackbar.show(context, 'Cache cleared');
             },
             child: const Text(
               'Clear',
@@ -335,12 +320,7 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to logout: ${e.toString()}'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SuccessSnackbar.showError(context, 'Failed to logout: ${e.toString()}');
       }
     }
   }

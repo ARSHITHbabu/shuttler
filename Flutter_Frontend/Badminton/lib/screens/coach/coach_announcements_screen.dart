@@ -4,8 +4,8 @@ import 'package:intl/intl.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
+import '../../widgets/common/skeleton_screen.dart';
 import '../../providers/coach_provider.dart';
 import '../../models/announcement.dart';
 
@@ -86,27 +86,7 @@ class _CoachAnnouncementsScreenState extends ConsumerState<CoachAnnouncementsScr
 
                   if (filteredAnnouncements.isEmpty) {
                     return Center(
-                      child: NeumorphicContainer(
-                        padding: const EdgeInsets.all(AppDimensions.paddingL),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.campaign_outlined,
-                              size: 64,
-                              color: AppColors.textSecondary.withValues(alpha: 0.5),
-                            ),
-                            const SizedBox(height: AppDimensions.spacingM),
-                            const Text(
-                              'No announcements found',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                      child: EmptyState.noAnnouncements(),
                     );
                   }
 
@@ -125,7 +105,7 @@ class _CoachAnnouncementsScreenState extends ConsumerState<CoachAnnouncementsScr
                     },
                   );
                 },
-                loading: () => const Center(child: LoadingSpinner()),
+                loading: () => const Center(child: ListSkeleton(itemCount: 5)),
                 error: (error, stack) => ErrorDisplay(
                   message: 'Failed to load announcements',
                   onRetry: () => ref.invalidate(coachAnnouncementsProvider),

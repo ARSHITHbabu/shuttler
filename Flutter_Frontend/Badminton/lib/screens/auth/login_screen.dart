@@ -7,6 +7,7 @@ import '../../core/utils/validators.dart';
 import '../../widgets/common/neumorphic_button.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/loading_spinner.dart';
+import '../../widgets/common/success_snackbar.dart';
 import '../../providers/auth_provider.dart';
 
 /// Login screen for user authentication
@@ -90,18 +91,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           errorMessage = e.toString();
         }
         
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: AppColors.error,
-            duration: const Duration(seconds: 4),
-            action: SnackBarAction(
-              label: 'Dismiss',
-              textColor: Colors.white,
-              onPressed: () {},
-            ),
-          ),
-        );
+        SuccessSnackbar.showError(context, errorMessage);
       }
     } finally {
       if (mounted) {

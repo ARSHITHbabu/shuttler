@@ -7,6 +7,7 @@ import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/neumorphic_button.dart';
 import '../../widgets/common/profile_image_picker.dart';
@@ -79,7 +80,7 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
       },
       loading: () => Scaffold(
         appBar: AppBar(title: const Text('Profile')),
-        body: const Center(child: LoadingSpinner()),
+        body: const Center(child: ProfileSkeleton()),
       ),
       error: (error, stack) => Scaffold(
         appBar: AppBar(title: const Text('Profile')),
@@ -412,24 +413,14 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Profile photo updated successfully'),
-            backgroundColor: AppColors.success,
-          ),
-        );
+        SuccessSnackbar.show(context, 'Profile photo updated successfully');
       }
     } catch (e) {
       setState(() {
         _isUploadingImage = false;
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to upload image: ${e.toString()}'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SuccessSnackbar.showError(context, 'Failed to upload image: ${e.toString()}');
       }
     }
   }
@@ -461,13 +452,7 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Profile updated successfully'),
-            backgroundColor: AppColors.success,
-            duration: Duration(seconds: 2),
-          ),
-        );
+        SuccessSnackbar.show(context, 'Profile updated successfully');
         // Refresh profile
         setState(() {
           _coach = null;
@@ -475,13 +460,7 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to update profile: ${e.toString()}'),
-            backgroundColor: AppColors.error,
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        SuccessSnackbar.showError(context, 'Failed to update profile: ${e.toString()}');
       }
     } finally {
       if (mounted) {
@@ -494,22 +473,12 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
     if (_currentPasswordController.text.isEmpty ||
         _newPasswordController.text.isEmpty ||
         _confirmPasswordController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please fill all password fields'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      SuccessSnackbar.showError(context, 'Please fill all password fields');
       return;
     }
 
     if (_newPasswordController.text != _confirmPasswordController.text) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('New passwords do not match'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      SuccessSnackbar.showError(context, 'New passwords do not match');
       return;
     }
 
@@ -539,26 +508,14 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Password changed successfully'),
-            backgroundColor: AppColors.success,
-            duration: Duration(seconds: 2),
-          ),
-        );
+        SuccessSnackbar.show(context, 'Password changed successfully');
         _currentPasswordController.clear();
         _newPasswordController.clear();
         _confirmPasswordController.clear();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to change password: ${e.toString()}'),
-            backgroundColor: AppColors.error,
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        SuccessSnackbar.showError(context, 'Failed to change password: ${e.toString()}');
       }
     } finally {
       if (mounted) {

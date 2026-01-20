@@ -6,6 +6,8 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
+import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/neumorphic_button.dart';
 import '../../providers/coach_provider.dart';
 import '../../providers/auth_provider.dart';
@@ -56,7 +58,7 @@ class _CoachAttendanceScreenState extends ConsumerState<CoachAttendanceScreen> {
         final coachId = authValue.userId;
         return _buildContent(coachId);
       },
-      loading: () => const Center(child: LoadingSpinner()),
+      loading: () => const Center(child: DashboardSkeleton()),
       error: (error, stack) => Center(
         child: Text(
           'Error: ${error.toString()}',
@@ -205,7 +207,7 @@ class _CoachAttendanceScreenState extends ConsumerState<CoachAttendanceScreen> {
                   ),
                 );
               },
-              loading: () => const Center(child: LoadingSpinner()),
+              loading: () => const Center(child: ListSkeleton(itemCount: 3)),
               error: (error, stack) => ErrorDisplay(
                 message: 'Failed to load batches',
                 onRetry: () => ref.invalidate(coachBatchesProvider(coachId)),
@@ -232,7 +234,7 @@ class _CoachAttendanceScreenState extends ConsumerState<CoachAttendanceScreen> {
       future: studentsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: LoadingSpinner());
+          return const Center(child: ListSkeleton(itemCount: 5));
         }
 
         if (snapshot.hasError) {
@@ -381,12 +383,7 @@ class _CoachAttendanceScreenState extends ConsumerState<CoachAttendanceScreen> {
 
   Future<void> _saveAttendance() async {
     if (_selectedBatchId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select a batch'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      SuccessSnackbar.showError(context, 'Please select a batch');
       return;
     }
 
@@ -420,23 +417,11 @@ class _CoachAttendanceScreenState extends ConsumerState<CoachAttendanceScreen> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Attendance saved successfully'),
-            backgroundColor: AppColors.success,
-            duration: Duration(seconds: 2),
-          ),
-        );
+        SuccessSnackbar.show(context, 'Attendance saved successfully');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to save attendance: ${e.toString()}'),
-            backgroundColor: AppColors.error,
-            duration: const Duration(seconds: 3),
-          ),
-        );
+        SuccessSnackbar.showError(context, 'Failed to save attendance: ${e.toString()}');
       }
     } finally {
       if (mounted) {
