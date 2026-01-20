@@ -188,94 +188,103 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         ),
         child: SafeArea(
           top: false,
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(AppDimensions.paddingL),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Report Type Selection
-                  Column(
-                    children: _reportTypes.map((type) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
-                        child: NeumorphicContainer(
-                          padding: const EdgeInsets.all(AppDimensions.paddingL),
-                          onTap: () {
-                            setState(() {
-                              _selectedType = type['id'];
-                            });
-                          },
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 48,
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  color: AppColors.background,
-                                  borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-                                  boxShadow: NeumorphicStyles.getInsetShadow(),
-                                ),
-                                child: Icon(
-                                  type['icon'],
-                                  color: AppColors.iconPrimary,
-                                  size: 24,
-                                ),
-                              ),
-                              const SizedBox(width: AppDimensions.spacingM),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppDimensions.paddingL),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Report Type Selection
+                        Column(
+                          children: _reportTypes.map((type) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
+                              child: NeumorphicContainer(
+                                padding: const EdgeInsets.all(AppDimensions.paddingL),
+                                onTap: () {
+                                  setState(() {
+                                    _selectedType = type['id'];
+                                  });
+                                },
+                                child: Row(
                                   children: [
-                                    Text(
-                                      type['title'],
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.textPrimary,
+                                    Container(
+                                      width: 48,
+                                      height: 48,
+                                      decoration: BoxDecoration(
+                                        color: AppColors.background,
+                                        borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                                        boxShadow: NeumorphicStyles.getInsetShadow(),
+                                      ),
+                                      child: Icon(
+                                        type['icon'],
+                                        color: AppColors.iconPrimary,
+                                        size: 24,
                                       ),
                                     ),
-                                    Text(
-                                      type['description'],
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: AppColors.textSecondary,
+                                    const SizedBox(width: AppDimensions.spacingM),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            type['title'],
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w600,
+                                              color: AppColors.textPrimary,
+                                            ),
+                                          ),
+                                          Text(
+                                            type['description'],
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              color: AppColors.textSecondary,
+                                            ),
+                                          ),
+                                        ],
                                       ),
+                                    ),
+                                    const Icon(
+                                      Icons.chevron_right,
+                                      color: AppColors.textTertiary,
                                     ),
                                   ],
                                 ),
                               ),
-                              const Icon(
-                                Icons.chevron_right,
-                                color: AppColors.textTertiary,
-                              ),
-                            ],
-                          ),
+                            );
+                          }).toList(),
                         ),
-                      );
-                    }).toList(),
-                  ),
 
-                  const SizedBox(height: AppDimensions.spacingXl),
+                        const SizedBox(height: AppDimensions.spacingXl),
 
-                  // Previously Generated Reports (if any)
-                  if (_generatedReport != null) ...[
-                    const SizedBox(height: AppDimensions.spacingXl),
-                    const Text(
-                      'Generated Report',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                      ),
+                        // Previously Generated Reports (if any)
+                        if (_generatedReport != null) ...[
+                          const SizedBox(height: AppDimensions.spacingXl),
+                          const Text(
+                            'Generated Report',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: AppDimensions.spacingM),
+                        ],
+
+                        const SizedBox(height: 100), // Space for bottom nav
+                      ],
                     ),
-                    const SizedBox(height: AppDimensions.spacingM),
-                  ],
-
-                  const SizedBox(height: 100), // Space for bottom nav
-                ],
-              ),
-            ),
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ),
@@ -292,277 +301,286 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           gradient: AppColors.backgroundGradient,
         ),
         child: SafeArea(
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(AppDimensions.paddingL),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Back Button
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _selectedType = null;
-                        _startDate = null;
-                        _endDate = null;
-                      });
-                    },
-                    child: const Text(
-                      '← Back',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: AppDimensions.spacingM),
-
-                  // Header
-                  Text(
-                    reportType['title'],
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Configure and generate report',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: AppDimensions.spacingL),
-
-                  // Date Range
-                  NeumorphicContainer(
-                    padding: const EdgeInsets.all(AppDimensions.paddingM),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppDimensions.paddingL),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
+                        // Back Button
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _selectedType = null;
+                              _startDate = null;
+                              _endDate = null;
+                            });
+                          },
+                          child: const Text(
+                            '← Back',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: AppDimensions.spacingM),
+
+                        // Header
+                        Text(
+                          reportType['title'],
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
                         const Text(
-                          'Select Date Range',
+                          'Configure and generate report',
                           style: TextStyle(
                             fontSize: 14,
                             color: AppColors.textSecondary,
                           ),
                         ),
-                        const SizedBox(height: AppDimensions.spacingM),
-                        _DatePickerField(
-                          label: 'Start Date',
-                          date: _startDate,
-                          onDateSelected: (date) {
-                            setState(() {
-                              _startDate = date;
-                            });
-                          },
-                        ),
-                        const SizedBox(height: AppDimensions.spacingM),
-                        _DatePickerField(
-                          label: 'End Date',
-                          date: _endDate,
-                          onDateSelected: (date) {
-                            setState(() {
-                              _endDate = date;
-                            });
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
+                        const SizedBox(height: AppDimensions.spacingL),
 
-                  const SizedBox(height: AppDimensions.spacingM),
-
-                  // Filters (based on report type)
-                  if (_selectedType == 'attendance')
-                    NeumorphicContainer(
-                      padding: const EdgeInsets.all(AppDimensions.paddingM),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Select Batch',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                          const SizedBox(height: AppDimensions.spacingS),
-                          NeumorphicInsetContainer(
-                            padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
-                            child: DropdownButton<String>(
-                              value: 'all',
-                              isExpanded: true,
-                              underline: const SizedBox(),
-                              dropdownColor: AppColors.cardBackground,
-                              style: const TextStyle(color: AppColors.textPrimary),
-                              items: const [
-                                DropdownMenuItem(value: 'all', child: Text('All Batches')),
-                                DropdownMenuItem(value: '1', child: Text('Morning Batch A')),
-                                DropdownMenuItem(value: '2', child: Text('Evening Batch B')),
-                                DropdownMenuItem(value: '3', child: Text('Weekend Batch')),
-                              ],
-                              onChanged: (value) {},
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                  if (_selectedType == 'fee')
-                    NeumorphicContainer(
-                      padding: const EdgeInsets.all(AppDimensions.paddingM),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Status Filter',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                          const SizedBox(height: AppDimensions.spacingS),
-                          ...['All', 'Paid', 'Pending', 'Overdue'].map((status) {
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: AppDimensions.spacingS),
-                              child: NeumorphicInsetContainer(
-                                padding: const EdgeInsets.all(AppDimensions.spacingM),
-                                child: Row(
-                                  children: [
-                                    Checkbox(
-                                      value: status == 'All',
-                                      onChanged: (value) {},
-                                      activeColor: AppColors.accent,
-                                    ),
-                                    Text(
-                                      status,
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        color: AppColors.textPrimary,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }),
-                        ],
-                      ),
-                    ),
-
-                  const SizedBox(height: AppDimensions.spacingL),
-
-                  // Generate Button
-                  NeumorphicContainer(
-                    padding: const EdgeInsets.all(AppDimensions.paddingM),
-                    onTap: _isGenerating ? null : _generateReport,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        if (_isGenerating)
-                          const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        else
-                          const Icon(
-                            Icons.description_outlined,
-                            color: AppColors.iconActive,
-                            size: 20,
-                          ),
-                        const SizedBox(width: AppDimensions.spacingS),
-                        Text(
-                          _isGenerating ? 'Generating...' : 'Generate Report',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: _isGenerating
-                                ? AppColors.textSecondary
-                                : AppColors.textPrimary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Generated Report Display
-                  if (_generatedReport != null) ...[
-                    const SizedBox(height: AppDimensions.spacingL),
-                    NeumorphicContainer(
-                      padding: const EdgeInsets.all(AppDimensions.paddingL),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        // Date Range
+                        NeumorphicContainer(
+                          padding: const EdgeInsets.all(AppDimensions.paddingM),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                _generatedReport!['type'] as String,
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.textPrimary,
+                              const Text(
+                                'Select Date Range',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: AppColors.textSecondary,
                                 ),
                               ),
-                              PopupMenuButton<String>(
-                                icon: const Icon(
-                                  Icons.download_outlined,
-                                  color: AppColors.iconPrimary,
-                                ),
-                                itemBuilder: (context) => [
-                                  const PopupMenuItem(
-                                    value: 'csv',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.table_chart, size: 18),
-                                        SizedBox(width: 8),
-                                        Text('Export as CSV'),
-                                      ],
-                                    ),
-                                  ),
-                                  const PopupMenuItem(
-                                    value: 'pdf',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.picture_as_pdf, size: 18),
-                                        SizedBox(width: 8),
-                                        Text('Export as PDF'),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                                onSelected: (value) {
-                                  if (value == 'csv') {
-                                    _exportToCSV();
-                                  } else if (value == 'pdf') {
-                                    _exportToPDF();
-                                  }
+                              const SizedBox(height: AppDimensions.spacingM),
+                              _DatePickerField(
+                                label: 'Start Date',
+                                date: _startDate,
+                                onDateSelected: (date) {
+                                  setState(() {
+                                    _startDate = date;
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: AppDimensions.spacingM),
+                              _DatePickerField(
+                                label: 'End Date',
+                                date: _endDate,
+                                onDateSelected: (date) {
+                                  setState(() {
+                                    _endDate = date;
+                                  });
                                 },
                               ),
                             ],
                           ),
-                          const SizedBox(height: AppDimensions.spacingM),
-                          Text(
-                            'Period: ${_generatedReport!['period']}',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: AppColors.textSecondary,
+                        ),
+
+                        const SizedBox(height: AppDimensions.spacingM),
+
+                        // Filters (based on report type)
+                        if (_selectedType == 'attendance')
+                          NeumorphicContainer(
+                            padding: const EdgeInsets.all(AppDimensions.paddingM),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Select Batch',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(height: AppDimensions.spacingS),
+                                NeumorphicInsetContainer(
+                                  padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
+                                  child: DropdownButton<String>(
+                                    value: 'all',
+                                    isExpanded: true,
+                                    underline: const SizedBox(),
+                                    dropdownColor: AppColors.cardBackground,
+                                    style: const TextStyle(color: AppColors.textPrimary),
+                                    items: const [
+                                      DropdownMenuItem(value: 'all', child: Text('All Batches')),
+                                      DropdownMenuItem(value: '1', child: Text('Morning Batch A')),
+                                      DropdownMenuItem(value: '2', child: Text('Evening Batch B')),
+                                      DropdownMenuItem(value: '3', child: Text('Weekend Batch')),
+                                    ],
+                                    onChanged: (value) {},
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: AppDimensions.spacingM),
-                          _buildReportSummary(_generatedReport!['data'] as Map<String, dynamic>),
-                        ],
-                      ),
-                    ),
-                  ],
 
-                  const SizedBox(height: 100), // Space for bottom nav
-                ],
-              ),
-            ),
+                        if (_selectedType == 'fee')
+                          NeumorphicContainer(
+                            padding: const EdgeInsets.all(AppDimensions.paddingM),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Status Filter',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(height: AppDimensions.spacingS),
+                                ...['All', 'Paid', 'Pending', 'Overdue'].map((status) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: AppDimensions.spacingS),
+                                    child: NeumorphicInsetContainer(
+                                      padding: const EdgeInsets.all(AppDimensions.spacingM),
+                                      child: Row(
+                                        children: [
+                                          Checkbox(
+                                            value: status == 'All',
+                                            onChanged: (value) {},
+                                            activeColor: AppColors.accent,
+                                          ),
+                                          Text(
+                                            status,
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              color: AppColors.textPrimary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ),
+                          ),
+
+                        const SizedBox(height: AppDimensions.spacingL),
+
+                        // Generate Button
+                        NeumorphicContainer(
+                          padding: const EdgeInsets.all(AppDimensions.paddingM),
+                          onTap: _isGenerating ? null : _generateReport,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              if (_isGenerating)
+                                const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              else
+                                const Icon(
+                                  Icons.description_outlined,
+                                  color: AppColors.iconActive,
+                                  size: 20,
+                                ),
+                              const SizedBox(width: AppDimensions.spacingS),
+                              Text(
+                                _isGenerating ? 'Generating...' : 'Generate Report',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: _isGenerating
+                                      ? AppColors.textSecondary
+                                      : AppColors.textPrimary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // Generated Report Display
+                        if (_generatedReport != null) ...[
+                          const SizedBox(height: AppDimensions.spacingL),
+                          NeumorphicContainer(
+                            padding: const EdgeInsets.all(AppDimensions.paddingL),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      _generatedReport!['type'] as String,
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                    PopupMenuButton<String>(
+                                      icon: const Icon(
+                                        Icons.download_outlined,
+                                        color: AppColors.iconPrimary,
+                                      ),
+                                      itemBuilder: (context) => [
+                                        const PopupMenuItem(
+                                          value: 'csv',
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.table_chart, size: 18),
+                                              SizedBox(width: 8),
+                                              Text('Export as CSV'),
+                                            ],
+                                          ),
+                                        ),
+                                        const PopupMenuItem(
+                                          value: 'pdf',
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.picture_as_pdf, size: 18),
+                                              SizedBox(width: 8),
+                                              Text('Export as PDF'),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                      onSelected: (value) {
+                                        if (value == 'csv') {
+                                          _exportToCSV();
+                                        } else if (value == 'pdf') {
+                                          _exportToPDF();
+                                        }
+                                      },
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: AppDimensions.spacingM),
+                                Text(
+                                  'Period: ${_generatedReport!['period']}',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(height: AppDimensions.spacingM),
+                                _buildReportSummary(_generatedReport!['data'] as Map<String, dynamic>),
+                              ],
+                            ),
+                          ),
+                        ],
+
+                        const SizedBox(height: 100), // Space for bottom nav
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ),

@@ -514,21 +514,21 @@ class _AnnouncementCard extends StatelessWidget {
                               ),
                               const SizedBox(width: AppDimensions.spacingM),
                             ],
-                            if (createdAt != null) ...[
-                              Icon(
-                                Icons.access_time,
-                                size: 12,
+                            ...[
+                            Icon(
+                              Icons.access_time,
+                              size: 12,
+                              color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _formatDate(createdAt),
+                              style: TextStyle(
+                                fontSize: 11,
                                 color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
                               ),
-                              const SizedBox(width: 4),
-                              Text(
-                                _formatDate(createdAt),
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
-                                ),
-                              ),
-                            ],
+                            ),
+                          ],
                           ],
                         ),
                       ],
@@ -700,21 +700,21 @@ class _AnnouncementDetailSheet extends StatelessWidget {
                         ),
                         const SizedBox(width: AppDimensions.spacingL),
                       ],
-                      if (createdAt != null) ...[
-                        Icon(
-                          Icons.calendar_today_outlined,
-                          size: 14,
+                      ...[
+                      Icon(
+                        Icons.calendar_today_outlined,
+                        size: 14,
+                        color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _formatFullDate(createdAt),
+                        style: TextStyle(
+                          fontSize: 13,
                           color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                         ),
-                        const SizedBox(width: 4),
-                        Text(
-                          _formatFullDate(createdAt),
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-                          ),
-                        ),
-                      ],
+                      ),
+                    ],
                     ],
                   ),
 

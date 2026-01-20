@@ -31,12 +31,17 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(AppDimensions.paddingL),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          physics: const ClampingScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Padding(
+              padding: const EdgeInsets.all(AppDimensions.paddingL),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
             // Header
             const Text(
               'Attendance',
@@ -241,9 +246,12 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
               ),
 
             const SizedBox(height: 100), // Space for bottom nav
-          ],
-        ),
-      ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -319,7 +327,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       error: (error, stack) => Padding(
         padding: const EdgeInsets.all(AppDimensions.paddingM),
         child: ErrorDisplay(
-          message: 'Failed to load batches',
+          message: 'Failed to load batches. Please check your connection and try again.',
           onRetry: () => ref.read(batchListProvider.notifier).refresh(),
         ),
       ),
@@ -353,32 +361,65 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                IconButton(
-                  icon: const Icon(
-                    Icons.arrow_back,
-                    color: AppColors.textSecondary,
+            // Batch Header with Back Button
+            NeumorphicContainer(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimensions.paddingM,
+                vertical: AppDimensions.spacingS,
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(
+                      Icons.arrow_back,
+                      color: AppColors.textSecondary,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _selectedBatchId = null;
+                        _attendance.clear();
+                        _remarks.clear();
+                      });
+                    },
                   ),
-                  onPressed: () {
-                    setState(() {
-                      _selectedBatchId = null;
-                      _attendance.clear();
-                      _remarks.clear();
-                    });
-                  },
-                ),
-                Expanded(
-                  child: Text(
-                    batch?.name ?? 'Unknown Batch',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          batch?.name ?? 'Unknown Batch',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        if (batch?.timeRange != null)
+                          Text(
+                            batch!.timeRange,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppDimensions.spacingL),
+            // Attendance List Header
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
+              child: Text(
+                'Mark Attendance',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
                 ),
-              ],
+              ),
             ),
             const SizedBox(height: AppDimensions.spacingM),
             if (students.isEmpty)
@@ -607,6 +648,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
               ? EmptyState.noAttendance()
               : ListView.builder(
                   shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
                   itemCount: history.length > 10 ? 10 : history.length,
                   itemBuilder: (context, index) {
                     final record = history[index];

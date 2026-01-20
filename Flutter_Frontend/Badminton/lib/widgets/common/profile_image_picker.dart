@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
@@ -96,12 +97,19 @@ class _ProfileImagePickerState extends State<ProfileImagePicker> {
 
       if (image != null) {
         // Crop the image
-        final croppedFile = await _cropImage(File(image.path));
-        if (croppedFile != null) {
-          setState(() {
-            _pickedImage = croppedFile;
-          });
-          widget.onImagePicked?.call(croppedFile);
+        if (kIsWeb) {
+          // On web, skip cropping for now (web support requires additional setup)
+          // The image_cropper package supports web but needs proper configuration
+          // For now, we'll just pass null and let the parent handle the XFile
+          widget.onImagePicked?.call(null);
+        } else {
+          final croppedFile = await _cropImage(File(image.path));
+          if (croppedFile != null) {
+            setState(() {
+              _pickedImage = croppedFile;
+            });
+            widget.onImagePicked?.call(croppedFile);
+          }
         }
       }
     } catch (e) {
@@ -117,6 +125,11 @@ class _ProfileImagePickerState extends State<ProfileImagePicker> {
   }
 
   Future<File?> _cropImage(File imageFile) async {
+    if (kIsWeb) {
+      // Skip cropping on web
+      return imageFile;
+    }
+    
     try {
       final croppedFile = await ImageCropper().cropImage(
         sourcePath: imageFile.path,

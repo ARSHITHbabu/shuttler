@@ -425,7 +425,7 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
                           ),
                           const SizedBox(height: AppDimensions.spacingM),
                           Text(
-                            'No ${_selectedTab} sessions',
+                            'No $_selectedTab sessions',
                             style: const TextStyle(
                               fontSize: 16,
                               color: AppColors.textSecondary,

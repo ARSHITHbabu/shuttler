@@ -10,9 +10,7 @@ import '../../widgets/common/skeleton_screen.dart';
 import '../../providers/coach_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/calendar_provider.dart';
-import '../../providers/batch_provider.dart';
 import '../../models/schedule.dart';
-import '../../models/calendar_event.dart';
 import '../../core/utils/canadian_holidays.dart';
 
 /// Coach Schedule Screen - Calendar-based view of batch schedules, operating days, and holidays
