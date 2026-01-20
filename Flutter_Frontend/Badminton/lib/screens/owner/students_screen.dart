@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shimmer/shimmer.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/success_snackbar.dart';
@@ -1007,9 +1007,23 @@ class _StudentBatchAndFeeStatus extends ConsumerWidget {
               ],
             );
           },
-          loading: () => const SizedBox(
+          loading: () => SizedBox(
             height: 20,
-            child: Center(child: LoadingSpinner()),
+            child: Center(
+              child: Shimmer.fromColors(
+                baseColor: AppColors.cardBackground,
+                highlightColor: AppColors.surfaceLight,
+                period: const Duration(milliseconds: 1200),
+                child: Container(
+                  width: 60,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: AppColors.cardBackground,
+                    borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                  ),
+                ),
+              ),
+            ),
           ),
           error: (error, stack) => const SizedBox.shrink(),
         );
