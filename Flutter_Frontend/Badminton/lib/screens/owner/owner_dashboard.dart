@@ -5,6 +5,7 @@ import '../../core/theme/neumorphic_styles.dart';
 import 'home_screen.dart';
 import 'batches_screen.dart';
 import 'attendance_screen.dart';
+import 'reports_screen.dart';
 import 'more_screen.dart';
 
 /// Owner Dashboard with bottom navigation
@@ -23,6 +24,7 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
     const HomeScreen(),
     const BatchesScreen(),
     const AttendanceScreen(),
+    const ReportsScreen(),
     const MoreScreen(),
   ];
 
@@ -30,6 +32,7 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
     _BottomNavItem(icon: Icons.home, label: 'Home'),
     _BottomNavItem(icon: Icons.groups, label: 'Batches'),
     _BottomNavItem(icon: Icons.check_circle_outline, label: 'Attendance'),
+    _BottomNavItem(icon: Icons.assessment, label: 'Reports'),
     _BottomNavItem(icon: Icons.more_horiz, label: 'More'),
   ];
 

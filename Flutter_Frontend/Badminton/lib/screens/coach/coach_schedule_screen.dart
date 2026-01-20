@@ -6,6 +6,7 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
+import '../../widgets/common/skeleton_screen.dart';
 import '../../providers/coach_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/schedule.dart';
@@ -56,7 +57,7 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> with 
       },
       loading: () => Scaffold(
         appBar: AppBar(title: const Text('Schedule')),
-        body: const Center(child: LoadingSpinner()),
+        body: const Center(child: DashboardSkeleton()),
       ),
       error: (error, stack) => Scaffold(
         appBar: AppBar(title: const Text('Schedule')),
@@ -122,7 +123,7 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> with 
               ],
             );
           },
-          loading: () => const Center(child: LoadingSpinner()),
+          loading: () => const Center(child: ListSkeleton(itemCount: 5)),
           error: (error, stack) => ErrorDisplay(
             message: 'Failed to load schedule',
             onRetry: () => ref.invalidate(coachScheduleProvider(coachId)),

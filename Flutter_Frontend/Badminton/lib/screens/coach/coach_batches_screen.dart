@@ -5,6 +5,7 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
+import '../../widgets/common/skeleton_screen.dart';
 import '../../providers/coach_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/service_providers.dart';
@@ -41,7 +42,7 @@ class _CoachBatchesScreenState extends ConsumerState<CoachBatchesScreen> {
         final coachId = authValue.userId;
         return _buildContent(coachId);
       },
-      loading: () => const Center(child: LoadingSpinner()),
+      loading: () => const Center(child: DashboardSkeleton()),
       error: (error, stack) => Center(
         child: Text(
           'Error: ${error.toString()}',
@@ -141,7 +142,7 @@ class _CoachBatchesScreenState extends ConsumerState<CoachBatchesScreen> {
                     }).toList(),
                   );
                 },
-                loading: () => const Center(child: LoadingSpinner()),
+                loading: () => const Center(child: ListSkeleton(itemCount: 3)),
                 error: (error, stack) => ErrorDisplay(
                   message: 'Failed to load batches',
                   onRetry: () => ref.invalidate(coachBatchesProvider(coachId)),
@@ -406,7 +407,7 @@ class _BatchStudentsSheetState extends ConsumerState<_BatchStudentsSheet> {
               future: _studentsFuture,
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: LoadingSpinner());
+                  return const Center(child: ListSkeleton(itemCount: 5));
                 }
 
                 if (snapshot.hasError) {

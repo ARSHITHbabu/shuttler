@@ -6,6 +6,7 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
+import '../../widgets/common/skeleton_screen.dart';
 import '../../providers/service_providers.dart';
 import '../../models/calendar_event.dart';
 import '../../core/utils/canadian_holidays.dart';
@@ -76,7 +77,7 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
         future: _loadEvents(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: LoadingSpinner());
+            return const Center(child: ListSkeleton(itemCount: 5));
           }
 
           if (snapshot.hasError) {

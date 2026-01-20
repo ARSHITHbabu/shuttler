@@ -577,6 +577,139 @@ class _StudentDashboardProviderElement
   int get studentId => (origin as StudentDashboardProvider).studentId;
 }
 
+String _$studentSchedulesHash() => r'aa57e204f934d84f67776e3395065b86f78a6cbf';
+
+/// Provider for student schedules (all schedules for batches student is enrolled in)
+///
+/// Copied from [studentSchedules].
+@ProviderFor(studentSchedules)
+const studentSchedulesProvider = StudentSchedulesFamily();
+
+/// Provider for student schedules (all schedules for batches student is enrolled in)
+///
+/// Copied from [studentSchedules].
+class StudentSchedulesFamily extends Family<AsyncValue<List<Schedule>>> {
+  /// Provider for student schedules (all schedules for batches student is enrolled in)
+  ///
+  /// Copied from [studentSchedules].
+  const StudentSchedulesFamily();
+
+  /// Provider for student schedules (all schedules for batches student is enrolled in)
+  ///
+  /// Copied from [studentSchedules].
+  StudentSchedulesProvider call(int studentId) {
+    return StudentSchedulesProvider(studentId);
+  }
+
+  @override
+  StudentSchedulesProvider getProviderOverride(
+    covariant StudentSchedulesProvider provider,
+  ) {
+    return call(provider.studentId);
+  }
+
+  static const Iterable<ProviderOrFamily>? _dependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get dependencies => _dependencies;
+
+  static const Iterable<ProviderOrFamily>? _allTransitiveDependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get allTransitiveDependencies =>
+      _allTransitiveDependencies;
+
+  @override
+  String? get name => r'studentSchedulesProvider';
+}
+
+/// Provider for student schedules (all schedules for batches student is enrolled in)
+///
+/// Copied from [studentSchedules].
+class StudentSchedulesProvider
+    extends AutoDisposeFutureProvider<List<Schedule>> {
+  /// Provider for student schedules (all schedules for batches student is enrolled in)
+  ///
+  /// Copied from [studentSchedules].
+  StudentSchedulesProvider(int studentId)
+    : this._internal(
+        (ref) => studentSchedules(ref as StudentSchedulesRef, studentId),
+        from: studentSchedulesProvider,
+        name: r'studentSchedulesProvider',
+        debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+            ? null
+            : _$studentSchedulesHash,
+        dependencies: StudentSchedulesFamily._dependencies,
+        allTransitiveDependencies:
+            StudentSchedulesFamily._allTransitiveDependencies,
+        studentId: studentId,
+      );
+
+  StudentSchedulesProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.studentId,
+  }) : super.internal();
+
+  final int studentId;
+
+  @override
+  Override overrideWith(
+    FutureOr<List<Schedule>> Function(StudentSchedulesRef provider) create,
+  ) {
+    return ProviderOverride(
+      origin: this,
+      override: StudentSchedulesProvider._internal(
+        (ref) => create(ref as StudentSchedulesRef),
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        studentId: studentId,
+      ),
+    );
+  }
+
+  @override
+  AutoDisposeFutureProviderElement<List<Schedule>> createElement() {
+    return _StudentSchedulesProviderElement(this);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is StudentSchedulesProvider && other.studentId == studentId;
+  }
+
+  @override
+  int get hashCode {
+    var hash = _SystemHash.combine(0, runtimeType.hashCode);
+    hash = _SystemHash.combine(hash, studentId.hashCode);
+
+    return _SystemHash.finish(hash);
+  }
+}
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+mixin StudentSchedulesRef on AutoDisposeFutureProviderRef<List<Schedule>> {
+  /// The parameter `studentId` of this provider.
+  int get studentId;
+}
+
+class _StudentSchedulesProviderElement
+    extends AutoDisposeFutureProviderElement<List<Schedule>>
+    with StudentSchedulesRef {
+  _StudentSchedulesProviderElement(super.provider);
+
+  @override
+  int get studentId => (origin as StudentSchedulesProvider).studentId;
+}
+
 String _$studentListHash() => r'34ee8a637f622f49796dd3b3f756b2629273a38d';
 
 /// Provider for student list state

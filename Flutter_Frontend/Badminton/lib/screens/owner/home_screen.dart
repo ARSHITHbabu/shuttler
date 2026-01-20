@@ -269,7 +269,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
             loading: () => const Padding(
               padding: EdgeInsets.all(AppDimensions.paddingL),
-              child: Center(child: LoadingSpinner()),
+              child: GridSkeleton(itemCount: 4, crossAxisCount: 2),
             ),
             error: (error, stack) => Padding(
               padding: const EdgeInsets.all(AppDimensions.paddingL),
@@ -423,7 +423,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                   loading: () => const NeumorphicContainer(
                     padding: EdgeInsets.all(AppDimensions.paddingM),
-                    child: Center(child: LoadingSpinner()),
+                    child: ListSkeleton(itemCount: 3),
                   ),
                   error: (error, stack) => const SizedBox.shrink(),
                 ),

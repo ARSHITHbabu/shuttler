@@ -5,6 +5,7 @@ import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
+import '../../widgets/common/success_snackbar.dart';
 import '../../providers/service_providers.dart';
 import 'coach_profile_screen.dart';
 import 'coach_announcements_screen.dart';
@@ -180,12 +181,7 @@ class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to logout: ${e.toString()}'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SuccessSnackbar.showError(context, 'Failed to logout: ${e.toString()}');
       }
     }
   }
