@@ -11,6 +11,7 @@ import '../../widgets/common/confirmation_dialog.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../providers/batch_provider.dart';
 import '../../providers/service_providers.dart';
+import '../../providers/session_provider.dart';
 import '../../models/batch.dart';
 import '../../models/coach.dart';
 import '../../core/constants/api_endpoints.dart';
@@ -39,6 +40,7 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
   final List<String> _selectedDays = [];
   List<Coach> _coaches = [];
   String _searchQuery = '';
+  int? _selectedSessionId;
 
   @override
   void initState() {
@@ -84,6 +86,7 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
       _startDate = null;
       _selectedCoachIds.clear();
       _selectedDays.clear();
+      _selectedSessionId = null;
     });
   }
 
@@ -129,6 +132,7 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
       }
       _selectedDays.clear();
       _selectedDays.addAll(batch.days);
+      _selectedSessionId = batch.sessionId;
     });
   }
 
@@ -295,6 +299,12 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
           }
         }
         // If coach didn't change, don't send coach fields
+        
+        // Handle session assignment - only send if changed
+        final originalSessionId = originalBatch.sessionId;
+        if (_selectedSessionId != originalSessionId) {
+          batchData['session_id'] = _selectedSessionId;
+        }
       } else {
         // When creating, send all required fields
         batchData['name'] = _nameController.text.trim();
@@ -322,10 +332,11 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
           if (assignedCoachName != null) {
             batchData['assigned_coach_name'] = assignedCoachName;
           }
-        } else {
-          // No coach assigned
-          batchData['assigned_coach_id'] = null;
-          batchData['assigned_coach_name'] = null;
+        }
+        
+        // Add session assignment
+        if (_selectedSessionId != null) {
+          batchData['session_id'] = _selectedSessionId;
         }
       }
 
@@ -715,6 +726,63 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                           },
                         ),
                       ],
+                      const SizedBox(height: AppDimensions.spacingM),
+                      // Session Selector
+                      const Text(
+                        'Select Session (Optional)',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: AppDimensions.spacingS),
+                      Consumer(
+                        builder: (context, ref, child) {
+                          final sessionsAsync = ref.watch(activeSessionsProvider);
+                          
+                          return sessionsAsync.when(
+                            loading: () => const NeumorphicContainer(
+                              padding: EdgeInsets.all(AppDimensions.paddingM),
+                              child: Center(child: CircularProgressIndicator()),
+                            ),
+                            error: (error, stack) => NeumorphicContainer(
+                              padding: const EdgeInsets.all(AppDimensions.paddingM),
+                              child: Text(
+                                'Error loading sessions: ${error.toString()}',
+                                style: const TextStyle(color: AppColors.error),
+                              ),
+                            ),
+                            data: (sessions) => NeumorphicContainer(
+                              padding: const EdgeInsets.all(AppDimensions.paddingM),
+                              child: DropdownButtonFormField<int>(
+                                value: _selectedSessionId,
+                                decoration: const InputDecoration(
+                                  labelText: 'Session',
+                                  labelStyle: TextStyle(color: AppColors.textSecondary),
+                                  border: InputBorder.none,
+                                ),
+                                dropdownColor: AppColors.cardBackground,
+                                style: const TextStyle(color: AppColors.textPrimary),
+                                items: [
+                                  const DropdownMenuItem<int>(
+                                    value: null,
+                                    child: Text('No Session'),
+                                  ),
+                                  ...sessions.map((session) {
+                                    return DropdownMenuItem<int>(
+                                      value: session.id,
+                                      child: Text(session.name),
+                                    );
+                                  }),
+                                ],
+                                onChanged: (value) {
+                                  setState(() => _selectedSessionId = value);
+                                },
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                       const SizedBox(height: AppDimensions.spacingL),
                       Row(
                         children: [
