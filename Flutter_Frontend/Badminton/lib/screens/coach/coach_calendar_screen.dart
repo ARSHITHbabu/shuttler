@@ -4,10 +4,9 @@ import 'package:table_calendar/table_calendar.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
-import '../../providers/service_providers.dart';
+import '../../providers/calendar_provider.dart';
 import '../../models/calendar_event.dart';
 import '../../core/utils/canadian_holidays.dart';
 import 'package:intl/intl.dart';
@@ -26,22 +25,6 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
   DateTime _focusedDay = DateTime.now();
   DateTime _selectedDay = DateTime.now();
   CalendarFormat _calendarFormat = CalendarFormat.month;
-
-  Future<List<CalendarEvent>> _loadEvents() async {
-    try {
-      final calendarService = ref.read(calendarServiceProvider);
-      // Get events for the current month
-      final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
-      final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
-      final events = await calendarService.getCalendarEvents(
-        startDate: firstDay,
-        endDate: lastDay,
-      );
-      return events;
-    } catch (e) {
-      return [];
-    }
-  }
 
   Map<DateTime, List<CalendarEvent>> _groupEventsByDate(List<CalendarEvent> events) {
     final Map<DateTime, List<CalendarEvent>> grouped = {};
@@ -73,27 +56,42 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
         ),
         // No add button - read-only for coaches
       ),
-      body: FutureBuilder<List<CalendarEvent>>(
-        future: _loadEvents(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: ListSkeleton(itemCount: 5));
-          }
+      body: _buildCalendarBody(),
+    );
+  }
 
-          if (snapshot.hasError) {
-            return ErrorDisplay(
-              message: 'Failed to load calendar events',
-              onRetry: () => setState(() {}),
-            );
-          }
+  Widget _buildCalendarBody() {
+    final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
+    final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
+    final eventsAsync = ref.watch(calendarEventsProvider(
+      startDate: firstDay,
+      endDate: lastDay,
+    ));
 
-          final events = snapshot.data ?? [];
-          final groupedEvents = _groupEventsByDate(events);
-          
-          // Get Canadian holidays for the focused year
-          final canadianHolidays = CanadianHolidays.getHolidaysForYear(_focusedDay.year);
+    return RefreshIndicator(
+      onRefresh: () async {
+        ref.invalidate(calendarEventsProvider(
+          startDate: firstDay,
+          endDate: lastDay,
+        ));
+      },
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: eventsAsync.when(
+          loading: () => const Center(child: ListSkeleton(itemCount: 5)),
+          error: (error, stack) => ErrorDisplay(
+            message: 'Failed to load calendar events: ${error.toString()}',
+            onRetry: () => ref.invalidate(calendarEventsProvider(
+              startDate: firstDay,
+              endDate: lastDay,
+            )),
+          ),
+          data: (events) {
+            final groupedEvents = _groupEventsByDate(events);
+            // Get Canadian holidays for the focused year
+            final canadianHolidays = CanadianHolidays.getHolidaysForYear(_focusedDay.year);
 
-          return Column(
+            return Column(
             children: [
               // Calendar
               NeumorphicContainer(
@@ -163,7 +161,6 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
                   onPageChanged: (focusedDay) {
                     setState(() {
                       _focusedDay = focusedDay;
-                      // This will trigger FutureBuilder to reload events
                     });
                   },
                   calendarBuilders: CalendarBuilders(
@@ -256,12 +253,11 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
               ),
 
               // Selected Day Events
-              Expanded(
-                child: _buildSelectedDayEvents(groupedEvents),
-              ),
+              _buildSelectedDayEvents(groupedEvents),
             ],
           );
-        },
+          },
+        ),
       ),
     );
   }
@@ -289,48 +285,21 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
           ),
         ),
         const SizedBox(height: AppDimensions.spacingM),
-        Expanded(
-          child: (dayEvents.isEmpty && !hasHoliday)
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.event_outlined,
-                        size: 64,
-                        color: AppColors.textSecondary,
-                      ),
-                      const SizedBox(height: AppDimensions.spacingM),
-                      const Text(
-                        'No events on this day',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: () async {
-                    setState(() {});
-                  },
-                  child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
-                    itemCount: (hasHoliday ? 1 : 0) + dayEvents.length,
-                    itemBuilder: (context, index) {
-                      // Show holiday first if it exists
-                      if (hasHoliday && index == 0) {
-                        return _buildHolidayCard(holidayName);
-                      }
-                      // Then show regular events
-                      final eventIndex = hasHoliday ? index - 1 : index;
-                      final event = dayEvents[eventIndex];
-                      return _buildEventCard(event);
-                    },
-                  ),
-                ),
-        ),
+        if (dayEvents.isEmpty && !hasHoliday)
+          Padding(
+            padding: const EdgeInsets.all(AppDimensions.paddingL),
+            child: EmptyState.noEvents(),
+          )
+        else ...[
+          if (hasHoliday) Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+            child: _buildHolidayCard(holidayName),
+          ),
+          ...dayEvents.map((event) => Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+                child: _buildEventCard(event),
+              )),
+        ],
       ],
     );
   }

@@ -4,10 +4,9 @@ import 'package:table_calendar/table_calendar.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
-import '../../providers/service_providers.dart';
+import '../../providers/calendar_provider.dart';
 import '../../models/calendar_event.dart';
 import '../../core/utils/canadian_holidays.dart';
 import 'package:intl/intl.dart';
@@ -28,22 +27,6 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
   DateTime _focusedDay = DateTime.now();
   DateTime _selectedDay = DateTime.now();
   CalendarFormat _calendarFormat = CalendarFormat.month;
-
-  Future<List<CalendarEvent>> _loadEvents() async {
-    try {
-      final calendarService = ref.read(calendarServiceProvider);
-      // Get events for the current month
-      final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
-      final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
-      final events = await calendarService.getCalendarEvents(
-        startDate: firstDay,
-        endDate: lastDay,
-      );
-      return events;
-    } catch (e) {
-      return [];
-    }
-  }
 
   Map<DateTime, List<CalendarEvent>> _groupEventsByDate(List<CalendarEvent> events) {
     final Map<DateTime, List<CalendarEvent>> grouped = {};
@@ -82,193 +65,208 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
         ),
         // No add button - read-only for students
       ),
-      body: FutureBuilder<List<CalendarEvent>>(
-        future: _loadEvents(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: ListSkeleton(itemCount: 5));
-          }
+      body: Builder(
+        builder: (context) {
+          // Get events for the current month using provider
+          final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
+          final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
+          final eventsAsync = ref.watch(calendarEventsProvider(
+            startDate: firstDay,
+            endDate: lastDay,
+          ));
 
-          if (snapshot.hasError) {
-            return ErrorDisplay(
-              message: 'Failed to load calendar events',
-              onRetry: () => setState(() {}),
-            );
-          }
+          return RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(calendarEventsProvider(
+                startDate: firstDay,
+                endDate: lastDay,
+              ));
+            },
+            child: eventsAsync.when(
+              loading: () => const Center(child: ListSkeleton(itemCount: 5)),
+              error: (error, stack) => ErrorDisplay(
+                message: 'Failed to load calendar events: ${error.toString()}',
+                onRetry: () => ref.invalidate(calendarEventsProvider(
+                  startDate: firstDay,
+                  endDate: lastDay,
+                )),
+              ),
+              data: (events) {
+                final groupedEvents = _groupEventsByDate(events);
+                
+                // Get Canadian holidays for the focused year
+                final canadianHolidays = CanadianHolidays.getHolidaysForYear(_focusedDay.year);
 
-          final events = snapshot.data ?? [];
-          final groupedEvents = _groupEventsByDate(events);
-          
-          // Get Canadian holidays for the focused year
-          final canadianHolidays = CanadianHolidays.getHolidaysForYear(_focusedDay.year);
-
-          return Column(
-            children: [
-              // Calendar
-              NeumorphicContainer(
-                margin: const EdgeInsets.all(AppDimensions.paddingL),
-                padding: const EdgeInsets.all(AppDimensions.paddingM),
-                child: TableCalendar<CalendarEvent>(
-                  firstDay: DateTime.utc(2020, 1, 1),
-                  lastDay: DateTime.utc(2030, 12, 31),
-                  focusedDay: _focusedDay,
-                  selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-                  calendarFormat: _calendarFormat,
-                  eventLoader: (day) {
-                    final date = DateTime(day.year, day.month, day.day);
-                    return groupedEvents[date] ?? [];
-                  },
-                  startingDayOfWeek: StartingDayOfWeek.sunday,
-                  calendarStyle: CalendarStyle(
-                    outsideDaysVisible: false,
-                    weekendTextStyle: TextStyle(color: textSecondary),
-                    defaultTextStyle: TextStyle(color: textPrimary),
-                    selectedDecoration: BoxDecoration(
-                      color: isDark ? AppColors.accent : AppColorsLight.accent,
-                      shape: BoxShape.circle,
-                    ),
-                    todayDecoration: BoxDecoration(
-                      color: (isDark ? AppColors.accent : AppColorsLight.accent).withOpacity(0.3),
-                      shape: BoxShape.circle,
-                    ),
-                    markerDecoration: BoxDecoration(
-                      color: isDark ? AppColors.accent : AppColorsLight.accent,
-                      shape: BoxShape.circle,
-                    ),
-                    markersMaxCount: 3,
-                    markerSize: 6,
-                    canMarkersOverflow: true,
-                  ),
-                  headerStyle: HeaderStyle(
-                    formatButtonVisible: true,
-                    titleCentered: true,
-                    formatButtonShowsNext: false,
-                    formatButtonDecoration: BoxDecoration(
-                      color: cardBackground,
-                      borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                    ),
-                    formatButtonTextStyle: TextStyle(color: textPrimary),
-                    leftChevronIcon: Icon(Icons.chevron_left, color: textPrimary),
-                    rightChevronIcon: Icon(Icons.chevron_right, color: textPrimary),
-                    titleTextStyle: TextStyle(
-                      color: textPrimary,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  daysOfWeekStyle: DaysOfWeekStyle(
-                    weekdayStyle: TextStyle(color: textSecondary),
-                    weekendStyle: TextStyle(color: textSecondary),
-                  ),
-                  onDaySelected: (selectedDay, focusedDay) {
-                    setState(() {
-                      _selectedDay = selectedDay;
-                      _focusedDay = focusedDay;
-                    });
-                  },
-                  onFormatChanged: (format) {
-                    setState(() => _calendarFormat = format);
-                  },
-                  onPageChanged: (focusedDay) {
-                    setState(() {
-                      _focusedDay = focusedDay;
-                      // This will trigger FutureBuilder to reload events
-                    });
-                  },
-                  calendarBuilders: CalendarBuilders(
-                    defaultBuilder: (context, date, focusedDay) {
-                      final dateKey = DateTime(date.year, date.month, date.day);
-                      final isHoliday = canadianHolidays.containsKey(dateKey);
-                      final isSelected = isSameDay(_selectedDay, date);
-                      final isToday = isSameDay(DateTime.now(), date);
-                      
-                      if (isHoliday && !isSelected && !isToday) {
-                        return Center(
-                          child: Text(
-                            '${date.day}',
-                            style: const TextStyle(
-                              color: Colors.red,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        );
-                      }
-                      return null;
-                    },
-                    selectedBuilder: (context, date, focusedDay) {
-                      final dateKey = DateTime(date.year, date.month, date.day);
-                      final isHoliday = canadianHolidays.containsKey(dateKey);
-                      
-                      return Container(
-                        margin: const EdgeInsets.all(4.0),
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: isHoliday ? Colors.red : (isDark ? AppColors.accent : AppColorsLight.accent),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Text(
-                          '${date.day}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      );
-                    },
-                    todayBuilder: (context, date, focusedDay) {
-                      final dateKey = DateTime(date.year, date.month, date.day);
-                      final isHoliday = canadianHolidays.containsKey(dateKey);
-                      final isSelected = isSameDay(_selectedDay, date);
-                      
-                      if (isSelected) return null; // Let selectedBuilder handle it
-                      
-                      return Container(
-                        margin: const EdgeInsets.all(4.0),
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: isHoliday 
-                              ? Colors.red.withOpacity(0.5)
-                              : (isDark ? AppColors.accent : AppColorsLight.accent).withOpacity(0.3),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Text(
-                          '${date.day}',
-                          style: TextStyle(
-                            color: isHoliday ? Colors.red : textPrimary,
-                            fontWeight: isHoliday ? FontWeight.bold : FontWeight.normal,
-                          ),
-                        ),
-                      );
-                    },
-                    markerBuilder: (context, date, events) {
-                      if (events.isEmpty) return null;
-                      
-                      final eventTypes = events.map((e) => (e).eventType).toSet();
-                      return Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: eventTypes.map((type) {
-                          final event = events.firstWhere((e) => (e).eventType == type);
-                          return Container(
-                            width: 6,
-                            height: 6,
-                            margin: const EdgeInsets.symmetric(horizontal: 1),
-                            decoration: BoxDecoration(
-                              color: event.eventColor,
+                return SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      // Calendar
+                      NeumorphicContainer(
+                        margin: const EdgeInsets.all(AppDimensions.paddingL),
+                        padding: const EdgeInsets.all(AppDimensions.paddingM),
+                        child: TableCalendar<CalendarEvent>(
+                          firstDay: DateTime.utc(2020, 1, 1),
+                          lastDay: DateTime.utc(2030, 12, 31),
+                          focusedDay: _focusedDay,
+                          selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+                          calendarFormat: _calendarFormat,
+                          eventLoader: (day) {
+                            final date = DateTime(day.year, day.month, day.day);
+                            return groupedEvents[date] ?? [];
+                          },
+                          startingDayOfWeek: StartingDayOfWeek.sunday,
+                          calendarStyle: CalendarStyle(
+                            outsideDaysVisible: false,
+                            weekendTextStyle: TextStyle(color: textSecondary),
+                            defaultTextStyle: TextStyle(color: textPrimary),
+                            selectedDecoration: BoxDecoration(
+                              color: isDark ? AppColors.accent : AppColorsLight.accent,
                               shape: BoxShape.circle,
                             ),
-                          );
-                        }).toList(),
-                      );
-                    },
-                  ),
-                ),
-              ),
+                            todayDecoration: BoxDecoration(
+                              color: (isDark ? AppColors.accent : AppColorsLight.accent).withOpacity(0.3),
+                              shape: BoxShape.circle,
+                            ),
+                            markerDecoration: BoxDecoration(
+                              color: isDark ? AppColors.accent : AppColorsLight.accent,
+                              shape: BoxShape.circle,
+                            ),
+                            markersMaxCount: 3,
+                            markerSize: 6,
+                            canMarkersOverflow: true,
+                          ),
+                          headerStyle: HeaderStyle(
+                            formatButtonVisible: true,
+                            titleCentered: true,
+                            formatButtonShowsNext: false,
+                            formatButtonDecoration: BoxDecoration(
+                              color: cardBackground,
+                              borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                            ),
+                            formatButtonTextStyle: TextStyle(color: textPrimary),
+                            leftChevronIcon: Icon(Icons.chevron_left, color: textPrimary),
+                            rightChevronIcon: Icon(Icons.chevron_right, color: textPrimary),
+                            titleTextStyle: TextStyle(
+                              color: textPrimary,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          daysOfWeekStyle: DaysOfWeekStyle(
+                            weekdayStyle: TextStyle(color: textSecondary),
+                            weekendStyle: TextStyle(color: textSecondary),
+                          ),
+                          onDaySelected: (selectedDay, focusedDay) {
+                            setState(() {
+                              _selectedDay = selectedDay;
+                              _focusedDay = focusedDay;
+                            });
+                          },
+                          onFormatChanged: (format) {
+                            setState(() => _calendarFormat = format);
+                          },
+                          onPageChanged: (focusedDay) {
+                            setState(() {
+                              _focusedDay = focusedDay;
+                              // Provider will automatically reload events for new month
+                            });
+                          },
+                          calendarBuilders: CalendarBuilders(
+                            defaultBuilder: (context, date, focusedDay) {
+                              final dateKey = DateTime(date.year, date.month, date.day);
+                              final isHoliday = canadianHolidays.containsKey(dateKey);
+                              final isSelected = isSameDay(_selectedDay, date);
+                              final isToday = isSameDay(DateTime.now(), date);
+                              
+                              if (isHoliday && !isSelected && !isToday) {
+                                return Center(
+                                  child: Text(
+                                    '${date.day}',
+                                    style: const TextStyle(
+                                      color: Colors.red,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                );
+                              }
+                              return null;
+                            },
+                            selectedBuilder: (context, date, focusedDay) {
+                              final dateKey = DateTime(date.year, date.month, date.day);
+                              final isHoliday = canadianHolidays.containsKey(dateKey);
+                              
+                              return Container(
+                                margin: const EdgeInsets.all(4.0),
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: isHoliday ? Colors.red : (isDark ? AppColors.accent : AppColorsLight.accent),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Text(
+                                  '${date.day}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              );
+                            },
+                            todayBuilder: (context, date, focusedDay) {
+                              final dateKey = DateTime(date.year, date.month, date.day);
+                              final isHoliday = canadianHolidays.containsKey(dateKey);
+                              final isSelected = isSameDay(_selectedDay, date);
+                              
+                              if (isSelected) return null; // Let selectedBuilder handle it
+                              
+                              return Container(
+                                margin: const EdgeInsets.all(4.0),
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: isHoliday 
+                                      ? Colors.red.withOpacity(0.5)
+                                      : (isDark ? AppColors.accent : AppColorsLight.accent).withOpacity(0.3),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Text(
+                                  '${date.day}',
+                                  style: TextStyle(
+                                    color: isHoliday ? Colors.red : textPrimary,
+                                    fontWeight: isHoliday ? FontWeight.bold : FontWeight.normal,
+                                  ),
+                                ),
+                              );
+                            },
+                            markerBuilder: (context, date, events) {
+                              if (events.isEmpty) return null;
+                              
+                              final eventTypes = events.map((e) => (e).eventType).toSet();
+                              return Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: eventTypes.map((type) {
+                                  final event = events.firstWhere((e) => (e).eventType == type);
+                                  return Container(
+                                    width: 6,
+                                    height: 6,
+                                    margin: const EdgeInsets.symmetric(horizontal: 1),
+                                    decoration: BoxDecoration(
+                                      color: event.eventColor,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  );
+                                }).toList(),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
 
-              // Selected Day Events
-              Expanded(
-                child: _buildSelectedDayEvents(groupedEvents, isDark),
-              ),
-            ],
+                      // Selected Day Events
+                      _buildSelectedDayEvents(groupedEvents, isDark),
+                    ],
+                  ),
+                );
+              },
+            ),
           );
         },
       ),
@@ -301,48 +299,19 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
           ),
         ),
         const SizedBox(height: AppDimensions.spacingM),
-        Expanded(
-          child: (dayEvents.isEmpty && !hasHoliday)
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.event_outlined,
-                        size: 64,
-                        color: textSecondary,
-                      ),
-                      const SizedBox(height: AppDimensions.spacingM),
-                      Text(
-                        'No events on this day',
-                        style: TextStyle(
-                          color: textSecondary,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: () async {
-                    setState(() {});
-                  },
-                  child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
-                    itemCount: (hasHoliday ? 1 : 0) + dayEvents.length,
-                    itemBuilder: (context, index) {
-                      // Show holiday first if it exists
-                      if (hasHoliday && index == 0) {
-                        return _buildHolidayCard(holidayName, isDark);
-                      }
-                      // Then show regular events
-                      final eventIndex = hasHoliday ? index - 1 : index;
-                      final event = dayEvents[eventIndex];
-                      return _buildEventCard(event, isDark);
-                    },
-                  ),
-                ),
-        ),
+        if (dayEvents.isEmpty && !hasHoliday)
+          Padding(
+            padding: const EdgeInsets.all(AppDimensions.paddingL),
+            child: EmptyState.noEvents(),
+          )
+        else ...[
+          if (hasHoliday) _buildHolidayCard(holidayName, isDark),
+          ...dayEvents.map((event) => Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+                child: _buildEventCard(event, isDark),
+              )),
+        ],
+        const SizedBox(height: AppDimensions.spacingL),
       ],
     );
   }

@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/success_snackbar.dart';
@@ -95,8 +94,7 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
   }
 
   Widget _buildScaffold(int coachId) {
-    final coachService = ref.watch(coachServiceProvider);
-    final coachFuture = coachService.getCoachById(coachId);
+    final coachAsync = ref.watch(coachByIdProvider(coachId));
     final coachStatsAsync = ref.watch(coachStatsProvider(coachId));
 
     return Scaffold(
@@ -105,33 +103,32 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         elevation: 0,
       ),
-      body: FutureBuilder<Coach>(
-        future: coachFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const ProfileSkeleton();
-          }
-
-          if (snapshot.hasError) {
-            return ErrorDisplay(
-              message: 'Failed to load profile',
-              onRetry: () {
-                setState(() {});
-              },
-            );
-          }
-
-          final coach = snapshot.data!;
-          if (_coach == null) {
-            _coach = coach;
-            _nameController.text = coach.name;
-            _phoneController.text = coach.phone;
-            _specializationController.text = coach.specialization ?? '';
-            _experienceController.text = coach.experienceYears?.toString() ?? '';
-          }
-
-          return _buildContent(coach, coachStatsAsync);
+      body: RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(coachByIdProvider(coachId));
+          ref.invalidate(coachStatsProvider(coachId));
         },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: coachAsync.when(
+            loading: () => const ProfileSkeleton(),
+            error: (error, stack) => ErrorDisplay(
+              message: 'Failed to load profile: ${error.toString()}',
+              onRetry: () => ref.invalidate(coachByIdProvider(coachId)),
+            ),
+            data: (coach) {
+              if (_coach == null || _coach!.id != coach.id) {
+                _coach = coach;
+                _nameController.text = coach.name;
+                _phoneController.text = coach.phone;
+                _specializationController.text = coach.specialization ?? '';
+                _experienceController.text = coach.experienceYears?.toString() ?? '';
+              }
+
+              return _buildContent(coach, coachStatsAsync);
+            },
+          ),
+        ),
       ),
     );
   }

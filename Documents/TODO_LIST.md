@@ -254,3 +254,18 @@
 **Total Items**: 35+
 **Completed**: 28
 **Remaining**: 7+
+
+---
+
+## Phase 6 Remaining Work
+
+**Note**: Phase 6 is ~85% complete. For detailed TODO list of remaining Phase 6 work (Student/Coach Portal Migration), see:
+- **`PHASE6_REMAINING_TODO.md`** - Comprehensive TODO list for Phase 6 incomplete items
+
+### Quick Summary:
+- ⬜ **Student Portal Migration**: 13 screens need provider migration
+- ⬜ **Coach Portal Migration**: 10 screens need provider migration
+- ⬜ **Loading State Fixes**: 3 screens need LoadingSpinner → Skeleton replacement
+- ⬜ **Optional Enhancements**: ValidatedTextField, PDF Export, Image Cropping
+
+**Estimated Time**: 2.5-4 weeks for all remaining Phase 6 work

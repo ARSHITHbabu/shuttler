@@ -7,7 +7,6 @@ import '../../core/constants/dimensions.dart';
 import '../../core/utils/validators.dart';
 import '../../widgets/common/neumorphic_button.dart';
 import '../../widgets/common/custom_text_field.dart';
-import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/auth_provider.dart';
@@ -371,14 +370,11 @@ class _ProfileCompletionScreenState
                 const SizedBox(height: AppDimensions.spacingXl),
 
                 // Submit Button
-                if (_isLoading)
-                  const LoadingSpinner()
-                else
-                  NeumorphicButton(
-                    text: 'Complete Profile',
-                    onPressed: _handleSubmit,
-                    icon: Icons.check_circle_outline,
-                  ),
+                NeumorphicButton(
+                  text: 'Complete Profile',
+                  onPressed: _isLoading ? null : _handleSubmit,
+                  icon: Icons.check_circle_outline,
+                ),
               ],
             ),
           ),
