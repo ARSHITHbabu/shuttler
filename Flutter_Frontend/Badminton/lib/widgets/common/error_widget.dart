@@ -21,35 +21,37 @@ class ErrorDisplay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppDimensions.paddingL),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 64,
-              color: AppColors.error,
-            ),
-            const SizedBox(height: AppDimensions.spacingM),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 16,
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(AppDimensions.paddingL),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 64,
+                color: AppColors.error,
               ),
-            ),
-            if (onRetry != null) ...[
-              const SizedBox(height: AppDimensions.spacingL),
-              NeumorphicButton(
-                text: retryButtonText ?? 'Retry',
-                onPressed: onRetry,
-                icon: Icons.refresh,
-                isAccent: true,
+              const SizedBox(height: AppDimensions.spacingM),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 16,
+                ),
               ),
+              if (onRetry != null) ...[
+                const SizedBox(height: AppDimensions.spacingL),
+                NeumorphicButton(
+                  text: retryButtonText ?? 'Retry',
+                  onPressed: onRetry,
+                  icon: Icons.refresh,
+                  isAccent: true,
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -167,46 +169,48 @@ class EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(AppDimensions.paddingL),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 64,
-              color: AppColors.textSecondary,
-            ),
-            const SizedBox(height: AppDimensions.spacingM),
-            if (title != null) ...[
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(AppDimensions.paddingL),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 64,
+                color: AppColors.textSecondary,
+              ),
+              const SizedBox(height: AppDimensions.spacingM),
+              if (title != null) ...[
+                Text(
+                  title!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: AppDimensions.spacingS),
+              ],
               Text(
-                title!,
+                message,
                 textAlign: TextAlign.center,
                 style: const TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
+                  color: AppColors.textSecondary,
+                  fontSize: 16,
                 ),
               ),
-              const SizedBox(height: AppDimensions.spacingS),
+              if (actionText != null && onAction != null) ...[
+                const SizedBox(height: AppDimensions.spacingL),
+                NeumorphicButton(
+                  text: actionText!,
+                  onPressed: onAction,
+                  isAccent: true,
+                ),
+              ],
             ],
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 16,
-              ),
-            ),
-            if (actionText != null && onAction != null) ...[
-              const SizedBox(height: AppDimensions.spacingL),
-              NeumorphicButton(
-                text: actionText!,
-                onPressed: onAction,
-                isAccent: true,
-              ),
-            ],
-          ],
+          ),
         ),
       ),
     );

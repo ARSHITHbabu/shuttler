@@ -402,10 +402,9 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
             physics: const ClampingScrollPhysics(),
             child: ConstrainedBox(
               constraints: BoxConstraints(minHeight: constraints.maxHeight),
-              child: IntrinsicHeight(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
           // Header
           Padding(
             padding: const EdgeInsets.all(AppDimensions.paddingL),
@@ -934,7 +933,6 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
           const SizedBox(height: 100), // Space for bottom nav
                   ],
                 ),
-              ),
             ),
           );
         },
