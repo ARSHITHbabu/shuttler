@@ -6,6 +6,8 @@ import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
 import '../../providers/theme_provider.dart';
 import '../../widgets/settings/shuttlecock_theme_toggle.dart';
+import 'profile_screen.dart';
+import 'academy_details_screen.dart';
 
 /// Settings Screen - App settings, academy settings, account settings
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -112,7 +114,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 icon: Icons.person_outline,
                 title: 'Profile',
                 onTap: () {
-                  // Navigate to profile edit
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const ProfileScreen(),
+                    ),
+                  );
                 },
               ),
 
@@ -135,7 +141,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 icon: Icons.business_outlined,
                 title: 'Academy Details',
                 onTap: () {
-                  // Navigate to academy details edit
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const AcademyDetailsScreen(),
+                    ),
+                  );
                 },
               ),
 

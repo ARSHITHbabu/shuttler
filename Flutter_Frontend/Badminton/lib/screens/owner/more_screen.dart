@@ -13,7 +13,6 @@ import 'calendar_view_screen.dart';
 import 'reports_screen.dart';
 import 'bmi_tracking_screen.dart';
 import 'performance_tracking_screen.dart';
-import 'fees_screen.dart';
 import 'settings_screen.dart';
 import 'notifications_screen.dart';
 
@@ -50,31 +49,6 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                 color: AppColors.textPrimary,
               ),
             ),
-            const SizedBox(height: AppDimensions.spacingL),
-
-            // Account Section
-            _SectionTitle(title: 'Account'),
-            const SizedBox(height: AppDimensions.spacingM),
-            _MenuItem(
-              icon: Icons.person_outline,
-              title: 'Profile',
-              onTap: () {
-                setState(() {
-                  _currentView = 'profile';
-                });
-              },
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.business_outlined,
-              title: 'Academy Details',
-              onTap: () {
-                setState(() {
-                  _currentView = 'academy';
-                });
-              },
-            ),
-
             const SizedBox(height: AppDimensions.spacingL),
 
             // Management Section
@@ -159,18 +133,6 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (context) => const PerformanceTrackingScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.payments_outlined,
-              title: 'Fee Management',
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const FeesScreen(),
                   ),
                 );
               },
