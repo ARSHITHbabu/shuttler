@@ -127,7 +127,11 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
       _feesController.text = batch.fees;
       _startDate = startDate;
       _selectedCoachIds.clear();
-      if (batch.coachId != null) {
+      // Load multiple coach IDs from batch
+      if (batch.assignedCoachIds.isNotEmpty) {
+        _selectedCoachIds.addAll(batch.assignedCoachIds);
+      } else if (batch.coachId != null) {
+        // Backward compatibility: if only single coach ID exists
         _selectedCoachIds.add(batch.coachId!);
       }
       _selectedDays.clear();
@@ -197,17 +201,8 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
       final startTimeStr = _formatTimeOfDay(_startTime!);
       final endTimeStr = _formatTimeOfDay(_endTime!);
       
-      // Get coach assignment (only first coach if multiple selected, or null if none)
-      int? assignedCoachId;
-      String? assignedCoachName;
-      if (_selectedCoachIds.isNotEmpty) {
-        assignedCoachId = _selectedCoachIds.first;
-        try {
-          assignedCoachName = _coaches.firstWhere((c) => c.id == assignedCoachId).name;
-        } catch (e) {
-          // Coach not found in list, name will be null
-        }
-      }
+      // Get coach assignments (multiple coaches supported)
+      List<int> assignedCoachIds = List.from(_selectedCoachIds);
       
       // Prepare batch data - only include changed fields when editing
       final batchData = <String, dynamic>{};
@@ -284,21 +279,19 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
         // If _startDate is null, preserve original (don't send it)
         
         // Handle coach assignment - only send if changed
-        final originalCoachId = originalBatch.coachId;
-        if (assignedCoachId != originalCoachId) {
-          // Coach assignment changed
-          if (assignedCoachId != null) {
-            batchData['assigned_coach_id'] = assignedCoachId;
-            if (assignedCoachName != null) {
-              batchData['assigned_coach_name'] = assignedCoachName;
-            }
-          } else {
-            // Coach was removed
-            batchData['assigned_coach_id'] = null;
-            batchData['assigned_coach_name'] = null;
-          }
+        final originalCoachIds = originalBatch.assignedCoachIds.isNotEmpty
+            ? originalBatch.assignedCoachIds
+            : (originalBatch.coachId != null ? [originalBatch.coachId!] : []);
+        
+        // Check if coach assignments changed (compare sorted lists)
+        final originalIdsSorted = List<int>.from(originalCoachIds)..sort();
+        final newIdsSorted = List<int>.from(assignedCoachIds)..sort();
+        
+        if (originalIdsSorted.toString() != newIdsSorted.toString()) {
+          // Coach assignments changed
+          batchData['assigned_coach_ids'] = assignedCoachIds;
         }
-        // If coach didn't change, don't send coach fields
+        // If coaches didn't change, don't send coach fields
         
         // Handle session assignment - only send if changed
         final originalSessionId = originalBatch.sessionId;
@@ -326,12 +319,9 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
             : DateTime.now().toIso8601String().split('T')[0];
         batchData['created_by'] = 'owner'; // TODO: Get from auth
         
-        // Add coach assignment (singular, not plural)
-        if (assignedCoachId != null) {
-          batchData['assigned_coach_id'] = assignedCoachId;
-          if (assignedCoachName != null) {
-            batchData['assigned_coach_name'] = assignedCoachName;
-          }
+        // Add coach assignments (multiple coaches)
+        if (assignedCoachIds.isNotEmpty) {
+          batchData['assigned_coach_ids'] = assignedCoachIds;
         }
         
         // Add session assignment
@@ -687,9 +677,10 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                             onSelected: (selected) {
                               setState(() {
                                 if (selected) {
-                                  // Only allow one coach selection
-                                  _selectedCoachIds.clear();
-                                  _selectedCoachIds.add(coach.id);
+                                  // Allow multiple coach selection
+                                  if (!_selectedCoachIds.contains(coach.id)) {
+                                    _selectedCoachIds.add(coach.id);
+                                  }
                                 } else {
                                   _selectedCoachIds.remove(coach.id);
                                 }
@@ -710,9 +701,17 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                         Builder(
                           builder: (context) {
                             try {
-                              final coachName = _coaches.firstWhere((c) => c.id == _selectedCoachIds.first).name;
+                              final selectedCoachNames = _selectedCoachIds
+                                  .map((id) {
+                                    try {
+                                      return _coaches.firstWhere((c) => c.id == id).name;
+                                    } catch (e) {
+                                      return 'Coach $id';
+                                    }
+                                  })
+                                  .join(', ');
                               return Text(
-                                'Selected: $coachName',
+                                'Selected: $selectedCoachNames',
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: AppColors.textSecondary,
@@ -720,7 +719,7 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                               );
                             } catch (e) {
                               return Text(
-                                'Selected: Coach ${_selectedCoachIds.first}',
+                                'Selected: ${_selectedCoachIds.length} coach(es)',
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: AppColors.textSecondary,
@@ -1048,14 +1047,16 @@ class _BatchCard extends StatelessWidget {
               ),
             ],
           ),
-          // Coach Name - conditionally shown (check both ID and name)
-          if (batch.assignedCoachId != null) ...[
+          // Coach Names - conditionally shown (show all assigned coaches)
+          if (batch.assignedCoachIds.isNotEmpty || batch.assignedCoachId != null) ...[
             const SizedBox(height: AppDimensions.spacingS),
             Row(
               children: [
                 _InfoChip(
                   icon: Icons.person_outline,
-                  label: batch.coachName ?? 'Coach ${batch.assignedCoachId}',
+                  label: batch.coachNamesString.isNotEmpty
+                      ? batch.coachNamesString
+                      : (batch.coachName ?? 'Coach ${batch.assignedCoachId ?? "Unknown"}'),
                 ),
               ],
             ),
