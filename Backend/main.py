@@ -13,6 +13,7 @@ import os
 import shutil
 import uuid
 import secrets
+import traceback
 from pathlib import Path
 from dotenv import load_dotenv
 from passlib.context import CryptContext
@@ -1526,7 +1527,7 @@ def create_owner(owner: OwnerCreate):
             raise HTTPException(status_code=400, detail="Email already registered as a coach. Owners and coaches must have unique emails.")
         
         # Hash password before storing
-        owner_dict = owner.model_dump()
+        owner_dict = owner.model_dump(exclude_none=True)  # Exclude None values to avoid SQLAlchemy issues
         owner_dict['password'] = hash_password(owner_dict['password'])
         owner_dict['status'] = "active"  # Default status
         
@@ -1557,8 +1558,15 @@ def create_owner(owner: OwnerCreate):
         if 'email' in error_msg.lower() or 'unique' in error_msg.lower():
             raise HTTPException(status_code=400, detail="Email already registered")
         raise HTTPException(status_code=400, detail=f"Database constraint violation: {error_msg}")
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
+        # Log the full error for debugging
+        error_trace = traceback.format_exc()
+        print(f"Error creating owner: {error_trace}")  # Log to console for debugging
         raise HTTPException(status_code=500, detail=f"Error creating owner: {str(e)}")
     finally:
         db.close()
