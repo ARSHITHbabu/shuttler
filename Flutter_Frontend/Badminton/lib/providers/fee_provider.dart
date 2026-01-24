@@ -1,7 +1,11 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../models/fee.dart';
+import '../models/student_with_batch_fee.dart';
+import '../models/student.dart';
+import '../models/batch.dart';
 import 'service_providers.dart';
 import 'dashboard_provider.dart';
+import 'batch_provider.dart';
 
 part 'fee_provider.g.dart';
 
@@ -144,4 +148,71 @@ Future<List<Fee>> overdueFees(OverdueFeesRef ref) async {
   final feeService = ref.watch(feeServiceProvider);
   final allFees = await feeService.getFees();
   return allFees.where((fee) => fee.status == 'overdue' || fee.isOverdue).toList();
+}
+
+/// Provider for all students with their batch enrollments and fee status
+/// Returns students grouped by batch with their fee information
+@riverpod
+Future<Map<int, List<StudentWithBatchFee>>> studentsWithBatchFees(
+  StudentsWithBatchFeesRef ref,
+) async {
+  final batchService = ref.watch(batchServiceProvider);
+  final feeService = ref.watch(feeServiceProvider);
+  
+  // Get all batches
+  final batches = await batchService.getBatches();
+  
+  // Get all existing fees
+  final allFees = await feeService.getFees();
+  
+  // Map to store batchId -> List<StudentWithBatchFee>
+  final Map<int, List<StudentWithBatchFee>> result = {};
+  
+  // For each batch, get enrolled students and match with fees
+  for (final batch in batches) {
+    try {
+      // Get students enrolled in this batch
+      final students = await batchService.getBatchStudents(batch.id);
+      
+      // Parse batch fee amount (handle string format like "5000" or "₹5000")
+      double batchFeeAmount = 0.0;
+      try {
+        final feeString = batch.fees.replaceAll(RegExp(r'[₹,\s]'), '');
+        batchFeeAmount = double.parse(feeString);
+      } catch (e) {
+        // If parsing fails, default to 0
+        batchFeeAmount = 0.0;
+      }
+      
+      // Create StudentWithBatchFee for each student
+      final studentFeeList = students.map((student) {
+        // Find existing fee for this student-batch combination
+        Fee? existingFee;
+        try {
+          existingFee = allFees.firstWhere(
+            (fee) => fee.studentId == student.id && fee.batchId == batch.id,
+          );
+        } catch (e) {
+          // No fee found for this student-batch combination
+          existingFee = null;
+        }
+        
+        return StudentWithBatchFee(
+          student: student,
+          batch: batch,
+          batchFeeAmount: batchFeeAmount,
+          existingFee: existingFee,
+        );
+      }).toList();
+      
+      if (studentFeeList.isNotEmpty) {
+        result[batch.id] = studentFeeList;
+      }
+    } catch (e) {
+      // Skip batch if there's an error fetching students
+      continue;
+    }
+  }
+  
+  return result;
 }

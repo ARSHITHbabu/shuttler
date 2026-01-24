@@ -343,6 +343,29 @@ final overdueFeesProvider = AutoDisposeFutureProvider<List<Fee>>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef OverdueFeesRef = AutoDisposeFutureProviderRef<List<Fee>>;
+String _$studentsWithBatchFeesHash() =>
+    r'84a5832b0ab9207ede6efdb61033a7ce54fba58a';
+
+/// Provider for all students with their batch enrollments and fee status
+/// Returns students grouped by batch with their fee information
+///
+/// Copied from [studentsWithBatchFees].
+@ProviderFor(studentsWithBatchFees)
+final studentsWithBatchFeesProvider =
+    AutoDisposeFutureProvider<Map<int, List<StudentWithBatchFee>>>.internal(
+      studentsWithBatchFees,
+      name: r'studentsWithBatchFeesProvider',
+      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+          ? null
+          : _$studentsWithBatchFeesHash,
+      dependencies: null,
+      allTransitiveDependencies: null,
+    );
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef StudentsWithBatchFeesRef =
+    AutoDisposeFutureProviderRef<Map<int, List<StudentWithBatchFee>>>;
 String _$feeListHash() => r'9ebeb757b7e2d70076e44f64cefee8a5c8ac830c';
 
 abstract class _$FeeList extends BuildlessAutoDisposeAsyncNotifier<List<Fee>> {
