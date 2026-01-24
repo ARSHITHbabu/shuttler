@@ -168,17 +168,37 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
               // Coach List (for coaches)
               _buildCoachAttendanceList(),
               const SizedBox(height: AppDimensions.spacingL),
-              // Save Button (separate, at bottom for coaches)
-              ElevatedButton(
-                onPressed: _attendance.isEmpty
-                    ? null
-                    : () => _saveAttendance(),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.accent,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 48),
-                ),
-                child: const Text('Save Attendance'),
+              // Save and Cancel Buttons (separate, at bottom for coaches)
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _attendance.isEmpty
+                          ? null
+                          : () => _saveAttendance(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.accent,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(double.infinity, 48),
+                      ),
+                      child: const Text('Save Attendance'),
+                    ),
+                  ),
+                  const SizedBox(width: AppDimensions.spacingM),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _attendance.isEmpty
+                          ? null
+                          : () => _cancelAttendance(),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.textPrimary,
+                        side: const BorderSide(color: AppColors.textSecondary),
+                        minimumSize: const Size(double.infinity, 48),
+                      ),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                ],
               ),
             ],
 
@@ -397,17 +417,37 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                     );
                   }),
             const SizedBox(height: AppDimensions.spacingL),
-            // Save Button (inside batch list for students)
-            ElevatedButton(
-              onPressed: _attendance.isEmpty
-                  ? null
-                  : () => _saveAttendance(),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.accent,
-                foregroundColor: Colors.white,
-                minimumSize: const Size(double.infinity, 48),
-              ),
-              child: const Text('Save Attendance'),
+            // Save and Cancel Buttons (inside batch list for students)
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: _attendance.isEmpty
+                        ? null
+                        : () => _saveAttendance(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.accent,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(double.infinity, 48),
+                    ),
+                    child: const Text('Save Attendance'),
+                  ),
+                ),
+                const SizedBox(width: AppDimensions.spacingM),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _attendance.isEmpty
+                        ? null
+                        : () => _cancelAttendance(),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.textPrimary,
+                      side: const BorderSide(color: AppColors.textSecondary),
+                      minimumSize: const Size(double.infinity, 48),
+                    ),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+              ],
             ),
           ],
         );
@@ -587,6 +627,13 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
         SuccessSnackbar.showError(context, 'Error: ${e.toString()}');
       }
     }
+  }
+
+  void _cancelAttendance() {
+    setState(() {
+      _attendance.clear();
+      _remarks.clear();
+    });
   }
 
   Future<void> _loadExistingAttendance() async {
