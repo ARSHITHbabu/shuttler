@@ -28,6 +28,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
   DateTime _selectedDate = DateTime.now();
   final Map<int, String> _attendance = {}; // studentId/coachId -> 'present' or 'absent'
   final Map<int, String> _remarks = {}; // studentId/coachId -> remarks
+  bool _hasUnsavedChanges = false; // Track if there are unsaved changes
 
   @override
   Widget build(BuildContext context) {
@@ -69,8 +70,10 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                           _selectedBatchId = null;
                           _attendance.clear();
                           _remarks.clear();
+                          _hasUnsavedChanges = false;
                         });
                         ref.invalidate(batchStudentsForAttendanceProvider);
+                        // Note: Attendance will load when batch is selected
                       },
                     ),
                   ),
@@ -86,8 +89,11 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                           _selectedBatchId = null;
                           _attendance.clear();
                           _remarks.clear();
+                          _hasUnsavedChanges = false;
                         });
                         ref.invalidate(coachesForAttendanceProvider);
+                        // Load existing coach attendance for current date
+                        _loadExistingCoachAttendance();
                       },
                     ),
                   ),
@@ -131,11 +137,13 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                         if (date != null) {
                           setState(() {
                             _selectedDate = date;
-                            _attendance.clear();
-                            _remarks.clear();
                           });
                           // Load existing attendance for the selected date
-                          _loadExistingAttendance();
+                          if (_attendanceType == 'students' && _selectedBatchId != null) {
+                            _loadExistingAttendance();
+                          } else if (_attendanceType == 'coaches') {
+                            _loadExistingCoachAttendance();
+                          }
                         }
                       },
                       child: Text(
@@ -163,43 +171,45 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
 
             // Coach Summary Metrics (at top, before coach list)
             if (_attendanceType == 'coaches') ...[
-              _buildSummaryMetrics(),
+              _buildCoachSummaryMetrics(),
               const SizedBox(height: AppDimensions.spacingL),
               // Coach List (for coaches)
               _buildCoachAttendanceList(),
-              const SizedBox(height: AppDimensions.spacingL),
-              // Save and Cancel Buttons (separate, at bottom for coaches)
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: _attendance.isEmpty
-                          ? null
-                          : () => _saveAttendance(),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.accent,
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size(double.infinity, 48),
+              // Save and Cancel Buttons (only show when there are unsaved changes)
+              if (_hasUnsavedChanges) ...[
+                const SizedBox(height: AppDimensions.spacingL),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _attendance.isEmpty
+                            ? null
+                            : () => _saveAttendance(),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.accent,
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size(double.infinity, 48),
+                        ),
+                        child: const Text('Save Attendance'),
                       ),
-                      child: const Text('Save Attendance'),
                     ),
-                  ),
-                  const SizedBox(width: AppDimensions.spacingM),
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _attendance.isEmpty
-                          ? null
-                          : () => _cancelAttendance(),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.textPrimary,
-                        side: const BorderSide(color: AppColors.textSecondary),
-                        minimumSize: const Size(double.infinity, 48),
+                    const SizedBox(width: AppDimensions.spacingM),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _attendance.isEmpty
+                            ? null
+                            : () => _cancelAttendance(),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.textPrimary,
+                          side: const BorderSide(color: AppColors.textSecondary),
+                          minimumSize: const Size(double.infinity, 48),
+                        ),
+                        child: const Text('Cancel'),
                       ),
-                      child: const Text('Cancel'),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
+              ],
             ],
 
             const SizedBox(height: 100), // Space for bottom nav
@@ -239,6 +249,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                           _selectedBatchId = batch.id;
                           _attendance.clear();
                           _remarks.clear();
+                          _hasUnsavedChanges = false;
                         });
                         // Load existing attendance for selected batch and date
                         _loadExistingAttendance();
@@ -367,7 +378,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
             ),
             const SizedBox(height: AppDimensions.spacingL),
             // Summary Metrics (at top, inside batch list for students)
-            _buildSummaryMetrics(),
+            _buildSummaryMetrics(totalCount: students.length),
             const SizedBox(height: AppDimensions.spacingL),
             // Attendance List Header
             const Padding(
@@ -407,48 +418,52 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                           } else {
                             _attendance[student.id] = 'absent';
                           }
+                          _hasUnsavedChanges = true;
                         });
                       },
                       onRemarkChanged: (remark) {
                         setState(() {
                           _remarks[student.id] = remark;
+                          _hasUnsavedChanges = true;
                         });
                       },
                     );
                   }),
-            const SizedBox(height: AppDimensions.spacingL),
-            // Save and Cancel Buttons (inside batch list for students)
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: _attendance.isEmpty
-                        ? null
-                        : () => _saveAttendance(),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.accent,
-                      foregroundColor: Colors.white,
-                      minimumSize: const Size(double.infinity, 48),
+            // Save and Cancel Buttons (only show when there are unsaved changes)
+            if (_hasUnsavedChanges) ...[
+              const SizedBox(height: AppDimensions.spacingL),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _attendance.isEmpty
+                          ? null
+                          : () => _saveAttendance(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.accent,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(double.infinity, 48),
+                      ),
+                      child: const Text('Save Attendance'),
                     ),
-                    child: const Text('Save Attendance'),
                   ),
-                ),
-                const SizedBox(width: AppDimensions.spacingM),
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _attendance.isEmpty
-                        ? null
-                        : () => _cancelAttendance(),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.textPrimary,
-                      side: const BorderSide(color: AppColors.textSecondary),
-                      minimumSize: const Size(double.infinity, 48),
+                  const SizedBox(width: AppDimensions.spacingM),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _attendance.isEmpty
+                          ? null
+                          : () => _cancelAttendance(),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.textPrimary,
+                        side: const BorderSide(color: AppColors.textSecondary),
+                        minimumSize: const Size(double.infinity, 48),
+                      ),
+                      child: const Text('Cancel'),
                     ),
-                    child: const Text('Cancel'),
                   ),
-                ),
-              ],
-            ),
+                ],
+              ),
+            ],
           ],
         );
       },
@@ -466,35 +481,73 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
     );
   }
 
-  Widget _buildSummaryMetrics() {
+  Widget _buildSummaryMetrics({required int totalCount}) {
+    final presentCount = _attendance.values.where((v) => v == 'present').length;
+    final absentCount = _attendance.values.where((v) => v == 'absent').length;
+    final percentage = totalCount > 0 
+        ? ((presentCount / totalCount) * 100).toStringAsFixed(0)
+        : '0';
+
     return NeumorphicContainer(
       padding: const EdgeInsets.all(AppDimensions.paddingM),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _SummaryItem(
+            label: 'Total',
+            value: totalCount.toString(),
+            color: AppColors.textSecondary,
+          ),
+          _SummaryItem(
             label: 'Present',
-            value: _attendance.values.where((v) => v == 'present').length.toString(),
+            value: presentCount.toString(),
             color: AppColors.success,
           ),
           _SummaryItem(
             label: 'Absent',
-            value: _attendance.values.where((v) => v == 'absent').length.toString(),
+            value: absentCount.toString(),
             color: AppColors.error,
           ),
-          _SummaryItem(
-            label: 'Total',
-            value: _attendance.length.toString(),
-            color: AppColors.textSecondary,
-          ),
-          if (_attendance.isNotEmpty)
+          if (totalCount > 0)
             _SummaryItem(
               label: 'Percentage',
-              value: '${((_attendance.values.where((v) => v == 'present').length / _attendance.length) * 100).toStringAsFixed(0)}%',
+              value: '$percentage%',
               color: AppColors.iconPrimary,
             ),
         ],
       ),
+    );
+  }
+
+  Widget _buildCoachSummaryMetrics() {
+    final coachesAsync = ref.watch(coachesForAttendanceProvider);
+    
+    return coachesAsync.when(
+      data: (coaches) => _buildSummaryMetrics(totalCount: coaches.length),
+      loading: () => NeumorphicContainer(
+        padding: const EdgeInsets.all(AppDimensions.paddingM),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _SummaryItem(
+              label: 'Total',
+              value: '...',
+              color: AppColors.textSecondary,
+            ),
+            _SummaryItem(
+              label: 'Present',
+              value: '...',
+              color: AppColors.success,
+            ),
+            _SummaryItem(
+              label: 'Absent',
+              value: '...',
+              color: AppColors.error,
+            ),
+          ],
+        ),
+      ),
+      error: (_, __) => _buildSummaryMetrics(totalCount: 0),
     );
   }
 
@@ -547,11 +600,13 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                     } else {
                       _attendance[coach.id] = 'absent';
                     }
+                    _hasUnsavedChanges = true;
                   });
                 },
                 onRemarkChanged: (remark) {
                   setState(() {
                     _remarks[coach.id] = remark;
+                    _hasUnsavedChanges = true;
                   });
                 },
               );
@@ -605,12 +660,6 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       if (mounted) {
         SuccessSnackbar.show(context, 'Attendance saved successfully');
 
-        // Clear attendance after saving
-        setState(() {
-          _attendance.clear();
-          _remarks.clear();
-        });
-
         // Invalidate providers to refresh data
         if (_attendanceType == 'students' && _selectedBatchId != null) {
           ref.invalidate(
@@ -621,6 +670,15 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
             coachAttendanceProvider(_selectedDate),
           );
         }
+
+        // Reload attendance from database to reflect saved changes
+        await Future.delayed(const Duration(milliseconds: 200)); // Small delay for DB commit
+        if (_attendanceType == 'students' && _selectedBatchId != null) {
+          await _loadExistingAttendance();
+        } else if (_attendanceType == 'coaches') {
+          await _loadExistingCoachAttendance();
+        }
+        // _hasUnsavedChanges is reset in the load methods
       }
     } catch (e) {
       if (mounted) {
@@ -630,10 +688,13 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
   }
 
   void _cancelAttendance() {
-    setState(() {
-      _attendance.clear();
-      _remarks.clear();
-    });
+    // Reload attendance from database to discard changes
+    if (_attendanceType == 'students' && _selectedBatchId != null) {
+      _loadExistingAttendance();
+    } else if (_attendanceType == 'coaches') {
+      _loadExistingCoachAttendance();
+    }
+    // _hasUnsavedChanges is reset in the load methods
   }
 
   Future<void> _loadExistingAttendance() async {
@@ -647,12 +708,38 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       );
 
       setState(() {
+        _attendance.clear();
+        _remarks.clear();
         for (final record in existingAttendance) {
           _attendance[record.studentId] = record.status;
           if (record.remarks != null) {
             _remarks[record.studentId] = record.remarks!;
           }
         }
+        _hasUnsavedChanges = false; // Reset flag after loading
+      });
+    } catch (e) {
+      // Silently fail - user can mark attendance fresh
+    }
+  }
+
+  Future<void> _loadExistingCoachAttendance() async {
+    try {
+      final attendanceService = ref.read(attendanceServiceProvider);
+      final existingAttendance = await attendanceService.getCoachAttendance(
+        date: _selectedDate,
+      );
+
+      setState(() {
+        _attendance.clear();
+        _remarks.clear();
+        for (final record in existingAttendance) {
+          _attendance[record.coachId] = record.status;
+          if (record.remarks != null) {
+            _remarks[record.coachId] = record.remarks!;
+          }
+        }
+        _hasUnsavedChanges = false; // Reset flag after loading
       });
     } catch (e) {
       // Silently fail - user can mark attendance fresh
