@@ -169,7 +169,7 @@ class _AddStudentDialogState extends ConsumerState<AddStudentDialog> {
               const SizedBox(height: AppDimensions.spacingS),
               _InviteOption(
                 icon: Icons.message,
-                label: 'Send via Text Message',
+                label: 'Send via Messages',
                 onTap: () => _sendViaSMS(phone, inviteLink),
               ),
               const SizedBox(height: AppDimensions.spacingS),
@@ -193,7 +193,7 @@ class _AddStudentDialogState extends ConsumerState<AddStudentDialog> {
               const SizedBox(height: AppDimensions.spacingS),
               _InviteOption(
                 icon: Icons.message,
-                label: 'Send via Text Message',
+                label: 'Send via Messages',
                 onTap: () => _sendViaSMS(phone, inviteLink),
               ),
               const SizedBox(height: AppDimensions.spacingS),
