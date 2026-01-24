@@ -66,18 +66,35 @@ class BatchService {
   Future<Batch> createBatch(Map<String, dynamic> batchData) async {
     try {
       // Map Flutter model fields to backend fields
-      final backendData = {
+      final backendData = <String, dynamic>{
         'batch_name': batchData['name'] ?? batchData['batch_name'],
         'timing': batchData['timing'] ?? '${batchData['start_time']} - ${batchData['end_time']}',
         'period': batchData['period'] ?? (batchData['days'] as List<String>?)?.join(',') ?? '',
         'capacity': batchData['capacity'],
         'fees': batchData['fees'] ?? '0',
         'start_date': batchData['start_date'] ?? DateTime.now().toIso8601String().split('T')[0],
-        'assigned_coach_id': batchData['coach_id'] ?? batchData['assigned_coach_id'],
-        'assigned_coach_name': batchData['coach_name'] ?? batchData['assigned_coach_name'],
         'location': batchData['location'],
         'created_by': batchData['created_by'] ?? 'owner', // TODO: Get from auth
       };
+      
+      // Handle coach assignments - support multiple coaches
+      if (batchData.containsKey('assigned_coach_ids')) {
+        final coachIds = batchData['assigned_coach_ids'];
+        if (coachIds is List && coachIds.isNotEmpty) {
+          backendData['assigned_coach_ids'] = coachIds;
+        }
+      } else if (batchData.containsKey('coach_id') || batchData.containsKey('assigned_coach_id')) {
+        // Backward compatibility: convert single coach to array
+        final coachId = batchData['coach_id'] ?? batchData['assigned_coach_id'];
+        if (coachId != null) {
+          backendData['assigned_coach_ids'] = [coachId];
+        }
+      }
+      
+      // Handle session_id
+      if (batchData.containsKey('session_id')) {
+        backendData['session_id'] = batchData['session_id'];
+      }
       
       final response = await _apiService.post(
         ApiEndpoints.batches,
@@ -120,31 +137,32 @@ class BatchService {
         backendData['location'] = batchData['location'];
       }
       
-      // Handle coach assignment - support both singular and plural field names
-      if (batchData.containsKey('assigned_coach_ids')) {
-        // Handle plural form (list) - take first coach or null
-        final coachIds = batchData['assigned_coach_ids'] as List<dynamic>?;
-        if (coachIds != null && coachIds.isNotEmpty) {
-          backendData['assigned_coach_id'] = coachIds.first;
-        } else {
-          backendData['assigned_coach_id'] = null;
-        }
-      } else if (batchData.containsKey('coach_id') || batchData.containsKey('assigned_coach_id')) {
-        backendData['assigned_coach_id'] = batchData['coach_id'] ?? batchData['assigned_coach_id'];
+      // Handle session_id
+      if (batchData.containsKey('session_id')) {
+        backendData['session_id'] = batchData['session_id'];
       }
       
-      if (batchData.containsKey('assigned_coach_names')) {
-        // Handle plural form (string) - take first coach name or null
-        final coachNames = batchData['assigned_coach_names'] as String?;
-        if (coachNames != null && coachNames.isNotEmpty) {
-          // If it's a comma-separated string, take the first one
-          final names = coachNames.split(',').map((n) => n.trim()).where((n) => n.isNotEmpty).toList();
-          backendData['assigned_coach_name'] = names.isNotEmpty ? names.first : null;
+      // Handle coach assignments - support multiple coaches (new format)
+      if (batchData.containsKey('assigned_coach_ids')) {
+        final coachIds = batchData['assigned_coach_ids'];
+        if (coachIds is List) {
+          // Send as array for multiple coaches
+          backendData['assigned_coach_ids'] = coachIds;
+        } else if (coachIds != null) {
+          // If it's a single value, convert to array
+          backendData['assigned_coach_ids'] = [coachIds];
         } else {
-          backendData['assigned_coach_name'] = null;
+          // Empty array means no coaches
+          backendData['assigned_coach_ids'] = [];
         }
-      } else if (batchData.containsKey('coach_name') || batchData.containsKey('assigned_coach_name')) {
-        backendData['assigned_coach_name'] = batchData['coach_name'] ?? batchData['assigned_coach_name'];
+      } else if (batchData.containsKey('coach_id') || batchData.containsKey('assigned_coach_id')) {
+        // Backward compatibility: convert single coach to array
+        final coachId = batchData['coach_id'] ?? batchData['assigned_coach_id'];
+        if (coachId != null) {
+          backendData['assigned_coach_ids'] = [coachId];
+        } else {
+          backendData['assigned_coach_ids'] = [];
+        }
       }
       
       final response = await _apiService.put(

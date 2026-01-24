@@ -13,6 +13,7 @@ import os
 import shutil
 import uuid
 import secrets
+import traceback
 from pathlib import Path
 from dotenv import load_dotenv
 from passlib.context import CryptContext
@@ -186,6 +187,13 @@ class BatchStudentDB(Base):
     batch_id = Column(Integer, nullable=False)
     student_id = Column(Integer, nullable=False)
     status = Column(String, default="pending") 
+
+class BatchCoachDB(Base):
+    __tablename__ = "batch_coaches"
+    id = Column(Integer, primary_key=True, index=True)
+    batch_id = Column(Integer, ForeignKey("batches.id", ondelete="CASCADE"), nullable=False)
+    coach_id = Column(Integer, ForeignKey("coaches.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class AttendanceDB(Base):
     __tablename__ = "attendance"
@@ -723,9 +731,17 @@ class BatchCreate(BaseModel):
     period: str
     location: Optional[str] = None
     created_by: str
-    assigned_coach_id: Optional[int] = None
-    assigned_coach_name: Optional[str] = None
+    assigned_coach_id: Optional[int] = None  # Deprecated: kept for backward compatibility
+    assigned_coach_name: Optional[str] = None  # Deprecated: kept for backward compatibility
+    assigned_coach_ids: Optional[List[int]] = None  # New: supports multiple coaches
     session_id: Optional[int] = None
+
+class CoachInfo(BaseModel):
+    id: int
+    name: str
+    
+    class Config:
+        from_attributes = True
 
 class Batch(BaseModel):
     id: int
@@ -737,8 +753,10 @@ class Batch(BaseModel):
     period: str
     location: Optional[str] = None
     created_by: str
-    assigned_coach_id: Optional[int] = None
-    assigned_coach_name: Optional[str] = None
+    assigned_coach_id: Optional[int] = None  # Deprecated: kept for backward compatibility
+    assigned_coach_name: Optional[str] = None  # Deprecated: kept for backward compatibility
+    assigned_coach_ids: Optional[List[int]] = None  # New: list of coach IDs
+    assigned_coaches: Optional[List[CoachInfo]] = None  # New: list of coach info objects
     session_id: Optional[int] = None
     
     class Config:
@@ -752,8 +770,9 @@ class BatchUpdate(BaseModel):
     timing: Optional[str] = None
     period: Optional[str] = None
     location: Optional[str] = None
-    assigned_coach_id: Optional[int] = None
-    assigned_coach_name: Optional[str] = None
+    assigned_coach_id: Optional[int] = None  # Deprecated: kept for backward compatibility
+    assigned_coach_name: Optional[str] = None  # Deprecated: kept for backward compatibility
+    assigned_coach_ids: Optional[List[int]] = None  # New: supports multiple coaches
     session_id: Optional[int] = None
 
 # Student Models
@@ -1526,7 +1545,7 @@ def create_owner(owner: OwnerCreate):
             raise HTTPException(status_code=400, detail="Email already registered as a coach. Owners and coaches must have unique emails.")
         
         # Hash password before storing
-        owner_dict = owner.model_dump()
+        owner_dict = owner.model_dump(exclude_none=True)  # Exclude None values to avoid SQLAlchemy issues
         owner_dict['password'] = hash_password(owner_dict['password'])
         owner_dict['status'] = "active"  # Default status
         
@@ -1557,8 +1576,15 @@ def create_owner(owner: OwnerCreate):
         if 'email' in error_msg.lower() or 'unique' in error_msg.lower():
             raise HTTPException(status_code=400, detail="Email already registered")
         raise HTTPException(status_code=400, detail=f"Database constraint violation: {error_msg}")
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
+        # Log the full error for debugging
+        error_trace = traceback.format_exc()
+        print(f"Error creating owner: {error_trace}")  # Log to console for debugging
         raise HTTPException(status_code=500, detail=f"Error creating owner: {str(e)}")
     finally:
         db.close()
@@ -1688,15 +1714,101 @@ def login_owner(login_data: OwnerLogin):
 
 # ==================== Batch Routes ====================
 
+def _sync_batch_coaches(db, batch_id: int, coach_ids: Optional[List[int]]):
+    """Helper function to sync batch-coach relationships in junction table"""
+    if coach_ids is None:
+        return  # No change requested
+    
+    # Get existing assignments
+    existing_assignments = db.query(BatchCoachDB).filter(
+        BatchCoachDB.batch_id == batch_id
+    ).all()
+    existing_coach_ids = {bc.coach_id for bc in existing_assignments}
+    new_coach_ids = set(coach_ids)
+    
+    # Remove coaches that are no longer assigned
+    for assignment in existing_assignments:
+        if assignment.coach_id not in new_coach_ids:
+            db.delete(assignment)
+    
+    # Add new coach assignments
+    for coach_id in new_coach_ids:
+        if coach_id not in existing_coach_ids:
+            # Verify coach exists
+            coach = db.query(CoachDB).filter(CoachDB.id == coach_id).first()
+            if coach:
+                db_assignment = BatchCoachDB(
+                    batch_id=batch_id,
+                    coach_id=coach_id
+                )
+                db.add(db_assignment)
+    
+    db.commit()
+
+def _get_batch_coaches(db, batch_id: int) -> List[CoachInfo]:
+    """Helper function to get coaches assigned to a batch"""
+    try:
+        assignments = db.query(BatchCoachDB).filter(
+            BatchCoachDB.batch_id == batch_id
+        ).all()
+        coach_ids = [bc.coach_id for bc in assignments]
+        
+        if not coach_ids:
+            return []
+        
+        coaches = db.query(CoachDB).filter(CoachDB.id.in_(coach_ids)).all()
+        return [CoachInfo(id=c.id, name=c.name) for c in coaches]
+    except Exception:
+        # If table doesn't exist yet, return empty list
+        return []
+
 @app.post("/batches/", response_model=Batch)
 def create_batch(batch: BatchCreate):
     db = SessionLocal()
     try:
-        db_batch = BatchDB(**batch.model_dump())
+        batch_data = batch.model_dump()
+        coach_ids = batch_data.pop('assigned_coach_ids', None)
+        
+        # Handle backward compatibility: if assigned_coach_id is provided, add it to list
+        if coach_ids is None and batch_data.get('assigned_coach_id'):
+            coach_ids = [batch_data['assigned_coach_id']]
+        
+        # Remove assigned_coach_id from batch_data (we'll use junction table)
+        batch_data.pop('assigned_coach_id', None)
+        batch_data.pop('assigned_coach_name', None)
+        
+        db_batch = BatchDB(**batch_data)
         db.add(db_batch)
         db.commit()
         db.refresh(db_batch)
-        return db_batch
+        
+        # Sync coach assignments
+        if coach_ids:
+            _sync_batch_coaches(db, db_batch.id, coach_ids)
+        
+        # Get coaches for response
+        coaches = _get_batch_coaches(db, db_batch.id)
+        coach_ids_list = [c.id for c in coaches]
+        
+        # Build response
+        batch_response = Batch(
+            id=db_batch.id,
+            batch_name=db_batch.batch_name,
+            capacity=db_batch.capacity,
+            fees=db_batch.fees,
+            start_date=db_batch.start_date,
+            timing=db_batch.timing,
+            period=db_batch.period,
+            location=db_batch.location,
+            created_by=db_batch.created_by,
+            assigned_coach_id=coach_ids_list[0] if coach_ids_list else None,  # Backward compatibility
+            assigned_coach_name=coaches[0].name if coaches else None,  # Backward compatibility
+            assigned_coach_ids=coach_ids_list,
+            assigned_coaches=coaches,
+            session_id=db_batch.session_id
+        )
+        
+        return batch_response
     finally:
         db.close()
 
@@ -1706,7 +1818,30 @@ def get_batches():
     try:
         # Try normal query first
         try:
-            batches = db.query(BatchDB).all()
+            batches_db = db.query(BatchDB).all()
+            batches = []
+            for batch_db in batches_db:
+                # Get coaches from junction table
+                coaches = _get_batch_coaches(db, batch_db.id)
+                coach_ids_list = [c.id for c in coaches]
+                
+                batch = Batch(
+                    id=batch_db.id,
+                    batch_name=batch_db.batch_name,
+                    capacity=batch_db.capacity,
+                    fees=batch_db.fees,
+                    start_date=batch_db.start_date,
+                    timing=batch_db.timing,
+                    period=batch_db.period,
+                    location=batch_db.location,
+                    created_by=batch_db.created_by,
+                    assigned_coach_id=coach_ids_list[0] if coach_ids_list else batch_db.assigned_coach_id,  # Backward compatibility
+                    assigned_coach_name=coaches[0].name if coaches else batch_db.assigned_coach_name,  # Backward compatibility
+                    assigned_coach_ids=coach_ids_list,
+                    assigned_coaches=coaches,
+                    session_id=batch_db.session_id
+                )
+                batches.append(batch)
             return batches
         except Exception as e:
             # If error is about missing session_id column, rollback and use raw SQL
@@ -1721,9 +1856,14 @@ def get_batches():
                 """))
                 batches = []
                 for row in result:
+                    batch_id = row[0]
+                    # Try to get coaches from junction table
+                    coaches = _get_batch_coaches(db, batch_id)
+                    coach_ids_list = [c.id for c in coaches]
+                    
                     # Create Batch response model directly (not BatchDB)
                     batch = Batch(
-                        id=row[0],
+                        id=batch_id,
                         batch_name=row[1],
                         capacity=row[2],
                         fees=row[3],
@@ -1732,8 +1872,10 @@ def get_batches():
                         period=row[6],
                         location=row[7],
                         created_by=row[8],
-                        assigned_coach_id=row[9],
-                        assigned_coach_name=row[10],
+                        assigned_coach_id=coach_ids_list[0] if coach_ids_list else row[9],  # Backward compatibility
+                        assigned_coach_name=coaches[0].name if coaches else row[10],  # Backward compatibility
+                        assigned_coach_ids=coach_ids_list,
+                        assigned_coaches=coaches,
                         session_id=None,  # Default to None if column doesn't exist
                     )
                     batches.append(batch)
@@ -1749,37 +1891,103 @@ def get_coach_batches(coach_id: int):
     db = SessionLocal()
     try:
         try:
-            batches = db.query(BatchDB).filter(BatchDB.assigned_coach_id == coach_id).all()
+            # Query via junction table
+            batch_coaches = db.query(BatchCoachDB).filter(
+                BatchCoachDB.coach_id == coach_id
+            ).all()
+            batch_ids = [bc.batch_id for bc in batch_coaches]
+            
+            if not batch_ids:
+                return []
+            
+            batches_db = db.query(BatchDB).filter(BatchDB.id.in_(batch_ids)).all()
+            batches = []
+            for batch_db in batches_db:
+                # Get all coaches for this batch
+                coaches = _get_batch_coaches(db, batch_db.id)
+                coach_ids_list = [c.id for c in coaches]
+                
+                batch = Batch(
+                    id=batch_db.id,
+                    batch_name=batch_db.batch_name,
+                    capacity=batch_db.capacity,
+                    fees=batch_db.fees,
+                    start_date=batch_db.start_date,
+                    timing=batch_db.timing,
+                    period=batch_db.period,
+                    location=batch_db.location,
+                    created_by=batch_db.created_by,
+                    assigned_coach_id=coach_ids_list[0] if coach_ids_list else batch_db.assigned_coach_id,  # Backward compatibility
+                    assigned_coach_name=coaches[0].name if coaches else batch_db.assigned_coach_name,  # Backward compatibility
+                    assigned_coach_ids=coach_ids_list,
+                    assigned_coaches=coaches,
+                    session_id=batch_db.session_id
+                )
+                batches.append(batch)
             return batches
         except Exception as e:
-            # If error is about missing session_id column, rollback and use raw SQL
-            if "session_id" in str(e) or "UndefinedColumn" in str(e):
+            # If error is about missing batch_coaches table, fall back to old method
+            if "batch_coaches" in str(e) or "UndefinedTable" in str(e):
                 db.rollback()
-                from sqlalchemy import text
-                result = db.execute(text("""
-                    SELECT id, batch_name, capacity, fees, start_date, timing, period, 
-                           location, created_by, assigned_coach_id, assigned_coach_name
-                    FROM batches
-                    WHERE assigned_coach_id = :coach_id
-                """), {"coach_id": coach_id})
-                batches = []
-                for row in result:
-                    batch = Batch(
-                        id=row[0],
-                        batch_name=row[1],
-                        capacity=row[2],
-                        fees=row[3],
-                        start_date=row[4],
-                        timing=row[5],
-                        period=row[6],
-                        location=row[7],
-                        created_by=row[8],
-                        assigned_coach_id=row[9],
-                        assigned_coach_name=row[10],
-                        session_id=None,
-                    )
-                    batches.append(batch)
-                return batches
+                # Fall back to old method using assigned_coach_id
+                try:
+                    batches_db = db.query(BatchDB).filter(BatchDB.assigned_coach_id == coach_id).all()
+                    batches = []
+                    for batch_db in batches_db:
+                        coaches = _get_batch_coaches(db, batch_db.id)
+                        coach_ids_list = [c.id for c in coaches]
+                        
+                        batch = Batch(
+                            id=batch_db.id,
+                            batch_name=batch_db.batch_name,
+                            capacity=batch_db.capacity,
+                            fees=batch_db.fees,
+                            start_date=batch_db.start_date,
+                            timing=batch_db.timing,
+                            period=batch_db.period,
+                            location=batch_db.location,
+                            created_by=batch_db.created_by,
+                            assigned_coach_id=coach_ids_list[0] if coach_ids_list else batch_db.assigned_coach_id,
+                            assigned_coach_name=coaches[0].name if coaches else batch_db.assigned_coach_name,
+                            assigned_coach_ids=coach_ids_list,
+                            assigned_coaches=coaches,
+                            session_id=batch_db.session_id
+                        )
+                        batches.append(batch)
+                    return batches
+                except Exception:
+                    # If that also fails, use raw SQL
+                    from sqlalchemy import text
+                    result = db.execute(text("""
+                        SELECT id, batch_name, capacity, fees, start_date, timing, period, 
+                               location, created_by, assigned_coach_id, assigned_coach_name
+                        FROM batches
+                        WHERE assigned_coach_id = :coach_id
+                    """), {"coach_id": coach_id})
+                    batches = []
+                    for row in result:
+                        batch_id = row[0]
+                        coaches = _get_batch_coaches(db, batch_id)
+                        coach_ids_list = [c.id for c in coaches]
+                        
+                        batch = Batch(
+                            id=batch_id,
+                            batch_name=row[1],
+                            capacity=row[2],
+                            fees=row[3],
+                            start_date=row[4],
+                            timing=row[5],
+                            period=row[6],
+                            location=row[7],
+                            created_by=row[8],
+                            assigned_coach_id=coach_ids_list[0] if coach_ids_list else row[9],
+                            assigned_coach_name=coaches[0].name if coaches else row[10],
+                            assigned_coach_ids=coach_ids_list,
+                            assigned_coaches=coaches,
+                            session_id=None,
+                        )
+                        batches.append(batch)
+                    return batches
             else:
                 raise
     finally:
@@ -1789,17 +1997,147 @@ def get_coach_batches(coach_id: int):
 def update_batch(batch_id: int, batch_update: BatchUpdate):
     db = SessionLocal()
     try:
-        batch = db.query(BatchDB).filter(BatchDB.id == batch_id).first()
-        if not batch:
-            raise HTTPException(status_code=404, detail="Batch not found")
+        # Try normal query first
+        try:
+            batch = db.query(BatchDB).filter(BatchDB.id == batch_id).first()
+            if not batch:
+                raise HTTPException(status_code=404, detail="Batch not found")
+            session_id_value = batch.session_id
+        except Exception as e:
+            # If error is about missing session_id column, use raw SQL
+            if "session_id" in str(e) or "UndefinedColumn" in str(e):
+                db.rollback()
+                from sqlalchemy import text
+                result = db.execute(text("""
+                    SELECT id, batch_name, capacity, fees, start_date, timing, period, 
+                           location, created_by, assigned_coach_id, assigned_coach_name
+                    FROM batches
+                    WHERE id = :batch_id
+                """), {"batch_id": batch_id})
+                row = result.first()
+                if not row:
+                    raise HTTPException(status_code=404, detail="Batch not found")
+                
+                # Create a minimal batch-like object for field updates
+                # We'll use raw SQL for updates too
+                batch = None
+                session_id_value = None
+            else:
+                raise
         
         update_data = batch_update.model_dump(exclude_unset=True)
-        for key, value in update_data.items():
-            setattr(batch, key, value)
+        coach_ids = update_data.pop('assigned_coach_ids', None)
         
-        db.commit()
-        db.refresh(batch)
-        return batch
+        # Handle backward compatibility: if assigned_coach_id is provided, convert to list
+        if coach_ids is None and 'assigned_coach_id' in update_data:
+            assigned_coach_id = update_data.pop('assigned_coach_id')
+            if assigned_coach_id is not None:
+                coach_ids = [assigned_coach_id]
+            else:
+                coach_ids = []  # Explicitly clear coaches
+        
+        # Remove deprecated fields
+        update_data.pop('assigned_coach_id', None)
+        update_data.pop('assigned_coach_name', None)
+        
+        # Handle session_id separately if it's in update_data
+        session_id_update = update_data.pop('session_id', None)
+        
+        # Update batch fields
+        if batch is not None:
+            # Normal ORM update
+            for key, value in update_data.items():
+                setattr(batch, key, value)
+            if session_id_update is not None:
+                batch.session_id = session_id_update
+            
+            db.commit()
+            db.refresh(batch)
+            session_id_value = batch.session_id
+        else:
+            # Raw SQL update (when session_id column doesn't exist)
+            if update_data or session_id_update is not None:
+                from sqlalchemy import text
+                set_clauses = []
+                params = {"batch_id": batch_id}
+                
+                for key, value in update_data.items():
+                    set_clauses.append(f"{key} = :{key}")
+                    params[key] = value
+                
+                if set_clauses:
+                    sql = f"""
+                        UPDATE batches
+                        SET {', '.join(set_clauses)}
+                        WHERE id = :batch_id
+                    """
+                    db.execute(text(sql), params)
+                    db.commit()
+        
+        # Sync coach assignments if provided
+        if coach_ids is not None:
+            _sync_batch_coaches(db, batch_id, coach_ids)
+        
+        # Get coaches for response
+        coaches = _get_batch_coaches(db, batch_id)
+        coach_ids_list = [c.id for c in coaches]
+        
+        # Get updated batch data for response
+        if batch is not None:
+            batch_data = {
+                'id': batch.id,
+                'batch_name': batch.batch_name,
+                'capacity': batch.capacity,
+                'fees': batch.fees,
+                'start_date': batch.start_date,
+                'timing': batch.timing,
+                'period': batch.period,
+                'location': batch.location,
+                'created_by': batch.created_by,
+                'session_id': session_id_value
+            }
+        else:
+            # Re-query for response
+            from sqlalchemy import text
+            result = db.execute(text("""
+                SELECT id, batch_name, capacity, fees, start_date, timing, period, 
+                       location, created_by, assigned_coach_id, assigned_coach_name
+                FROM batches
+                WHERE id = :batch_id
+            """), {"batch_id": batch_id})
+            row = result.first()
+            batch_data = {
+                'id': row[0],
+                'batch_name': row[1],
+                'capacity': row[2],
+                'fees': row[3],
+                'start_date': row[4],
+                'timing': row[5],
+                'period': row[6],
+                'location': row[7],
+                'created_by': row[8],
+                'session_id': None
+            }
+        
+        # Build response
+        batch_response = Batch(
+            id=batch_data['id'],
+            batch_name=batch_data['batch_name'],
+            capacity=batch_data['capacity'],
+            fees=batch_data['fees'],
+            start_date=batch_data['start_date'],
+            timing=batch_data['timing'],
+            period=batch_data['period'],
+            location=batch_data['location'],
+            created_by=batch_data['created_by'],
+            assigned_coach_id=coach_ids_list[0] if coach_ids_list else None,  # Backward compatibility
+            assigned_coach_name=coaches[0].name if coaches else None,  # Backward compatibility
+            assigned_coach_ids=coach_ids_list,
+            assigned_coaches=coaches,
+            session_id=batch_data['session_id']
+        )
+        
+        return batch_response
     finally:
         db.close()
 
