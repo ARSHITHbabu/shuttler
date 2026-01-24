@@ -13,7 +13,6 @@ import '../../models/student_with_batch_fee.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/fee_provider.dart';
 import '../../providers/student_provider.dart';
-import '../../widgets/forms/add_fee_dialog.dart';
 import '../../widgets/forms/add_payment_dialog.dart';
 import '../../widgets/forms/edit_fee_dialog.dart';
 import '../../models/fee_payment.dart';
@@ -155,15 +154,6 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
             ),
           );
         },
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddFeeDialog(context),
-        backgroundColor: AppColors.accent,
-        icon: const Icon(Icons.add, color: Colors.white),
-        label: const Text(
-          'Add Fee',
-          style: TextStyle(color: Colors.white),
-        ),
       ),
     );
   }
@@ -1123,38 +1113,6 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
         );
       }
     }
-  }
-
-  void _showAddFeeDialog(BuildContext context) {
-    // Capture ref and mounted before dialog - these are available in ConsumerState
-    final widgetRef = ref;
-    final isMounted = mounted;
-    
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AddFeeDialog(
-        onSubmit: (feeData) async {
-          try {
-            // Use the fee list provider notifier to create fee
-            final feeListNotifier = widgetRef.read(feeListProvider(status: null).notifier);
-            await feeListNotifier.createFee(feeData);
-            // Invalidate the students with batch fees provider to refresh the display
-            widgetRef.invalidate(studentsWithBatchFeesProvider);
-            // Note: Dialog will close itself after onSubmit completes
-            // Don't call Navigator.pop() here to avoid double pop
-            if (isMounted && mounted) {
-              SuccessSnackbar.show(context, 'Fee created successfully');
-            }
-          } catch (e) {
-            if (isMounted && mounted) {
-              SuccessSnackbar.showError(context, 'Failed to create fee: ${e.toString()}');
-            }
-            // Re-throw to let dialog handle error state
-            rethrow;
-          }
-        },
-      ),
-    );
   }
 
   Color _getStatusColor(String status) {
