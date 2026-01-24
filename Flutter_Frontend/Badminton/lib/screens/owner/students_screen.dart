@@ -394,7 +394,10 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                                           onTap: () {
                                             Navigator.of(context).push(
                                               MaterialPageRoute(
-                                                builder: (context) => const FeesScreen(),
+                                                builder: (context) => FeesScreen(
+                                                  selectedStudentId: student.id,
+                                                  selectedStudentName: student.name,
+                                                ),
                                               ),
                                             );
                                           },
