@@ -9,11 +9,13 @@ import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
 import '../../models/fee.dart';
 import '../../models/student.dart';
+import '../../models/student_with_batch_fee.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/fee_provider.dart';
 import '../../providers/student_provider.dart';
 import '../../widgets/forms/add_fee_dialog.dart';
 import '../../widgets/forms/add_payment_dialog.dart';
+import '../../widgets/forms/edit_fee_dialog.dart';
 import '../../models/fee_payment.dart';
 import 'student_profile_screen.dart';
 
@@ -72,16 +74,18 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
           : null,
       body: LayoutBuilder(
         builder: (context, constraints) {
-          return RefreshIndicator(
-            onRefresh: () async {
-              String? statusFilter;
-              if (_selectedFilter == 'overdue') {
-                statusFilter = null;
-              } else if (_selectedFilter != 'all') {
-                statusFilter = _selectedFilter;
-              }
-              ref.invalidate(feeListProvider(status: statusFilter));
-            },
+            return RefreshIndicator(
+              onRefresh: () async {
+                // Invalidate both providers to refresh data
+                ref.invalidate(studentsWithBatchFeesProvider);
+                String? statusFilter;
+                if (_selectedFilter == 'overdue') {
+                  statusFilter = null;
+                } else if (_selectedFilter != 'all') {
+                  statusFilter = _selectedFilter;
+                }
+                ref.invalidate(feeListProvider(status: statusFilter));
+              },
             child: SingleChildScrollView(
               physics: const ClampingScrollPhysics(),
               child: ConstrainedBox(
@@ -167,24 +171,33 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
   Widget _buildStatsOverview() {
     return Consumer(
       builder: (context, ref, child) {
-        final feesAsync = ref.watch(feeListProvider(status: null));
+        final studentsWithFeesAsync = ref.watch(studentsWithBatchFeesProvider);
         
-        return feesAsync.when(
+        return studentsWithFeesAsync.when(
           loading: () => const SizedBox.shrink(),
           error: (_, __) => const SizedBox.shrink(),
-          data: (allFees) {
+          data: (batchGroups) {
             double pending = 0;
             double paid = 0;
             double overdue = 0;
             
-            for (final fee in allFees) {
-              final pendingAmount = fee.pendingAmount;
-              if (fee.status == 'paid') {
-                paid += fee.totalPaid;
-              } else if (fee.isOverdue) {
-                overdue += pendingAmount;
-              } else {
-                pending += pendingAmount;
+            // Calculate stats from all students with batch fees
+            for (final batchEntry in batchGroups.values) {
+              for (final studentFee in batchEntry) {
+                if (studentFee.existingFee != null) {
+                  final fee = studentFee.existingFee!;
+                  final pendingAmount = fee.pendingAmount;
+                  if (fee.status == 'paid') {
+                    paid += fee.totalPaid;
+                  } else if (fee.isOverdue) {
+                    overdue += pendingAmount;
+                  } else {
+                    pending += pendingAmount;
+                  }
+                } else {
+                  // Fee not created yet, use batch fee amount as pending
+                  pending += studentFee.batchFeeAmount;
+                }
               }
             }
             
@@ -225,79 +238,73 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
   }
 
   Widget _buildFeesOverview() {
-    // Use provider for fee list with status filter
-    String? statusFilter;
-    if (_selectedFilter == 'overdue') {
-      // For overdue, we'll filter after fetching
-      statusFilter = null;
-    } else if (_selectedFilter != 'all') {
-      statusFilter = _selectedFilter;
-    }
+    // Use new provider that gets all students with batch enrollments
+    final studentsWithFeesAsync = ref.watch(studentsWithBatchFeesProvider);
 
-    final feesAsync = ref.watch(feeListProvider(
-      status: statusFilter,
-    ));
-
-    return feesAsync.when(
+    return studentsWithFeesAsync.when(
       loading: () => const ListSkeleton(itemCount: 5),
       error: (error, stack) => ErrorDisplay(
         message: 'Failed to load fees: ${error.toString()}',
         onRetry: () {
-          ref.invalidate(feeListProvider(status: statusFilter));
+          ref.invalidate(studentsWithBatchFeesProvider);
         },
       ),
-      data: (allFees) {
+      data: (batchGroups) {
         // Auto-select student fee when navigating from student detail view
         if ((widget.selectedStudentId != null || widget.selectedStudentName != null) && 
-            _selectedFee == null && 
-            allFees.isNotEmpty) {
+            _selectedFee == null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            Fee? studentFee;
-            if (widget.selectedStudentId != null) {
-              studentFee = allFees.firstWhere(
-                (f) => f.studentId == widget.selectedStudentId,
-                orElse: () => allFees.first,
-              );
-            } else if (widget.selectedStudentName != null) {
-              studentFee = allFees.firstWhere(
-                (f) => f.studentName == widget.selectedStudentName,
-                orElse: () => allFees.first,
-              );
-            }
-            
-            if (studentFee != null && mounted) {
-              setState(() {
-                _selectedFee = studentFee;
-                _expandedBatches.add(studentFee!.batchId);
-              });
+            for (final batchEntry in batchGroups.entries) {
+              for (final studentFee in batchEntry.value) {
+                if ((widget.selectedStudentId != null && 
+                     studentFee.student.id == widget.selectedStudentId) ||
+                    (widget.selectedStudentName != null && 
+                     studentFee.student.name == widget.selectedStudentName)) {
+                  if (studentFee.existingFee != null && mounted) {
+                    setState(() {
+                      _selectedFee = studentFee.existingFee;
+                      _expandedBatches.add(batchEntry.key);
+                    });
+                    return;
+                  }
+                }
+              }
             }
           });
         }
         
-        // Filter by overdue if needed
-        final fees = _selectedFilter == 'overdue'
-            ? allFees.where((fee) => fee.isOverdue).toList()
-            : allFees;
-
-        if (fees.isEmpty) {
-          return EmptyState.noFees();
+        // Filter batches based on selected filter
+        Map<int, List<StudentWithBatchFee>> filteredGroups = {};
+        
+        for (final entry in batchGroups.entries) {
+          List<StudentWithBatchFee> filtered = entry.value;
+          
+          if (_selectedFilter == 'paid') {
+            filtered = entry.value.where((s) => s.feeStatus == 'paid').toList();
+          } else if (_selectedFilter == 'pending') {
+            filtered = entry.value.where((s) => s.feeStatus == 'pending').toList();
+          } else if (_selectedFilter == 'overdue') {
+            filtered = entry.value.where((s) => 
+              s.feeStatus == 'overdue' || 
+              (s.existingFee != null && s.existingFee!.isOverdue)
+            ).toList();
+          }
+          
+          if (filtered.isNotEmpty) {
+            filteredGroups[entry.key] = filtered;
+          }
         }
 
-        // Group fees by batch
-        final Map<int, List<Fee>> batchGroups = {};
-        for (final fee in fees) {
-          if (!batchGroups.containsKey(fee.batchId)) {
-            batchGroups[fee.batchId] = [];
-          }
-          batchGroups[fee.batchId]!.add(fee);
+        if (filteredGroups.isEmpty) {
+          return EmptyState.noFees();
         }
         
         // Auto-expand first batch ONLY if we haven't done it yet and no batches are expanded
-        if (!_hasAutoExpanded && _expandedBatches.isEmpty && batchGroups.isNotEmpty) {
+        if (!_hasAutoExpanded && _expandedBatches.isEmpty && filteredGroups.isNotEmpty) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {
               setState(() {
-                _expandedBatches.add(batchGroups.keys.first);
+                _expandedBatches.add(filteredGroups.keys.first);
                 _hasAutoExpanded = true; // Mark as done so it doesn't run again
               });
             }
@@ -305,10 +312,10 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
         }
 
         // Sort batches by name
-        final sortedBatches = batchGroups.entries.toList()
+        final sortedBatches = filteredGroups.entries.toList()
           ..sort((a, b) {
-            final nameA = a.value.first.batchName ?? 'Batch ${a.key}';
-            final nameB = b.value.first.batchName ?? 'Batch ${b.key}';
+            final nameA = a.value.first.batch.batchName;
+            final nameB = b.value.first.batch.batchName;
             return nameA.compareTo(nameB);
           });
 
@@ -316,8 +323,9 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: sortedBatches.map((batchEntry) {
             final batchId = batchEntry.key;
-            final batchFees = batchEntry.value;
-            final batchName = batchFees.first.batchName ?? 'Batch $batchId';
+            final studentFees = batchEntry.value;
+            final batchName = studentFees.first.batch.batchName;
+            final batchFeeAmount = studentFees.first.batchFeeAmount;
             final isExpanded = _expandedBatches.contains(batchId);
             
             // Calculate batch stats
@@ -325,14 +333,20 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
             double batchPaid = 0;
             double batchOverdue = 0;
             
-            for (final fee in batchFees) {
-              final pendingAmount = fee.pendingAmount;
-              if (fee.status == 'paid') {
-                batchPaid += fee.totalPaid;
-              } else if (fee.isOverdue) {
-                batchOverdue += pendingAmount;
+            for (final studentFee in studentFees) {
+              if (studentFee.existingFee != null) {
+                final fee = studentFee.existingFee!;
+                final pendingAmount = fee.pendingAmount;
+                if (fee.status == 'paid') {
+                  batchPaid += fee.totalPaid;
+                } else if (fee.isOverdue) {
+                  batchOverdue += pendingAmount;
+                } else {
+                  batchPending += pendingAmount;
+                }
               } else {
-                batchPending += pendingAmount;
+                // Fee not created yet, use batch fee amount as pending
+                batchPending += studentFee.batchFeeAmount;
               }
             }
 
@@ -418,10 +432,30 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
                               borderRadius: BorderRadius.circular(AppDimensions.radiusS),
                             ),
                             child: Text(
-                              '${batchFees.length} student${batchFees.length != 1 ? 's' : ''}',
+                              '${studentFees.length} student${studentFees.length != 1 ? 's' : ''}',
                               style: const TextStyle(
                                 fontSize: 12,
                                 color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: AppDimensions.spacingS),
+                          // Show batch fee amount
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppDimensions.spacingS,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.accent.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                            ),
+                            child: Text(
+                              '₹${batchFeeAmount.toStringAsFixed(0)}/student',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.accent,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
@@ -436,7 +470,7 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
                   ),
                   // Students List
                   if (isExpanded)
-                    ...batchFees.map((fee) => _buildFeeCard(fee)),
+                    ...studentFees.map((studentFee) => _buildStudentFeeCard(studentFee)),
                 ],
               ),
             );
@@ -446,7 +480,10 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
     );
   }
 
-  Widget _buildFeeCard(Fee fee) {
+  Widget _buildStudentFeeCard(StudentWithBatchFee studentFee) {
+    final hasFee = studentFee.hasFee;
+    final fee = studentFee.existingFee;
+    
     return Container(
       margin: const EdgeInsets.only(
         left: AppDimensions.paddingM,
@@ -455,91 +492,272 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
       ),
       child: NeumorphicContainer(
         padding: const EdgeInsets.all(AppDimensions.paddingM),
-        child: InkWell(
-          onTap: () {
-            setState(() {
-              _selectedFee = fee;
-            });
-          },
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: GestureDetector(
-                      onTap: () => _navigateToStudentProfile(fee.studentId),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            fee.studentName ?? 'Student #${fee.studentId}',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => _navigateToStudentProfile(studentFee.student.id),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          studentFee.student.name,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        Text(
+                          'Batch: ${studentFee.batch.batchName}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Row(
+                  children: [
+                    if (hasFee && fee != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppDimensions.spacingM,
+                          vertical: AppDimensions.spacingS,
+                        ),
+                        decoration: BoxDecoration(
+                          color: _getStatusColor(fee.status),
+                          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                        ),
+                        child: Text(
+                          fee.status.toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      )
+                    else
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppDimensions.spacingM,
+                          vertical: AppDimensions.spacingS,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.textSecondary.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                        ),
+                        child: const Text(
+                          'PENDING',
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(width: AppDimensions.spacingS),
+                    // 3-dots menu
+                    PopupMenuButton<String>(
+                      icon: const Icon(
+                        Icons.more_vert,
+                        size: 20,
+                        color: AppColors.textSecondary,
+                      ),
+                      color: AppColors.cardBackground,
+                      onSelected: (value) {
+                        if (value == 'edit' && hasFee && fee != null) {
+                          _editFee(studentFee, fee);
+                        } else if (value == 'view' && hasFee && fee != null) {
+                          _viewFeeDetails(fee);
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        if (hasFee && fee != null)
+                          const PopupMenuItem(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit, size: 18, color: AppColors.textPrimary),
+                                SizedBox(width: 8),
+                                Text('Edit Fee', style: TextStyle(color: AppColors.textPrimary)),
+                              ],
                             ),
                           ),
-                          if (fee.studentName == null)
-                            Text(
-                              'ID: ${fee.studentId}',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textSecondary,
-                              ),
+                        if (hasFee && fee != null)
+                          const PopupMenuItem(
+                            value: 'view',
+                            child: Row(
+                              children: [
+                                Icon(Icons.visibility, size: 18, color: AppColors.textPrimary),
+                                SizedBox(width: 8),
+                                Text('View Details', style: TextStyle(color: AppColors.textPrimary)),
+                              ],
                             ),
-                        ],
-                      ),
+                          ),
+                      ],
                     ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppDimensions.spacingM,
-                      vertical: AppDimensions.spacingS,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _getStatusColor(fee.status),
-                      borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                    ),
-                    child: Text(
-                      fee.status.toUpperCase(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppDimensions.spacingS),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                if (hasFee && fee != null)
                   Text(
                     'Due: ${_formatDate(fee.dueDate)}',
                     style: const TextStyle(
                       fontSize: 12,
                       color: AppColors.textSecondary,
                     ),
-                  ),
+                  )
+                else
                   Text(
-                    '₹${fee.pendingAmount.toStringAsFixed(0)} pending',
-                    style: TextStyle(
+                    'Fee: ₹${studentFee.batchFeeAmount.toStringAsFixed(0)}',
+                    style: const TextStyle(
                       fontSize: 12,
-                      color: fee.pendingAmount > 0 ? AppColors.error : AppColors.success,
-                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
                     ),
                   ),
-                ],
+                Text(
+                  hasFee && fee != null
+                      ? '₹${fee.pendingAmount.toStringAsFixed(0)} pending'
+                      : '₹${studentFee.batchFeeAmount.toStringAsFixed(0)} pending',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: (hasFee && fee != null && fee.pendingAmount > 0) || 
+                           (!hasFee && studentFee.batchFeeAmount > 0)
+                        ? AppColors.error 
+                        : AppColors.success,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            // Add Payment button for all students
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _showAddPaymentForStudent(studentFee),
+                icon: const Icon(Icons.payment, size: 16),
+                label: const Text('Add Payment'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
+
+  /// Auto-create fee if it doesn't exist, then return the fee
+  Future<Fee> _ensureFeeExists(StudentWithBatchFee studentFee) async {
+    if (studentFee.hasFee && studentFee.existingFee != null) {
+      return studentFee.existingFee!;
+    }
+
+    // Auto-create fee with batch fee amount and default due date (end of current month)
+    final now = DateTime.now();
+    final dueDate = DateTime(now.year, now.month + 1, 0); // Last day of current month
+
+    final feeData = {
+      'student_id': studentFee.student.id,
+      'batch_id': studentFee.batch.id,
+      'amount': studentFee.batchFeeAmount,
+      'due_date': dueDate.toIso8601String().split('T')[0],
+      'payee_student_id': studentFee.student.id, // Default to student themselves
+    };
+
+    final feeService = ref.read(feeServiceProvider);
+    final createdFee = await feeService.createFee(feeData);
+    
+    // Invalidate providers to refresh the list
+    ref.invalidate(studentsWithBatchFeesProvider);
+    
+    return createdFee;
+  }
+
+  /// Show add payment dialog, auto-creating fee if needed
+  Future<void> _showAddPaymentForStudent(StudentWithBatchFee studentFee) async {
+    try {
+      // Show loading indicator
+      if (mounted) {
+        SuccessSnackbar.show(context, 'Preparing payment...', duration: const Duration(seconds: 1));
+      }
+
+      // Ensure fee exists (auto-create if needed)
+      final fee = await _ensureFeeExists(studentFee);
+      
+      // Refresh the provider to update the UI
+      ref.invalidate(studentsWithBatchFeesProvider);
+      
+      // Note: The fee returned from createFee is already fully enriched with all payment data
+      // (via enrich_fee_with_payments in backend), so we don't need to fetch it again.
+      // The backend doesn't have a GET /fees/{id} endpoint anyway.
+      
+      // Now show the payment dialog with the fee we already have
+      if (mounted) {
+        _showAddPaymentDialog(context, fee);
+      }
+    } catch (e) {
+      if (mounted) {
+        SuccessSnackbar.showError(context, 'Failed to prepare payment: ${e.toString()}');
+      }
+    }
+  }
+
+  /// Edit fee dialog
+  void _editFee(StudentWithBatchFee studentFee, Fee fee) {
+    final widgetRef = ref;
+    final isMounted = mounted;
+    
+    showDialog(
+      context: context,
+      builder: (dialogContext) => EditFeeDialog(
+        fee: fee,
+        onSubmit: (feeData) async {
+          try {
+            final feeListNotifier = widgetRef.read(feeListProvider(status: null).notifier);
+            await feeListNotifier.updateFee(fee.id, feeData);
+            // Invalidate the students with batch fees provider
+            widgetRef.invalidate(studentsWithBatchFeesProvider);
+            // Note: Dialog will close itself after onSubmit completes
+            if (isMounted && mounted) {
+              SuccessSnackbar.show(context, 'Fee updated successfully');
+            }
+          } catch (e) {
+            if (isMounted && mounted) {
+              SuccessSnackbar.showError(context, 'Failed to update fee: ${e.toString()}');
+            }
+            // Re-throw to let dialog handle error state
+            rethrow;
+          }
+        },
+      ),
+    );
+  }
+
+  /// View fee details (navigate to deep view)
+  void _viewFeeDetails(Fee fee) {
+    setState(() {
+      _selectedFee = fee;
+    });
+  }
+
 
   Widget _buildDeepView() {
     final fee = _selectedFee!;
@@ -920,14 +1138,19 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
             // Use the fee list provider notifier to create fee
             final feeListNotifier = widgetRef.read(feeListProvider(status: null).notifier);
             await feeListNotifier.createFee(feeData);
+            // Invalidate the students with batch fees provider to refresh the display
+            widgetRef.invalidate(studentsWithBatchFeesProvider);
+            // Note: Dialog will close itself after onSubmit completes
+            // Don't call Navigator.pop() here to avoid double pop
             if (isMounted && mounted) {
-              Navigator.of(dialogContext).pop();
               SuccessSnackbar.show(context, 'Fee created successfully');
             }
           } catch (e) {
             if (isMounted && mounted) {
               SuccessSnackbar.showError(context, 'Failed to create fee: ${e.toString()}');
             }
+            // Re-throw to let dialog handle error state
+            rethrow;
           }
         },
       ),
@@ -966,20 +1189,24 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
           try {
             final feeService = widgetRef.read(feeServiceProvider);
             await feeService.createFeePayment(fee.id, paymentData);
-            // Refresh fee list provider - get current filter
+            // Refresh both providers
+            widgetRef.invalidate(studentsWithBatchFeesProvider);
             String? currentStatus;
             if (currentFilter != 'all' && currentFilter != 'overdue') {
               currentStatus = currentFilter;
             }
             widgetRef.invalidate(feeListProvider(status: currentStatus));
+            // Note: Dialog will close itself after onSubmit completes
+            // Don't call Navigator.pop() here to avoid double pop
             if (isMounted && mounted) {
-              Navigator.of(dialogContext).pop();
               SuccessSnackbar.show(context, 'Payment recorded successfully');
             }
           } catch (e) {
             if (isMounted && mounted) {
               SuccessSnackbar.showError(context, 'Failed to record payment: ${e.toString()}');
             }
+            // Re-throw to let dialog handle error state
+            rethrow;
           }
         },
       ),
@@ -1003,7 +1230,8 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
         try {
           final feeService = widgetRef.read(feeServiceProvider);
           await feeService.deleteFeePayment(fee.id, payment.id);
-          // Refresh fee list provider - get current filter
+          // Refresh both providers
+          widgetRef.invalidate(studentsWithBatchFeesProvider);
           String? currentStatus;
           if (currentFilter != 'all' && currentFilter != 'overdue') {
             currentStatus = currentFilter;

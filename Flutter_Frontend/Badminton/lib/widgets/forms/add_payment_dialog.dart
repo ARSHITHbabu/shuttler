@@ -112,19 +112,15 @@ class _AddPaymentDialogState extends ConsumerState<AddPaymentDialog> {
         await widget.onSubmit!(paymentData);
       }
 
+      // Only close dialog if onSubmit succeeds (doesn't throw)
       if (mounted) {
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Payment recorded successfully')),
-        );
+        // Note: Success message is handled by the onSubmit callback
       }
     } catch (e) {
       setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to record payment: $e')),
-        );
-      }
+      // Don't close dialog on error - let user see the error and retry
+      // Error message is handled by the onSubmit callback
     }
   }
 
