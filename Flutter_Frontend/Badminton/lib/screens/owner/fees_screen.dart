@@ -13,6 +13,7 @@ import '../../models/student_with_batch_fee.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/fee_provider.dart';
 import '../../providers/student_provider.dart';
+import '../../providers/batch_provider.dart';
 import '../../widgets/forms/add_payment_dialog.dart';
 import '../../widgets/forms/edit_fee_dialog.dart';
 import '../../models/fee_payment.dart';
@@ -34,10 +35,9 @@ class FeesScreen extends ConsumerStatefulWidget {
 }
 
 class _FeesScreenState extends ConsumerState<FeesScreen> {
-  String _selectedFilter = 'all'; // 'all', 'paid', 'pending', 'overdue'
+  String _selectedFilter = 'all'; // 'all', 'paid', 'pending', 'overdue' - for batch detail view
   Fee? _selectedFee; // For deep view
-  final Set<int> _expandedBatches = {}; // Track expanded batches
-  bool _hasAutoExpanded = false; // Track if auto-expand has already run
+  int? _selectedBatchId; // Track selected batch for detail view
 
   @override
   void initState() {
@@ -105,48 +105,11 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
                       ),
                       const SizedBox(height: AppDimensions.spacingL),
                       
-                      // Stats Overview
-                      _buildStatsOverview(),
-                      const SizedBox(height: AppDimensions.spacingL),
-                      
-                      // Filter Chips
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            _FilterChip(
-                              label: 'All',
-                              isSelected: _selectedFilter == 'all',
-                              onTap: () => setState(() => _selectedFilter = 'all'),
-                            ),
-                            const SizedBox(width: AppDimensions.spacingS),
-                            _FilterChip(
-                              label: 'Paid',
-                              isSelected: _selectedFilter == 'paid',
-                              onTap: () => setState(() => _selectedFilter = 'paid'),
-                              color: AppColors.success,
-                            ),
-                            const SizedBox(width: AppDimensions.spacingS),
-                            _FilterChip(
-                              label: 'Pending',
-                              isSelected: _selectedFilter == 'pending',
-                              onTap: () => setState(() => _selectedFilter = 'pending'),
-                              color: AppColors.warning,
-                            ),
-                            const SizedBox(width: AppDimensions.spacingS),
-                            _FilterChip(
-                              label: 'Overdue',
-                              isSelected: _selectedFilter == 'overdue',
-                              onTap: () => setState(() => _selectedFilter = 'overdue'),
-                              color: AppColors.error,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: AppDimensions.spacingL),
-                      
-                      // Fees List (Overview with batch grouping)
-                      _buildFeesOverview(),
+                      // Show batch list or batch detail view
+                      if (_selectedBatchId == null)
+                        _buildBatchList()
+                      else
+                        _buildBatchFeeDetailView(),
                     ],
                   ),
                 ),
@@ -158,76 +121,7 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
     );
   }
 
-  Widget _buildStatsOverview() {
-    return Consumer(
-      builder: (context, ref, child) {
-        final studentsWithFeesAsync = ref.watch(studentsWithBatchFeesProvider);
-        
-        return studentsWithFeesAsync.when(
-          loading: () => const SizedBox.shrink(),
-          error: (_, __) => const SizedBox.shrink(),
-          data: (batchGroups) {
-            double pending = 0;
-            double paid = 0;
-            double overdue = 0;
-            
-            // Calculate stats from all students with batch fees
-            for (final batchEntry in batchGroups.values) {
-              for (final studentFee in batchEntry) {
-                if (studentFee.existingFee != null) {
-                  final fee = studentFee.existingFee!;
-                  final pendingAmount = fee.pendingAmount;
-                  if (fee.status == 'paid') {
-                    paid += fee.totalPaid;
-                  } else if (fee.isOverdue) {
-                    overdue += pendingAmount;
-                  } else {
-                    pending += pendingAmount;
-                  }
-                } else {
-                  // Fee not created yet, use batch fee amount as pending
-                  pending += studentFee.batchFeeAmount;
-                }
-              }
-            }
-            
-            return Row(
-              children: [
-                Expanded(
-                  child: _StatCard(
-                    icon: Icons.schedule,
-                    value: '₹${pending.toStringAsFixed(0)}',
-                    label: 'Pending',
-                    color: AppColors.warning,
-                  ),
-                ),
-                const SizedBox(width: AppDimensions.spacingS),
-                Expanded(
-                  child: _StatCard(
-                    icon: Icons.check_circle,
-                    value: '₹${paid.toStringAsFixed(0)}',
-                    label: 'Paid',
-                    color: AppColors.success,
-                  ),
-                ),
-                const SizedBox(width: AppDimensions.spacingS),
-                Expanded(
-                  child: _StatCard(
-                    icon: Icons.warning,
-                    value: '₹${overdue.toStringAsFixed(0)}',
-                    label: 'Overdue',
-                    color: AppColors.error,
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildFeesOverview() {
+  Widget _buildBatchList() {
     // Use new provider that gets all students with batch enrollments
     final studentsWithFeesAsync = ref.watch(studentsWithBatchFeesProvider);
 
@@ -242,7 +136,7 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
       data: (batchGroups) {
         // Auto-select student fee when navigating from student detail view
         if ((widget.selectedStudentId != null || widget.selectedStudentName != null) && 
-            _selectedFee == null) {
+            _selectedFee == null && _selectedBatchId == null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             for (final batchEntry in batchGroups.entries) {
               for (final studentFee in batchEntry.value) {
@@ -253,7 +147,7 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
                   if (studentFee.existingFee != null && mounted) {
                     setState(() {
                       _selectedFee = studentFee.existingFee;
-                      _expandedBatches.add(batchEntry.key);
+                      _selectedBatchId = batchEntry.key;
                     });
                     return;
                   }
@@ -262,47 +156,13 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
             }
           });
         }
-        
-        // Filter batches based on selected filter
-        Map<int, List<StudentWithBatchFee>> filteredGroups = {};
-        
-        for (final entry in batchGroups.entries) {
-          List<StudentWithBatchFee> filtered = entry.value;
-          
-          if (_selectedFilter == 'paid') {
-            filtered = entry.value.where((s) => s.feeStatus == 'paid').toList();
-          } else if (_selectedFilter == 'pending') {
-            filtered = entry.value.where((s) => s.feeStatus == 'pending').toList();
-          } else if (_selectedFilter == 'overdue') {
-            filtered = entry.value.where((s) => 
-              s.feeStatus == 'overdue' || 
-              (s.existingFee != null && s.existingFee!.isOverdue)
-            ).toList();
-          }
-          
-          if (filtered.isNotEmpty) {
-            filteredGroups[entry.key] = filtered;
-          }
-        }
 
-        if (filteredGroups.isEmpty) {
+        if (batchGroups.isEmpty) {
           return EmptyState.noFees();
-        }
-        
-        // Auto-expand first batch ONLY if we haven't done it yet and no batches are expanded
-        if (!_hasAutoExpanded && _expandedBatches.isEmpty && filteredGroups.isNotEmpty) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              setState(() {
-                _expandedBatches.add(filteredGroups.keys.first);
-                _hasAutoExpanded = true; // Mark as done so it doesn't run again
-              });
-            }
-          });
         }
 
         // Sort batches by name
-        final sortedBatches = filteredGroups.entries.toList()
+        final sortedBatches = batchGroups.entries.toList()
           ..sort((a, b) {
             final nameA = a.value.first.batch.batchName;
             final nameB = b.value.first.batch.batchName;
@@ -314,11 +174,11 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
           children: sortedBatches.map((batchEntry) {
             final batchId = batchEntry.key;
             final studentFees = batchEntry.value;
-            final batchName = studentFees.first.batch.batchName;
+            final batch = studentFees.first.batch;
+            final batchName = batch.batchName;
             final batchFeeAmount = studentFees.first.batchFeeAmount;
-            final isExpanded = _expandedBatches.contains(batchId);
             
-            // Calculate batch stats
+            // Calculate batch stats for preview
             double batchPending = 0;
             double batchPaid = 0;
             double batchOverdue = 0;
@@ -341,132 +201,374 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
             }
 
             return NeumorphicContainer(
-              padding: EdgeInsets.zero,
+              padding: const EdgeInsets.all(AppDimensions.paddingM),
               margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
-              child: Column(
+              onTap: () {
+                setState(() {
+                  _selectedBatchId = batchId;
+                });
+              },
+              child: Row(
                 children: [
-                  // Batch Header
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () {
-                      setState(() {
-                        if (isExpanded) {
-                          _expandedBatches.remove(batchId);
-                        } else {
-                          _expandedBatches.add(batchId);
-                        }
-                      });
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.all(AppDimensions.paddingM),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.groups,
-                            color: AppColors.textSecondary,
-                            size: 20,
+                  const Icon(
+                    Icons.groups,
+                    color: AppColors.textSecondary,
+                    size: 20,
+                  ),
+                  const SizedBox(width: AppDimensions.spacingS),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          batchName,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
                           ),
-                          const SizedBox(width: AppDimensions.spacingS),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  batchName,
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppColors.textPrimary,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Wrap(
-                                  spacing: AppDimensions.spacingM,
-                                  children: [
-                                    if (batchPending > 0)
-                                      Text(
-                                        '₹${batchPending.toStringAsFixed(0)} pending',
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: AppColors.warning,
-                                        ),
-                                      ),
-                                    if (batchPaid > 0)
-                                      Text(
-                                        '₹${batchPaid.toStringAsFixed(0)} paid',
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: AppColors.success,
-                                        ),
-                                      ),
-                                    if (batchOverdue > 0)
-                                      Text(
-                                        '₹${batchOverdue.toStringAsFixed(0)} overdue',
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: AppColors.error,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ],
+                        ),
+                        if (batch.timeRange != null && batch.timeRange!.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            batch.timeRange!,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
                             ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppDimensions.spacingS,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.cardBackground,
-                              borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                            ),
-                            child: Text(
-                              '${studentFees.length} student${studentFees.length != 1 ? 's' : ''}',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: AppDimensions.spacingS),
-                          // Show batch fee amount
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppDimensions.spacingS,
-                              vertical: 4,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.accent.withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                            ),
-                            child: Text(
-                              '₹${batchFeeAmount.toStringAsFixed(0)}/student',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: AppColors.accent,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: AppDimensions.spacingS),
-                          Icon(
-                            isExpanded ? Icons.expand_less : Icons.expand_more,
-                            color: AppColors.textSecondary,
                           ),
                         ],
+                        const SizedBox(height: 4),
+                        Wrap(
+                          spacing: AppDimensions.spacingM,
+                          children: [
+                            if (batchPending > 0)
+                              Text(
+                                '₹${batchPending.toStringAsFixed(0)} pending',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.warning,
+                                ),
+                              ),
+                            if (batchPaid > 0)
+                              Text(
+                                '₹${batchPaid.toStringAsFixed(0)} paid',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.success,
+                                ),
+                              ),
+                            if (batchOverdue > 0)
+                              Text(
+                                '₹${batchOverdue.toStringAsFixed(0)} overdue',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.error,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppDimensions.spacingS,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.cardBackground,
+                      borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                    ),
+                    child: Text(
+                      '${studentFees.length} student${studentFees.length != 1 ? 's' : ''}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
                       ),
                     ),
                   ),
-                  // Students List
-                  if (isExpanded)
-                    ...studentFees.map((studentFee) => _buildStudentFeeCard(studentFee)),
+                  const SizedBox(width: AppDimensions.spacingS),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppDimensions.spacingS,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                    ),
+                    child: Text(
+                      '₹${batchFeeAmount.toStringAsFixed(0)}/student',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.accent,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppDimensions.spacingS),
+                  const Icon(
+                    Icons.chevron_right,
+                    color: AppColors.textSecondary,
+                  ),
                 ],
               ),
             );
           }).toList(),
         );
       },
+    );
+  }
+
+  Widget _buildBatchFeeDetailView() {
+    if (_selectedBatchId == null) return const SizedBox.shrink();
+
+    final studentsWithFeesAsync = ref.watch(studentsWithBatchFeesProvider);
+
+    return studentsWithFeesAsync.when(
+      loading: () => const ListSkeleton(itemCount: 5),
+      error: (error, stack) => ErrorDisplay(
+        message: 'Failed to load batch fees: ${error.toString()}',
+        onRetry: () {
+          ref.invalidate(studentsWithBatchFeesProvider);
+        },
+      ),
+      data: (batchGroups) {
+        final studentFees = batchGroups[_selectedBatchId];
+        if (studentFees == null || studentFees.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.all(AppDimensions.paddingM),
+            child: Text(
+              'No students found in this batch',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
+          );
+        }
+
+        final batch = studentFees.first.batch;
+        final batchName = batch.batchName;
+        final batchTimeRange = batch.timeRange ?? '';
+
+        // Filter students based on selected filter
+        List<StudentWithBatchFee> filteredStudents = studentFees;
+        if (_selectedFilter == 'paid') {
+          filteredStudents = studentFees.where((s) => s.feeStatus == 'paid').toList();
+        } else if (_selectedFilter == 'pending') {
+          filteredStudents = studentFees.where((s) => s.feeStatus == 'pending').toList();
+        } else if (_selectedFilter == 'overdue') {
+          filteredStudents = studentFees.where((s) => 
+            s.feeStatus == 'overdue' || 
+            (s.existingFee != null && s.existingFee!.isOverdue)
+          ).toList();
+        }
+
+        // Calculate batch-specific stats
+        double batchPending = 0;
+        double batchPaid = 0;
+        double batchOverdue = 0;
+        double totalFeeAmount = 0;
+        int totalStudents = studentFees.length;
+        
+        for (final studentFee in studentFees) {
+          totalFeeAmount += studentFee.batchFeeAmount;
+          if (studentFee.existingFee != null) {
+            final fee = studentFee.existingFee!;
+            final pendingAmount = fee.pendingAmount;
+            if (fee.status == 'paid') {
+              batchPaid += fee.totalPaid;
+            } else if (fee.isOverdue) {
+              batchOverdue += pendingAmount;
+            } else {
+              batchPending += pendingAmount;
+            }
+          } else {
+            // Fee not created yet, use batch fee amount as pending
+            batchPending += studentFee.batchFeeAmount;
+          }
+        }
+
+        final collectionRate = totalFeeAmount > 0 
+            ? ((batchPaid / totalFeeAmount) * 100).toStringAsFixed(0)
+            : '0';
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Batch Header with Back Button
+            NeumorphicContainer(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimensions.paddingM,
+                vertical: AppDimensions.spacingS,
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(
+                      Icons.arrow_back,
+                      color: AppColors.textSecondary,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _selectedBatchId = null;
+                        _selectedFilter = 'all'; // Reset filter when going back
+                      });
+                    },
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          batchName,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        if (batchTimeRange.isNotEmpty)
+                          Text(
+                            batchTimeRange,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppDimensions.spacingL),
+            
+            // Filter Chips
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _FilterChip(
+                    label: 'All',
+                    isSelected: _selectedFilter == 'all',
+                    onTap: () => setState(() => _selectedFilter = 'all'),
+                  ),
+                  const SizedBox(width: AppDimensions.spacingS),
+                  _FilterChip(
+                    label: 'Paid',
+                    isSelected: _selectedFilter == 'paid',
+                    onTap: () => setState(() => _selectedFilter = 'paid'),
+                    color: AppColors.success,
+                  ),
+                  const SizedBox(width: AppDimensions.spacingS),
+                  _FilterChip(
+                    label: 'Pending',
+                    isSelected: _selectedFilter == 'pending',
+                    onTap: () => setState(() => _selectedFilter = 'pending'),
+                    color: AppColors.warning,
+                  ),
+                  const SizedBox(width: AppDimensions.spacingS),
+                  _FilterChip(
+                    label: 'Overdue',
+                    isSelected: _selectedFilter == 'overdue',
+                    onTap: () => setState(() => _selectedFilter = 'overdue'),
+                    color: AppColors.error,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppDimensions.spacingL),
+            
+            // Dashboard Statistics
+            _buildBatchDashboard(
+              totalStudents: totalStudents,
+              totalFeeAmount: totalFeeAmount,
+              paidAmount: batchPaid,
+              pendingAmount: batchPending,
+              overdueAmount: batchOverdue,
+              collectionRate: collectionRate,
+            ),
+            const SizedBox(height: AppDimensions.spacingL),
+            
+            // Student List Header
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
+              child: Text(
+                'Student Fees',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ),
+            const SizedBox(height: AppDimensions.spacingM),
+            
+            // Student List
+            if (filteredStudents.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(AppDimensions.paddingM),
+                child: Text(
+                  'No students match the selected filter',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              )
+            else
+              ...filteredStudents.map((studentFee) => _buildStudentFeeCard(studentFee)),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildBatchDashboard({
+    required int totalStudents,
+    required double totalFeeAmount,
+    required double paidAmount,
+    required double pendingAmount,
+    required double overdueAmount,
+    required String collectionRate,
+  }) {
+    return NeumorphicContainer(
+      padding: const EdgeInsets.all(AppDimensions.paddingM),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _SummaryItem(
+            label: 'Total Students',
+            value: totalStudents.toString(),
+            color: AppColors.textSecondary,
+          ),
+          _SummaryItem(
+            label: 'Total Fee',
+            value: '₹${totalFeeAmount.toStringAsFixed(0)}',
+            color: AppColors.textPrimary,
+          ),
+          _SummaryItem(
+            label: 'Paid',
+            value: '₹${paidAmount.toStringAsFixed(0)}',
+            color: AppColors.success,
+          ),
+          _SummaryItem(
+            label: 'Pending',
+            value: '₹${pendingAmount.toStringAsFixed(0)}',
+            color: AppColors.warning,
+          ),
+          _SummaryItem(
+            label: 'Overdue',
+            value: '₹${overdueAmount.toStringAsFixed(0)}',
+            color: AppColors.error,
+          ),
+          if (totalFeeAmount > 0)
+            _SummaryItem(
+              label: 'Collection',
+              value: '$collectionRate%',
+              color: AppColors.accent,
+            ),
+        ],
+      ),
     );
   }
 
@@ -500,13 +602,6 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                             color: AppColors.textPrimary,
-                          ),
-                        ),
-                        Text(
-                          'Batch: ${studentFee.batch.batchName}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary,
                           ),
                         ),
                       ],
@@ -1291,46 +1386,37 @@ class _FilterChip extends StatelessWidget {
   }
 }
 
-class _StatCard extends StatelessWidget {
-  final IconData icon;
-  final String value;
+class _SummaryItem extends StatelessWidget {
   final String label;
+  final String value;
   final Color color;
 
-  const _StatCard({
-    required this.icon,
-    required this.value,
+  const _SummaryItem({
     required this.label,
+    required this.value,
     required this.color,
   });
 
   @override
   Widget build(BuildContext context) {
-    return NeumorphicContainer(
-      padding: const EdgeInsets.all(AppDimensions.paddingM),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 20, color: color),
-          const SizedBox(height: AppDimensions.spacingS),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
-            ),
+    return Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.w600,
+            color: color,
           ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.textSecondary,
-            ),
+        ),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: AppColors.textSecondary,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
