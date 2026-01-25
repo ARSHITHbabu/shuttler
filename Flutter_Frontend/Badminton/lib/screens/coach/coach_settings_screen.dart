@@ -8,6 +8,9 @@ import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/settings/shuttlecock_theme_toggle.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/service_providers.dart';
+import '../common/privacy_policy_screen.dart';
+import '../common/terms_conditions_screen.dart';
+import '../common/help_support_screen.dart';
 
 /// Coach Settings Screen - App settings and preferences
 class CoachSettingsScreen extends ConsumerStatefulWidget {
@@ -128,7 +131,11 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
                 icon: Icons.help_outline,
                 title: 'Help & Support',
                 onTap: () {
-                  SuccessSnackbar.showInfo(context, 'Help & Support coming soon');
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const HelpSupportScreen(userRole: 'coach'),
+                    ),
+                  );
                 },
               ),
 
@@ -138,7 +145,11 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
                 icon: Icons.privacy_tip_outlined,
                 title: 'Privacy Policy',
                 onTap: () {
-                  SuccessSnackbar.showInfo(context, 'Privacy Policy coming soon');
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const PrivacyPolicyScreen(),
+                    ),
+                  );
                 },
               ),
 
@@ -148,7 +159,11 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
                 icon: Icons.description_outlined,
                 title: 'Terms & Conditions',
                 onTap: () {
-                  SuccessSnackbar.showInfo(context, 'Terms & Conditions coming soon');
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const TermsConditionsScreen(),
+                    ),
+                  );
                 },
               ),
 
