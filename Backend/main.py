@@ -519,6 +519,63 @@ def migrate_database_schema(engine):
         if 'schedules' in tables:
             check_and_add_column(engine, 'schedules', 'capacity', 'INTEGER', nullable=True)
         
+        # Migrate sessions table - create if it doesn't exist
+        if 'sessions' not in tables:
+            print("⚠️  Table 'sessions' missing. Creating...")
+            try:
+                with engine.begin() as conn:
+                    sessions_table_sql = text("""
+                        CREATE TABLE sessions (
+                            id SERIAL PRIMARY KEY,
+                            name VARCHAR(255) NOT NULL,
+                            start_date VARCHAR(50) NOT NULL,
+                            end_date VARCHAR(50) NOT NULL,
+                            status VARCHAR(20) DEFAULT 'active',
+                            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP WITH TIME ZONE
+                        )
+                    """)
+                    conn.execute(sessions_table_sql)
+                print("✅ Created table 'sessions'")
+            except Exception as e:
+                print(f"⚠️  Error creating sessions table: {e}")
+        else:
+            print("✅ Table 'sessions' already exists")
+        
+        # Migrate batches table - add session_id column
+        if 'batches' in tables:
+            columns = [col['name'] for col in inspector.get_columns('batches')]
+            if 'session_id' not in columns:
+                print("⚠️  Column 'session_id' missing in 'batches' table. Adding...")
+                try:
+                    with engine.begin() as conn:
+                        # First, ensure sessions table exists (should already be created above)
+                        # Add session_id column with foreign key
+                        alter_sql = text("""
+                            ALTER TABLE batches 
+                            ADD COLUMN session_id INTEGER 
+                            REFERENCES sessions(id) ON DELETE SET NULL
+                        """)
+                        conn.execute(alter_sql)
+                        print("✅ Added column 'session_id' to 'batches' table")
+                        
+                        # Create index on session_id for better query performance
+                        index_check = text("""
+                            SELECT COUNT(*) 
+                            FROM pg_indexes 
+                            WHERE tablename = 'batches' 
+                            AND indexname = 'idx_batches_session_id'
+                        """)
+                        index_result = conn.execute(index_check).scalar()
+                        if index_result == 0:
+                            create_index_sql = text("CREATE INDEX idx_batches_session_id ON batches(session_id)")
+                            conn.execute(create_index_sql)
+                            print("✅ Created index 'idx_batches_session_id' on 'batches' table")
+                except Exception as e:
+                    print(f"⚠️  Error adding session_id column: {e}")
+            else:
+                print("✅ Column 'session_id' already exists in 'batches' table")
+        
         # Migrate invitations table - add invite_token and make columns nullable
         if 'invitations' in tables:
             columns = [col['name'] for col in inspector.get_columns('invitations')]

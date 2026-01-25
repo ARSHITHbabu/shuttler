@@ -1,12 +1,41 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
+import '../../widgets/common/error_widget.dart';
+import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/success_snackbar.dart';
+import '../../widgets/common/custom_text_field.dart';
+import '../../widgets/common/neumorphic_button.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/service_providers.dart';
+import '../../providers/owner_provider.dart';
+import '../../models/owner.dart';
 
 /// Profile Screen - Edit owner profile details
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  
+  bool _isSaving = false;
+  Owner? _owner;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -15,9 +44,91 @@ class ProfileScreen extends StatelessWidget {
     final backgroundColor = theme.scaffoldBackgroundColor;
     final textPrimaryColor = theme.colorScheme.onSurface;
     final textSecondaryColor = theme.colorScheme.onSurface.withValues(alpha: 0.6);
-    final textHintColor = theme.colorScheme.onSurface.withValues(alpha: 0.4);
     final iconPrimaryColor = isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary;
     final cardBackground = isDark ? AppColors.cardBackground : AppColorsLight.cardBackground;
+
+    final authState = ref.watch(authProvider);
+    
+    return authState.when(
+      data: (authValue) {
+        if (authValue is! Authenticated) {
+          return Scaffold(
+            appBar: AppBar(
+              backgroundColor: backgroundColor,
+              elevation: 0,
+              leading: IconButton(
+                icon: Icon(Icons.arrow_back, color: textPrimaryColor),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+              title: Text(
+                'Profile',
+                style: TextStyle(
+                  color: textPrimaryColor,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            body: const Center(
+              child: Text(
+                'Please login',
+                style: TextStyle(color: AppColors.error),
+              ),
+            ),
+          );
+        }
+
+        final ownerId = authValue.userId;
+        return _buildScaffold(ownerId, backgroundColor, textPrimaryColor, textSecondaryColor, iconPrimaryColor, cardBackground);
+      },
+      loading: () => Scaffold(
+        appBar: AppBar(
+          backgroundColor: backgroundColor,
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back, color: textPrimaryColor),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          title: Text(
+            'Profile',
+            style: TextStyle(
+              color: textPrimaryColor,
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        body: const Center(child: ProfileSkeleton()),
+      ),
+      error: (error, stack) => Scaffold(
+        appBar: AppBar(
+          backgroundColor: backgroundColor,
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back, color: textPrimaryColor),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          title: Text(
+            'Profile',
+            style: TextStyle(
+              color: textPrimaryColor,
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        body: Center(
+          child: Text(
+            'Error: ${error.toString()}',
+            style: const TextStyle(color: AppColors.error),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScaffold(int ownerId, Color backgroundColor, Color textPrimaryColor, Color textSecondaryColor, Color iconPrimaryColor, Color cardBackground) {
+    final ownerAsync = ref.watch(ownerByIdProvider(ownerId));
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -37,14 +148,44 @@ class ProfileScreen extends StatelessWidget {
           ),
         ),
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(AppDimensions.paddingL),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Profile Avatar Section
-              NeumorphicContainer(
+      body: RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(ownerByIdProvider(ownerId));
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: ownerAsync.when(
+            loading: () => const ProfileSkeleton(),
+            error: (error, stack) => ErrorDisplay(
+              message: 'Failed to load profile: ${error.toString()}',
+              onRetry: () => ref.invalidate(ownerByIdProvider(ownerId)),
+            ),
+            data: (owner) {
+              if (_owner == null || _owner!.id != owner.id) {
+                _owner = owner;
+                _nameController.text = owner.name;
+                _phoneController.text = owner.phone;
+              }
+
+              return _buildContent(owner, textPrimaryColor, textSecondaryColor, iconPrimaryColor, cardBackground);
+            },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContent(Owner owner, Color textPrimaryColor, Color textSecondaryColor, Color iconPrimaryColor, Color cardBackground) {
+    return Padding(
+      padding: const EdgeInsets.all(AppDimensions.paddingL),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Profile Avatar Section
+            Center(
+              child: NeumorphicContainer(
                 padding: const EdgeInsets.all(AppDimensions.paddingL),
                 child: Column(
                   children: [
@@ -58,7 +199,7 @@ class ProfileScreen extends StatelessWidget {
                       ),
                       child: Center(
                         child: Text(
-                          'A',
+                          owner.name.isNotEmpty ? owner.name[0].toUpperCase() : 'A',
                           style: TextStyle(
                             fontSize: 32,
                             color: iconPrimaryColor,
@@ -68,7 +209,7 @@ class ProfileScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: AppDimensions.spacingM),
                     Text(
-                      'Admin Owner',
+                      owner.name,
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w600,
@@ -85,74 +226,105 @@ class ProfileScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: AppDimensions.spacingL),
+            ),
+            const SizedBox(height: AppDimensions.spacingL),
 
-              // Full Name Field
-              NeumorphicInsetContainer(
-                padding: const EdgeInsets.all(AppDimensions.paddingL),
-                child: TextField(
-                  style: TextStyle(color: textPrimaryColor),
-                  decoration: InputDecoration(
-                    hintText: 'Full Name',
-                    hintStyle: TextStyle(color: textHintColor),
-                    border: InputBorder.none,
-                  ),
-                ),
-              ),
-              const SizedBox(height: AppDimensions.spacingM),
+            // Full Name Field
+            CustomTextField(
+              controller: _nameController,
+              label: 'Full Name',
+              prefixIcon: Icons.person_outline,
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Name is required';
+                }
+                return null;
+              },
+            ),
 
-              // Email Field
-              NeumorphicInsetContainer(
-                padding: const EdgeInsets.all(AppDimensions.paddingL),
-                child: TextField(
-                  style: TextStyle(color: textPrimaryColor),
-                  decoration: InputDecoration(
-                    hintText: 'Email',
-                    hintStyle: TextStyle(color: textHintColor),
-                    border: InputBorder.none,
-                  ),
-                ),
-              ),
-              const SizedBox(height: AppDimensions.spacingM),
+            const SizedBox(height: AppDimensions.spacingM),
 
-              // Phone Field
-              NeumorphicInsetContainer(
-                padding: const EdgeInsets.all(AppDimensions.paddingL),
-                child: TextField(
-                  style: TextStyle(color: textPrimaryColor),
-                  decoration: InputDecoration(
-                    hintText: 'Phone',
-                    hintStyle: TextStyle(color: textHintColor),
-                    border: InputBorder.none,
-                  ),
-                ),
-              ),
-              const SizedBox(height: AppDimensions.spacingL),
+            // Email Field
+            CustomTextField(
+              controller: TextEditingController(text: owner.email),
+              label: 'Email',
+              prefixIcon: Icons.email_outlined,
+              enabled: false,
+              readOnly: true,
+            ),
 
-              // Save Button
-              NeumorphicContainer(
-                padding: const EdgeInsets.all(AppDimensions.paddingM),
-                onTap: () {
-                  // Save changes
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Profile saved')),
-                  );
-                },
-                child: Center(
-                  child: Text(
-                    'Save Changes',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: textPrimaryColor,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 100),
-            ],
-          ),
+            const SizedBox(height: AppDimensions.spacingM),
+
+            // Phone Field
+            CustomTextField(
+              controller: _phoneController,
+              label: 'Phone Number',
+              prefixIcon: Icons.phone_outlined,
+              keyboardType: TextInputType.phone,
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Phone number is required';
+                }
+                if (value.length < 10) {
+                  return 'Enter a valid phone number';
+                }
+                return null;
+              },
+            ),
+
+            const SizedBox(height: AppDimensions.spacingL),
+
+            // Save Button
+            NeumorphicButton(
+              text: _isSaving ? 'Saving...' : 'Save Changes',
+              onPressed: _isSaving ? null : _saveProfile,
+              icon: _isSaving ? null : Icons.save_outlined,
+              isAccent: true,
+            ),
+
+            const SizedBox(height: 100),
+          ],
         ),
       ),
     );
+  }
+
+  Future<void> _saveProfile() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isSaving = true);
+
+    try {
+      final ownerService = ref.read(ownerServiceProvider);
+      final authState = ref.read(authProvider);
+      
+      if (authState.value is! Authenticated) {
+        throw Exception('Not authenticated');
+      }
+
+      final ownerId = (authState.value as Authenticated).userId;
+
+      await ownerService.updateOwner(ownerId, {
+        'name': _nameController.text.trim(),
+        'phone': _phoneController.text.trim(),
+      });
+
+      if (mounted) {
+        SuccessSnackbar.show(context, 'Profile updated successfully');
+        // Refresh profile
+        setState(() {
+          _owner = null;
+        });
+        ref.invalidate(ownerByIdProvider(ownerId));
+      }
+    } catch (e) {
+      if (mounted) {
+        SuccessSnackbar.showError(context, 'Failed to update profile: ${e.toString()}');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
   }
 }
