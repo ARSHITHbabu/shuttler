@@ -17,6 +17,9 @@ class ApiEndpoints {
   // Authentication
   static const String login = '/api/auth/login';
   static const String register = '/api/auth/register';
+  static const String changePassword = '/auth/change-password';
+  static const String forgotPassword = '/auth/forgot-password';
+  static const String resetPassword = '/auth/reset-password';
 
   // Owners
   static const String owners = '/owners/';

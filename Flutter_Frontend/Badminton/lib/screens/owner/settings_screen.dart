@@ -6,6 +6,8 @@ import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
 import '../../providers/theme_provider.dart';
 import '../../widgets/settings/shuttlecock_theme_toggle.dart';
+import '../../providers/auth_provider.dart';
+import '../../widgets/forms/change_password_dialog.dart';
 import 'profile_screen.dart';
 import 'academy_details_screen.dart';
 
@@ -126,8 +128,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 icon: Icons.lock_outline,
                 title: 'Change Password',
                 onTap: () {
-                  // TODO: Navigate to change password
-                  SuccessSnackbar.showInfo(context, 'Change password feature coming soon');
+                  final authState = ref.read(authProvider);
+                  authState.whenData((authValue) {
+                    if (authValue is Authenticated) {
+                      showDialog(
+                        context: context,
+                        builder: (context) => ChangePasswordDialog(
+                          userType: authValue.userType,
+                          userEmail: authValue.userEmail,
+                        ),
+                      );
+                    }
+                  });
                 },
               ),
 

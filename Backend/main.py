@@ -705,6 +705,12 @@ class ResetPasswordRequest(BaseModel):
     new_password: str
     user_type: str  # "coach", "owner", or "student"
 
+class ChangePasswordRequest(BaseModel):
+    email: str
+    current_password: str
+    new_password: str
+    user_type: str  # "coach", "owner", or "student"
+
 class CoachUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
@@ -1579,6 +1585,72 @@ def reset_password(request: ResetPasswordRequest):
         return {
             "success": True,
             "message": "Password reset successfully. You can now login with your new password."
+        }
+    finally:
+        db.close()
+
+@app.post("/auth/change-password")
+def change_password(request: ChangePasswordRequest):
+    """Change password for authenticated users - requires current password verification"""
+    db = SessionLocal()
+    try:
+        # Find user by email and type
+        if request.user_type == "coach":
+            user = db.query(CoachDB).filter(CoachDB.email == request.email).first()
+        elif request.user_type == "owner":
+            user = db.query(OwnerDB).filter(OwnerDB.email == request.email).first()
+        else:
+            user = db.query(StudentDB).filter(StudentDB.email == request.email).first()
+        
+        if not user:
+            return {
+                "success": False,
+                "message": "User not found"
+            }
+        
+        # Verify current password
+        password_valid = False
+        if user.password.startswith('$2b$') or user.password.startswith('$2a$'):
+            # Password is hashed, verify it
+            password_valid = verify_password(request.current_password, user.password)
+        else:
+            # Plain text password (legacy), check directly
+            password_valid = (user.password == request.current_password)
+        
+        if not password_valid:
+            return {
+                "success": False,
+                "message": "Current password is incorrect"
+            }
+        
+        # Check if new password is different from current password
+        if request.current_password == request.new_password:
+            return {
+                "success": False,
+                "message": "New password must be different from current password"
+            }
+        
+        # Validate new password length (bcrypt limit is 72 bytes)
+        new_password_bytes = request.new_password.encode('utf-8')
+        if len(new_password_bytes) > 72:
+            return {
+                "success": False,
+                "message": "Password cannot be longer than 72 characters"
+            }
+        
+        # Update password
+        user.password = hash_password(request.new_password)
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": "Password changed successfully"
+        }
+    except Exception as e:
+        db.rollback()
+        return {
+            "success": False,
+            "message": f"Failed to change password: {str(e)}"
         }
     finally:
         db.close()
