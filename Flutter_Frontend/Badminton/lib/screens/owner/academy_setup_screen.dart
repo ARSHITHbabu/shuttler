@@ -113,8 +113,17 @@ class _AcademySetupScreenState extends ConsumerState<AcademySetupScreen> {
 
       await ownerService.updateOwner(authState.userId, ownerData);
 
-      // Store academy information (could be stored in a separate academy table)
-      // For now, we'll just show success
+      // Store academy information in local storage
+      final storageService = ref.read(storageServiceProvider);
+      if (!storageService.isInitialized) {
+        await storageService.init();
+      }
+      await storageService.saveAcademyName(_academyNameController.text.trim());
+      await storageService.saveAcademyAddress(_addressController.text.trim());
+      // Use owner's contact and email as academy contact/email if not set separately
+      await storageService.saveAcademyContact(_phoneController.text.trim());
+      await storageService.saveAcademyEmail(_emailController.text.trim());
+
       if (mounted) {
         SuccessSnackbar.show(context, 'Academy setup completed successfully');
         Navigator.of(context).pop();

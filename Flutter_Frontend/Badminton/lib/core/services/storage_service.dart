@@ -9,6 +9,12 @@ class StorageService {
   static const String _keyUserName = 'user_name';
   static const String _keyRememberMe = 'remember_me';
   static const String _keyFcmToken = 'fcm_token';
+  
+  // Academy Details
+  static const String _keyAcademyName = 'academy_name';
+  static const String _keyAcademyAddress = 'academy_address';
+  static const String _keyAcademyContact = 'academy_contact';
+  static const String _keyAcademyEmail = 'academy_email';
 
   SharedPreferences? _prefs;
   bool _isInitialized = false;
@@ -209,6 +215,47 @@ class StorageService {
       'name': getUserName(),
       'fcmToken': getFcmToken(),
     };
+  }
+
+  // Academy Details
+  Future<bool> saveAcademyName(String name) async {
+    await _ensureInitialized();
+    return await _prefs!.setString(_keyAcademyName, name);
+  }
+
+  String? getAcademyName() {
+    if (!_isInitialized) return null;
+    return _prefs!.getString(_keyAcademyName);
+  }
+
+  Future<bool> saveAcademyAddress(String address) async {
+    await _ensureInitialized();
+    return await _prefs!.setString(_keyAcademyAddress, address);
+  }
+
+  String? getAcademyAddress() {
+    if (!_isInitialized) return null;
+    return _prefs!.getString(_keyAcademyAddress);
+  }
+
+  Future<bool> saveAcademyContact(String contact) async {
+    await _ensureInitialized();
+    return await _prefs!.setString(_keyAcademyContact, contact);
+  }
+
+  String? getAcademyContact() {
+    if (!_isInitialized) return null;
+    return _prefs!.getString(_keyAcademyContact);
+  }
+
+  Future<bool> saveAcademyEmail(String email) async {
+    await _ensureInitialized();
+    return await _prefs!.setString(_keyAcademyEmail, email);
+  }
+
+  String? getAcademyEmail() {
+    if (!_isInitialized) return null;
+    return _prefs!.getString(_keyAcademyEmail);
   }
 
   // Generic string getter/setter for app preferences (like theme)
