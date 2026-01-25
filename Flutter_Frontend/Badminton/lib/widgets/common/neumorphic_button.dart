@@ -51,6 +51,13 @@ class _NeumorphicButtonState extends State<NeumorphicButton> {
   Widget build(BuildContext context) {
     final isDisabled = widget.onPressed == null || widget.isLoading;
 
+    // Calculate default padding to determine constraints
+    final defaultPadding = widget.padding ??
+        const EdgeInsets.symmetric(
+          horizontal: AppDimensions.paddingL,
+          vertical: AppDimensions.paddingM,
+        );
+
     return GestureDetector(
       onTapDown: isDisabled ? null : (_) => setState(() => _isPressed = true),
       onTapUp: isDisabled ? null : (_) => setState(() => _isPressed = false),
@@ -59,15 +66,12 @@ class _NeumorphicButtonState extends State<NeumorphicButton> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         width: widget.width,
-        height: widget.height ?? AppDimensions.buttonHeightM,
-        constraints: widget.width == null
-            ? const BoxConstraints(minWidth: 120)
-            : null,
-        padding: widget.padding ??
-            const EdgeInsets.symmetric(
-              horizontal: AppDimensions.paddingL,
-              vertical: AppDimensions.paddingM,
-            ),
+        height: widget.height,
+        constraints: BoxConstraints(
+          minWidth: widget.width ?? 120,
+          minHeight: widget.height ?? AppDimensions.buttonHeightM,
+        ),
+        padding: defaultPadding,
         margin: widget.margin,
         decoration: _getDecoration(isDisabled),
         child: _buildContent(isDisabled),

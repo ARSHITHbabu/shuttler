@@ -149,14 +149,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 },
               ),
 
-              _SettingsTile(
-                icon: Icons.location_on_outlined,
-                title: 'Address & Contact',
-                onTap: () {
-                  // TODO: Navigate to address edit
-                },
-              ),
-
               const SizedBox(height: AppDimensions.spacingL),
 
               // Data & Storage Section
