@@ -14,6 +14,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/coach_provider.dart';
 import '../../models/coach.dart';
+import '../../widgets/forms/change_password_dialog.dart';
 
 /// Coach Profile Screen - View and edit coach profile
 class CoachProfileScreen extends ConsumerStatefulWidget {
@@ -29,16 +30,9 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
   final _phoneController = TextEditingController();
   final _specializationController = TextEditingController();
   final _experienceController = TextEditingController();
-  final _currentPasswordController = TextEditingController();
-  final _newPasswordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
   
   bool _isSaving = false;
-  bool _isChangingPassword = false;
   bool _isUploadingImage = false;
-  bool _obscureCurrentPassword = true;
-  bool _obscureNewPassword = true;
-  bool _obscureConfirmPassword = true;
   Coach? _coach;
   File? _selectedImage;
 
@@ -48,9 +42,6 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
     _phoneController.dispose();
     _specializationController.dispose();
     _experienceController.dispose();
-    _currentPasswordController.dispose();
-    _newPasswordController.dispose();
-    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -298,71 +289,23 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
               const _SectionTitle(title: 'Change Password'),
               const SizedBox(height: AppDimensions.spacingM),
 
-              CustomTextField(
-                controller: _currentPasswordController,
-                label: 'Current Password',
-                prefixIcon: Icons.lock_outline,
-                obscureText: _obscureCurrentPassword,
-                suffixIcon: _obscureCurrentPassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                onSuffixIconTap: () {
-                  setState(() {
-                    _obscureCurrentPassword = !_obscureCurrentPassword;
-                  });
-                },
-              ),
-
-              const SizedBox(height: AppDimensions.spacingM),
-
-              CustomTextField(
-                controller: _newPasswordController,
-                label: 'New Password',
-                prefixIcon: Icons.lock_outline,
-                obscureText: _obscureNewPassword,
-                suffixIcon: _obscureNewPassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                onSuffixIconTap: () {
-                  setState(() {
-                    _obscureNewPassword = !_obscureNewPassword;
-                  });
-                },
-                validator: (value) {
-                  if (value != null && value.isNotEmpty) {
-                    if (value.length < 6) {
-                      return 'Password must be at least 6 characters';
-                    }
-                  }
-                  return null;
-                },
-              ),
-
-              const SizedBox(height: AppDimensions.spacingM),
-
-              CustomTextField(
-                controller: _confirmPasswordController,
-                label: 'Confirm New Password',
-                prefixIcon: Icons.lock_outline,
-                obscureText: _obscureConfirmPassword,
-                suffixIcon: _obscureConfirmPassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                onSuffixIconTap: () {
-                  setState(() {
-                    _obscureConfirmPassword = !_obscureConfirmPassword;
-                  });
-                },
-                validator: (value) {
-                  if (value != null && value.isNotEmpty) {
-                    if (value != _newPasswordController.text) {
-                      return 'Passwords do not match';
-                    }
-                  }
-                  return null;
-                },
-              ),
-
-              const SizedBox(height: AppDimensions.spacingM),
-
               NeumorphicButton(
-                text: _isChangingPassword ? 'Changing...' : 'Change Password',
-                onPressed: _isChangingPassword ? null : _changePassword,
-                icon: _isChangingPassword ? null : Icons.lock_reset_outlined,
+                text: 'Change Password',
+                onPressed: () {
+                  final authState = ref.read(authProvider);
+                  authState.whenData((authValue) {
+                    if (authValue is Authenticated) {
+                      showDialog(
+                        context: context,
+                        builder: (context) => ChangePasswordDialog(
+                          userType: authValue.userType,
+                          userEmail: authValue.userEmail,
+                        ),
+                      );
+                    }
+                  });
+                },
+                icon: Icons.lock_reset_outlined,
               ),
 
               const SizedBox(height: 100), // Space for bottom nav
@@ -466,60 +409,6 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
     }
   }
 
-  Future<void> _changePassword() async {
-    if (_currentPasswordController.text.isEmpty ||
-        _newPasswordController.text.isEmpty ||
-        _confirmPasswordController.text.isEmpty) {
-      SuccessSnackbar.showError(context, 'Please fill all password fields');
-      return;
-    }
-
-    if (_newPasswordController.text != _confirmPasswordController.text) {
-      SuccessSnackbar.showError(context, 'New passwords do not match');
-      return;
-    }
-
-    setState(() => _isChangingPassword = true);
-
-    try {
-      final apiService = ref.read(apiServiceProvider);
-      final authState = ref.read(authProvider);
-      
-      if (authState.value is! Authenticated) {
-        throw Exception('Not authenticated');
-      }
-
-      final userEmail = (authState.value as Authenticated).userEmail;
-
-      // Use reset password endpoint with a token (simplified - in production, verify current password first)
-      // For now, we'll use forgot-password flow or create a dedicated change-password endpoint
-      // This is a placeholder - backend needs a proper change-password endpoint
-      await apiService.post(
-        '/auth/reset-password',
-        data: {
-          'email': userEmail,
-          'reset_token': 'change-password', // This won't work - needs proper implementation
-          'new_password': _newPasswordController.text,
-          'user_type': 'coach',
-        },
-      );
-
-      if (mounted) {
-        SuccessSnackbar.show(context, 'Password changed successfully');
-        _currentPasswordController.clear();
-        _newPasswordController.clear();
-        _confirmPasswordController.clear();
-      }
-    } catch (e) {
-      if (mounted) {
-        SuccessSnackbar.showError(context, 'Failed to change password: ${e.toString()}');
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isChangingPassword = false);
-      }
-    }
-  }
 }
 
 class _SectionTitle extends StatelessWidget {

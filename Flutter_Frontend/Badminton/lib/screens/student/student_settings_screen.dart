@@ -11,6 +11,7 @@ import '../../providers/service_providers.dart';
 import '../common/privacy_policy_screen.dart';
 import '../common/terms_conditions_screen.dart';
 import '../common/help_support_screen.dart';
+import '../../widgets/forms/change_password_dialog.dart';
 
 /// Student Settings Screen - App preferences and account settings
 /// Students can toggle theme, manage notifications, and logout
@@ -568,48 +569,18 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
   }
 
   void _showChangePassword(bool isDark) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: Container(
-          padding: const EdgeInsets.all(AppDimensions.paddingL),
-          decoration: BoxDecoration(
-            color: isDark ? AppColors.cardBackground : AppColorsLight.cardBackground,
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(AppDimensions.radiusXl),
-            ),
+    final authState = ref.read(authProvider);
+    authState.whenData((authValue) {
+      if (authValue is Authenticated) {
+        showDialog(
+          context: context,
+          builder: (context) => ChangePasswordDialog(
+            userType: authValue.userType,
+            userEmail: authValue.userEmail,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Change Password',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                ),
-              ),
-              const SizedBox(height: AppDimensions.spacingL),
-              Text(
-                'Password change feature coming soon. Please contact your academy administrator to reset your password.',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: AppDimensions.spacingXl),
-            ],
-          ),
-        ),
-      ),
-    );
+        );
+      }
+    });
   }
 
   void _showLogoutConfirmation(bool isDark) {
