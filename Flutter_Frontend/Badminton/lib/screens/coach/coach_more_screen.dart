@@ -12,6 +12,8 @@ import 'coach_announcements_screen.dart';
 import 'coach_schedule_screen.dart';
 import 'coach_calendar_screen.dart';
 import 'coach_settings_screen.dart';
+import '../owner/bmi_tracking_screen.dart';
+import '../owner/performance_tracking_screen.dart';
 
 /// Coach More Screen - Navigation hub for additional features
 class CoachMoreScreen extends ConsumerStatefulWidget {
@@ -97,6 +99,29 @@ class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
               },
             ),
             const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.monitor_weight_outlined,
+              title: 'BMI Tracking',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const BMITrackingScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.trending_up_outlined,
+              title: 'Performance Tracking',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const PerformanceTrackingScreen(),
+                  ),
+                );
+              },
+            ),
 
             // App Section
             const SizedBox(height: AppDimensions.spacingL),
