@@ -6,6 +6,9 @@ import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
 import '../../providers/theme_provider.dart';
 import '../../widgets/settings/shuttlecock_theme_toggle.dart';
+import '../common/privacy_policy_screen.dart';
+import '../common/terms_conditions_screen.dart';
+import '../common/help_support_screen.dart';
 import 'profile_screen.dart';
 import 'academy_details_screen.dart';
 
@@ -201,7 +204,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 icon: Icons.help_outline,
                 title: 'Help & Support',
                 onTap: () {
-                  // TODO: Navigate to help
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const HelpSupportScreen(userRole: 'owner'),
+                    ),
+                  );
                 },
               ),
 
@@ -209,7 +216,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 icon: Icons.privacy_tip_outlined,
                 title: 'Privacy Policy',
                 onTap: () {
-                  // TODO: Navigate to privacy policy
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const PrivacyPolicyScreen(),
+                    ),
+                  );
                 },
               ),
 
@@ -217,7 +228,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 icon: Icons.description_outlined,
                 title: 'Terms & Conditions',
                 onTap: () {
-                  // TODO: Navigate to terms
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const TermsConditionsScreen(),
+                    ),
+                  );
                 },
               ),
             ],

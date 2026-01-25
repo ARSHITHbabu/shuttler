@@ -8,6 +8,9 @@ import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/service_providers.dart';
+import '../common/privacy_policy_screen.dart';
+import '../common/terms_conditions_screen.dart';
+import '../common/help_support_screen.dart';
 
 /// Student Settings Screen - App preferences and account settings
 /// Students can toggle theme, manage notifications, and logout
@@ -199,21 +202,39 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                         title: 'Privacy Policy',
                         icon: Icons.privacy_tip_outlined,
                         isDark: isDark,
-                        onTap: () => _showPrivacyPolicy(isDark),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const PrivacyPolicyScreen(),
+                            ),
+                          );
+                        },
                       ),
                       const Divider(height: 1),
                       _buildActionTile(
                         title: 'Terms of Service',
                         icon: Icons.description_outlined,
                         isDark: isDark,
-                        onTap: () => _showTermsOfService(isDark),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const TermsConditionsScreen(),
+                            ),
+                          );
+                        },
                       ),
                       const Divider(height: 1),
                       _buildActionTile(
                         title: 'Contact Support',
                         icon: Icons.support_agent_outlined,
                         isDark: isDark,
-                        onTap: () => _showContactSupport(isDark),
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const HelpSupportScreen(userRole: 'student'),
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -546,111 +567,6 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
     );
   }
 
-  void _showPrivacyPolicy(bool isDark) {
-    _showInfoDialog(
-      title: 'Privacy Policy',
-      content: 'Our privacy policy ensures that your personal data is protected and used responsibly. We collect only necessary information to provide you with the best service.\n\nYour data is stored securely and is never shared with third parties without your consent.',
-      isDark: isDark,
-    );
-  }
-
-  void _showTermsOfService(bool isDark) {
-    _showInfoDialog(
-      title: 'Terms of Service',
-      content: 'By using Shuttler, you agree to our terms of service. Please use the app responsibly and in accordance with your academy\'s guidelines.\n\nWe reserve the right to update these terms at any time.',
-      isDark: isDark,
-    );
-  }
-
-  void _showContactSupport(bool isDark) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(AppDimensions.paddingL),
-        decoration: BoxDecoration(
-          color: isDark ? AppColors.cardBackground : AppColorsLight.cardBackground,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(AppDimensions.radiusXl),
-          ),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Contact Support',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-              ),
-            ),
-            const SizedBox(height: AppDimensions.spacingL),
-            _buildContactOption(
-              icon: Icons.email_outlined,
-              title: 'Email',
-              value: 'support@shuttler.app',
-              isDark: isDark,
-            ),
-            const SizedBox(height: AppDimensions.spacingM),
-            _buildContactOption(
-              icon: Icons.phone_outlined,
-              title: 'Phone',
-              value: '+91 1234567890',
-              isDark: isDark,
-            ),
-            const SizedBox(height: AppDimensions.spacingXl),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildContactOption({
-    required IconData icon,
-    required String title,
-    required String value,
-    required bool isDark,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(AppDimensions.paddingM),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.background : AppColorsLight.background,
-        borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            icon,
-            size: 24,
-            color: isDark ? AppColors.accent : AppColorsLight.accent,
-          ),
-          const SizedBox(width: AppDimensions.spacingM),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-                ),
-              ),
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   void _showChangePassword(bool isDark) {
     showModalBottomSheet(
       context: context,
@@ -692,42 +608,6 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  void _showInfoDialog({
-    required String title,
-    required String content,
-    required bool isDark,
-  }) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: isDark ? AppColors.cardBackground : AppColorsLight.cardBackground,
-        title: Text(
-          title,
-          style: TextStyle(
-            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-          ),
-        ),
-        content: Text(
-          content,
-          style: TextStyle(
-            color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(
-              'Close',
-              style: TextStyle(
-                color: isDark ? AppColors.accent : AppColorsLight.accent,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
