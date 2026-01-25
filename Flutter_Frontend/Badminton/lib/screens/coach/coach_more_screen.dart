@@ -14,6 +14,7 @@ import 'coach_calendar_screen.dart';
 import 'coach_settings_screen.dart';
 import '../owner/bmi_tracking_screen.dart';
 import '../owner/performance_tracking_screen.dart';
+import 'coach_fees_screen.dart';
 
 /// Coach More Screen - Navigation hub for additional features
 class CoachMoreScreen extends ConsumerStatefulWidget {
@@ -118,6 +119,18 @@ class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (context) => const PerformanceTrackingScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.payments_outlined,
+              title: 'Fees Management',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const CoachFeesScreen(),
                   ),
                 );
               },
