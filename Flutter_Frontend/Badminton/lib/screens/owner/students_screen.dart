@@ -20,6 +20,7 @@ import '../../providers/batch_provider.dart';
 import 'performance_tracking_screen.dart';
 import 'bmi_tracking_screen.dart';
 import 'fees_screen.dart';
+import '../../widgets/dialogs/student_details_dialog.dart';
 
 /// Students List Screen - Shows all students with add button
 class StudentsScreen extends ConsumerStatefulWidget {
@@ -196,7 +197,9 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                           itemCount: filteredStudents.length,
                           itemBuilder: (context, index) {
                             final student = filteredStudents[index];
-                                  return NeumorphicContainer(
+                                  return InkWell(
+                              onTap: () => _showStudentDetailsDialog(context, student),
+                              child: NeumorphicContainer(
                               key: ValueKey('student_${student.id}'),
                               padding: const EdgeInsets.all(AppDimensions.paddingM),
                               margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
@@ -407,7 +410,8 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                                   ),
                                 ],
                               ),
-                            );
+                            ),
+                          );
                           },
                         ),
                       );
@@ -417,6 +421,10 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
         ],
       ),
     );
+  }
+
+  void _showStudentDetailsDialog(BuildContext context, Student student) {
+    StudentDetailsDialog.show(context, student);
   }
 
   void _showAddStudentDialog(BuildContext context) {
