@@ -444,6 +444,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                 ),
                                 const SizedBox(height: AppDimensions.spacingS),
                                 ...['All', 'Paid', 'Pending', 'Overdue'].map((status) {
+                                  final statusValue = status == 'All' ? null : status.toLowerCase();
+                                  final isSelected = _selectedStatus == statusValue;
                                   return Padding(
                                     padding: const EdgeInsets.only(bottom: AppDimensions.spacingS),
                                     child: NeumorphicInsetContainer(
@@ -451,15 +453,28 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                       child: Row(
                                         children: [
                                           Checkbox(
-                                            value: status == 'All',
-                                            onChanged: (value) {},
+                                            value: isSelected,
+                                            onChanged: (value) {
+                                              setState(() {
+                                                _selectedStatus = value ?? false ? statusValue : null;
+                                              });
+                                            },
                                             activeColor: AppColors.accent,
                                           ),
-                                          Text(
-                                            status,
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                              color: AppColors.textPrimary,
+                                          Expanded(
+                                            child: GestureDetector(
+                                              onTap: () {
+                                                setState(() {
+                                                  _selectedStatus = isSelected ? null : statusValue;
+                                                });
+                                              },
+                                              child: Text(
+                                                status,
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  color: AppColors.textPrimary,
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ],
@@ -615,7 +630,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           ),
           _SummaryRow(
             label: 'Attendance Rate',
-            value: '${(data['attendanceRate'] as double).toStringAsFixed(1)}%',
+            value: '${((data['attendanceRate'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(1)}%',
             color: AppColors.iconPrimary,
           ),
         ],
@@ -630,16 +645,16 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           ),
           _SummaryRow(
             label: 'Total Amount',
-            value: '\$${_formatCurrency(data['totalAmount'] as double)}',
+            value: '\$${_formatCurrency((data['totalAmount'] as num?)?.toDouble() ?? 0.0)}',
           ),
           _SummaryRow(
             label: 'Paid Amount',
-            value: '\$${_formatCurrency(data['paidAmount'] as double)}',
+            value: '\$${_formatCurrency((data['paidAmount'] as num?)?.toDouble() ?? 0.0)}',
             color: AppColors.success,
           ),
           _SummaryRow(
             label: 'Pending Amount',
-            value: '\$${_formatCurrency(data['pendingAmount'] as double)}',
+            value: '\$${_formatCurrency((data['pendingAmount'] as num?)?.toDouble() ?? 0.0)}',
             color: AppColors.error,
           ),
         ],
@@ -670,19 +685,42 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     }
 
     try {
+      // Get academy details
+      final storageService = ref.read(storageServiceProvider);
+      final academyName = storageService.getAcademyName() ?? 'Badminton Academy';
+      final academyAddress = storageService.getAcademyAddress() ?? '';
+      final academyContact = storageService.getAcademyContact() ?? '';
+      final academyEmail = storageService.getAcademyEmail() ?? '';
+
       final reportType = _generatedReport!['type'] as String;
       final data = _generatedReport!['data'] as Map<String, dynamic>;
       final period = _generatedReport!['period'] as String;
       
       String csvContent = '';
       
-      // CSV Header
+      // CSV Header with Academy Details
+      csvContent += '═══════════════════════════════════════════════════════════\n';
+      csvContent += '                    SHUTTLER\n';
+      csvContent += '          Badminton Academy Management System\n';
+      csvContent += '═══════════════════════════════════════════════════════════\n\n';
+      csvContent += 'ACADEMY DETAILS\n';
+      csvContent += '───────────────────────────────────────────────────────────\n';
+      csvContent += 'Academy Name: $academyName\n';
+      if (academyAddress.isNotEmpty) csvContent += 'Address: $academyAddress\n';
+      if (academyContact.isNotEmpty) csvContent += 'Contact: $academyContact\n';
+      if (academyEmail.isNotEmpty) csvContent += 'Email: $academyEmail\n';
+      csvContent += '───────────────────────────────────────────────────────────\n\n';
+      csvContent += 'REPORT INFORMATION\n';
+      csvContent += '───────────────────────────────────────────────────────────\n';
       csvContent += 'Report Type: $reportType\n';
       csvContent += 'Period: $period\n';
-      csvContent += 'Generated On: ${_generatedReport!['generatedOn']}\n\n';
+      csvContent += 'Generated On: ${_generatedReport!['generatedOn']}\n';
+      csvContent += '───────────────────────────────────────────────────────────\n\n';
       
       if (_selectedType == 'attendance') {
         // Attendance CSV
+        csvContent += 'ATTENDANCE DATA\n';
+        csvContent += '───────────────────────────────────────────────────────────\n';
         csvContent += 'Date,Student Name,Student ID,Batch,Status\n';
         final attendance = data['attendance'] as List<dynamic>;
         for (var att in attendance) {
@@ -693,14 +731,20 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           final status = att.status?.toString() ?? 'N/A';
           csvContent += '$date,$studentName,$studentId,$batchName,$status\n';
         }
-        csvContent += '\nSummary\n';
+        csvContent += '\n';
+        csvContent += 'SUMMARY STATISTICS\n';
+        csvContent += '───────────────────────────────────────────────────────────\n';
+        csvContent += 'Metric,Value\n';
         csvContent += 'Total Days,${data['totalDays']}\n';
         csvContent += 'Total Records,${data['totalRecords']}\n';
         csvContent += 'Present,${data['presentCount']}\n';
         csvContent += 'Absent,${data['absentCount']}\n';
-        csvContent += 'Attendance Rate,${(data['attendanceRate'] as double).toStringAsFixed(1)}%\n';
+        csvContent += 'Attendance Rate,${((data['attendanceRate'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(1)}%\n';
+        csvContent += '═══════════════════════════════════════════════════════════\n';
       } else if (_selectedType == 'fee') {
         // Fee CSV
+        csvContent += 'FEE DATA\n';
+        csvContent += '───────────────────────────────────────────────────────────\n';
         csvContent += 'Student Name,Student ID,Amount,Status,Due Date,Paid Date\n';
         final fees = data['fees'] as List<dynamic>;
         for (var fee in fees) {
@@ -719,11 +763,15 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           }
           csvContent += '$studentName,$studentId,$amount,$status,$dueDate,$paidDate\n';
         }
-        csvContent += '\nSummary\n';
+        csvContent += '\n';
+        csvContent += 'SUMMARY STATISTICS\n';
+        csvContent += '───────────────────────────────────────────────────────────\n';
+        csvContent += 'Metric,Value\n';
         csvContent += 'Total Fees,${data['totalFees']}\n';
-        csvContent += 'Total Amount,${data['totalAmount']}\n';
-        csvContent += 'Paid Amount,${data['paidAmount']}\n';
-        csvContent += 'Pending Amount,${data['pendingAmount']}\n';
+        csvContent += 'Total Amount,\$${((data['totalAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}\n';
+        csvContent += 'Paid Amount,\$${((data['paidAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}\n';
+        csvContent += 'Pending Amount,\$${((data['pendingAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}\n';
+        csvContent += '═══════════════════════════════════════════════════════════\n';
       }
       
       // Save CSV to file
@@ -766,11 +814,123 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     }
 
     try {
+      // Get academy details
+      final storageService = ref.read(storageServiceProvider);
+      final academyName = storageService.getAcademyName() ?? 'Badminton Academy';
+      final academyAddress = storageService.getAcademyAddress() ?? '';
+      final academyContact = storageService.getAcademyContact() ?? '';
+      final academyEmail = storageService.getAcademyEmail() ?? '';
+
       final pdf = pw.Document();
       final reportType = _generatedReport!['type'] as String;
       final period = _generatedReport!['period'] as String;
       final generatedOn = _generatedReport!['generatedOn'] as String;
       final data = _generatedReport!['data'] as Map<String, dynamic>;
+
+      // Helper function to build PDF header
+      List<pw.Widget> _buildPDFHeader() {
+        return [
+          // Academy Header with Logo
+          pw.Container(
+            padding: const pw.EdgeInsets.all(20),
+            decoration: pw.BoxDecoration(
+              color: PdfColors.blueGrey900,
+              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+            ),
+            child: pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Expanded(
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        academyName,
+                        style: pw.TextStyle(
+                          fontSize: 24,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.white,
+                        ),
+                      ),
+                      if (academyAddress.isNotEmpty) ...[
+                        pw.SizedBox(height: 4),
+                        pw.Text(
+                          academyAddress,
+                          style: pw.TextStyle(
+                            fontSize: 10,
+                            color: PdfColors.grey300,
+                          ),
+                        ),
+                      ],
+                      if (academyContact.isNotEmpty || academyEmail.isNotEmpty) ...[
+                        pw.SizedBox(height: 4),
+                        pw.Row(
+                          children: [
+                            if (academyContact.isNotEmpty)
+                              pw.Text(
+                                'Phone: $academyContact',
+                                style: pw.TextStyle(
+                                  fontSize: 10,
+                                  color: PdfColors.grey300,
+                                ),
+                              ),
+                            if (academyContact.isNotEmpty && academyEmail.isNotEmpty)
+                              pw.Text(' | ', style: pw.TextStyle(fontSize: 10, color: PdfColors.grey300)),
+                            if (academyEmail.isNotEmpty)
+                              pw.Text(
+                                'Email: $academyEmail',
+                                style: pw.TextStyle(
+                                  fontSize: 10,
+                                  color: PdfColors.grey300,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                // Logo placeholder (using text icon)
+                pw.Container(
+                  width: 60,
+                  height: 60,
+                  decoration: pw.BoxDecoration(
+                    color: PdfColors.blue700,
+                    borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+                  ),
+                  child: pw.Center(
+                    child: pw.Text(
+                      '🏸',
+                      style: pw.TextStyle(fontSize: 32),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          pw.SizedBox(height: 20),
+          
+          // Report Title
+          pw.Text(
+            reportType,
+            style: pw.TextStyle(
+              fontSize: 22,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
+          pw.SizedBox(height: 10),
+          
+          // Report Info
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text('Period: $period', style: pw.TextStyle(fontSize: 11)),
+              pw.Text('Generated: $generatedOn', style: pw.TextStyle(fontSize: 11)),
+            ],
+          ),
+          pw.SizedBox(height: 20),
+        ];
+      }
 
       // Build PDF content based on report type
       if (reportType == 'Attendance Report') {
@@ -780,28 +940,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             margin: const pw.EdgeInsets.all(40),
             build: (pw.Context context) {
               return [
-                // Header
-                pw.Header(
-                  level: 0,
-                  child: pw.Text(
-                    reportType,
-                    style: pw.TextStyle(
-                      fontSize: 24,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                  ),
-                ),
-                pw.SizedBox(height: 20),
-                
-                // Report Info
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text('Period: $period'),
-                    pw.Text('Generated: $generatedOn'),
-                  ],
-                ),
-                pw.SizedBox(height: 30),
+                ..._buildPDFHeader(),
                 
                 // Summary Statistics
                 pw.Text(
@@ -888,28 +1027,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             margin: const pw.EdgeInsets.all(40),
             build: (pw.Context context) {
               return [
-                // Header
-                pw.Header(
-                  level: 0,
-                  child: pw.Text(
-                    reportType,
-                    style: pw.TextStyle(
-                      fontSize: 24,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                  ),
-                ),
-                pw.SizedBox(height: 20),
-                
-                // Report Info
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text('Period: $period'),
-                    pw.Text('Generated: $generatedOn'),
-                  ],
-                ),
-                pw.SizedBox(height: 30),
+                ..._buildPDFHeader(),
                 
                 // Summary Statistics
                 pw.Text(
@@ -931,7 +1049,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         ),
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('\$ ${data['totalAmount']}'),
+                          child: pw.Text('\$ ${((data['totalAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}'),
                         ),
                       ],
                     ),
@@ -943,7 +1061,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         ),
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('\$ ${data['paidAmount']}'),
+                          child: pw.Text('\$ ${((data['paidAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}'),
                         ),
                       ],
                     ),
@@ -955,7 +1073,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         ),
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('\$ ${data['pendingAmount']}'),
+                          child: pw.Text('\$ ${((data['pendingAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}'),
                         ),
                       ],
                     ),
@@ -967,7 +1085,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         ),
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('\$ ${data['overdueAmount'] ?? 0}'),
+                          child: pw.Text('\$ ${((data['overdueAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}'),
                         ),
                       ],
                     ),
@@ -984,28 +1102,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             margin: const pw.EdgeInsets.all(40),
             build: (pw.Context context) {
               return [
-                // Header
-                pw.Header(
-                  level: 0,
-                  child: pw.Text(
-                    reportType,
-                    style: pw.TextStyle(
-                      fontSize: 24,
-                      fontWeight: pw.FontWeight.bold,
-                    ),
-                  ),
-                ),
-                pw.SizedBox(height: 20),
-                
-                // Report Info
-                pw.Row(
-                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                  children: [
-                    pw.Text('Period: $period'),
-                    pw.Text('Generated: $generatedOn'),
-                  ],
-                ),
-                pw.SizedBox(height: 30),
+                ..._buildPDFHeader(),
                 
                 // Summary
                 pw.Text(
