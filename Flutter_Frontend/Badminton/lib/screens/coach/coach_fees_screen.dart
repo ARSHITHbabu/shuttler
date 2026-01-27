@@ -235,7 +235,7 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
                           children: [
                             if (batchPending > 0)
                               Text(
-                                '₹${batchPending.toStringAsFixed(0)} pending',
+                                '\$${batchPending.toStringAsFixed(0)} pending',
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: AppColors.warning,
@@ -243,7 +243,7 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
                               ),
                             if (batchPaid > 0)
                               Text(
-                                '₹${batchPaid.toStringAsFixed(0)} paid',
+                                '\$${batchPaid.toStringAsFixed(0)} paid',
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: AppColors.success,
@@ -251,7 +251,7 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
                               ),
                             if (batchOverdue > 0)
                               Text(
-                                '₹${batchOverdue.toStringAsFixed(0)} overdue',
+                                '\$${batchOverdue.toStringAsFixed(0)} overdue',
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: AppColors.error,
@@ -286,11 +286,11 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.accent.withOpacity(0.2),
+                      color: AppColors.accent.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(AppDimensions.radiusS),
                     ),
                     child: Text(
-                      '₹${batchFeeAmount.toStringAsFixed(0)}/student',
+                      '\$${batchFeeAmount.toStringAsFixed(0)}/student',
                       style: const TextStyle(
                         fontSize: 12,
                         color: AppColors.accent,
@@ -534,22 +534,22 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
           ),
           _SummaryItem(
             label: 'Total Fee',
-            value: '₹${totalFeeAmount.toStringAsFixed(0)}',
+            value: '\$${totalFeeAmount.toStringAsFixed(0)}',
             color: AppColors.textPrimary,
           ),
           _SummaryItem(
             label: 'Paid',
-            value: '₹${paidAmount.toStringAsFixed(0)}',
+            value: '\$${paidAmount.toStringAsFixed(0)}',
             color: AppColors.success,
           ),
           _SummaryItem(
             label: 'Pending',
-            value: '₹${pendingAmount.toStringAsFixed(0)}',
+            value: '\$${pendingAmount.toStringAsFixed(0)}',
             color: AppColors.warning,
           ),
           _SummaryItem(
             label: 'Overdue',
-            value: '₹${overdueAmount.toStringAsFixed(0)}',
+            value: '\$${overdueAmount.toStringAsFixed(0)}',
             color: AppColors.error,
           ),
           if (totalFeeAmount > 0)
@@ -624,7 +624,7 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
                           vertical: AppDimensions.spacingS,
                         ),
                         decoration: BoxDecoration(
-                          color: AppColors.textSecondary.withOpacity(0.3),
+                          color: AppColors.textSecondary.withValues(alpha: 0.3),
                           borderRadius: BorderRadius.circular(AppDimensions.radiusS),
                         ),
                         child: const Text(
@@ -665,7 +665,7 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
                   )
                 else
                   Text(
-                    'Fee: ₹${studentFee.batchFeeAmount.toStringAsFixed(0)}',
+                    'Fee: \$${studentFee.batchFeeAmount.toStringAsFixed(0)}',
                     style: const TextStyle(
                       fontSize: 12,
                       color: AppColors.textSecondary,
@@ -673,8 +673,8 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
                   ),
                 Text(
                   hasFee && fee != null
-                      ? '₹${fee.pendingAmount.toStringAsFixed(0)} pending'
-                      : '₹${studentFee.batchFeeAmount.toStringAsFixed(0)} pending',
+                      ? '\$${fee.pendingAmount.toStringAsFixed(0)} pending'
+                      : '\$${studentFee.batchFeeAmount.toStringAsFixed(0)} pending',
                   style: TextStyle(
                     fontSize: 12,
                     color: (hasFee && fee != null && fee.pendingAmount > 0) || 
@@ -783,7 +783,7 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
                         ),
                       ),
                       Text(
-                        '₹${fee.amount.toStringAsFixed(2)}',
+                        '\$${fee.amount.toStringAsFixed(2)}',
                         style: const TextStyle(
                           color: AppColors.textPrimary,
                           fontSize: 18,
@@ -804,7 +804,7 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
                         ),
                       ),
                       Text(
-                        '₹${fee.totalPaid.toStringAsFixed(2)}',
+                        '\$${fee.totalPaid.toStringAsFixed(2)}',
                         style: const TextStyle(
                           color: AppColors.success,
                           fontSize: 18,
@@ -825,7 +825,7 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
                         ),
                       ),
                       Text(
-                        '₹${fee.pendingAmount.toStringAsFixed(2)}',
+                        '\$${fee.pendingAmount.toStringAsFixed(2)}',
                         style: TextStyle(
                           color: fee.pendingAmount > 0 ? AppColors.error : AppColors.success,
                           fontSize: 20,
@@ -958,7 +958,7 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    '₹${payment.amount.toStringAsFixed(2)}',
+                                    '\$${payment.amount.toStringAsFixed(2)}',
                                     style: const TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.w600,

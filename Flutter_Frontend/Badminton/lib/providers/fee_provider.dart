@@ -174,10 +174,10 @@ Future<Map<int, List<StudentWithBatchFee>>> studentsWithBatchFees(
       // Get students enrolled in this batch
       final students = await batchService.getBatchStudents(batch.id);
       
-      // Parse batch fee amount (handle string format like "5000" or "₹5000")
+      // Parse batch fee amount (handle string format like "5000" or "$5000")
       double batchFeeAmount = 0.0;
       try {
-        final feeString = batch.fees.replaceAll(RegExp(r'[₹,\s]'), '');
+        final feeString = batch.fees.replaceAll(RegExp(r'[\$,\s]'), '');
         batchFeeAmount = double.parse(feeString);
       } catch (e) {
         // If parsing fails, default to 0
