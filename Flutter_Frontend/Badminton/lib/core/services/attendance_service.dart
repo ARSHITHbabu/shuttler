@@ -146,6 +146,25 @@ class AttendanceService {
     }
   }
 
+  /// Get coach attendance records by coach ID
+  Future<List<CoachAttendance>> getCoachAttendanceByCoachId(int coachId) async {
+    try {
+      // Backend endpoint: /coach-attendance/coach/{coach_id}
+      final response = await _apiService.get(
+        '/coach-attendance/coach/$coachId',
+      );
+
+      if (response.data is List) {
+        return (response.data as List)
+            .map((json) => CoachAttendance.fromJson(json as Map<String, dynamic>))
+            .toList();
+      }
+      return [];
+    } catch (e) {
+      throw Exception('Failed to fetch coach attendance: ${_apiService.getErrorMessage(e)}');
+    }
+  }
+
   /// Mark coach attendance
   Future<CoachAttendance> markCoachAttendance({
     required int coachId,

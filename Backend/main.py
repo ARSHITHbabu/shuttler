@@ -455,26 +455,106 @@ def migrate_database_schema(engine):
         # Migrate announcements table - add creator_type and make created_by nullable
         if 'announcements' in tables:
             check_and_add_column(engine, 'announcements', 'creator_type', 'VARCHAR(20)', nullable=True, default_value="'coach'")
-            # Make created_by nullable (remove NOT NULL constraint if exists)
+            # Make created_by nullable and remove foreign key constraint (since it can reference either coaches or owners)
             try:
                 with engine.begin() as conn:
                     # Check if created_by is NOT NULL and make it nullable
                     col_info = next((col for col in inspector.get_columns('announcements') if col['name'] == 'created_by'), None)
                     if col_info and not col_info.get('nullable', True):
                         conn.execute(text("ALTER TABLE announcements ALTER COLUMN created_by DROP NOT NULL"))
+                    
+                    # Drop foreign key constraint if it exists (since created_by can reference either coaches or owners)
+                    # Check for common foreign key constraint names
+                    fk_constraints = [
+                        'announcements_created_by_fkey',
+                        'announcements_created_by_coaches_id_fkey',
+                        'fk_announcements_created_by'
+                    ]
+                    
+                    for fk_name in fk_constraints:
+                        fk_check = text(f"""
+                            SELECT COUNT(*) 
+                            FROM information_schema.table_constraints 
+                            WHERE table_name = 'announcements' 
+                            AND constraint_name = '{fk_name}'
+                        """)
+                        result = conn.execute(fk_check).scalar()
+                        if result > 0:
+                            # Drop the foreign key constraint
+                            drop_fk_sql = text(f"ALTER TABLE announcements DROP CONSTRAINT IF EXISTS {fk_name}")
+                            conn.execute(drop_fk_sql)
+                            print(f"✅ Dropped foreign key constraint {fk_name} from announcements.created_by")
+                            break
+                    
+                    # Also try to find and drop any foreign key constraint on created_by column
+                    # This handles cases where constraint name might be different
+                    fk_check_all = text("""
+                        SELECT tc.constraint_name 
+                        FROM information_schema.table_constraints tc
+                        JOIN information_schema.key_column_usage kcu 
+                            ON tc.constraint_name = kcu.constraint_name
+                        WHERE tc.table_name = 'announcements' 
+                        AND kcu.column_name = 'created_by'
+                        AND tc.constraint_type = 'FOREIGN KEY'
+                    """)
+                    fk_results = conn.execute(fk_check_all).fetchall()
+                    for fk_row in fk_results:
+                        fk_name = fk_row[0]
+                        drop_fk_sql = text(f"ALTER TABLE announcements DROP CONSTRAINT IF EXISTS {fk_name}")
+                        conn.execute(drop_fk_sql)
+                        print(f"✅ Dropped foreign key constraint {fk_name} from announcements.created_by")
             except Exception as alter_error:
                 print(f"⚠️  Warning: Could not alter announcements.created_by constraint: {alter_error}")
         
         # Migrate calendar_events table - add creator_type and make created_by nullable
         if 'calendar_events' in tables:
             check_and_add_column(engine, 'calendar_events', 'creator_type', 'VARCHAR(20)', nullable=True, default_value="'coach'")
-            # Make created_by nullable (remove NOT NULL constraint if exists)
+            # Make created_by nullable and remove foreign key constraint (since it can reference either coaches or owners)
             try:
                 with engine.begin() as conn:
                     # Check if created_by is NOT NULL and make it nullable
                     col_info = next((col for col in inspector.get_columns('calendar_events') if col['name'] == 'created_by'), None)
                     if col_info and not col_info.get('nullable', True):
                         conn.execute(text("ALTER TABLE calendar_events ALTER COLUMN created_by DROP NOT NULL"))
+                    
+                    # Drop foreign key constraint if it exists (since created_by can reference either coaches or owners)
+                    fk_constraints = [
+                        'calendar_events_created_by_fkey',
+                        'calendar_events_created_by_coaches_id_fkey',
+                        'fk_calendar_events_created_by'
+                    ]
+                    
+                    for fk_name in fk_constraints:
+                        fk_check = text(f"""
+                            SELECT COUNT(*) 
+                            FROM information_schema.table_constraints 
+                            WHERE table_name = 'calendar_events' 
+                            AND constraint_name = '{fk_name}'
+                        """)
+                        result = conn.execute(fk_check).scalar()
+                        if result > 0:
+                            # Drop the foreign key constraint
+                            drop_fk_sql = text(f"ALTER TABLE calendar_events DROP CONSTRAINT IF EXISTS {fk_name}")
+                            conn.execute(drop_fk_sql)
+                            print(f"✅ Dropped foreign key constraint {fk_name} from calendar_events.created_by")
+                            break
+                    
+                    # Also try to find and drop any foreign key constraint on created_by column
+                    fk_check_all = text("""
+                        SELECT tc.constraint_name 
+                        FROM information_schema.table_constraints tc
+                        JOIN information_schema.key_column_usage kcu 
+                            ON tc.constraint_name = kcu.constraint_name
+                        WHERE tc.table_name = 'calendar_events' 
+                        AND kcu.column_name = 'created_by'
+                        AND tc.constraint_type = 'FOREIGN KEY'
+                    """)
+                    fk_results = conn.execute(fk_check_all).fetchall()
+                    for fk_row in fk_results:
+                        fk_name = fk_row[0]
+                        drop_fk_sql = text(f"ALTER TABLE calendar_events DROP CONSTRAINT IF EXISTS {fk_name}")
+                        conn.execute(drop_fk_sql)
+                        print(f"✅ Dropped foreign key constraint {fk_name} from calendar_events.created_by")
             except Exception as alter_error:
                 print(f"⚠️  Warning: Could not alter calendar_events.created_by constraint: {alter_error}")
         
@@ -4602,6 +4682,21 @@ def get_coach_analytics(coach_id: int):
 
 # ==================== Announcement Endpoints ====================
 
+def _db_announcement_to_pydantic(db_announcement: AnnouncementDB) -> Announcement:
+    """Convert database announcement to Pydantic model with proper datetime serialization"""
+    return Announcement(
+        id=db_announcement.id,
+        title=db_announcement.title,
+        message=db_announcement.message,
+        target_audience=db_announcement.target_audience,
+        priority=db_announcement.priority,
+        created_by=db_announcement.created_by,
+        creator_type=db_announcement.creator_type,
+        created_at=db_announcement.created_at.isoformat() if hasattr(db_announcement.created_at, 'isoformat') else str(db_announcement.created_at),
+        scheduled_at=db_announcement.scheduled_at.isoformat() if db_announcement.scheduled_at and hasattr(db_announcement.scheduled_at, 'isoformat') else (str(db_announcement.scheduled_at) if db_announcement.scheduled_at else None),
+        is_sent=db_announcement.is_sent
+    )
+
 @app.post("/api/announcements/", response_model=Announcement)
 def create_announcement(announcement: AnnouncementCreate):
     """Create a new announcement"""
@@ -4623,11 +4718,20 @@ def create_announcement(announcement: AnnouncementCreate):
                     detail=f"Invalid created_by user ID. Coach with ID {announcement.created_by} does not exist."
                 )
         
-        db_announcement = AnnouncementDB(**announcement.dict())
+        # Convert scheduled_at string to datetime if provided
+        announcement_data = announcement.model_dump()
+        if announcement_data.get('scheduled_at'):
+            try:
+                # Parse ISO format datetime string
+                announcement_data['scheduled_at'] = datetime.fromisoformat(announcement_data['scheduled_at'].replace('Z', '+00:00'))
+            except (ValueError, AttributeError) as e:
+                raise HTTPException(status_code=400, detail=f"Invalid scheduled_at format: {str(e)}")
+        
+        db_announcement = AnnouncementDB(**announcement_data)
         db.add(db_announcement)
         db.commit()
         db.refresh(db_announcement)
-        return db_announcement
+        return _db_announcement_to_pydantic(db_announcement)
     except HTTPException:
         db.rollback()
         raise
@@ -4654,7 +4758,7 @@ def get_announcements(
         if is_sent is not None:
             query = query.filter(AnnouncementDB.is_sent == is_sent)
         announcements = query.order_by(AnnouncementDB.created_at.desc()).all()
-        return announcements
+        return [_db_announcement_to_pydantic(ann) for ann in announcements]
     finally:
         db.close()
 
@@ -4666,7 +4770,7 @@ def get_announcement(announcement_id: int):
         announcement = db.query(AnnouncementDB).filter(AnnouncementDB.id == announcement_id).first()
         if not announcement:
             raise HTTPException(status_code=404, detail="Announcement not found")
-        return announcement
+        return _db_announcement_to_pydantic(announcement)
     finally:
         db.close()
 
@@ -4679,12 +4783,21 @@ def update_announcement(announcement_id: int, announcement: AnnouncementUpdate):
         if not db_announcement:
             raise HTTPException(status_code=404, detail="Announcement not found")
 
-        for key, value in announcement.dict(exclude_unset=True).items():
+        update_data = announcement.model_dump(exclude_unset=True)
+        # Convert scheduled_at string to datetime if provided
+        if 'scheduled_at' in update_data and update_data['scheduled_at'] is not None:
+            try:
+                # Parse ISO format datetime string
+                update_data['scheduled_at'] = datetime.fromisoformat(update_data['scheduled_at'].replace('Z', '+00:00'))
+            except (ValueError, AttributeError) as e:
+                raise HTTPException(status_code=400, detail=f"Invalid scheduled_at format: {str(e)}")
+        
+        for key, value in update_data.items():
             setattr(db_announcement, key, value)
 
         db.commit()
         db.refresh(db_announcement)
-        return db_announcement
+        return _db_announcement_to_pydantic(db_announcement)
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))

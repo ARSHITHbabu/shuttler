@@ -307,6 +307,149 @@ class _CoachAttendanceProviderElement
   DateTime get date => (origin as CoachAttendanceProvider).date;
 }
 
+String _$coachAttendanceByCoachIdHash() =>
+    r'224c2160148d66ed5c1b0dc300050e45627fdb17';
+
+/// Provider for coach attendance by coach ID
+///
+/// Copied from [coachAttendanceByCoachId].
+@ProviderFor(coachAttendanceByCoachId)
+const coachAttendanceByCoachIdProvider = CoachAttendanceByCoachIdFamily();
+
+/// Provider for coach attendance by coach ID
+///
+/// Copied from [coachAttendanceByCoachId].
+class CoachAttendanceByCoachIdFamily
+    extends Family<AsyncValue<List<CoachAttendance>>> {
+  /// Provider for coach attendance by coach ID
+  ///
+  /// Copied from [coachAttendanceByCoachId].
+  const CoachAttendanceByCoachIdFamily();
+
+  /// Provider for coach attendance by coach ID
+  ///
+  /// Copied from [coachAttendanceByCoachId].
+  CoachAttendanceByCoachIdProvider call(int coachId) {
+    return CoachAttendanceByCoachIdProvider(coachId);
+  }
+
+  @override
+  CoachAttendanceByCoachIdProvider getProviderOverride(
+    covariant CoachAttendanceByCoachIdProvider provider,
+  ) {
+    return call(provider.coachId);
+  }
+
+  static const Iterable<ProviderOrFamily>? _dependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get dependencies => _dependencies;
+
+  static const Iterable<ProviderOrFamily>? _allTransitiveDependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get allTransitiveDependencies =>
+      _allTransitiveDependencies;
+
+  @override
+  String? get name => r'coachAttendanceByCoachIdProvider';
+}
+
+/// Provider for coach attendance by coach ID
+///
+/// Copied from [coachAttendanceByCoachId].
+class CoachAttendanceByCoachIdProvider
+    extends AutoDisposeFutureProvider<List<CoachAttendance>> {
+  /// Provider for coach attendance by coach ID
+  ///
+  /// Copied from [coachAttendanceByCoachId].
+  CoachAttendanceByCoachIdProvider(int coachId)
+    : this._internal(
+        (ref) => coachAttendanceByCoachId(
+          ref as CoachAttendanceByCoachIdRef,
+          coachId,
+        ),
+        from: coachAttendanceByCoachIdProvider,
+        name: r'coachAttendanceByCoachIdProvider',
+        debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+            ? null
+            : _$coachAttendanceByCoachIdHash,
+        dependencies: CoachAttendanceByCoachIdFamily._dependencies,
+        allTransitiveDependencies:
+            CoachAttendanceByCoachIdFamily._allTransitiveDependencies,
+        coachId: coachId,
+      );
+
+  CoachAttendanceByCoachIdProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.coachId,
+  }) : super.internal();
+
+  final int coachId;
+
+  @override
+  Override overrideWith(
+    FutureOr<List<CoachAttendance>> Function(
+      CoachAttendanceByCoachIdRef provider,
+    )
+    create,
+  ) {
+    return ProviderOverride(
+      origin: this,
+      override: CoachAttendanceByCoachIdProvider._internal(
+        (ref) => create(ref as CoachAttendanceByCoachIdRef),
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        coachId: coachId,
+      ),
+    );
+  }
+
+  @override
+  AutoDisposeFutureProviderElement<List<CoachAttendance>> createElement() {
+    return _CoachAttendanceByCoachIdProviderElement(this);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is CoachAttendanceByCoachIdProvider &&
+        other.coachId == coachId;
+  }
+
+  @override
+  int get hashCode {
+    var hash = _SystemHash.combine(0, runtimeType.hashCode);
+    hash = _SystemHash.combine(hash, coachId.hashCode);
+
+    return _SystemHash.finish(hash);
+  }
+}
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+mixin CoachAttendanceByCoachIdRef
+    on AutoDisposeFutureProviderRef<List<CoachAttendance>> {
+  /// The parameter `coachId` of this provider.
+  int get coachId;
+}
+
+class _CoachAttendanceByCoachIdProviderElement
+    extends AutoDisposeFutureProviderElement<List<CoachAttendance>>
+    with CoachAttendanceByCoachIdRef {
+  _CoachAttendanceByCoachIdProviderElement(super.provider);
+
+  @override
+  int get coachId => (origin as CoachAttendanceByCoachIdProvider).coachId;
+}
+
 String _$batchStudentsForAttendanceHash() =>
     r'456546e7482fe194bc5ade91fe0627cc19b7a326';
 

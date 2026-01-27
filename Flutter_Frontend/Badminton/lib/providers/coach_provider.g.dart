@@ -718,6 +718,138 @@ class _CoachScheduleProviderElement
   int get coachId => (origin as CoachScheduleProvider).coachId;
 }
 
+String _$coachStudentsHash() => r'556966ad5021ec0814c5501985122ecaa785b63a';
+
+/// Provider for coach's students (students in all batches assigned to coach)
+///
+/// Copied from [coachStudents].
+@ProviderFor(coachStudents)
+const coachStudentsProvider = CoachStudentsFamily();
+
+/// Provider for coach's students (students in all batches assigned to coach)
+///
+/// Copied from [coachStudents].
+class CoachStudentsFamily extends Family<AsyncValue<List<Student>>> {
+  /// Provider for coach's students (students in all batches assigned to coach)
+  ///
+  /// Copied from [coachStudents].
+  const CoachStudentsFamily();
+
+  /// Provider for coach's students (students in all batches assigned to coach)
+  ///
+  /// Copied from [coachStudents].
+  CoachStudentsProvider call(int coachId) {
+    return CoachStudentsProvider(coachId);
+  }
+
+  @override
+  CoachStudentsProvider getProviderOverride(
+    covariant CoachStudentsProvider provider,
+  ) {
+    return call(provider.coachId);
+  }
+
+  static const Iterable<ProviderOrFamily>? _dependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get dependencies => _dependencies;
+
+  static const Iterable<ProviderOrFamily>? _allTransitiveDependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get allTransitiveDependencies =>
+      _allTransitiveDependencies;
+
+  @override
+  String? get name => r'coachStudentsProvider';
+}
+
+/// Provider for coach's students (students in all batches assigned to coach)
+///
+/// Copied from [coachStudents].
+class CoachStudentsProvider extends AutoDisposeFutureProvider<List<Student>> {
+  /// Provider for coach's students (students in all batches assigned to coach)
+  ///
+  /// Copied from [coachStudents].
+  CoachStudentsProvider(int coachId)
+    : this._internal(
+        (ref) => coachStudents(ref as CoachStudentsRef, coachId),
+        from: coachStudentsProvider,
+        name: r'coachStudentsProvider',
+        debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+            ? null
+            : _$coachStudentsHash,
+        dependencies: CoachStudentsFamily._dependencies,
+        allTransitiveDependencies:
+            CoachStudentsFamily._allTransitiveDependencies,
+        coachId: coachId,
+      );
+
+  CoachStudentsProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.coachId,
+  }) : super.internal();
+
+  final int coachId;
+
+  @override
+  Override overrideWith(
+    FutureOr<List<Student>> Function(CoachStudentsRef provider) create,
+  ) {
+    return ProviderOverride(
+      origin: this,
+      override: CoachStudentsProvider._internal(
+        (ref) => create(ref as CoachStudentsRef),
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        coachId: coachId,
+      ),
+    );
+  }
+
+  @override
+  AutoDisposeFutureProviderElement<List<Student>> createElement() {
+    return _CoachStudentsProviderElement(this);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is CoachStudentsProvider && other.coachId == coachId;
+  }
+
+  @override
+  int get hashCode {
+    var hash = _SystemHash.combine(0, runtimeType.hashCode);
+    hash = _SystemHash.combine(hash, coachId.hashCode);
+
+    return _SystemHash.finish(hash);
+  }
+}
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+mixin CoachStudentsRef on AutoDisposeFutureProviderRef<List<Student>> {
+  /// The parameter `coachId` of this provider.
+  int get coachId;
+}
+
+class _CoachStudentsProviderElement
+    extends AutoDisposeFutureProviderElement<List<Student>>
+    with CoachStudentsRef {
+  _CoachStudentsProviderElement(super.provider);
+
+  @override
+  int get coachId => (origin as CoachStudentsProvider).coachId;
+}
+
 String _$coachListHash() => r'5451a14ed89475defccca77a2a7065a15583b4e7';
 
 /// Provider for coach list state

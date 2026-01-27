@@ -28,6 +28,16 @@ Future<List<CoachAttendance>> coachAttendance(
   return attendanceService.getCoachAttendance(date: date);
 }
 
+/// Provider for coach attendance by coach ID
+@riverpod
+Future<List<CoachAttendance>> coachAttendanceByCoachId(
+  CoachAttendanceByCoachIdRef ref,
+  int coachId,
+) async {
+  final attendanceService = ref.watch(attendanceServiceProvider);
+  return attendanceService.getCoachAttendanceByCoachId(coachId);
+}
+
 /// Provider for students in a batch (for attendance marking)
 @riverpod
 Future<List<Student>> batchStudentsForAttendance(
