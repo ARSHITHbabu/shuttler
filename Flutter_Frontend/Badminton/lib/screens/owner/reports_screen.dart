@@ -1,5 +1,7 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -10,6 +12,10 @@ import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../providers/service_providers.dart';
+
+// Conditional imports for web file download
+import '../../utils/file_download_helper_stub.dart'
+    if (dart.library.html) '../../utils/file_download_helper_web.dart';
 
 /// Reports Screen - Generate and view reports
 /// Matches React reference: ReportsScreen.tsx
@@ -624,16 +630,16 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           ),
           _SummaryRow(
             label: 'Total Amount',
-            value: '₹${_formatCurrency(data['totalAmount'] as double)}',
+            value: '\$${_formatCurrency(data['totalAmount'] as double)}',
           ),
           _SummaryRow(
             label: 'Paid Amount',
-            value: '₹${_formatCurrency(data['paidAmount'] as double)}',
+            value: '\$${_formatCurrency(data['paidAmount'] as double)}',
             color: AppColors.success,
           ),
           _SummaryRow(
             label: 'Pending Amount',
-            value: '₹${_formatCurrency(data['pendingAmount'] as double)}',
+            value: '\$${_formatCurrency(data['pendingAmount'] as double)}',
             color: AppColors.error,
           ),
         ],
@@ -703,7 +709,14 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           final amount = fee.amount?.toString() ?? '0';
           final status = fee.status?.toString() ?? 'N/A';
           final dueDate = fee.dueDate?.toString() ?? 'N/A';
-          final paidDate = fee.paidDate?.toString() ?? 'N/A';
+          // Get paidDate from first payment if available
+          String paidDate = 'N/A';
+          if (fee.payments != null && fee.payments is List && (fee.payments as List).isNotEmpty) {
+            final firstPayment = (fee.payments as List).first;
+            if (firstPayment.paidDate != null) {
+              paidDate = firstPayment.paidDate.toString();
+            }
+          }
           csvContent += '$studentName,$studentId,$amount,$status,$dueDate,$paidDate\n';
         }
         csvContent += '\nSummary\n';
@@ -714,16 +727,31 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       }
       
       // Save CSV to file
-      final directory = await getApplicationDocumentsDirectory();
       final fileName = 'report_${DateTime.now().millisecondsSinceEpoch}.csv';
-      final file = File('${directory.path}/$fileName');
-      await file.writeAsString(csvContent);
+      
+      if (kIsWeb) {
+        // Web: Download file using browser download
+        final bytes = Uint8List.fromList(csvContent.codeUnits);
+        downloadFileWeb(bytes, fileName, 'text/csv');
+        
+        if (mounted) {
+          SuccessSnackbar.show(
+            context,
+            'CSV exported successfully',
+          );
+        }
+      } else {
+        // Mobile/Desktop: Save to file system
+        final directory = await getApplicationDocumentsDirectory();
+        final file = File('${directory.path}/$fileName');
+        await file.writeAsString(csvContent);
 
-      if (mounted) {
-        SuccessSnackbar.show(
-          context,
-          'CSV exported successfully to: ${file.path}',
-        );
+        if (mounted) {
+          SuccessSnackbar.show(
+            context,
+            'CSV exported successfully to: ${file.path}',
+          );
+        }
       }
       
     } catch (e) {
@@ -903,7 +931,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         ),
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('₹${data['totalAmount']}'),
+                          child: pw.Text('\$ ${data['totalAmount']}'),
                         ),
                       ],
                     ),
@@ -915,7 +943,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         ),
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('₹${data['paidAmount']}'),
+                          child: pw.Text('\$ ${data['paidAmount']}'),
                         ),
                       ],
                     ),
@@ -927,7 +955,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         ),
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('₹${data['pendingAmount']}'),
+                          child: pw.Text('\$ ${data['pendingAmount']}'),
                         ),
                       ],
                     ),
@@ -939,7 +967,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         ),
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('₹${data['overdueAmount']}'),
+                          child: pw.Text('\$ ${data['overdueAmount'] ?? 0}'),
                         ),
                       ],
                     ),
@@ -999,16 +1027,30 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
       // Save PDF to file
       final bytes = await pdf.save();
-      final directory = await getApplicationDocumentsDirectory();
       final fileName = 'report_${DateTime.now().millisecondsSinceEpoch}.pdf';
-      final file = File('${directory.path}/$fileName');
-      await file.writeAsBytes(bytes);
+      
+      if (kIsWeb) {
+        // Web: Download file using browser download
+        downloadFileWeb(bytes, fileName, 'application/pdf');
+        
+        if (mounted) {
+          SuccessSnackbar.show(
+            context,
+            'PDF exported successfully',
+          );
+        }
+      } else {
+        // Mobile/Desktop: Save to file system
+        final directory = await getApplicationDocumentsDirectory();
+        final file = File('${directory.path}/$fileName');
+        await file.writeAsBytes(bytes);
 
-      if (mounted) {
-        SuccessSnackbar.show(
-          context,
-          'PDF exported successfully to: ${file.path}',
-        );
+        if (mounted) {
+          SuccessSnackbar.show(
+            context,
+            'PDF exported successfully to: ${file.path}',
+          );
+        }
       }
     } catch (e) {
       if (mounted) {

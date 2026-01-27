@@ -174,7 +174,7 @@ class _EditFeeDialogState extends ConsumerState<EditFeeDialog> {
                 // Fee Amount
                 CustomTextField(
                   controller: _totalFeeController,
-                  label: 'Fee Amount (₹)',
+                  label: 'Fee Amount (\$)',
                   hint: 'Enter fee amount',
                   keyboardType: TextInputType.numberWithOptions(decimal: true),
                   validator: (value) {

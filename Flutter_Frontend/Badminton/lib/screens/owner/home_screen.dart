@@ -261,7 +261,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                   _StatCard(
                     icon: Icons.attach_money_outlined,
-                    value: '₹${_formatCurrency(stats.pendingFees)}',
+                    value: '\$${_formatCurrency(stats.pendingFees)}',
                     label: 'Pending Fees',
                     onTap: () {
                       Navigator.of(context).push(

@@ -83,7 +83,7 @@ class _AddFeeDialogState extends ConsumerState<AddFeeDialog> {
           // Auto-fill fee amount from batch if not already set
           if (widget.initialFeeAmount == null) {
             try {
-              final feeString = initialBatch.fees.replaceAll(RegExp(r'[₹,\s]'), '');
+              final feeString = initialBatch.fees.replaceAll(RegExp(r'[\$,\s]'), '');
               final batchFee = double.parse(feeString);
               _totalFeeController.text = batchFee.toStringAsFixed(0);
             } catch (e) {
@@ -239,7 +239,7 @@ class _AddFeeDialogState extends ConsumerState<AddFeeDialog> {
                           _selectedBatch = _batches.firstWhere((b) => b.id == value);
                           // Auto-fill fee amount from batch
                           try {
-                            final feeString = _selectedBatch!.fees.replaceAll(RegExp(r'[₹,\s]'), '');
+                            final feeString = _selectedBatch!.fees.replaceAll(RegExp(r'[\$,\s]'), '');
                             final batchFee = double.parse(feeString);
                             _totalFeeController.text = batchFee.toStringAsFixed(0);
                           } catch (e) {
@@ -343,7 +343,7 @@ class _AddFeeDialogState extends ConsumerState<AddFeeDialog> {
                         Row(
                           children: [
                             const Text(
-                              '4. Total Fee (₹)',
+                              '4. Total Fee (\$)',
                               style: TextStyle(
                                 color: AppColors.textSecondary,
                                 fontSize: 14,
@@ -392,7 +392,7 @@ class _AddFeeDialogState extends ConsumerState<AddFeeDialog> {
                 else
                   CustomTextField(
                     controller: _totalFeeController,
-                    label: '4. Total Fee (₹)',
+                    label: '4. Total Fee (\$)',
                     hint: 'Enter total fee amount',
                     keyboardType: TextInputType.numberWithOptions(decimal: true),
                     validator: (value) {

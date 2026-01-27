@@ -3,6 +3,7 @@ import '../models/batch.dart';
 import '../models/schedule.dart';
 import '../models/announcement.dart';
 import '../models/coach.dart';
+import '../models/student.dart';
 import 'service_providers.dart';
 
 part 'coach_provider.g.dart';
@@ -230,6 +231,32 @@ class CoachList extends _$CoachList {
       throw Exception('Failed to delete coach: $e');
     }
   }
+}
+
+/// Provider for coach's students (students in all batches assigned to coach)
+@riverpod
+Future<List<Student>> coachStudents(CoachStudentsRef ref, int coachId) async {
+  final batchService = ref.watch(batchServiceProvider);
+  
+  // Get coach's assigned batches
+  final batches = await batchService.getBatchesByCoachId(coachId);
+  
+  // Get all students from all batches
+  Set<Student> uniqueStudents = {};
+  for (var batch in batches) {
+    try {
+      final students = await batchService.getBatchStudents(batch.id);
+      uniqueStudents.addAll(students);
+    } catch (e) {
+      // Skip if error fetching students for this batch
+    }
+  }
+  
+  // Convert to list and sort by name
+  final studentsList = uniqueStudents.toList();
+  studentsList.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  
+  return studentsList;
 }
 
 /// Coach statistics model

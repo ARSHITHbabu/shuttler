@@ -8,12 +8,10 @@ import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
 import '../../models/fee.dart';
-import '../../models/student.dart';
 import '../../models/student_with_batch_fee.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/fee_provider.dart';
 import '../../providers/student_provider.dart';
-import '../../providers/batch_provider.dart';
 import '../../widgets/forms/add_payment_dialog.dart';
 import '../../widgets/forms/edit_fee_dialog.dart';
 import '../../models/fee_payment.dart';
@@ -228,10 +226,10 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
                             color: AppColors.textPrimary,
                           ),
                         ),
-                        if (batch.timeRange != null && batch.timeRange!.isNotEmpty) ...[
+                        if (batch.timeRange.isNotEmpty) ...[
                           const SizedBox(height: 4),
                           Text(
-                            batch.timeRange!,
+                            batch.timeRange,
                             style: const TextStyle(
                               fontSize: 12,
                               color: AppColors.textSecondary,
@@ -244,7 +242,7 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
                           children: [
                             if (batchPending > 0)
                               Text(
-                                '₹${batchPending.toStringAsFixed(0)} pending',
+                                '\$${batchPending.toStringAsFixed(0)} pending',
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: AppColors.warning,
@@ -252,7 +250,7 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
                               ),
                             if (batchPaid > 0)
                               Text(
-                                '₹${batchPaid.toStringAsFixed(0)} paid',
+                                '\$${batchPaid.toStringAsFixed(0)} paid',
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: AppColors.success,
@@ -260,7 +258,7 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
                               ),
                             if (batchOverdue > 0)
                               Text(
-                                '₹${batchOverdue.toStringAsFixed(0)} overdue',
+                                '\$${batchOverdue.toStringAsFixed(0)} overdue',
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: AppColors.error,
@@ -295,11 +293,11 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.accent.withOpacity(0.2),
+                      color: AppColors.accent.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(AppDimensions.radiusS),
                     ),
                     child: Text(
-                      '₹${batchFeeAmount.toStringAsFixed(0)}/student',
+                      '\$${batchFeeAmount.toStringAsFixed(0)}/student',
                       style: const TextStyle(
                         fontSize: 12,
                         color: AppColors.accent,
@@ -348,7 +346,7 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
 
         final batch = studentFees.first.batch;
         final batchName = batch.batchName;
-        final batchTimeRange = batch.timeRange ?? '';
+        final batchTimeRange = batch.timeRange;
 
         // Filter students based on selected filter
         List<StudentWithBatchFee> filteredStudents = studentFees;
@@ -543,22 +541,22 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
           ),
           _SummaryItem(
             label: 'Total Fee',
-            value: '₹${totalFeeAmount.toStringAsFixed(0)}',
+            value: '\$${totalFeeAmount.toStringAsFixed(0)}',
             color: AppColors.textPrimary,
           ),
           _SummaryItem(
             label: 'Paid',
-            value: '₹${paidAmount.toStringAsFixed(0)}',
+            value: '\$${paidAmount.toStringAsFixed(0)}',
             color: AppColors.success,
           ),
           _SummaryItem(
             label: 'Pending',
-            value: '₹${pendingAmount.toStringAsFixed(0)}',
+            value: '\$${pendingAmount.toStringAsFixed(0)}',
             color: AppColors.warning,
           ),
           _SummaryItem(
             label: 'Overdue',
-            value: '₹${overdueAmount.toStringAsFixed(0)}',
+            value: '\$${overdueAmount.toStringAsFixed(0)}',
             color: AppColors.error,
           ),
           if (totalFeeAmount > 0)
@@ -636,7 +634,7 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
                           vertical: AppDimensions.spacingS,
                         ),
                         decoration: BoxDecoration(
-                          color: AppColors.textSecondary.withOpacity(0.3),
+                          color: AppColors.textSecondary.withValues(alpha: 0.3),
                           borderRadius: BorderRadius.circular(AppDimensions.radiusS),
                         ),
                         child: const Text(
@@ -707,7 +705,7 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
                   )
                 else
                   Text(
-                    'Fee: ₹${studentFee.batchFeeAmount.toStringAsFixed(0)}',
+                    'Fee: \$${studentFee.batchFeeAmount.toStringAsFixed(0)}',
                     style: const TextStyle(
                       fontSize: 12,
                       color: AppColors.textSecondary,
@@ -715,8 +713,8 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
                   ),
                 Text(
                   hasFee && fee != null
-                      ? '₹${fee.pendingAmount.toStringAsFixed(0)} pending'
-                      : '₹${studentFee.batchFeeAmount.toStringAsFixed(0)} pending',
+                      ? '\$${fee.pendingAmount.toStringAsFixed(0)} pending'
+                      : '\$${studentFee.batchFeeAmount.toStringAsFixed(0)} pending',
                   style: TextStyle(
                     fontSize: 12,
                     color: (hasFee && fee != null && fee.pendingAmount > 0) || 
@@ -931,7 +929,7 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
                         ),
                       ),
                       Text(
-                        '₹${fee.amount.toStringAsFixed(2)}',
+                        '\$${fee.amount.toStringAsFixed(2)}',
                         style: const TextStyle(
                           color: AppColors.textPrimary,
                           fontSize: 18,
@@ -952,7 +950,7 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
                         ),
                       ),
                       Text(
-                        '₹${fee.totalPaid.toStringAsFixed(2)}',
+                        '\$${fee.totalPaid.toStringAsFixed(2)}',
                         style: const TextStyle(
                           color: AppColors.success,
                           fontSize: 18,
@@ -973,7 +971,7 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
                         ),
                       ),
                       Text(
-                        '₹${fee.pendingAmount.toStringAsFixed(2)}',
+                        '\$${fee.pendingAmount.toStringAsFixed(2)}',
                         style: TextStyle(
                           color: fee.pendingAmount > 0 ? AppColors.error : AppColors.success,
                           fontSize: 20,
@@ -1106,7 +1104,7 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    '₹${payment.amount.toStringAsFixed(2)}',
+                                    '\$${payment.amount.toStringAsFixed(2)}',
                                     style: const TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.w600,
@@ -1275,7 +1273,7 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
     ConfirmationDialog.show(
       context,
       'Delete Payment',
-      'Are you sure you want to delete this payment of ₹${payment.amount.toStringAsFixed(2)}?',
+      'Are you sure you want to delete this payment of \$${payment.amount.toStringAsFixed(2)}?',
       confirmText: 'Delete',
       cancelText: 'Cancel',
       icon: Icons.delete_outline,

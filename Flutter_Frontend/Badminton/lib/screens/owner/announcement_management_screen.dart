@@ -69,8 +69,26 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
       final authState = await ref.read(authProvider.future);
       
       int? createdBy;
+      String? creatorType;
       if (authState is Authenticated) {
         createdBy = authState.userId;
+        // Map userType to creator_type for backend
+        // userType can be "owner", "coach", or "student"
+        // creator_type should be "owner" or "coach"
+        if (authState.userType == 'owner') {
+          creatorType = 'owner';
+        } else if (authState.userType == 'coach') {
+          creatorType = 'coach';
+        }
+      }
+
+      // Validate required fields
+      if (createdBy == null || creatorType == null) {
+        if (mounted) {
+          SuccessSnackbar.showError(context, 'Unable to determine user information. Please try again.');
+        }
+        setState(() => _isLoading = false);
+        return;
       }
 
       final announcementData = {
@@ -79,6 +97,7 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
         'target_audience': _selectedTargetAudience,
         'priority': _selectedPriority,
         'created_by': createdBy,
+        'creator_type': creatorType,
         'scheduled_at': _scheduledAt?.toIso8601String(),
       };
 

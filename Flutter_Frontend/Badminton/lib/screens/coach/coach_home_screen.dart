@@ -10,6 +10,9 @@ import '../../providers/coach_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/schedule.dart';
 import '../../widgets/forms/add_student_dialog.dart';
+import 'coach_schedule_screen.dart';
+import 'coach_students_screen.dart';
+import 'coach_attendance_view_screen.dart';
 
 /// Coach Home Screen - Dashboard overview
 /// Shows coach's assigned batches, today's sessions, and quick stats
@@ -111,35 +114,35 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
                   childAspectRatio: 0.85,
                   children: [
                     _StatCard(
-                      icon: Icons.groups,
-                      value: stats.assignedBatches.toString(),
-                      label: 'Assigned Batches',
-                      onTap: null,
-                    ),
-                    _StatCard(
                       icon: Icons.people_outline,
                       value: stats.totalStudents.toString(),
                       label: 'Total Students',
-                      onTap: null,
-                    ),
-                    _StatCard(
-                      icon: Icons.calendar_today_outlined,
-                      value: stats.sessionsToday.toString(),
-                      label: 'Sessions Today',
-                      onTap: null,
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => const CoachStudentsScreen(),
+                          ),
+                        );
+                      },
                     ),
                     _StatCard(
                       icon: Icons.trending_up,
                       value: '${stats.attendanceRate.toStringAsFixed(0)}%',
                       label: 'Attendance Rate',
-                      onTap: null,
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => const CoachAttendanceViewScreen(),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),
               ),
               loading: () => const Padding(
                 padding: EdgeInsets.all(AppDimensions.paddingL),
-                child: GridSkeleton(itemCount: 4, crossAxisCount: 2),
+                child: GridSkeleton(itemCount: 2, crossAxisCount: 2),
               ),
               error: (error, stack) => Padding(
                 padding: const EdgeInsets.all(AppDimensions.paddingL),
@@ -338,7 +341,11 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
                           icon: Icons.calendar_today_outlined,
                           label: 'View Schedule',
                           onTap: () {
-                            // Navigate to schedule screen - will be in More menu
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => const CoachScheduleScreen(),
+                              ),
+                            );
                           },
                         ),
                       ),

@@ -252,9 +252,9 @@ class _BatchCard extends StatelessWidget {
             ),
             const SizedBox(height: AppDimensions.spacingS),
             _InfoRow(
-              icon: Icons.currency_rupee_outlined,
+              icon: Icons.attach_money,
               label: 'Fees',
-              value: '₹${batch.fees}',
+              value: '\$${batch.fees}',
             ),
             const SizedBox(height: AppDimensions.spacingM),
             SizedBox(

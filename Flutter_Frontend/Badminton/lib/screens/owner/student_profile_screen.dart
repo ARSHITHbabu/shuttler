@@ -301,7 +301,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        '₹${fee.amount.toStringAsFixed(2)}',
+                        '\$${fee.amount.toStringAsFixed(2)}',
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.w600,

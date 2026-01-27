@@ -427,9 +427,9 @@ class _StudentFeesScreenState extends ConsumerState<StudentFeesScreen> {
 
   String _formatCurrency(double amount) {
     if (amount >= 1000) {
-      return '\u20B9${(amount / 1000).toStringAsFixed(1)}K';
+      return '\$${(amount / 1000).toStringAsFixed(1)}K';
     }
-    return '\u20B9${amount.toStringAsFixed(0)}';
+    return '\$${amount.toStringAsFixed(0)}';
   }
 }
 
@@ -607,7 +607,7 @@ class _FeeRecordCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '\u20B9${amount.toStringAsFixed(0)}',
+                        '\$${amount.toStringAsFixed(0)}',
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
