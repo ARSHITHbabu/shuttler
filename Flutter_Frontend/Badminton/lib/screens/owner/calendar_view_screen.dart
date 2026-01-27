@@ -140,12 +140,30 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
         return;
       }
 
+      // Determine creator_type based on userType
+      String? creatorType;
+      if (authState.userType == 'owner') {
+        creatorType = 'owner';
+      } else if (authState.userType == 'coach') {
+        creatorType = 'coach';
+      }
+
+      // Validate creator_type
+      if (creatorType == null) {
+        setState(() => _isLoading = false);
+        if (mounted) {
+          SuccessSnackbar.showError(context, 'Unable to determine user type. Please try again.');
+        }
+        return;
+      }
+
       // Build event data and filter out null values
       final eventData = <String, dynamic>{
         'title': _titleController.text.trim(),
         'event_type': _selectedEventType,
         'date': _eventDate!.toIso8601String().split('T')[0],
         'created_by': userId, // Explicitly cast to int
+        'creator_type': creatorType, // Add creator_type for backend validation
       };
 
       // Only add description if it's not empty

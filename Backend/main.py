@@ -5017,12 +5017,15 @@ def update_calendar_event(event_id: int, event: CalendarEventUpdate):
             raise HTTPException(status_code=404, detail="Calendar event not found")
 
         # Handle date conversion if date is being updated
-        event_dict = event.dict(exclude_unset=True)
+        event_dict = event.model_dump(exclude_unset=True)
         if 'date' in event_dict and isinstance(event_dict['date'], str):
             event_dict['date'] = datetime.strptime(event_dict['date'], "%Y-%m-%d").date()
         
+        # Only update allowed fields (exclude created_by and creator_type as they shouldn't change)
+        allowed_fields = {'title', 'event_type', 'date', 'description'}
         for key, value in event_dict.items():
-            setattr(db_event, key, value)
+            if key in allowed_fields:
+                setattr(db_event, key, value)
 
         db.commit()
         db.refresh(db_event)
