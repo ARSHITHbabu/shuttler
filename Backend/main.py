@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, File, UploadFile
+from fastapi import FastAPI, HTTPException, File, UploadFile, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, Text, Date, DateTime, ForeignKey, JSON, func, and_
@@ -4638,13 +4638,21 @@ def create_announcement(announcement: AnnouncementCreate):
         db.close()
 
 @app.get("/api/announcements/", response_model=List[Announcement])
-def get_announcements(target_audience: Optional[str] = None):
-    """Get all announcements, optionally filtered by target audience"""
+def get_announcements(
+    target_audience: Optional[str] = Query(None, description="Filter by target audience"),
+    priority: Optional[str] = Query(None, description="Filter by priority"),
+    is_sent: Optional[bool] = Query(None, description="Filter by sent status")
+):
+    """Get all announcements, optionally filtered by target audience, priority, or is_sent"""
     db = SessionLocal()
     try:
         query = db.query(AnnouncementDB)
         if target_audience:
             query = query.filter(AnnouncementDB.target_audience.in_([target_audience, "all"]))
+        if priority:
+            query = query.filter(AnnouncementDB.priority == priority)
+        if is_sent is not None:
+            query = query.filter(AnnouncementDB.is_sent == is_sent)
         announcements = query.order_by(AnnouncementDB.created_at.desc()).all()
         return announcements
     finally:
