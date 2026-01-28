@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
@@ -106,6 +108,13 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                           _buildLatestPerformance(isDark, latestPerformance),
 
                           const SizedBox(height: AppDimensions.spacingL),
+
+                          // Progress Chart
+                          if (sortedRecords.length >= 2)
+                            _buildProgressChart(isDark, sortedRecords),
+
+                          if (sortedRecords.length >= 2)
+                            const SizedBox(height: AppDimensions.spacingL),
 
                           // Skill Breakdown
                           _buildSkillBreakdown(isDark, latestPerformance),
@@ -323,6 +332,143 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
     } catch (e) {
       return dateStr;
     }
+  }
+
+  Widget _buildProgressChart(bool isDark, List<Performance> performanceRecords) {
+    // Sort by date ascending for chart
+    final sortedHistory = List<Performance>.from(performanceRecords)
+      ..sort((a, b) => a.date.compareTo(b.date));
+
+    // Prepare data for chart - average rating over time
+    final spots = sortedHistory.asMap().entries.map((entry) {
+      return FlSpot(entry.key.toDouble(), entry.value.averageRating);
+    }).toList();
+
+    final textColor = isDark ? AppColors.textSecondary : AppColorsLight.textSecondary;
+    final accentColor = isDark ? AppColors.accent : AppColorsLight.accent;
+    final bgColor = isDark ? AppColors.background : AppColorsLight.background;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+      child: NeumorphicContainer(
+        padding: const EdgeInsets.all(AppDimensions.paddingM),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Performance Progress',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+              ),
+            ),
+            const SizedBox(height: AppDimensions.spacingM),
+            SizedBox(
+              height: 200,
+              child: LineChart(
+                LineChartData(
+                  gridData: FlGridData(
+                    show: true,
+                    drawVerticalLine: false,
+                    horizontalInterval: 1,
+                    getDrawingHorizontalLine: (value) {
+                      return FlLine(
+                        color: textColor.withOpacity(0.1),
+                        strokeWidth: 1,
+                      );
+                    },
+                  ),
+                  titlesData: FlTitlesData(
+                    show: true,
+                    rightTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    topTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 30,
+                        interval: 1,
+                        getTitlesWidget: (value, meta) {
+                          if (value.toInt() >= sortedHistory.length) {
+                            return const Text('');
+                          }
+                          final date = sortedHistory[value.toInt()].date;
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: Text(
+                              DateFormat('MMM dd').format(date),
+                              style: TextStyle(
+                                color: textColor,
+                                fontSize: 10,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 40,
+                        interval: 1,
+                        getTitlesWidget: (value, meta) {
+                          return Text(
+                            value.toStringAsFixed(1),
+                            style: TextStyle(
+                              color: textColor,
+                              fontSize: 10,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  borderData: FlBorderData(
+                    show: true,
+                    border: Border.all(
+                      color: textColor.withOpacity(0.2),
+                      width: 1,
+                    ),
+                  ),
+                  minX: 0,
+                  maxX: (sortedHistory.length - 1).toDouble(),
+                  minY: 0,
+                  maxY: 5,
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: spots,
+                      isCurved: true,
+                      color: accentColor,
+                      barWidth: 3,
+                      isStrokeCapRound: true,
+                      dotData: FlDotData(
+                        show: true,
+                        getDotPainter: (spot, percent, barData, index) {
+                          return FlDotCirclePainter(
+                            radius: 4,
+                            color: accentColor,
+                            strokeWidth: 2,
+                            strokeColor: bgColor,
+                          );
+                        },
+                      ),
+                      belowBarData: BarAreaData(
+                        show: true,
+                        color: accentColor.withOpacity(0.1),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
