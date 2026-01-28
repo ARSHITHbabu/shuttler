@@ -7,7 +7,6 @@ import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../providers/service_providers.dart';
-import 'coach_profile_screen.dart';
 import 'coach_announcements_screen.dart';
 import 'coach_schedule_screen.dart';
 import 'coach_calendar_screen.dart';
@@ -44,25 +43,8 @@ class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
             ),
             const SizedBox(height: AppDimensions.spacingL),
 
-            // Account Section
-            const _SectionTitle(title: 'Account'),
-            const SizedBox(height: AppDimensions.spacingM),
-            _MenuItem(
-              icon: Icons.person_outline,
-              title: 'Profile',
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const CoachProfileScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-
-            // Features Section
-            const SizedBox(height: AppDimensions.spacingL),
-            const _SectionTitle(title: 'Features'),
+            // Services Section
+            const _SectionTitle(title: 'Services'),
             const SizedBox(height: AppDimensions.spacingM),
             _MenuItem(
               icon: Icons.campaign_outlined,
@@ -71,30 +53,6 @@ class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (context) => const CoachAnnouncementsScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.calendar_today_outlined,
-              title: 'Schedule',
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const CoachScheduleScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.calendar_month_outlined,
-              title: 'Calendar',
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const CoachCalendarScreen(),
                   ),
                 );
               },
@@ -113,12 +71,12 @@ class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
             ),
             const SizedBox(height: AppDimensions.spacingS),
             _MenuItem(
-              icon: Icons.trending_up_outlined,
-              title: 'Performance Tracking',
+              icon: Icons.calendar_month_outlined,
+              title: 'Calendar',
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (context) => const PerformanceTrackingScreen(),
+                    builder: (context) => const CoachCalendarScreen(),
                   ),
                 );
               },
@@ -131,6 +89,30 @@ class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (context) => const CoachFeesScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.trending_up_outlined,
+              title: 'Performance Tracking',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const PerformanceTrackingScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.calendar_today_outlined,
+              title: 'Schedule',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const CoachScheduleScreen(),
                   ),
                 );
               },

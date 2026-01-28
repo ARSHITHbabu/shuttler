@@ -11,6 +11,7 @@ import '../../providers/service_providers.dart';
 import '../common/privacy_policy_screen.dart';
 import '../common/terms_conditions_screen.dart';
 import '../common/help_support_screen.dart';
+import 'coach_profile_screen.dart';
 
 /// Coach Settings Screen - App settings and preferences
 class CoachSettingsScreen extends ConsumerStatefulWidget {
@@ -69,6 +70,24 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Account Section
+              const _SectionTitle(title: 'Account'),
+              const SizedBox(height: AppDimensions.spacingM),
+
+              _SettingsItem(
+                icon: Icons.person_outline,
+                title: 'Profile',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const CoachProfileScreen(),
+                    ),
+                  );
+                },
+              ),
+
+              const SizedBox(height: AppDimensions.spacingL),
+
               // App Settings Section
               const _SectionTitle(title: 'App Settings'),
               const SizedBox(height: AppDimensions.spacingM),
