@@ -1,14 +1,14 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
-import '../../core/theme/neumorphic_styles.dart';
-import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/neumorphic_button.dart';
+import '../../widgets/common/profile_image_picker.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/owner_provider.dart';
@@ -28,6 +28,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   final _phoneController = TextEditingController();
   
   bool _isSaving = false;
+  bool _isUploadingImage = false;
   Owner? _owner;
 
   @override
@@ -185,46 +186,31 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           children: [
             // Profile Avatar Section
             Center(
-              child: NeumorphicContainer(
-                padding: const EdgeInsets.all(AppDimensions.paddingL),
-                child: Column(
-                  children: [
-                    Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: cardBackground,
-                        shape: BoxShape.circle,
-                        boxShadow: NeumorphicStyles.getInsetShadow(),
-                      ),
-                      child: Center(
-                        child: Text(
-                          owner.name.isNotEmpty ? owner.name[0].toUpperCase() : 'A',
-                          style: TextStyle(
-                            fontSize: 32,
-                            color: iconPrimaryColor,
-                          ),
-                        ),
-                      ),
+              child: Column(
+                children: [
+                  ProfileImagePicker(
+                    initialImageUrl: owner.profilePhoto,
+                    size: 100,
+                    onImagePicked: _handleImagePicked,
+                    isLoading: _isUploadingImage,
+                  ),
+                  const SizedBox(height: AppDimensions.spacingM),
+                  Text(
+                    owner.name,
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: textPrimaryColor,
                     ),
-                    const SizedBox(height: AppDimensions.spacingM),
-                    Text(
-                      owner.name,
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
-                        color: textPrimaryColor,
-                      ),
+                  ),
+                  Text(
+                    'Owner',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: textSecondaryColor,
                     ),
-                    Text(
-                      'Owner',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: textSecondaryColor,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: AppDimensions.spacingL),
@@ -287,6 +273,49 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _handleImagePicked(File? image) async {
+    if (image == null) return;
+
+    setState(() {
+      _isUploadingImage = true;
+    });
+
+    try {
+      final authState = ref.read(authProvider);
+      if (authState.value is! Authenticated) {
+        throw Exception('Not authenticated');
+      }
+
+      final ownerId = (authState.value as Authenticated).userId;
+      final apiService = ref.read(apiServiceProvider);
+
+      // Upload image
+      final imageUrl = await apiService.uploadImage(image.path);
+
+      // Update profile with new image URL
+      final ownerService = ref.read(ownerServiceProvider);
+      await ownerService.updateOwner(ownerId, {
+        'profile_photo': imageUrl,
+      });
+
+      setState(() {
+        _isUploadingImage = false;
+        _owner = null; // Force refresh
+      });
+
+      if (mounted) {
+        SuccessSnackbar.show(context, 'Profile photo updated successfully');
+      }
+    } catch (e) {
+      setState(() {
+        _isUploadingImage = false;
+      });
+      if (mounted) {
+        SuccessSnackbar.showError(context, 'Failed to upload image: ${e.toString()}');
+      }
+    }
   }
 
   Future<void> _saveProfile() async {
