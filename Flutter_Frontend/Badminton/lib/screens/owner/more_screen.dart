@@ -55,60 +55,12 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
             _SectionTitle(title: 'Management'),
             const SizedBox(height: AppDimensions.spacingM),
             _MenuItem(
-              icon: Icons.access_time_outlined,
-              title: 'Practice Sessions',
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const SessionManagementScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.event_note_outlined,
-              title: 'Session/Season Management',
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const SessionSeasonManagementScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
               icon: Icons.campaign_outlined,
               title: 'Announcements',
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (context) => const AnnouncementManagementScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.calendar_today_outlined,
-              title: 'Calendar',
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const CalendarViewScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.description_outlined,
-              title: 'Reports',
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const ReportsScreen(),
                   ),
                 );
               },
@@ -127,12 +79,12 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
             ),
             const SizedBox(height: AppDimensions.spacingS),
             _MenuItem(
-              icon: Icons.trending_up_outlined,
-              title: 'Performance Tracking',
+              icon: Icons.calendar_today_outlined,
+              title: 'Calendar',
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (context) => const PerformanceTrackingScreen(),
+                    builder: (context) => const CalendarViewScreen(),
                   ),
                 );
               },
@@ -145,6 +97,54 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (context) => const NotificationsScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.trending_up_outlined,
+              title: 'Performance Tracking',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const PerformanceTrackingScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.access_time_outlined,
+              title: 'Practice Sessions',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const SessionManagementScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.description_outlined,
+              title: 'Reports',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const ReportsScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.event_note_outlined,
+              title: 'Season Management',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const SessionSeasonManagementScreen(),
                   ),
                 );
               },

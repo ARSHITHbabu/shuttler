@@ -66,18 +66,22 @@ class CalendarEvent {
   }
 
   /// Get event color based on type
+  /// Holidays are red, all other events (tournament, event) are jade green
   Color get eventColor {
     switch (eventType.toLowerCase()) {
       case 'holiday':
         return Colors.red;
       case 'tournament':
-        return Colors.blue;
+        return const Color(0xFF00A86B); // Jade green
       case 'event':
-        return Colors.green;
+        return const Color(0xFF00A86B); // Jade green
       default:
-        return Colors.grey;
+        return const Color(0xFF00A86B); // Jade green
     }
   }
+
+  /// Check if this is a holiday event
+  bool get isHoliday => eventType.toLowerCase() == 'holiday';
 
   /// Get event icon based on type
   IconData get eventIcon {

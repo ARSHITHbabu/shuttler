@@ -110,6 +110,11 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
                           focusedDay: _focusedDay,
                           selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
                           calendarFormat: _calendarFormat,
+                          availableCalendarFormats: const {
+                            CalendarFormat.month: 'Month',
+                            CalendarFormat.twoWeeks: '2 Weeks',
+                            CalendarFormat.week: 'Week',
+                          },
                           eventLoader: (day) {
                             final date = DateTime(day.year, day.month, day.day);
                             return groupedEvents[date] ?? [];
@@ -177,29 +182,57 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
                               final isHoliday = canadianHolidays.containsKey(dateKey);
                               final isSelected = isSameDay(_selectedDay, date);
                               final isToday = isSameDay(DateTime.now(), date);
-                              
-                              if (isHoliday && !isSelected && !isToday) {
-                                return Center(
-                                  child: Text(
-                                    '${date.day}',
-                                    style: const TextStyle(
-                                      color: Colors.red,
-                                      fontWeight: FontWeight.bold,
+
+                              // Check if events contain holiday type or non-holiday events
+                              final hasHolidayEvent = groupedEvents[dateKey]?.any((e) => e.isHoliday) ?? false;
+                              final hasNonHolidayEvent = groupedEvents[dateKey]?.any((e) => !e.isHoliday) ?? false;
+
+                              if (!isSelected && !isToday) {
+                                // Canadian holidays or holiday events - show in red
+                                if (isHoliday || hasHolidayEvent) {
+                                  return Center(
+                                    child: Text(
+                                      '${date.day}',
+                                      style: const TextStyle(
+                                        color: Colors.red,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
-                                  ),
-                                );
+                                  );
+                                }
+                                // Non-holiday events (tournament, event) - show in jade green
+                                if (hasNonHolidayEvent) {
+                                  return Center(
+                                    child: Text(
+                                      '${date.day}',
+                                      style: const TextStyle(
+                                        color: Color(0xFF00A86B), // Jade green
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  );
+                                }
                               }
                               return null;
                             },
                             selectedBuilder: (context, date, focusedDay) {
                               final dateKey = DateTime(date.year, date.month, date.day);
                               final isHoliday = canadianHolidays.containsKey(dateKey);
-                              
+                              final hasHolidayEvent = groupedEvents[dateKey]?.any((e) => e.isHoliday) ?? false;
+                              final hasNonHolidayEvent = groupedEvents[dateKey]?.any((e) => !e.isHoliday) ?? false;
+
+                              Color bgColor = isDark ? AppColors.accent : AppColorsLight.accent;
+                              if (isHoliday || hasHolidayEvent) {
+                                bgColor = Colors.red;
+                              } else if (hasNonHolidayEvent) {
+                                bgColor = const Color(0xFF00A86B); // Jade green
+                              }
+
                               return Container(
                                 margin: const EdgeInsets.all(4.0),
                                 alignment: Alignment.center,
                                 decoration: BoxDecoration(
-                                  color: isHoliday ? Colors.red : (isDark ? AppColors.accent : AppColorsLight.accent),
+                                  color: bgColor,
                                   shape: BoxShape.circle,
                                 ),
                                 child: Text(
@@ -214,48 +247,43 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
                             todayBuilder: (context, date, focusedDay) {
                               final dateKey = DateTime(date.year, date.month, date.day);
                               final isHoliday = canadianHolidays.containsKey(dateKey);
+                              final hasHolidayEvent = groupedEvents[dateKey]?.any((e) => e.isHoliday) ?? false;
+                              final hasNonHolidayEvent = groupedEvents[dateKey]?.any((e) => !e.isHoliday) ?? false;
                               final isSelected = isSameDay(_selectedDay, date);
-                              
+
                               if (isSelected) return null; // Let selectedBuilder handle it
-                              
+
+                              Color bgColor = (isDark ? AppColors.accent : AppColorsLight.accent).withOpacity(0.3);
+                              Color textColorValue = textPrimary;
+                              FontWeight fontWeight = FontWeight.normal;
+
+                              if (isHoliday || hasHolidayEvent) {
+                                bgColor = Colors.red.withOpacity(0.5);
+                                textColorValue = Colors.red;
+                                fontWeight = FontWeight.bold;
+                              } else if (hasNonHolidayEvent) {
+                                bgColor = const Color(0xFF00A86B).withOpacity(0.3);
+                                textColorValue = const Color(0xFF00A86B);
+                                fontWeight = FontWeight.bold;
+                              }
+
                               return Container(
                                 margin: const EdgeInsets.all(4.0),
                                 alignment: Alignment.center,
                                 decoration: BoxDecoration(
-                                  color: isHoliday 
-                                      ? Colors.red.withOpacity(0.5)
-                                      : (isDark ? AppColors.accent : AppColorsLight.accent).withOpacity(0.3),
+                                  color: bgColor,
                                   shape: BoxShape.circle,
                                 ),
                                 child: Text(
                                   '${date.day}',
                                   style: TextStyle(
-                                    color: isHoliday ? Colors.red : textPrimary,
-                                    fontWeight: isHoliday ? FontWeight.bold : FontWeight.normal,
+                                    color: textColorValue,
+                                    fontWeight: fontWeight,
                                   ),
                                 ),
                               );
                             },
-                            markerBuilder: (context, date, events) {
-                              if (events.isEmpty) return null;
-                              
-                              final eventTypes = events.map((e) => (e).eventType).toSet();
-                              return Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: eventTypes.map((type) {
-                                  final event = events.firstWhere((e) => (e).eventType == type);
-                                  return Container(
-                                    width: 6,
-                                    height: 6,
-                                    margin: const EdgeInsets.symmetric(horizontal: 1),
-                                    decoration: BoxDecoration(
-                                      color: event.eventColor,
-                                      shape: BoxShape.circle,
-                                    ),
-                                  );
-                                }).toList(),
-                              );
-                            },
+                            // No marker dots needed - using colored date numbers instead
                           ),
                         ),
                       ),

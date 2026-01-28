@@ -40,6 +40,39 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
     return groupedSessions[dateKey] ?? [];
   }
 
+  /// Get day name from weekday number
+  String _getDayName(int weekday) {
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    return days[weekday - 1];
+  }
+
+  /// Check if a batch operates on a specific day of the week
+  bool _batchOperatesOnDay(String period, int weekday) {
+    // Map weekday number to day abbreviations
+    // DateTime weekday: 1=Monday, 2=Tuesday, ..., 7=Sunday
+    final dayMap = {
+      1: ['mon', 'monday'],
+      2: ['tue', 'tuesday'],
+      3: ['wed', 'wednesday'],
+      4: ['thu', 'thursday'],
+      5: ['fri', 'friday'],
+      6: ['sat', 'saturday'],
+      7: ['sun', 'sunday'],
+    };
+
+    final dayAbbreviations = dayMap[weekday] ?? [];
+    final periodLower = period.toLowerCase();
+
+    // Check if the period contains "daily" or the specific day
+    if (periodLower.contains('daily')) return true;
+
+    for (final abbr in dayAbbreviations) {
+      if (periodLower.contains(abbr)) return true;
+    }
+
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
@@ -134,6 +167,11 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
                       focusedDay: _focusedDay,
                       selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
                       calendarFormat: _calendarFormat,
+                      availableCalendarFormats: const {
+                        CalendarFormat.month: 'Month',
+                        CalendarFormat.twoWeeks: '2 Weeks',
+                        CalendarFormat.week: 'Week',
+                      },
                       onFormatChanged: (format) {
                         setState(() {
                           _calendarFormat = format;
@@ -151,6 +189,40 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
                         });
                       },
                       eventLoader: (day) => _getSessionsForDay(day, groupedSessions),
+                      headerStyle: HeaderStyle(
+                        formatButtonVisible: true,
+                        titleCentered: true,
+                        formatButtonShowsNext: false,
+                        formatButtonDecoration: BoxDecoration(
+                          color: AppColors.cardBackground,
+                          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                        ),
+                        formatButtonTextStyle: const TextStyle(color: AppColors.textPrimary),
+                        leftChevronIcon: const Icon(Icons.chevron_left, color: AppColors.textPrimary),
+                        rightChevronIcon: const Icon(Icons.chevron_right, color: AppColors.textPrimary),
+                        titleTextStyle: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      daysOfWeekStyle: const DaysOfWeekStyle(
+                        weekdayStyle: TextStyle(color: AppColors.textSecondary),
+                        weekendStyle: TextStyle(color: AppColors.textSecondary),
+                      ),
+                      calendarStyle: CalendarStyle(
+                        outsideDaysVisible: false,
+                        weekendTextStyle: const TextStyle(color: AppColors.textSecondary),
+                        defaultTextStyle: const TextStyle(color: AppColors.textPrimary),
+                        selectedDecoration: BoxDecoration(
+                          color: AppColors.accent,
+                          shape: BoxShape.circle,
+                        ),
+                        todayDecoration: BoxDecoration(
+                          color: AppColors.accent.withValues(alpha: 0.3),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
                       calendarBuilders: CalendarBuilders(
                         defaultBuilder: (context, date, focusedDay) {
                           final dateKey = DateTime(date.year, date.month, date.day);
@@ -354,27 +426,60 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
                     ),
                   ],
                   
-                  // Batch Operating Days Info
+                  // Batch Operating Days Info - filtered by selected day
                   batchesAsync.when(
                     data: (batches) {
                       if (batches.isEmpty) return const SizedBox.shrink();
-                      
+
+                      // Filter batches that operate on the selected day
+                      final filteredBatches = batches.where(
+                        (batch) => _batchOperatesOnDay(batch.period, _selectedDay.weekday)
+                      ).toList();
+
+                      if (filteredBatches.isEmpty) {
+                        return NeumorphicContainer(
+                          margin: const EdgeInsets.all(AppDimensions.paddingL),
+                          padding: const EdgeInsets.all(AppDimensions.paddingM),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Batches on ${_getDayName(_selectedDay.weekday)}',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: AppDimensions.spacingM),
+                              const Text(
+                                'No batches scheduled for this day',
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }
+
                       return NeumorphicContainer(
                         margin: const EdgeInsets.all(AppDimensions.paddingL),
                         padding: const EdgeInsets.all(AppDimensions.paddingM),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'Batch Operating Days',
-                              style: TextStyle(
+                            Text(
+                              'Batches on ${_getDayName(_selectedDay.weekday)}',
+                              style: const TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
                                 color: AppColors.textPrimary,
                               ),
                             ),
                             const SizedBox(height: AppDimensions.spacingM),
-                            ...batches.map((batch) => Padding(
+                            ...filteredBatches.map((batch) => Padding(
                               padding: const EdgeInsets.only(bottom: AppDimensions.spacingS),
                               child: Row(
                                 children: [

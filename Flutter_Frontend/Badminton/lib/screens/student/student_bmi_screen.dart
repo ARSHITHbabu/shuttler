@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
@@ -308,8 +310,24 @@ class _StudentBMIScreenState extends ConsumerState<StudentBMIScreen> {
       return const SizedBox.shrink();
     }
 
-    // Get last 6 records for trend
-    final trendRecords = bmiRecords.take(6).toList().reversed.toList();
+    // Sort by date ascending for chart
+    final sortedHistory = List<BMIRecord>.from(bmiRecords)
+      ..sort((a, b) => a.date.compareTo(b.date));
+
+    // Prepare data for chart - BMI over time
+    final spots = sortedHistory.asMap().entries.map((entry) {
+      return FlSpot(entry.key.toDouble(), entry.value.bmi.toDouble());
+    }).toList();
+
+    // Calculate min and max BMI for Y axis
+    final minBMI = sortedHistory.map((r) => r.bmi).reduce((a, b) => a < b ? a : b);
+    final maxBMI = sortedHistory.map((r) => r.bmi).reduce((a, b) => a > b ? a : b);
+    final yMin = (minBMI - 2.0).clamp(0.0, double.infinity);
+    final yMax = (maxBMI + 2.0);
+
+    final textColor = isDark ? AppColors.textSecondary : AppColorsLight.textSecondary;
+    final accentColor = isDark ? AppColors.accent : AppColorsLight.accent;
+    final bgColor = isDark ? AppColors.background : AppColorsLight.background;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
@@ -319,7 +337,7 @@ class _StudentBMIScreenState extends ConsumerState<StudentBMIScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'BMI Trend',
+              'BMI Trend Over Time',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
@@ -328,45 +346,143 @@ class _StudentBMIScreenState extends ConsumerState<StudentBMIScreen> {
             ),
             const SizedBox(height: AppDimensions.spacingM),
 
-            // Simple trend visualization
+            // FL Chart LineChart
             SizedBox(
-              height: 100,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: trendRecords.asMap().entries.map((entry) {
-                  final record = entry.value;
-                  final bmi = record.bmi;
-                  final normalizedHeight = ((bmi - 15) / 25 * 80).clamp(10.0, 80.0);
-                  final category = _getBMICategory(bmi);
-
-                  return Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Text(
-                          bmi.toStringAsFixed(1),
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: category.color,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Container(
-                          height: normalizedHeight,
-                          margin: const EdgeInsets.symmetric(horizontal: 4),
-                          decoration: BoxDecoration(
-                            color: category.color.withValues(alpha: 0.7),
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(4),
-                            ),
-                          ),
-                        ),
-                      ],
+              height: 200,
+              child: LineChart(
+                LineChartData(
+                  gridData: FlGridData(
+                    show: true,
+                    drawVerticalLine: false,
+                    horizontalInterval: 2,
+                    getDrawingHorizontalLine: (value) {
+                      return FlLine(
+                        color: textColor.withValues(alpha: 0.1),
+                        strokeWidth: 1,
+                      );
+                    },
+                  ),
+                  titlesData: FlTitlesData(
+                    show: true,
+                    rightTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
                     ),
-                  );
-                }).toList(),
+                    topTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 30,
+                        interval: 1,
+                        getTitlesWidget: (value, meta) {
+                          if (value.toInt() >= sortedHistory.length) {
+                            return const Text('');
+                          }
+                          final date = sortedHistory[value.toInt()].date;
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: Text(
+                              DateFormat('MMM dd').format(date),
+                              style: TextStyle(
+                                color: textColor,
+                                fontSize: 10,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 40,
+                        interval: 2,
+                        getTitlesWidget: (value, meta) {
+                          return Text(
+                            value.toStringAsFixed(1),
+                            style: TextStyle(
+                              color: textColor,
+                              fontSize: 10,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  borderData: FlBorderData(
+                    show: true,
+                    border: Border.all(
+                      color: textColor.withValues(alpha: 0.2),
+                      width: 1,
+                    ),
+                  ),
+                  minX: 0,
+                  maxX: (sortedHistory.length - 1).toDouble(),
+                  minY: yMin,
+                  maxY: yMax,
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: spots,
+                      isCurved: true,
+                      color: accentColor,
+                      barWidth: 3,
+                      isStrokeCapRound: true,
+                      dotData: FlDotData(
+                        show: true,
+                        getDotPainter: (spot, percent, barData, index) {
+                          final record = sortedHistory[index];
+                          return FlDotCirclePainter(
+                            radius: 4,
+                            color: _getBMICategory(record.bmi).color,
+                            strokeWidth: 2,
+                            strokeColor: bgColor,
+                          );
+                        },
+                      ),
+                      belowBarData: BarAreaData(
+                        show: true,
+                        color: accentColor.withValues(alpha: 0.1),
+                      ),
+                    ),
+                  ],
+                  lineTouchData: LineTouchData(
+                    touchTooltipData: LineTouchTooltipData(
+                      tooltipRoundedRadius: 8,
+                      getTooltipItems: (touchedSpots) {
+                        return touchedSpots.map((spot) {
+                          final record = sortedHistory[spot.spotIndex];
+                          final category = _getBMICategory(record.bmi);
+                          return LineTooltipItem(
+                            '${record.bmi.toStringAsFixed(1)}\n${category.label}',
+                            TextStyle(
+                              color: category.color,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          );
+                        }).toList();
+                      },
+                    ),
+                  ),
+                ),
               ),
+            ),
+
+            const SizedBox(height: AppDimensions.spacingS),
+
+            // Legend
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildLegendItem(Colors.orange, 'Under', isDark),
+                const SizedBox(width: AppDimensions.spacingM),
+                _buildLegendItem(isDark ? AppColors.success : AppColorsLight.success, 'Normal', isDark),
+                const SizedBox(width: AppDimensions.spacingM),
+                _buildLegendItem(Colors.orange, 'Over', isDark),
+                const SizedBox(width: AppDimensions.spacingM),
+                _buildLegendItem(isDark ? AppColors.error : AppColorsLight.error, 'Obese', isDark),
+              ],
             ),
 
             const SizedBox(height: AppDimensions.spacingS),
@@ -376,6 +492,29 @@ class _StudentBMIScreenState extends ConsumerState<StudentBMIScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildLegendItem(Color color, String label, bool isDark) {
+    return Row(
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: TextStyle(
+            color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+            fontSize: 10,
+          ),
+        ),
+      ],
     );
   }
 

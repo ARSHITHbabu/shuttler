@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/settings/shuttlecock_theme_toggle.dart';
 import '../../providers/theme_provider.dart';
-import '../../providers/service_providers.dart';
+import '../../providers/auth_provider.dart';
+import '../../widgets/forms/change_password_dialog.dart';
 import '../common/privacy_policy_screen.dart';
 import '../common/terms_conditions_screen.dart';
 import '../common/help_support_screen.dart';
+import 'coach_profile_screen.dart';
 
 /// Coach Settings Screen - App settings and preferences
 class CoachSettingsScreen extends ConsumerStatefulWidget {
@@ -69,6 +70,24 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Account Section
+              const _SectionTitle(title: 'Account'),
+              const SizedBox(height: AppDimensions.spacingM),
+
+              _SettingsItem(
+                icon: Icons.person_outline,
+                title: 'Profile',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const CoachProfileScreen(),
+                    ),
+                  );
+                },
+              ),
+
+              const SizedBox(height: AppDimensions.spacingL),
+
               // App Settings Section
               const _SectionTitle(title: 'App Settings'),
               const SizedBox(height: AppDimensions.spacingM),
@@ -214,16 +233,27 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
 
               const SizedBox(height: AppDimensions.spacingL),
 
-              // Logout Section
-              NeumorphicContainer(
-                padding: const EdgeInsets.all(AppDimensions.paddingM),
-                child: _SettingsItem(
-                  icon: Icons.logout,
-                  title: 'Logout',
-                  textColor: AppColors.error,
-                  iconColor: AppColors.error,
-                  onTap: () => _showLogoutDialog(context, ref),
-                ),
+              // Account Actions Section
+              const _SectionTitle(title: 'Security'),
+              const SizedBox(height: AppDimensions.spacingM),
+
+              _SettingsItem(
+                icon: Icons.lock_outline,
+                title: 'Change Password',
+                onTap: () {
+                  final authState = ref.read(authProvider);
+                  authState.whenData((authValue) {
+                    if (authValue is Authenticated) {
+                      showDialog(
+                        context: context,
+                        builder: (context) => ChangePasswordDialog(
+                          userType: authValue.userType,
+                          userEmail: authValue.userEmail,
+                        ),
+                      );
+                    }
+                  });
+                },
               ),
 
               const SizedBox(height: 100), // Space for bottom nav
@@ -277,63 +307,6 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
     );
   }
 
-  void _showLogoutDialog(BuildContext context, WidgetRef ref) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        title: const Text(
-          'Logout',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        content: const Text(
-          'Are you sure you want to logout?',
-          style: TextStyle(
-            fontSize: 16,
-            color: AppColors.textSecondary,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.of(context).pop();
-              await _handleLogout(context, ref);
-            },
-            child: const Text(
-              'Logout',
-              style: TextStyle(color: AppColors.error),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _handleLogout(BuildContext context, WidgetRef ref) async {
-    try {
-      final authService = ref.read(authServiceProvider);
-      await authService.logout();
-      
-      if (context.mounted) {
-        context.go('/');
-      }
-    } catch (e) {
-      if (context.mounted) {
-        SuccessSnackbar.showError(context, 'Failed to logout: ${e.toString()}');
-      }
-    }
-  }
 }
 
 class _SectionTitle extends StatelessWidget {

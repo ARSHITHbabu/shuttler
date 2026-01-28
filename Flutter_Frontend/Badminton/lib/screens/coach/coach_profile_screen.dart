@@ -14,7 +14,6 @@ import '../../providers/auth_provider.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/coach_provider.dart';
 import '../../models/coach.dart';
-import '../../widgets/forms/change_password_dialog.dart';
 
 /// Coach Profile Screen - View and edit coach profile
 class CoachProfileScreen extends ConsumerStatefulWidget {
@@ -281,31 +280,6 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
                 onPressed: _isSaving ? null : _saveProfile,
                 icon: _isSaving ? null : Icons.save_outlined,
                 isAccent: true,
-              ),
-
-              const SizedBox(height: AppDimensions.spacingL),
-
-              // Change Password Section
-              const _SectionTitle(title: 'Change Password'),
-              const SizedBox(height: AppDimensions.spacingM),
-
-              NeumorphicButton(
-                text: 'Change Password',
-                onPressed: () {
-                  final authState = ref.read(authProvider);
-                  authState.whenData((authValue) {
-                    if (authValue is Authenticated) {
-                      showDialog(
-                        context: context,
-                        builder: (context) => ChangePasswordDialog(
-                          userType: authValue.userType,
-                          userEmail: authValue.userEmail,
-                        ),
-                      );
-                    }
-                  });
-                },
-                icon: Icons.lock_reset_outlined,
               ),
 
               const SizedBox(height: 100), // Space for bottom nav
