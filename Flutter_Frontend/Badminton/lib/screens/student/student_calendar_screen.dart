@@ -6,6 +6,7 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/calendar_format_toggle.dart';
 import '../../providers/calendar_provider.dart';
 import '../../models/calendar_event.dart';
 import '../../core/utils/canadian_holidays.dart';
@@ -44,7 +45,6 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
     final backgroundColor = isDark ? AppColors.background : AppColorsLight.background;
     final textPrimary = isDark ? AppColors.textPrimary : AppColorsLight.textPrimary;
     final textSecondary = isDark ? AppColors.textSecondary : AppColorsLight.textSecondary;
-    final cardBackground = isDark ? AppColors.cardBackground : AppColorsLight.cardBackground;
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -100,9 +100,27 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
                 return SingleChildScrollView(
                   child: Column(
                     children: [
+                      // Calendar Format Toggle
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            CalendarFormatToggle(
+                              currentFormat: _calendarFormat,
+                              onFormatChanged: (format) {
+                                setState(() => _calendarFormat = format);
+                              },
+                              isDark: isDark,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: AppDimensions.spacingM),
+
                       // Calendar
                       NeumorphicContainer(
-                        margin: const EdgeInsets.all(AppDimensions.paddingL),
+                        margin: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
                         padding: const EdgeInsets.all(AppDimensions.paddingM),
                         child: TableCalendar<CalendarEvent>(
                           firstDay: DateTime.utc(2020, 1, 1),
@@ -136,14 +154,8 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
                             canMarkersOverflow: true,
                           ),
                           headerStyle: HeaderStyle(
-                            formatButtonVisible: true,
+                            formatButtonVisible: false,
                             titleCentered: true,
-                            formatButtonShowsNext: false,
-                            formatButtonDecoration: BoxDecoration(
-                              color: cardBackground,
-                              borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                            ),
-                            formatButtonTextStyle: TextStyle(color: textPrimary),
                             leftChevronIcon: Icon(Icons.chevron_left, color: textPrimary),
                             rightChevronIcon: Icon(Icons.chevron_right, color: textPrimary),
                             titleTextStyle: TextStyle(
