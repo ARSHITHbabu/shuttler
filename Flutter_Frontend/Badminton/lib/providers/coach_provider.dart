@@ -66,28 +66,20 @@ Future<CoachStats> coachStats(CoachStatsRef ref, int coachId) async {
     }
   }
   
-  // Calculate attendance rate (last 30 days)
-  final thirtyDaysAgo = today.subtract(const Duration(days: 30));
-  int totalAttendanceRecords = 0;
-  int presentRecords = 0;
-  
-  for (var batch in assignedBatches) {
-    try {
-      final attendance = await attendanceService.getAttendance(
-        batchId: batch.id,
-        startDate: thirtyDaysAgo,
-        endDate: today,
-      );
-      totalAttendanceRecords += attendance.length;
-      presentRecords += attendance.where((a) => a.status == 'present').length;
-    } catch (e) {
-      // Skip if error
+  // Calculate coach's own attendance rate using coach attendance records
+  double attendanceRate = 0.0;
+  try {
+    final coachAttendance = await attendanceService.getCoachAttendanceByCoachId(coachId);
+    if (coachAttendance.isNotEmpty) {
+      final presentRecords = coachAttendance.where((a) =>
+        a.status.toLowerCase() == 'present'
+      ).length;
+      attendanceRate = (presentRecords / coachAttendance.length) * 100;
     }
+  } catch (e) {
+    // If error fetching coach attendance, return 0.0
+    attendanceRate = 0.0;
   }
-  
-  final attendanceRate = totalAttendanceRecords > 0
-      ? (presentRecords / totalAttendanceRecords) * 100
-      : 0.0;
   
   return CoachStats(
     assignedBatches: assignedBatches.length,
