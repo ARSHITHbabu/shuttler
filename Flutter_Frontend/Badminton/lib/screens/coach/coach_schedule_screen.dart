@@ -7,7 +7,6 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
-import '../../widgets/common/calendar_format_toggle.dart';
 import '../../providers/coach_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/calendar_provider.dart';
@@ -158,29 +157,9 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
               physics: const AlwaysScrollableScrollPhysics(),
               child: Column(
                 children: [
-                  // Calendar Format Toggle
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        CalendarFormatToggle(
-                          currentFormat: _calendarFormat,
-                          onFormatChanged: (format) {
-                            setState(() {
-                              _calendarFormat = format;
-                            });
-                          },
-                          isDark: true,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: AppDimensions.spacingM),
-
                   // Calendar
                   NeumorphicContainer(
-                    margin: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+                    margin: const EdgeInsets.all(AppDimensions.paddingL),
                     padding: const EdgeInsets.all(AppDimensions.paddingM),
                     child: TableCalendar<Schedule>(
                       firstDay: DateTime.utc(2020, 1, 1),
@@ -210,12 +189,18 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
                         });
                       },
                       eventLoader: (day) => _getSessionsForDay(day, groupedSessions),
-                      headerStyle: const HeaderStyle(
-                        formatButtonVisible: false,
+                      headerStyle: HeaderStyle(
+                        formatButtonVisible: true,
                         titleCentered: true,
-                        leftChevronIcon: Icon(Icons.chevron_left, color: AppColors.textPrimary),
-                        rightChevronIcon: Icon(Icons.chevron_right, color: AppColors.textPrimary),
-                        titleTextStyle: TextStyle(
+                        formatButtonShowsNext: false,
+                        formatButtonDecoration: BoxDecoration(
+                          color: AppColors.cardBackground,
+                          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                        ),
+                        formatButtonTextStyle: const TextStyle(color: AppColors.textPrimary),
+                        leftChevronIcon: const Icon(Icons.chevron_left, color: AppColors.textPrimary),
+                        rightChevronIcon: const Icon(Icons.chevron_right, color: AppColors.textPrimary),
+                        titleTextStyle: const TextStyle(
                           color: AppColors.textPrimary,
                           fontSize: 18,
                           fontWeight: FontWeight.w600,

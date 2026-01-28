@@ -6,7 +6,6 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
-import '../../widgets/common/calendar_format_toggle.dart';
 import '../../providers/calendar_provider.dart';
 import '../../models/calendar_event.dart';
 import '../../core/utils/canadian_holidays.dart';
@@ -94,27 +93,9 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
 
             return Column(
             children: [
-              // Calendar Format Toggle
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CalendarFormatToggle(
-                      currentFormat: _calendarFormat,
-                      onFormatChanged: (format) {
-                        setState(() => _calendarFormat = format);
-                      },
-                      isDark: true,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: AppDimensions.spacingM),
-
               // Calendar
               NeumorphicContainer(
-                margin: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+                margin: const EdgeInsets.all(AppDimensions.paddingL),
                 padding: const EdgeInsets.all(AppDimensions.paddingM),
                 child: TableCalendar<CalendarEvent>(
                   firstDay: DateTime.utc(2020, 1, 1),
@@ -122,6 +103,11 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
                   focusedDay: _focusedDay,
                   selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
                   calendarFormat: _calendarFormat,
+                  availableCalendarFormats: const {
+                    CalendarFormat.month: 'Month',
+                    CalendarFormat.twoWeeks: '2 Weeks',
+                    CalendarFormat.week: 'Week',
+                  },
                   eventLoader: (day) {
                     final date = DateTime(day.year, day.month, day.day);
                     return groupedEvents[date] ?? [];
@@ -147,12 +133,18 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
                     markerSize: 6,
                     canMarkersOverflow: true,
                   ),
-                  headerStyle: const HeaderStyle(
-                    formatButtonVisible: false,
+                  headerStyle: HeaderStyle(
+                    formatButtonVisible: true,
                     titleCentered: true,
-                    leftChevronIcon: Icon(Icons.chevron_left, color: AppColors.textPrimary),
-                    rightChevronIcon: Icon(Icons.chevron_right, color: AppColors.textPrimary),
-                    titleTextStyle: TextStyle(
+                    formatButtonShowsNext: false,
+                    formatButtonDecoration: BoxDecoration(
+                      color: AppColors.cardBackground,
+                      borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                    ),
+                    formatButtonTextStyle: const TextStyle(color: AppColors.textPrimary),
+                    leftChevronIcon: const Icon(Icons.chevron_left, color: AppColors.textPrimary),
+                    rightChevronIcon: const Icon(Icons.chevron_right, color: AppColors.textPrimary),
+                    titleTextStyle: const TextStyle(
                       color: AppColors.textPrimary,
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
