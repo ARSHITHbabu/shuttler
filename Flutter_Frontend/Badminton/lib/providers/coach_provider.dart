@@ -4,6 +4,7 @@ import '../models/schedule.dart';
 import '../models/announcement.dart';
 import '../models/coach.dart';
 import '../models/student.dart';
+import '../utils/batch_time_utils.dart';
 import 'service_providers.dart';
 
 part 'coach_provider.g.dart';
@@ -28,7 +29,6 @@ Future<List<Batch>> coachBatches(CoachBatchesRef ref, int coachId) async {
 Future<CoachStats> coachStats(CoachStatsRef ref, int coachId) async {
   final batchService = ref.watch(batchServiceProvider);
   final attendanceService = ref.watch(attendanceServiceProvider);
-  final scheduleService = ref.watch(scheduleServiceProvider);
   
   // Get assigned batches using optimized endpoint
   final assignedBatches = await batchService.getBatchesByCoachId(coachId);
@@ -45,24 +45,21 @@ Future<CoachStats> coachStats(CoachStatsRef ref, int coachId) async {
   }
   
   // Get today's sessions count
-  // Since schedules don't have coach_id, get through batches
+  // Count batches that run today and are upcoming (like owner dashboard)
   final today = DateTime.now();
+  final dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  final todayDayName = dayNames[today.weekday - 1];
+  
   int sessionsToday = 0;
   for (var batch in assignedBatches) {
-    try {
-      final batchSchedules = await scheduleService.getSchedules(batchId: batch.id);
-      final todayBatchSessions = batchSchedules.where((schedule) {
-        final scheduleDate = DateTime(
-          schedule.date.year,
-          schedule.date.month,
-          schedule.date.day,
-        );
-        final todayDate = DateTime(today.year, today.month, today.day);
-        return scheduleDate.isAtSameMomentAs(todayDate);
-      }).toList();
-      sessionsToday += todayBatchSessions.length;
-    } catch (e) {
-      // Skip if error
+    // Check if batch runs today
+    final runsToday = batch.period.toLowerCase() == 'daily' || 
+                      batch.days.contains(todayDayName);
+    if (!runsToday) continue;
+    
+    // Check if batch is upcoming (hasn't finished yet)
+    if (BatchTimeUtils.isBatchUpcoming(batch)) {
+      sessionsToday++;
     }
   }
   
@@ -90,48 +87,81 @@ Future<CoachStats> coachStats(CoachStatsRef ref, int coachId) async {
 }
 
 /// Provider for coach's today sessions
-/// Since schedules don't have coach_id directly, we get schedules through batches
+/// Works directly with batches (like owner dashboard) instead of requiring Schedule records
+/// Converts batches to Schedule objects for display compatibility
 @riverpod
 Future<List<Schedule>> coachTodaySessions(CoachTodaySessionsRef ref, int coachId) async {
   final batchService = ref.watch(batchServiceProvider);
-  final scheduleService = ref.watch(scheduleServiceProvider);
   final today = DateTime.now();
+  final dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  final todayDayName = dayNames[today.weekday - 1];
   
-  // Get coach's assigned batches first
+  // Get coach's assigned batches
   final coachBatches = await batchService.getBatchesByCoachId(coachId);
   
-  // Get schedules for each batch and filter by today's date
+  // Filter batches that run today and are upcoming (haven't finished)
+  final todayBatches = coachBatches.where((batch) {
+    // Check if batch runs today
+    final runsToday = batch.period.toLowerCase() == 'daily' || 
+                      batch.days.contains(todayDayName);
+    if (!runsToday) return false;
+    
+    // Check if batch is upcoming (hasn't finished yet)
+    return BatchTimeUtils.isBatchUpcoming(batch);
+  }).toList();
+  
+  // Convert batches to Schedule objects for display compatibility
   List<Schedule> todaySessions = [];
-  for (var batch in coachBatches) {
+  for (var batch in todayBatches) {
     try {
-      // Get schedules for this batch
-      final batchSchedules = await scheduleService.getSchedules(batchId: batch.id);
-      // Filter by today's date
-      final todayBatchSessions = batchSchedules.where((schedule) {
-        final scheduleDate = DateTime(
-          schedule.date.year,
-          schedule.date.month,
-          schedule.date.day,
-        );
-        final todayDate = DateTime(today.year, today.month, today.day);
-        return scheduleDate.isAtSameMomentAs(todayDate);
-      }).toList();
+      // Parse timing to extract start and end times
+      final startTimeStr = BatchTimeUtils.parseBatchStartTimeString(batch.timing);
+      final endTimeStr = BatchTimeUtils.parseBatchEndTimeString(batch.timing);
       
-      // Add batch name to schedules for display
-      final sessionsWithBatchName = todayBatchSessions.map((schedule) {
-        return schedule.copyWith(
-          batchName: batch.batchName,
-          coachId: coachId,
-          coachName: batch.assignedCoachName,
-        );
-      }).toList();
+      // Calculate duration in minutes if we have both times
+      int? duration;
+      if (startTimeStr != null && endTimeStr != null) {
+        final startTime = BatchTimeUtils.parseTimeString(startTimeStr);
+        final endTime = BatchTimeUtils.parseTimeString(endTimeStr);
+        if (startTime != null && endTime != null) {
+          duration = endTime.difference(startTime).inMinutes;
+        }
+      }
       
-      todaySessions.addAll(sessionsWithBatchName);
+      // Create Schedule object from batch
+      final schedule = Schedule(
+        id: batch.id, // Use batch ID as schedule ID for uniqueness
+        sessionType: 'practice', // Default to practice
+        title: batch.batchName,
+        date: DateTime(today.year, today.month, today.day),
+        startTime: startTimeStr,
+        endTime: endTimeStr,
+        duration: duration,
+        batchId: batch.id,
+        batchName: batch.batchName,
+        location: batch.location,
+        coachId: coachId,
+        coachName: batch.coachNamesString.isNotEmpty 
+            ? batch.coachNamesString 
+            : batch.coachName,
+        capacity: batch.capacity,
+      );
+      
+      todaySessions.add(schedule);
     } catch (e) {
-      // Skip if error fetching schedules for this batch
+      // Skip if error converting batch to schedule
       continue;
     }
   }
+  
+  // Sort by start time
+  todaySessions.sort((a, b) {
+    if (a.startTime == null || b.startTime == null) return 0;
+    final aTime = BatchTimeUtils.parseTimeString(a.startTime!);
+    final bTime = BatchTimeUtils.parseTimeString(b.startTime!);
+    if (aTime == null || bTime == null) return 0;
+    return aTime.compareTo(bTime);
+  });
   
   return todaySessions;
 }

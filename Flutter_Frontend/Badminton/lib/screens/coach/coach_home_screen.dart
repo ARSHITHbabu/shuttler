@@ -8,6 +8,7 @@ import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../providers/coach_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/batch_provider.dart';
 import '../../models/schedule.dart';
 import '../../widgets/forms/add_student_dialog.dart';
 import 'coach_schedule_screen.dart';
@@ -158,154 +159,58 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
             // Today's Sessions
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Today's Sessions",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: context.textPrimaryColor,
+              child: NeumorphicContainer(
+                padding: const EdgeInsets.all(AppDimensions.paddingM),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Today's Sessions",
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: context.textSecondaryColor,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: AppDimensions.spacingM),
-                  todaySessionsAsync.when(
-                    data: (sessions) {
-                      if (sessions.isEmpty) {
-                        return NeumorphicContainer(
-                          padding: const EdgeInsets.all(AppDimensions.paddingL),
-                          child: Center(
+                    const SizedBox(height: AppDimensions.spacingM),
+                    todaySessionsAsync.when(
+                      data: (sessions) {
+                        if (sessions.isEmpty) {
+                          return Padding(
+                            padding: const EdgeInsets.all(AppDimensions.spacingM),
                             child: Text(
                               'No sessions scheduled for today',
                               style: TextStyle(
-                                fontSize: 14,
+                                fontSize: 12,
                                 color: context.textSecondaryColor,
                               ),
                             ),
-                          ),
-                        );
-                      }
-
-                      return Column(
-                        children: sessions.map((session) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
-                            child: NeumorphicContainer(
-                              padding: const EdgeInsets.all(AppDimensions.paddingM),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 60,
-                                    height: 60,
-                                    decoration: BoxDecoration(
-                                      color: context.backgroundColor,
-                                      borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-                                      boxShadow: NeumorphicStyles.getInsetShadow(),
-                                    ),
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Text(
-                                          session.startTime?.split(':')[0] ?? '--',
-                                          style: TextStyle(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.w600,
-                                            color: context.textPrimaryColor,
-                                          ),
-                                        ),
-                                        Text(
-                                          session.startTime?.split(':')[1] ?? '--',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: context.textSecondaryColor,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: AppDimensions.spacingM),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          session.batchName ?? session.title,
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w600,
-                                            color: context.textPrimaryColor,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          '${session.startTime ?? '--'} - ${session.endTime ?? '--'}',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: context.textSecondaryColor,
-                                          ),
-                                        ),
-                                        if (session.location != null) ...[
-                                          const SizedBox(height: 4),
-                                          Row(
-                                            children: [
-                                              Icon(
-                                                Icons.location_on_outlined,
-                                                size: 12,
-                                                color: context.textSecondaryColor,
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                session.location!,
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  color: context.textSecondaryColor,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: AppDimensions.spacingM,
-                                      vertical: AppDimensions.spacingS,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: _getSessionStatusColor(session, context),
-                                      borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                                    ),
-                                    child: Text(
-                                      _getSessionStatus(session).toUpperCase(),
-                                      style: const TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
                           );
-                        }).toList(),
-                      );
-                    },
-                    loading: () => const NeumorphicContainer(
-                      padding: EdgeInsets.all(AppDimensions.paddingL),
-                      child: ListSkeleton(itemCount: 3),
+                        }
+
+                        return Column(
+                          children: sessions.asMap().entries.map((entry) {
+                            final session = entry.value;
+                            final isLast = entry.key == sessions.length - 1;
+                            return Column(
+                              children: [
+                                _TodaySessionItem(
+                                  name: session.batchName ?? session.title,
+                                  time: session.startTime != null && session.endTime != null
+                                      ? '${session.startTime} - ${session.endTime}'
+                                      : session.startTime ?? '--',
+                                  batchId: session.batchId,
+                                ),
+                                if (!isLast) const SizedBox(height: AppDimensions.spacingS),
+                              ],
+                            );
+                          }).toList(),
+                        );
+                      },
+                      loading: () => const ListSkeleton(itemCount: 3),
+                      error: (error, stack) => const SizedBox.shrink(),
                     ),
-                    error: (error, stack) => NeumorphicContainer(
-                      padding: const EdgeInsets.all(AppDimensions.paddingL),
-                      child: ErrorDisplay(
-                        message: 'Failed to load sessions',
-                        onRetry: () => ref.invalidate(coachTodaySessionsProvider(coachId)),
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
 
@@ -428,6 +333,147 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
     } else {
       return 'upcoming';
     }
+  }
+}
+
+class _TodaySessionItem extends ConsumerWidget {
+  final String name;
+  final String time;
+  final int? batchId;
+
+  const _TodaySessionItem({
+    required this.name,
+    required this.time,
+    this.batchId,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (batchId == null) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: context.textPrimaryColor,
+                ),
+              ),
+              Text(
+                time,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: context.textSecondaryColor,
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
+    final batchStudentsAsync = ref.watch(batchStudentsProvider(batchId!));
+    
+    return batchStudentsAsync.when(
+      data: (students) {
+        final studentCount = students.length;
+        
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: context.textPrimaryColor,
+                  ),
+                ),
+                Text(
+                  time,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: context.textSecondaryColor,
+                  ),
+                ),
+              ],
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimensions.spacingM,
+                vertical: AppDimensions.spacingS,
+              ),
+              decoration: BoxDecoration(
+                color: context.backgroundColor,
+                borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                boxShadow: NeumorphicStyles.getSmallInsetShadow(),
+              ),
+              child: Text(
+                '$studentCount ${studentCount == 1 ? 'student' : 'students'}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: context.iconPrimaryColor,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+      loading: () => Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: context.textPrimaryColor,
+                ),
+              ),
+              Text(
+                time,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: context.textSecondaryColor,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      error: (_, __) => Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: context.textPrimaryColor,
+                ),
+              ),
+              Text(
+                time,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: context.textSecondaryColor,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }
 
