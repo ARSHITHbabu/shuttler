@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, File, UploadFile, Query
+from fastapi import FastAPI, HTTPException, File, UploadFile, Query, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, Text, Date, DateTime, ForeignKey, JSON, func, and_
@@ -293,10 +293,12 @@ class TournamentDB(Base):
 class VideoResourceDB(Base):
     __tablename__ = "video_resources"
     id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, nullable=False)
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
+    title = Column(String, nullable=True)
     url = Column(String, nullable=False)
-    description = Column(Text, nullable=True)
-    category = Column(String, nullable=True)
+    remarks = Column(Text, nullable=True)
+    uploaded_by = Column(Integer, nullable=True)  # Owner ID who uploaded
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class InvitationDB(Base):
     __tablename__ = "invitations"
@@ -732,7 +734,58 @@ def migrate_database_schema(engine):
                             print("✅ Made batch_id nullable in invitations table")
             except Exception as alter_error:
                 print(f"⚠️  Warning: Could not alter column constraints: {alter_error}")
-        
+
+        # Migrate video_resources table - add new columns for student video feature
+        if 'video_resources' in tables:
+            video_columns = [col['name'] for col in inspector.get_columns('video_resources')]
+            print(f"📹 video_resources table found with columns: {video_columns}")
+
+            # Check if this is the old schema (without student_id)
+            if 'student_id' not in video_columns:
+                print("⚠️  video_resources table has old schema. Migrating...")
+                try:
+                    with engine.begin() as conn:
+                        # Drop old video_resources table (since it has different structure)
+                        # First check if there's any data we should preserve
+                        count_result = conn.execute(text("SELECT COUNT(*) FROM video_resources")).scalar()
+                        if count_result > 0:
+                            print(f"⚠️  Found {count_result} existing videos. Backing up old data...")
+                            # For safety, rename old table instead of dropping
+                            conn.execute(text("ALTER TABLE video_resources RENAME TO video_resources_old_backup"))
+                            print("✅ Renamed old table to video_resources_old_backup")
+                        else:
+                            # No data, safe to drop
+                            conn.execute(text("DROP TABLE IF EXISTS video_resources"))
+                            print("✅ Dropped empty old video_resources table")
+
+                        # Create new table with correct schema
+                        conn.execute(text("""
+                            CREATE TABLE video_resources (
+                                id SERIAL PRIMARY KEY,
+                                student_id INTEGER NOT NULL REFERENCES students(id),
+                                title VARCHAR,
+                                url VARCHAR NOT NULL,
+                                remarks TEXT,
+                                uploaded_by INTEGER,
+                                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                            )
+                        """))
+                        print("✅ Created new video_resources table with student association")
+
+                        # Create index on student_id for faster lookups
+                        conn.execute(text("CREATE INDEX ix_video_resources_student_id ON video_resources (student_id)"))
+                        print("✅ Added index for video_resources.student_id")
+                except Exception as video_migration_error:
+                    print(f"⚠️  Error migrating video_resources table: {video_migration_error}")
+            else:
+                # Table already has student_id, just ensure other columns exist
+                check_and_add_column(engine, 'video_resources', 'remarks', 'TEXT', nullable=True)
+                check_and_add_column(engine, 'video_resources', 'uploaded_by', 'INTEGER', nullable=True)
+                check_and_add_column(engine, 'video_resources', 'created_at', 'TIMESTAMP WITH TIME ZONE', nullable=True, default_value='NOW()')
+                print("✅ video_resources table schema verified")
+        else:
+            print("📹 video_resources table will be created by SQLAlchemy")
+
         print("✅ Database schema migration completed!")
     except Exception as e:
         print(f"⚠️  Migration error: {e}")
@@ -1217,18 +1270,20 @@ class Tournament(BaseModel):
 
 # Video Resource Models
 class VideoResourceCreate(BaseModel):
-    title: str
-    url: str
-    description: Optional[str] = None
-    category: Optional[str] = None
+    student_id: int
+    title: Optional[str] = None
+    remarks: Optional[str] = None
 
 class VideoResource(BaseModel):
     id: int
-    title: str
+    student_id: int
+    student_name: Optional[str] = None
+    title: Optional[str] = None
     url: str
-    description: Optional[str] = None
-    category: Optional[str] = None
-    
+    remarks: Optional[str] = None
+    uploaded_by: Optional[int] = None
+    created_at: Optional[datetime] = None
+
     class Config:
         from_attributes = True
 
@@ -4205,46 +4260,144 @@ def delete_tournament(tournament_id: int):
 
 # ==================== Video Resource Routes ====================
 
-@app.post("/videos/", response_model=VideoResource)
-def create_video(video: VideoResourceCreate):
+@app.post("/video-resources/upload")
+async def upload_video(
+    student_id: int = Form(...),
+    title: Optional[str] = Form(None),
+    remarks: Optional[str] = Form(None),
+    uploaded_by: Optional[int] = Form(None),
+    video: UploadFile = File(...)
+):
+    """Upload a video file for a specific student"""
     db = SessionLocal()
     try:
-        db_video = VideoResourceDB(**video.dict())
+        # Validate file type
+        allowed_extensions = ["mp4", "webm", "mov", "avi", "mkv", "m4v"]
+        file_extension = video.filename.split(".")[-1].lower() if video.filename else ""
+
+        if file_extension not in allowed_extensions:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File type not allowed. Allowed types: {', '.join(allowed_extensions)}"
+            )
+
+        # Verify student exists
+        student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found")
+
+        # Generate unique filename
+        unique_filename = f"video_{uuid.uuid4()}.{file_extension}"
+        file_path = UPLOAD_DIR / unique_filename
+
+        # Save file
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(video.file, buffer)
+
+        # Create database record
+        db_video = VideoResourceDB(
+            student_id=student_id,
+            title=title or video.filename,
+            url=f"/uploads/{unique_filename}",
+            remarks=remarks,
+            uploaded_by=uploaded_by
+        )
         db.add(db_video)
         db.commit()
         db.refresh(db_video)
-        return db_video
+
+        # Return with student name
+        return {
+            "id": db_video.id,
+            "student_id": db_video.student_id,
+            "student_name": student.name,
+            "title": db_video.title,
+            "url": db_video.url,
+            "remarks": db_video.remarks,
+            "uploaded_by": db_video.uploaded_by,
+            "created_at": db_video.created_at
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
 
-@app.get("/videos/", response_model=List[VideoResource])
-def get_videos():
+@app.get("/video-resources/")
+def get_video_resources(student_id: Optional[int] = None):
+    """Get all video resources, optionally filtered by student_id"""
     db = SessionLocal()
     try:
-        videos = db.query(VideoResourceDB).all()
-        return videos
+        query = db.query(VideoResourceDB)
+
+        if student_id is not None:
+            query = query.filter(VideoResourceDB.student_id == student_id)
+
+        videos = query.order_by(VideoResourceDB.created_at.desc()).all()
+
+        # Enrich with student names
+        result = []
+        for video in videos:
+            student = db.query(StudentDB).filter(StudentDB.id == video.student_id).first()
+            result.append({
+                "id": video.id,
+                "student_id": video.student_id,
+                "student_name": student.name if student else None,
+                "title": video.title,
+                "url": video.url,
+                "remarks": video.remarks,
+                "uploaded_by": video.uploaded_by,
+                "created_at": video.created_at
+            })
+
+        return result
     finally:
         db.close()
 
-@app.get("/videos/category/{category}")
-def get_videos_by_category(category: str):
-    db = SessionLocal()
-    try:
-        videos = db.query(VideoResourceDB).filter(VideoResourceDB.category == category).all()
-        return videos
-    finally:
-        db.close()
-
-@app.delete("/videos/{video_id}")
-def delete_video(video_id: int):
+@app.get("/video-resources/{video_id}")
+def get_video_resource_by_id(video_id: int):
+    """Get a specific video resource by ID"""
     db = SessionLocal()
     try:
         video = db.query(VideoResourceDB).filter(VideoResourceDB.id == video_id).first()
         if not video:
             raise HTTPException(status_code=404, detail="Video not found")
+
+        student = db.query(StudentDB).filter(StudentDB.id == video.student_id).first()
+
+        return {
+            "id": video.id,
+            "student_id": video.student_id,
+            "student_name": student.name if student else None,
+            "title": video.title,
+            "url": video.url,
+            "remarks": video.remarks,
+            "uploaded_by": video.uploaded_by,
+            "created_at": video.created_at
+        }
+    finally:
+        db.close()
+
+@app.delete("/video-resources/{video_id}")
+def delete_video_resource(video_id: int):
+    """Delete a video resource and its file"""
+    db = SessionLocal()
+    try:
+        video = db.query(VideoResourceDB).filter(VideoResourceDB.id == video_id).first()
+        if not video:
+            raise HTTPException(status_code=404, detail="Video not found")
+
+        # Try to delete the file
+        if video.url:
+            filename = video.url.split("/")[-1]
+            file_path = UPLOAD_DIR / filename
+            if file_path.exists():
+                file_path.unlink()
+
         db.delete(video)
         db.commit()
-        return {"message": "Video deleted"}
+        return {"message": "Video deleted successfully"}
     finally:
         db.close()
 

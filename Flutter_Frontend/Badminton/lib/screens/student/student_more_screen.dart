@@ -12,6 +12,7 @@ import 'student_schedule_screen.dart';
 import 'student_calendar_screen.dart';
 import 'student_profile_screen.dart';
 import 'student_settings_screen.dart';
+import 'student_videos_screen.dart';
 
 /// Student More Screen - Navigation hub for additional features
 /// All features are READ-ONLY for students
@@ -106,6 +107,14 @@ class _StudentMoreScreenState extends ConsumerState<StudentMoreScreen> {
               isDark: isDark,
               onTap: () => setState(() => _currentView = 'schedule'),
             ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.video_library_outlined,
+              title: 'Training Videos',
+              subtitle: 'View videos uploaded by your coach',
+              isDark: isDark,
+              onTap: () => setState(() => _currentView = 'videos'),
+            ),
 
             const SizedBox(height: AppDimensions.spacingL),
 
@@ -160,6 +169,10 @@ class _StudentMoreScreenState extends ConsumerState<StudentMoreScreen> {
         );
       case 'calendar':
         return StudentCalendarScreen(
+          onBack: () => setState(() => _currentView = null),
+        );
+      case 'videos':
+        return StudentVideosScreen(
           onBack: () => setState(() => _currentView = null),
         );
       case 'settings':

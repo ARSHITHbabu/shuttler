@@ -18,6 +18,7 @@ import '../core/services/invitation_service.dart';
 import '../core/services/notification_service.dart';
 import '../core/services/tournament_service.dart';
 import '../core/services/session_service.dart';
+import '../core/services/video_service.dart';
 import '../core/network/connectivity_service.dart';
 import '../core/network/request_queue.dart';
 import 'package:dio/dio.dart';
@@ -167,6 +168,13 @@ TournamentService tournamentService(TournamentServiceRef ref) {
 SessionService sessionService(SessionServiceRef ref) {
   final apiService = ref.watch(apiServiceProvider);
   return SessionService(apiService);
+}
+
+/// Provider for VideoService singleton
+@riverpod
+VideoService videoService(VideoServiceRef ref) {
+  final apiService = ref.watch(apiServiceProvider);
+  return VideoService(apiService);
 }
 
 /// Provider for ConnectivityService singleton
