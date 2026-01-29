@@ -79,11 +79,101 @@ class BatchTimeUtils {
 
   /// Check if a batch is upcoming (scheduled for today after current time or future days)
   static bool isBatchUpcoming(Batch batch) {
+    final startTime = parseTimeString(parseBatchStartTimeString(batch.timing) ?? '');
     final endTime = parseBatchEndTime(batch.timing);
     if (endTime == null) return false;
     
+    // Handle batches that span midnight (e.g., "11:59 PM - 1:00 AM")
+    // If end time is earlier than start time, add 1 day to end time
+    DateTime adjustedEndTime = endTime;
+    if (startTime != null && endTime.isBefore(startTime)) {
+      adjustedEndTime = endTime.add(const Duration(days: 1));
+    }
+    
     final now = DateTime.now();
-    return now.isBefore(endTime);
+    return now.isBefore(adjustedEndTime);
+  }
+
+  /// Parse batch timing string and extract start time string
+  /// Returns start time as string (e.g., "6:00 AM" or "18:00")
+  static String? parseBatchStartTimeString(String timing) {
+    try {
+      final parts = timing.split(' - ');
+      if (parts.length != 2) return null;
+      return parts[0].trim();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Parse batch timing string and extract end time string
+  /// Returns end time as string (e.g., "7:30 AM" or "19:30")
+  static String? parseBatchEndTimeString(String timing) {
+    try {
+      final parts = timing.split(' - ');
+      if (parts.length != 2) return null;
+      return parts[1].trim();
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Parse a single time string (e.g., "6:00 AM" or "18:00") to DateTime
+  /// Returns DateTime with today's date and the parsed time
+  static DateTime? parseTimeString(String timeStr) {
+    try {
+      // Try parsing with AM/PM format first
+      try {
+        final timeFormat = DateFormat('h:mm a');
+        final time = timeFormat.parse(timeStr);
+        final now = DateTime.now();
+        return DateTime(now.year, now.month, now.day, time.hour, time.minute);
+      } catch (_) {
+        // Try manual parsing for AM/PM format (fallback)
+        try {
+          final upperStr = timeStr.toUpperCase();
+          final isPM = upperStr.contains('PM');
+          final isAM = upperStr.contains('AM');
+          
+          // Remove AM/PM from string
+          final timeStrClean = upperStr.replaceAll(RegExp(r'\s*(AM|PM)\s*'), '');
+          final timeParts = timeStrClean.split(':');
+          
+          if (timeParts.length == 2) {
+            var hour = int.parse(timeParts[0].trim());
+            final minute = int.parse(timeParts[1].trim());
+            
+            // Convert to 24-hour format
+            if (isPM && hour != 12) {
+              hour += 12;
+            } else if (isAM && hour == 12) {
+              hour = 0;
+            }
+            
+            final now = DateTime.now();
+            return DateTime(now.year, now.month, now.day, hour, minute);
+          }
+        } catch (_) {
+          // Try 24-hour format
+          try {
+            final timeParts = timeStr.split(':');
+            if (timeParts.length == 2) {
+              final hourStr = timeParts[0].trim();
+              final minuteStr = timeParts[1].trim().split(' ')[0]; // Remove AM/PM if present
+              final hour = int.parse(hourStr);
+              final minute = int.parse(minuteStr);
+              final now = DateTime.now();
+              return DateTime(now.year, now.month, now.day, hour, minute);
+            }
+          } catch (_) {
+            return null;
+          }
+        }
+      }
+    } catch (e) {
+      return null;
+    }
+    return null;
   }
 
   /// Get the next occurrence date for a batch based on its days
