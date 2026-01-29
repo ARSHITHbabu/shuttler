@@ -8,6 +8,8 @@ import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/service_providers.dart';
+import '../../providers/theme_provider.dart';
+import '../../widgets/settings/shuttlecock_theme_toggle.dart';
 import '../common/privacy_policy_screen.dart';
 import '../common/terms_conditions_screen.dart';
 import '../common/help_support_screen.dart';
@@ -74,6 +76,8 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final themeMode = ref.watch(themeNotifierProvider);
+    final isDarkMode = themeMode == ThemeMode.dark;
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
@@ -111,14 +115,22 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
               padding: const EdgeInsets.all(AppDimensions.paddingL),
               child: Column(
                 children: [
-                  // Appearance Section
-                  _buildSection(
-                    title: 'Appearance',
-                    icon: Icons.palette_outlined,
-                    isDark: isDark,
-                    children: [
-                      _buildThemeToggle(isDark),
-                    ],
+                  // Theme Section
+                  Text(
+                    'Theme',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: AppDimensions.spacingM),
+
+                  ShuttlecockThemeToggle(
+                    isDarkMode: isDarkMode,
+                    onToggle: () {
+                      ref.read(themeNotifierProvider.notifier).toggleTheme();
+                    },
                   ),
 
                   const SizedBox(height: AppDimensions.spacingL),
@@ -337,66 +349,6 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
     );
   }
 
-  Widget _buildThemeToggle(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.all(AppDimensions.paddingM),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Dark Mode',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                  ),
-                ),
-                Text(
-                  'Uses system theme settings',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppDimensions.spacingM,
-              vertical: AppDimensions.spacingS,
-            ),
-            decoration: BoxDecoration(
-              color: (isDark ? AppColors.accent : AppColorsLight.accent).withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  isDark ? Icons.dark_mode : Icons.light_mode,
-                  size: 18,
-                  color: isDark ? AppColors.accent : AppColorsLight.accent,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  isDark ? 'Dark' : 'Light',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? AppColors.accent : AppColorsLight.accent,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildSwitchTile({
     required String title,

@@ -344,7 +344,7 @@ final overdueFeesProvider = AutoDisposeFutureProvider<List<Fee>>.internal(
 // ignore: unused_element
 typedef OverdueFeesRef = AutoDisposeFutureProviderRef<List<Fee>>;
 String _$studentsWithBatchFeesHash() =>
-    r'84a5832b0ab9207ede6efdb61033a7ce54fba58a';
+    r'7f5fdf3b12e7db458a79c70798d6c490292b14c3';
 
 /// Provider for all students with their batch enrollments and fee status
 /// Returns students grouped by batch with their fee information

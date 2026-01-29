@@ -4,6 +4,7 @@ import 'core/theme/app_theme.dart';
 import 'core/services/storage_service.dart';
 import 'routes/app_router.dart';
 import 'providers/theme_provider.dart';
+import 'providers/service_providers.dart';
 import 'widgets/common/offline_indicator.dart';
 
 void main() async {
