@@ -12,6 +12,7 @@ import 'coach_attendance_view_screen.dart';
 import 'coach_schedule_screen.dart';
 import 'coach_calendar_screen.dart';
 import 'coach_settings_screen.dart';
+import 'coach_video_management_screen.dart';
 import '../owner/bmi_tracking_screen.dart';
 import '../owner/performance_tracking_screen.dart';
 import 'coach_fees_screen.dart';
@@ -126,6 +127,18 @@ class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (context) => const CoachScheduleScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.video_library_outlined,
+              title: 'Video Management',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const CoachVideoManagementScreen(),
                   ),
                 );
               },
