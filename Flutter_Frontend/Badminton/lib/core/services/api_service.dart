@@ -312,6 +312,7 @@ class ApiService {
   }
 
   /// Upload file (multipart/form-data)
+  /// Supports both file paths (mobile/desktop) and bytes (web)
   Future<Response> uploadFile(
     String path,
     String filePath, {
@@ -320,8 +321,51 @@ class ApiService {
     ProgressCallback? onSendProgress,
   }) async {
     try {
+      MultipartFile multipartFile;
+      
+      // Check if we're on web platform
+      try {
+        // Try to use fromFile first (works on mobile/desktop)
+        multipartFile = await MultipartFile.fromFile(filePath);
+      } catch (e) {
+        // If fromFile fails (e.g., on web), this method should not be called
+        // Instead, use uploadFileBytes for web
+        rethrow;
+      }
+
       final formData = FormData.fromMap({
-        fieldName: await MultipartFile.fromFile(filePath),
+        fieldName: multipartFile,
+        ...?additionalData,
+      });
+
+      final response = await _dio.post(
+        path,
+        data: formData,
+        options: Options(
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        ),
+        onSendProgress: onSendProgress,
+      );
+      return response;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// Upload file from bytes (for web support)
+  Future<Response> uploadFileBytes(
+    String path,
+    Uint8List bytes,
+    String filename, {
+    String fieldName = 'file',
+    Map<String, dynamic>? additionalData,
+    ProgressCallback? onSendProgress,
+  }) async {
+    try {
+      final formData = FormData.fromMap({
+        fieldName: MultipartFile.fromBytes(bytes, filename: filename),
         ...?additionalData,
       });
 

@@ -36,10 +36,10 @@ class StudentList extends _$StudentList {
     try {
       final studentService = ref.read(studentServiceProvider);
       await studentService.createStudent(studentData);
-      
+
       // Invalidate related providers
       ref.invalidate(dashboardStatsProvider);
-      
+
       await refresh();
     } catch (e) {
       throw Exception('Failed to create student: $e');
@@ -51,11 +51,11 @@ class StudentList extends _$StudentList {
     try {
       final studentService = ref.read(studentServiceProvider);
       await studentService.updateStudent(id, studentData);
-      
+
       // Invalidate related providers
       ref.invalidate(studentByIdProvider(id));
       ref.invalidate(dashboardStatsProvider);
-      
+
       await refresh();
     } catch (e) {
       throw Exception('Failed to update student: $e');
@@ -67,12 +67,12 @@ class StudentList extends _$StudentList {
     try {
       final studentService = ref.read(studentServiceProvider);
       await studentService.deleteStudent(id);
-      
+
       // Invalidate related providers
       ref.invalidate(studentByIdProvider(id));
       ref.invalidate(studentBatchesProvider(id));
       ref.invalidate(dashboardStatsProvider);
-      
+
       await refresh();
     } catch (e) {
       throw Exception('Failed to delete student: $e');
@@ -92,17 +92,18 @@ Future<Student> studentById(StudentByIdRef ref, int id) async {
 Future<List<Student>> studentSearch(StudentSearchRef ref, String query) async {
   final studentService = ref.watch(studentServiceProvider);
   final allStudents = await studentService.getStudents();
-  
+
   if (query.isEmpty) {
     return allStudents;
   }
-  
+
   final lowerQuery = query.toLowerCase();
   return allStudents.where((student) {
     return student.name.toLowerCase().contains(lowerQuery) ||
         student.email.toLowerCase().contains(lowerQuery) ||
         student.phone.contains(query) ||
-        (student.guardianName != null && student.guardianName!.toLowerCase().contains(lowerQuery));
+        (student.guardianName != null &&
+            student.guardianName!.toLowerCase().contains(lowerQuery));
   }).toList();
 }
 
@@ -118,7 +119,7 @@ Future<List<Student>> studentByBatch(StudentByBatchRef ref, int batchId) async {
 Future<Map<String, dynamic>> studentStats(StudentStatsRef ref) async {
   final studentService = ref.watch(studentServiceProvider);
   final students = await studentService.getStudents();
-  
+
   return {
     'total': students.length,
     'active': students.where((s) => s.status == 'active').length,
@@ -128,25 +129,34 @@ Future<Map<String, dynamic>> studentStats(StudentStatsRef ref) async {
 
 /// Provider for student dashboard data (stats and upcoming sessions)
 @riverpod
-Future<StudentDashboardData> studentDashboard(StudentDashboardRef ref, int studentId) async {
+Future<StudentDashboardData> studentDashboard(
+  StudentDashboardRef ref,
+  int studentId,
+) async {
   // Get student info
   final student = await ref.watch(studentByIdProvider(studentId).future);
-  
+
   // Get student batches
   final batches = await ref.watch(studentBatchesProvider(studentId).future);
-  
+
   // Calculate attendance rate
-  final attendanceRecords = await ref.watch(attendanceByStudentProvider(studentId).future);
+  final attendanceRecords = await ref.watch(
+    attendanceByStudentProvider(studentId).future,
+  );
   double attendanceRate = 0.0;
   if (attendanceRecords.isNotEmpty) {
-    final present = attendanceRecords.where((r) => r.status.toLowerCase() == 'present').length;
+    final present = attendanceRecords
+        .where((r) => r.status.toLowerCase() == 'present')
+        .length;
     attendanceRate = (present / attendanceRecords.length) * 100;
   }
-  
+
   // Get overall performance average
-  final overallPerformance = await ref.watch(averagePerformanceProvider(studentId).future);
+  final overallPerformance = await ref.watch(
+    averagePerformanceProvider(studentId).future,
+  );
   double performanceScore = overallPerformance['average'] ?? 0.0;
-  
+
   // Get latest BMI
   final bmiRecords = await ref.watch(bmiByStudentProvider(studentId).future);
   String bmiStatus = 'N/A';
@@ -163,7 +173,7 @@ Future<StudentDashboardData> studentDashboard(StudentDashboardRef ref, int stude
       bmiStatus = 'Obese';
     }
   }
-  
+
   // Get fee status
   final fees = await ref.watch(feeListProvider(studentId: studentId).future);
   String feeStatus = 'N/A';
@@ -175,13 +185,13 @@ Future<StudentDashboardData> studentDashboard(StudentDashboardRef ref, int stude
       feeStatus = '$pendingFees Pending';
     }
   }
-  
+
   // Get upcoming sessions - work directly with batches (like owner/coach dashboard)
   final now = DateTime.now();
   final dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   final todayDayName = dayNames[now.weekday - 1];
   final upcomingSessions = <Map<String, dynamic>>[];
-  
+
   // Parse batch timing to extract start/end times
   String? parseBatchStartTime(String timing) {
     try {
@@ -190,7 +200,7 @@ Future<StudentDashboardData> studentDashboard(StudentDashboardRef ref, int stude
     } catch (_) {}
     return null;
   }
-  
+
   String? parseBatchEndTime(String timing) {
     try {
       final parts = timing.split(' - ');
@@ -198,16 +208,17 @@ Future<StudentDashboardData> studentDashboard(StudentDashboardRef ref, int stude
     } catch (_) {}
     return null;
   }
-  
+
   // Get today's sessions and future sessions (next 7 days)
   // Only add ONE session per batch - either today (if upcoming) OR next future occurrence
   for (var batch in batches) {
     bool batchAdded = false;
-    
+
     // Check if batch runs today
-    final runsToday = batch.period.toLowerCase() == 'daily' || 
-                      batch.days.contains(todayDayName);
-    
+    final runsToday =
+        batch.period.toLowerCase() == 'daily' ||
+        batch.days.contains(todayDayName);
+
     if (runsToday && BatchTimeUtils.isBatchUpcoming(batch)) {
       // Batch runs today and is upcoming - add it
       final startTimeStr = parseBatchStartTime(batch.timing);
@@ -215,7 +226,7 @@ Future<StudentDashboardData> studentDashboard(StudentDashboardRef ref, int stude
       final timeStr = startTimeStr != null && endTimeStr != null
           ? '$startTimeStr - $endTimeStr'
           : (startTimeStr ?? batch.timing);
-      
+
       upcomingSessions.add({
         'batch_name': batch.name,
         'time': timeStr,
@@ -224,26 +235,31 @@ Future<StudentDashboardData> studentDashboard(StudentDashboardRef ref, int stude
       });
       batchAdded = true; // Mark as added, skip future days for this batch
     }
-    
+
     // Only check future days if batch wasn't added for today
     if (!batchAdded) {
       // Get future sessions (next 7 days)
       for (int i = 1; i <= 7 && upcomingSessions.length < 5; i++) {
         final checkDate = now.add(Duration(days: i));
         final checkDayName = dayNames[checkDate.weekday - 1];
-        
+
         // Check if batch runs on this future day
-        final runsOnDay = batch.period.toLowerCase() == 'daily' || 
-                          batch.days.contains(checkDayName);
-        
+        final runsOnDay =
+            batch.period.toLowerCase() == 'daily' ||
+            batch.days.contains(checkDayName);
+
         if (runsOnDay) {
           final startTimeStr = parseBatchStartTime(batch.timing);
           final endTimeStr = parseBatchEndTime(batch.timing);
           final timeStr = startTimeStr != null && endTimeStr != null
               ? '$startTimeStr - $endTimeStr'
               : (startTimeStr ?? batch.timing);
-          
-          final dateStr = DateTime(checkDate.year, checkDate.month, checkDate.day).toIso8601String();
+
+          final dateStr = DateTime(
+            checkDate.year,
+            checkDate.month,
+            checkDate.day,
+          ).toIso8601String();
           upcomingSessions.add({
             'batch_name': batch.name,
             'time': timeStr,
@@ -255,7 +271,7 @@ Future<StudentDashboardData> studentDashboard(StudentDashboardRef ref, int stude
       }
     }
   }
-  
+
   // Sort by date and limit to 5
   upcomingSessions.sort((a, b) {
     try {
@@ -266,7 +282,7 @@ Future<StudentDashboardData> studentDashboard(StudentDashboardRef ref, int stude
       return 0;
     }
   });
-  
+
   return StudentDashboardData(
     studentName: student.name,
     attendanceRate: attendanceRate,
@@ -279,21 +295,23 @@ Future<StudentDashboardData> studentDashboard(StudentDashboardRef ref, int stude
 
 /// Provider for student schedules (all schedules for batches student is enrolled in)
 @riverpod
-Future<List<Schedule>> studentSchedules(StudentSchedulesRef ref, int studentId) async {
+Future<List<Schedule>> studentSchedules(
+  StudentSchedulesRef ref,
+  int studentId,
+) async {
   final scheduleService = ref.watch(scheduleServiceProvider);
   final batches = await ref.watch(studentBatchesProvider(studentId).future);
-  
+
   List<Schedule> allSchedules = [];
-  
+
   for (var batch in batches) {
     try {
-      final batchSchedules = await scheduleService.getSchedules(batchId: batch.id);
+      final batchSchedules = await scheduleService.getSchedules(
+        batchId: batch.id,
+      );
       // Add batch name to schedules for display
       final schedulesWithBatchName = batchSchedules.map((schedule) {
-        return schedule.copyWith(
-          batchName: batch.name,
-          batchId: batch.id,
-        );
+        return schedule.copyWith(batchName: batch.name, batchId: batch.id);
       }).toList();
       allSchedules.addAll(schedulesWithBatchName);
     } catch (e) {
@@ -301,10 +319,10 @@ Future<List<Schedule>> studentSchedules(StudentSchedulesRef ref, int studentId) 
       continue;
     }
   }
-  
+
   // Sort by date (newest first)
   allSchedules.sort((a, b) => b.date.compareTo(a.date));
-  
+
   return allSchedules;
 }
 
@@ -316,7 +334,7 @@ class StudentDashboardData {
   final String bmiStatus;
   final String feeStatus;
   final List<Map<String, dynamic>> upcomingSessions;
-  
+
   StudentDashboardData({
     required this.studentName,
     required this.attendanceRate,
