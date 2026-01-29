@@ -351,6 +351,17 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
         setState(() {
           _showAddForm = false;
           _editingBatch = null;
+          // Explicitly clear all form fields
+          _nameController.clear();
+          _startTime = null;
+          _endTime = null;
+          _capacityController.clear();
+          _locationController.clear();
+          _feesController.clear();
+          _startDate = null;
+          _selectedCoachIds.clear();
+          _selectedDays.clear();
+          _selectedSessionId = null;
         });
       }
     } catch (e) {
@@ -797,6 +808,17 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                                 setState(() {
                                   _showAddForm = false;
                                   _editingBatch = null;
+                                  // Explicitly clear all form fields
+                                  _nameController.clear();
+                                  _startTime = null;
+                                  _endTime = null;
+                                  _capacityController.clear();
+                                  _locationController.clear();
+                                  _feesController.clear();
+                                  _startDate = null;
+                                  _selectedCoachIds.clear();
+                                  _selectedDays.clear();
+                                  _selectedSessionId = null;
                                 });
                               },
                               style: ElevatedButton.styleFrom(
