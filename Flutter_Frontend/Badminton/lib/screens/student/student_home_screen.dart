@@ -8,6 +8,10 @@ import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/student_provider.dart';
+import 'student_attendance_screen.dart';
+import 'student_performance_screen.dart';
+import 'student_bmi_screen.dart';
+import 'student_fees_screen.dart';
 
 /// Student Home Screen - Dashboard overview
 /// READ-ONLY view of student's personal statistics and upcoming sessions
@@ -75,17 +79,11 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
 
                   // Stats Grid
                   _buildStatsGrid(
+                    context,
                     isDark,
                     dashboardData.attendanceRate,
                     dashboardData.performanceScore,
-                    dashboardData.bmiStatus,
-                    dashboardData.feeStatus,
                   ),
-
-                  const SizedBox(height: AppDimensions.spacingL),
-
-                  // Today's Insights
-                  _buildTodaysInsights(isDark, dashboardData.attendanceRate),
 
                   const SizedBox(height: AppDimensions.spacingL),
 
@@ -95,7 +93,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                   const SizedBox(height: AppDimensions.spacingL),
 
                   // Quick Actions
-                  _buildQuickActions(isDark),
+                  _buildQuickActions(context, isDark),
 
                   const SizedBox(height: 100), // Space for bottom nav
                 ],
@@ -143,11 +141,10 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
   }
 
   Widget _buildStatsGrid(
+    BuildContext context,
     bool isDark,
     double attendanceRate,
     double performanceScore,
-    String bmiStatus,
-    String feeStatus,
   ) {
 
     return Padding(
@@ -166,120 +163,40 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
             label: 'Attendance Rate',
             isDark: isDark,
             valueColor: _getAttendanceColor(attendanceRate, isDark),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => _buildScreenWithBackground(
+                    context,
+                    const StudentAttendanceScreen(),
+                  ),
+                ),
+              );
+            },
           ),
           _StatCard(
             icon: Icons.trending_up,
             value: performanceScore > 0 ? '${performanceScore.toStringAsFixed(1)}/5' : 'N/A',
             label: 'Performance',
             isDark: isDark,
-          ),
-          _StatCard(
-            icon: Icons.monitor_weight_outlined,
-            value: bmiStatus,
-            label: 'BMI Status',
-            isDark: isDark,
-            valueColor: _getBmiStatusColor(bmiStatus, isDark),
-          ),
-          _StatCard(
-            icon: Icons.account_balance_wallet_outlined,
-            value: feeStatus,
-            label: 'Fee Status',
-            isDark: isDark,
-            valueColor: _getFeeStatusColor(feeStatus, isDark),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => _buildScreenWithBackground(
+                    context,
+                    const StudentPerformanceScreen(),
+                  ),
+                ),
+              );
+            },
           ),
         ],
       ),
     );
   }
 
-  Widget _buildTodaysInsights(bool isDark, double attendanceRate) {
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Your Progress',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-            ),
-          ),
-          const SizedBox(height: AppDimensions.spacingM),
-          NeumorphicContainer(
-            padding: const EdgeInsets.all(AppDimensions.paddingM),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: isDark ? AppColors.background : AppColorsLight.background,
-                        borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-                        boxShadow: NeumorphicStyles.getInsetShadow(),
-                      ),
-                      child: Icon(
-                        Icons.trending_up,
-                        size: 20,
-                        color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
-                      ),
-                    ),
-                    const SizedBox(width: AppDimensions.spacingM),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Overall Attendance',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-                            ),
-                          ),
-                          Text(
-                            '${attendanceRate.toStringAsFixed(0)}%',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w600,
-                              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppDimensions.spacingM),
-                Container(
-                  width: double.infinity,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: isDark ? AppColors.background : AppColorsLight.background,
-                    borderRadius: BorderRadius.circular(4),
-                    boxShadow: NeumorphicStyles.getSmallInsetShadow(),
-                  ),
-                  child: FractionallySizedBox(
-                    alignment: Alignment.centerLeft,
-                    widthFactor: (attendanceRate / 100).clamp(0.0, 1.0),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: _getAttendanceColor(attendanceRate, isDark),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildUpcomingSessions(bool isDark, List<Map<String, dynamic>> upcomingSessions) {
     return Padding(
@@ -348,7 +265,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
     );
   }
 
-  Widget _buildQuickActions(bool isDark) {
+  Widget _buildQuickActions(BuildContext context, bool isDark) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
       child: Column(
@@ -367,28 +284,113 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
             children: [
               Expanded(
                 child: _QuickActionButton(
-                  icon: Icons.check_circle_outline,
-                  label: 'View Attendance',
+                  icon: Icons.person_outline,
+                  label: 'Contact Owner',
+                  isDark: isDark,
+                  onTap: () => _showContactDialog(context, isDark, 'Owner'),
+                ),
+              ),
+              const SizedBox(width: AppDimensions.spacingM),
+              Expanded(
+                child: _QuickActionButton(
+                  icon: Icons.sports_tennis_outlined,
+                  label: 'Contact Coach',
+                  isDark: isDark,
+                  onTap: () => _showContactDialog(context, isDark, 'Coach'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppDimensions.spacingM),
+          Row(
+            children: [
+              Expanded(
+                child: _QuickActionButton(
+                  icon: Icons.monitor_weight_outlined,
+                  label: 'BMI',
                   isDark: isDark,
                   onTap: () {
-                    // Navigate to attendance tab (index 1)
-                    // This will be handled by parent dashboard
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => _buildScreenWithBackground(
+                          context,
+                          const StudentBMIScreen(),
+                        ),
+                      ),
+                    );
                   },
                 ),
               ),
               const SizedBox(width: AppDimensions.spacingM),
               Expanded(
                 child: _QuickActionButton(
-                  icon: Icons.trending_up,
-                  label: 'View Performance',
+                  icon: Icons.account_balance_wallet_outlined,
+                  label: 'Fees',
                   isDark: isDark,
                   onTap: () {
-                    // Navigate to performance tab (index 2)
-                    // This will be handled by parent dashboard
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => _buildScreenWithBackground(
+                          context,
+                          const StudentFeesScreen(),
+                        ),
+                      ),
+                    );
                   },
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScreenWithBackground(BuildContext context, Widget screen) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    // Wrap the screen in a Scaffold with gradient background
+    // The screen's Scaffold has transparent background, so the gradient will show through
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: isDark ? AppColors.backgroundGradient : AppColorsLight.backgroundGradient,
+        ),
+        child: screen,
+      ),
+    );
+  }
+
+  void _showContactDialog(BuildContext context, bool isDark, String contactType) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: isDark ? AppColors.cardBackground : AppColorsLight.cardBackground,
+        title: Text(
+          'Contact $contactType',
+          style: TextStyle(
+            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+          ),
+        ),
+        content: Text(
+          'Contact information will be available here.\n\nYou can reach out through:\n• Phone\n• Email\n• In-person at the academy',
+          style: TextStyle(
+            color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(
+              'Close',
+              style: TextStyle(
+                color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+              ),
+            ),
           ),
         ],
       ),
@@ -414,35 +416,6 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
       return isDark ? AppColors.error : AppColorsLight.error;
     }
   }
-
-  Color _getBmiStatusColor(String status, bool isDark) {
-    switch (status.toLowerCase()) {
-      case 'normal':
-      case 'healthy':
-        return isDark ? AppColors.success : AppColorsLight.success;
-      case 'underweight':
-      case 'overweight':
-        return Colors.orange;
-      case 'obese':
-        return isDark ? AppColors.error : AppColorsLight.error;
-      default:
-        return isDark ? AppColors.textPrimary : AppColorsLight.textPrimary;
-    }
-  }
-
-  Color _getFeeStatusColor(String status, bool isDark) {
-    switch (status.toLowerCase()) {
-      case 'paid':
-      case 'clear':
-        return isDark ? AppColors.success : AppColorsLight.success;
-      case 'pending':
-        return Colors.orange;
-      case 'overdue':
-        return isDark ? AppColors.error : AppColorsLight.error;
-      default:
-        return isDark ? AppColors.textPrimary : AppColorsLight.textPrimary;
-    }
-  }
 }
 
 class _StatCard extends StatelessWidget {
@@ -451,6 +424,7 @@ class _StatCard extends StatelessWidget {
   final String label;
   final bool isDark;
   final Color? valueColor;
+  final VoidCallback? onTap;
 
   const _StatCard({
     required this.icon,
@@ -458,13 +432,16 @@ class _StatCard extends StatelessWidget {
     required this.label,
     required this.isDark,
     this.valueColor,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return NeumorphicContainer(
-      padding: const EdgeInsets.all(AppDimensions.paddingM),
-      child: Column(
+    return GestureDetector(
+      onTap: onTap,
+      child: NeumorphicContainer(
+        padding: const EdgeInsets.all(AppDimensions.paddingM),
+        child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -508,6 +485,7 @@ class _StatCard extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
         ],
+      ),
       ),
     );
   }
