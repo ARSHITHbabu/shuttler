@@ -125,13 +125,8 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
                       color: AppColors.accent.withOpacity(0.3),
                       shape: BoxShape.circle,
                     ),
-                    markerDecoration: const BoxDecoration(
-                      color: AppColors.accent,
-                      shape: BoxShape.circle,
-                    ),
-                    markersMaxCount: 3,
-                    markerSize: 6,
-                    canMarkersOverflow: true,
+                    // Hide marker dots - using colored date numbers instead
+                    markersMaxCount: 0,
                   ),
                   headerStyle: HeaderStyle(
                     formatButtonVisible: true,

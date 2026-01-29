@@ -132,13 +132,8 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
                               color: (isDark ? AppColors.accent : AppColorsLight.accent).withOpacity(0.3),
                               shape: BoxShape.circle,
                             ),
-                            markerDecoration: BoxDecoration(
-                              color: isDark ? AppColors.accent : AppColorsLight.accent,
-                              shape: BoxShape.circle,
-                            ),
-                            markersMaxCount: 3,
-                            markerSize: 6,
-                            canMarkersOverflow: true,
+                            // Hide marker dots - using colored date numbers instead
+                            markersMaxCount: 0,
                           ),
                           headerStyle: HeaderStyle(
                             formatButtonVisible: true,
