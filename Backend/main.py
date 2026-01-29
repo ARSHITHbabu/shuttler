@@ -852,6 +852,7 @@ class CoachUpdate(BaseModel):
     specialization: Optional[str] = None
     experience_years: Optional[int] = None
     status: Optional[str] = None
+    profile_photo: Optional[str] = None
 
 # Owner Models
 class OwnerCreate(BaseModel):

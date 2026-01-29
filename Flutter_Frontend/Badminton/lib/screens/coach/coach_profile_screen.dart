@@ -326,6 +326,9 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
         'profile_photo': imageUrl,
       });
 
+      // Invalidate provider to refresh the coach data
+      ref.invalidate(coachByIdProvider(coachId));
+
       setState(() {
         _isUploadingImage = false;
         _coach = null; // Force refresh
@@ -370,6 +373,9 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
       await coachService.updateCoach(coachId, {
         'profile_photo': imageUrl,
       });
+
+      // Invalidate provider to refresh the coach data
+      ref.invalidate(coachByIdProvider(coachId));
 
       setState(() {
         _isUploadingImage = false;
