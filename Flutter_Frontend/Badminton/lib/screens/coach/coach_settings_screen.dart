@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/success_snackbar.dart';
+import '../../widgets/common/confirmation_dialog.dart';
 import '../../widgets/settings/shuttlecock_theme_toggle.dart';
 import '../../providers/theme_provider.dart';
 import '../../providers/auth_provider.dart';
@@ -23,20 +23,6 @@ class CoachSettingsScreen extends ConsumerStatefulWidget {
 
 class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
   bool _notificationsEnabled = true;
-  String _appVersion = '1.0.0';
-
-  @override
-  void initState() {
-    super.initState();
-    _loadAppVersion();
-  }
-
-  Future<void> _loadAppVersion() async {
-    // App version - can be set manually or loaded from package info if available
-    setState(() {
-      _appVersion = '1.0.0'; // Default version
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -70,24 +56,6 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Account Section
-              const _SectionTitle(title: 'Account'),
-              const SizedBox(height: AppDimensions.spacingM),
-
-              _SettingsItem(
-                icon: Icons.person_outline,
-                title: 'Profile',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => const CoachProfileScreen(),
-                    ),
-                  );
-                },
-              ),
-
-              const SizedBox(height: AppDimensions.spacingL),
-
               // App Settings Section
               const _SectionTitle(title: 'App Settings'),
               const SizedBox(height: AppDimensions.spacingM),
@@ -142,102 +110,23 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
 
               const SizedBox(height: AppDimensions.spacingL),
 
-              // Support Section
-              const _SectionTitle(title: 'Support'),
+              // Account Settings Section
+              const _SectionTitle(title: 'Account'),
               const SizedBox(height: AppDimensions.spacingM),
 
-              _SettingsItem(
-                icon: Icons.help_outline,
-                title: 'Help & Support',
+              _SettingsTile(
+                icon: Icons.person_outline,
+                title: 'Profile',
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (context) => const HelpSupportScreen(userRole: 'coach'),
+                      builder: (context) => const CoachProfileScreen(),
                     ),
                   );
                 },
               ),
 
-              const SizedBox(height: AppDimensions.spacingS),
-
-              _SettingsItem(
-                icon: Icons.privacy_tip_outlined,
-                title: 'Privacy Policy',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => const PrivacyPolicyScreen(),
-                    ),
-                  );
-                },
-              ),
-
-              const SizedBox(height: AppDimensions.spacingS),
-
-              _SettingsItem(
-                icon: Icons.description_outlined,
-                title: 'Terms & Conditions',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => const TermsConditionsScreen(),
-                    ),
-                  );
-                },
-              ),
-
-              const SizedBox(height: AppDimensions.spacingL),
-
-              // App Info Section
-              const _SectionTitle(title: 'App Info'),
-              const SizedBox(height: AppDimensions.spacingM),
-
-              NeumorphicContainer(
-                padding: const EdgeInsets.all(AppDimensions.paddingM),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.info_outline, color: textPrimaryColor.withValues(alpha: 0.6)),
-                        const SizedBox(width: AppDimensions.spacingM),
-                        Text(
-                          'App Version',
-                          style: TextStyle(
-                            color: textPrimaryColor,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Text(
-                      _appVersion,
-                      style: TextStyle(
-                        color: textPrimaryColor.withValues(alpha: 0.6),
-                        fontSize: 16,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: AppDimensions.spacingM),
-
-              _SettingsItem(
-                icon: Icons.delete_outline,
-                title: 'Clear Cache',
-                onTap: () {
-                  _showClearCacheDialog(context);
-                },
-              ),
-
-              const SizedBox(height: AppDimensions.spacingL),
-
-              // Account Actions Section
-              const _SectionTitle(title: 'Security'),
-              const SizedBox(height: AppDimensions.spacingM),
-
-              _SettingsItem(
+              _SettingsTile(
                 icon: Icons.lock_outline,
                 title: 'Change Password',
                 onTap: () {
@@ -256,53 +145,94 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
                 },
               ),
 
+              const SizedBox(height: AppDimensions.spacingL),
+
+              // Data & Storage Section
+              const _SectionTitle(title: 'Data & Storage'),
+              const SizedBox(height: AppDimensions.spacingM),
+
+              _SettingsTile(
+                icon: Icons.download_outlined,
+                title: 'Export Data',
+                onTap: () {
+                  // TODO: Export data
+                  SuccessSnackbar.showInfo(context, 'Export data feature coming soon');
+                },
+              ),
+
+              _SettingsTile(
+                icon: Icons.delete_outline,
+                title: 'Clear Cache',
+                onTap: () async {
+                  final confirm = await ConfirmationDialog.show(
+                    context,
+                    'Clear Cache',
+                    'Are you sure you want to clear all cached data?',
+                    confirmText: 'Clear',
+                    cancelText: 'Cancel',
+                    icon: Icons.delete_outline,
+                    isDestructive: true,
+                  );
+                  if (confirm == true && mounted) {
+                    // TODO: Clear cache
+                    SuccessSnackbar.show(context, 'Cache cleared');
+                  }
+                },
+              ),
+
+              const SizedBox(height: AppDimensions.spacingL),
+
+              // About Section
+              const _SectionTitle(title: 'About'),
+              const SizedBox(height: AppDimensions.spacingM),
+
+              _SettingsTile(
+                icon: Icons.info_outline,
+                title: 'App Version',
+                subtitle: '1.0.0',
+                onTap: null,
+              ),
+
+              _SettingsTile(
+                icon: Icons.help_outline,
+                title: 'Help & Support',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const HelpSupportScreen(userRole: 'coach'),
+                    ),
+                  );
+                },
+              ),
+
+              _SettingsTile(
+                icon: Icons.privacy_tip_outlined,
+                title: 'Privacy Policy',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const PrivacyPolicyScreen(),
+                    ),
+                  );
+                },
+              ),
+
+              _SettingsTile(
+                icon: Icons.description_outlined,
+                title: 'Terms & Conditions',
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const TermsConditionsScreen(),
+                    ),
+                  );
+                },
+              ),
+
               const SizedBox(height: 100), // Space for bottom nav
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  void _showClearCacheDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        title: const Text(
-          'Clear Cache',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        content: const Text(
-          'This will clear all cached data. You may need to log in again.',
-          style: TextStyle(
-            fontSize: 16,
-            color: AppColors.textSecondary,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              SuccessSnackbar.show(context, 'Cache cleared');
-            },
-            child: const Text(
-              'Clear',
-              style: TextStyle(color: AppColors.error),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -329,52 +259,64 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
-class _SettingsItem extends StatelessWidget {
+class _SettingsTile extends StatelessWidget {
   final IconData icon;
   final String title;
-  final VoidCallback onTap;
-  final Color? textColor;
-  final Color? iconColor;
+  final String? subtitle;
+  final VoidCallback? onTap;
 
-  const _SettingsItem({
+  const _SettingsTile({
     required this.icon,
     required this.title,
-    required this.onTap,
-    this.textColor,
-    this.iconColor,
+    this.subtitle,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final textPrimaryColor = theme.colorScheme.onSurface;
-    final itemTextColor = textColor ?? textPrimaryColor;
-    final itemIconColor = iconColor ?? textPrimaryColor.withValues(alpha: 0.6);
+    final textSecondaryColor = theme.colorScheme.onSurface.withValues(alpha: 0.6);
 
-    return GestureDetector(
+    return NeumorphicContainer(
+      padding: const EdgeInsets.all(AppDimensions.paddingM),
+      margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
       onTap: onTap,
-      child: NeumorphicContainer(
-        padding: const EdgeInsets.all(AppDimensions.paddingM),
-        child: Row(
-          children: [
-            Icon(icon, color: itemIconColor),
-            const SizedBox(width: AppDimensions.spacingM),
-            Expanded(
-              child: Text(
-                title,
-                style: TextStyle(
-                  fontSize: 16,
-                  color: itemTextColor,
+      child: Row(
+        children: [
+          Icon(icon, color: textSecondaryColor, size: 24),
+          const SizedBox(width: AppDimensions.spacingM),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: textPrimaryColor,
+                    fontSize: 16,
+                  ),
                 ),
-              ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle!,
+                    style: TextStyle(
+                      color: textSecondaryColor,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ],
             ),
+          ),
+          if (onTap != null)
             Icon(
               Icons.chevron_right,
+              color: textSecondaryColor,
               size: 20,
-              color: textPrimaryColor.withValues(alpha: 0.4),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
