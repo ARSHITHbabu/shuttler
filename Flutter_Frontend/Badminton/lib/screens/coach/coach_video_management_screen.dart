@@ -7,20 +7,20 @@ import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
 import '../../providers/service_providers.dart';
-import '../../providers/batch_provider.dart';
+import '../../providers/coach_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/video_resource.dart';
 import '../../models/student.dart';
 
-/// Video Management Screen - Upload and manage training videos for students
-class VideoManagementScreen extends ConsumerStatefulWidget {
-  const VideoManagementScreen({super.key});
+/// Coach Video Management Screen - Upload and manage training videos for students
+class CoachVideoManagementScreen extends ConsumerStatefulWidget {
+  const CoachVideoManagementScreen({super.key});
 
   @override
-  ConsumerState<VideoManagementScreen> createState() => _VideoManagementScreenState();
+  ConsumerState<CoachVideoManagementScreen> createState() => _CoachVideoManagementScreenState();
 }
 
-class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
+class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagementScreen> {
   int? _selectedBatchId;
   int? _selectedStudentId;
   List<Student> _batchStudents = [];
@@ -240,119 +240,176 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final batchesAsync = ref.watch(batchListProvider);
+    final authState = ref.watch(authProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Video Management'),
-        backgroundColor: AppColors.background,
-        elevation: 0,
-      ),
-      backgroundColor: AppColors.background,
-      floatingActionButton: _selectedStudentId != null && !_showUploadForm
-          ? FloatingActionButton(
-              onPressed: () => setState(() => _showUploadForm = true),
-              backgroundColor: AppColors.accent,
-              child: const Icon(Icons.add, color: Colors.white),
-            )
-          : null,
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppDimensions.paddingL),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Batch Selector
-            const Text(
-              'Select Batch',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
+    return authState.when(
+      data: (authValue) {
+        if (authValue is! Authenticated) {
+          return Scaffold(
+            appBar: AppBar(
+              title: const Text('Video Management'),
+              backgroundColor: AppColors.background,
+              elevation: 0,
+            ),
+            body: const Center(
+              child: Text(
+                'Please login',
+                style: TextStyle(color: AppColors.error),
               ),
             ),
-            const SizedBox(height: AppDimensions.spacingS),
-            batchesAsync.when(
-              loading: () => const LinearProgressIndicator(),
-              error: (e, _) => Text('Error: $e', style: const TextStyle(color: AppColors.error)),
-              data: (batches) => NeumorphicContainer(
-                padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
-                child: DropdownButtonFormField<int>(
-                  value: _selectedBatchId,
-                  decoration: const InputDecoration(
-                    border: InputBorder.none,
-                    hintText: 'Select a batch',
-                    hintStyle: TextStyle(color: AppColors.textHint),
+          );
+        }
+
+        final coachId = authValue.userId;
+        final batchesAsync = ref.watch(coachBatchesProvider(coachId));
+
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Video Management'),
+            backgroundColor: AppColors.background,
+            elevation: 0,
+          ),
+          backgroundColor: AppColors.background,
+          floatingActionButton: _selectedStudentId != null && !_showUploadForm
+              ? FloatingActionButton(
+                  onPressed: () => setState(() => _showUploadForm = true),
+                  backgroundColor: AppColors.accent,
+                  child: const Icon(Icons.add, color: Colors.white),
+                )
+              : null,
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(AppDimensions.paddingL),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Batch Selector
+                const Text(
+                  'Select Batch',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
                   ),
-                  dropdownColor: AppColors.cardBackground,
-                  style: const TextStyle(color: AppColors.textPrimary),
-                  items: batches.map((batch) {
-                    return DropdownMenuItem<int>(
-                      value: batch.id,
-                      child: Text(batch.name),
+                ),
+                const SizedBox(height: AppDimensions.spacingS),
+                batchesAsync.when(
+                  loading: () => const LinearProgressIndicator(),
+                  error: (e, _) => Text('Error: $e', style: const TextStyle(color: AppColors.error)),
+                  data: (batches) {
+                    if (batches.isEmpty) {
+                      return const NeumorphicContainer(
+                        padding: EdgeInsets.all(AppDimensions.paddingM),
+                        child: Center(
+                          child: Text(
+                            'No batches assigned',
+                            style: TextStyle(color: AppColors.textSecondary),
+                          ),
+                        ),
+                      );
+                    }
+                    return NeumorphicContainer(
+                      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
+                      child: DropdownButtonFormField<int>(
+                        value: _selectedBatchId,
+                        decoration: const InputDecoration(
+                          border: InputBorder.none,
+                          hintText: 'Select a batch',
+                          hintStyle: TextStyle(color: AppColors.textHint),
+                        ),
+                        dropdownColor: AppColors.cardBackground,
+                        style: const TextStyle(color: AppColors.textPrimary),
+                        items: batches.map((batch) {
+                          return DropdownMenuItem<int>(
+                            value: batch.id,
+                            child: Text(batch.name),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() => _selectedBatchId = value);
+                          _loadBatchStudents();
+                        },
+                      ),
                     );
-                  }).toList(),
-                  onChanged: (value) {
-                    setState(() => _selectedBatchId = value);
-                    _loadBatchStudents();
                   },
                 ),
-              ),
-            ),
 
-            const SizedBox(height: AppDimensions.spacingL),
+                const SizedBox(height: AppDimensions.spacingL),
 
-            // Student Selector
-            if (_selectedBatchId != null) ...[
-              const Text(
-                'Select Student',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: AppDimensions.spacingS),
-              if (_loadingStudents)
-                const LinearProgressIndicator()
-              else
-                NeumorphicContainer(
-                  padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
-                  child: DropdownButtonFormField<int>(
-                    value: _selectedStudentId,
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      hintText: 'Select a student',
-                      hintStyle: TextStyle(color: AppColors.textHint),
+                // Student Selector
+                if (_selectedBatchId != null) ...[
+                  const Text(
+                    'Select Student',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
                     ),
-                    dropdownColor: AppColors.cardBackground,
-                    style: const TextStyle(color: AppColors.textPrimary),
-                    items: _batchStudents.map((student) {
-                      return DropdownMenuItem<int>(
-                        value: student.id,
-                        child: Text(student.name),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedStudentId = value;
-                        _showUploadForm = false;
-                      });
-                      _loadVideos();
-                    },
                   ),
-                ),
-            ],
+                  const SizedBox(height: AppDimensions.spacingS),
+                  if (_loadingStudents)
+                    const LinearProgressIndicator()
+                  else
+                    NeumorphicContainer(
+                      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
+                      child: DropdownButtonFormField<int>(
+                        value: _selectedStudentId,
+                        decoration: const InputDecoration(
+                          border: InputBorder.none,
+                          hintText: 'Select a student',
+                          hintStyle: TextStyle(color: AppColors.textHint),
+                        ),
+                        dropdownColor: AppColors.cardBackground,
+                        style: const TextStyle(color: AppColors.textPrimary),
+                        items: _batchStudents.map((student) {
+                          return DropdownMenuItem<int>(
+                            value: student.id,
+                            child: Text(student.name),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedStudentId = value;
+                            _showUploadForm = false;
+                          });
+                          _loadVideos();
+                        },
+                      ),
+                    ),
+                ],
 
-            const SizedBox(height: AppDimensions.spacingL),
+                const SizedBox(height: AppDimensions.spacingL),
 
-            // Upload Form
-            if (_showUploadForm && _selectedStudentId != null) ...[
-              _buildUploadForm(),
-            ] else if (_selectedStudentId != null) ...[
-              // Video List
-              _buildVideoList(),
-            ],
-          ],
+                // Upload Form
+                if (_showUploadForm && _selectedStudentId != null) ...[
+                  _buildUploadForm(),
+                ] else if (_selectedStudentId != null) ...[
+                  // Video List
+                  _buildVideoList(),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+      loading: () => Scaffold(
+        appBar: AppBar(
+          title: const Text('Video Management'),
+          backgroundColor: AppColors.background,
+          elevation: 0,
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      ),
+      error: (error, _) => Scaffold(
+        appBar: AppBar(
+          title: const Text('Video Management'),
+          backgroundColor: AppColors.background,
+          elevation: 0,
+        ),
+        body: Center(
+          child: Text(
+            'Error: ${error.toString()}',
+            style: const TextStyle(color: AppColors.error),
+          ),
         ),
       ),
     );
