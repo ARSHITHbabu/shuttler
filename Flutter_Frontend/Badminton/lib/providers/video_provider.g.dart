@@ -6,6 +6,8 @@ part of 'video_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
+String _$videosByStudentHash() => r'd3be8697db822fb357861be870773da3de6b6407';
+
 /// Copied from Dart SDK
 class _SystemHash {
   _SystemHash._();
@@ -26,8 +28,6 @@ class _SystemHash {
     return 0x1fffffff & (hash + ((0x00003fff & hash) << 15));
   }
 }
-
-String _$videosByStudentHash() => r'abc123videosbystudent0123456789abcdef';
 
 /// Provider for videos by student ID
 ///
@@ -82,19 +82,18 @@ class VideosByStudentProvider
   ///
   /// Copied from [videosByStudent].
   VideosByStudentProvider(int studentId)
-      : this._internal(
-          (ref) => videosByStudent(ref as VideosByStudentRef, studentId),
-          from: videosByStudentProvider,
-          name: r'videosByStudentProvider',
-          debugGetCreateSourceHash:
-              const bool.fromEnvironment('dart.vm.product')
-                  ? null
-                  : _$videosByStudentHash,
-          dependencies: VideosByStudentFamily._dependencies,
-          allTransitiveDependencies:
-              VideosByStudentFamily._allTransitiveDependencies,
-          studentId: studentId,
-        );
+    : this._internal(
+        (ref) => videosByStudent(ref as VideosByStudentRef, studentId),
+        from: videosByStudentProvider,
+        name: r'videosByStudentProvider',
+        debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+            ? null
+            : _$videosByStudentHash,
+        dependencies: VideosByStudentFamily._dependencies,
+        allTransitiveDependencies:
+            VideosByStudentFamily._allTransitiveDependencies,
+        studentId: studentId,
+      );
 
   VideosByStudentProvider._internal(
     super._createNotifier, {
@@ -140,6 +139,7 @@ class VideosByStudentProvider
   int get hashCode {
     var hash = _SystemHash.combine(0, runtimeType.hashCode);
     hash = _SystemHash.combine(hash, studentId.hashCode);
+
     return _SystemHash.finish(hash);
   }
 }
@@ -160,26 +160,27 @@ class _VideosByStudentProviderElement
   int get studentId => (origin as VideosByStudentProvider).studentId;
 }
 
-String _$allVideosHash() => r'def456allvideos0123456789abcdef012345';
+String _$allVideosHash() => r'465741732c8e7c600f647b124ad396a60ae362fc';
 
 /// Provider for all videos (owner view)
 ///
 /// Copied from [allVideos].
 @ProviderFor(allVideos)
-final allVideosProvider = AutoDisposeFutureProvider<List<VideoResource>>.internal(
-  allVideos,
-  name: r'allVideosProvider',
-  debugGetCreateSourceHash:
-      const bool.fromEnvironment('dart.vm.product') ? null : _$allVideosHash,
-  dependencies: null,
-  allTransitiveDependencies: null,
-);
+final allVideosProvider =
+    AutoDisposeFutureProvider<List<VideoResource>>.internal(
+      allVideos,
+      name: r'allVideosProvider',
+      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+          ? null
+          : _$allVideosHash,
+      dependencies: null,
+      allTransitiveDependencies: null,
+    );
 
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef AllVideosRef = AutoDisposeFutureProviderRef<List<VideoResource>>;
-
-String _$videoByIdHash() => r'789012videobyid0123456789abcdef012345678';
+String _$videoByIdHash() => r'4715ea9e586b654349dfc373156d143ecc0046ab';
 
 /// Provider for video by ID
 ///
@@ -204,9 +205,7 @@ class VideoByIdFamily extends Family<AsyncValue<VideoResource>> {
   }
 
   @override
-  VideoByIdProvider getProviderOverride(
-    covariant VideoByIdProvider provider,
-  ) {
+  VideoByIdProvider getProviderOverride(covariant VideoByIdProvider provider) {
     return call(provider.id);
   }
 
@@ -233,19 +232,17 @@ class VideoByIdProvider extends AutoDisposeFutureProvider<VideoResource> {
   ///
   /// Copied from [videoById].
   VideoByIdProvider(int id)
-      : this._internal(
-          (ref) => videoById(ref as VideoByIdRef, id),
-          from: videoByIdProvider,
-          name: r'videoByIdProvider',
-          debugGetCreateSourceHash:
-              const bool.fromEnvironment('dart.vm.product')
-                  ? null
-                  : _$videoByIdHash,
-          dependencies: VideoByIdFamily._dependencies,
-          allTransitiveDependencies:
-              VideoByIdFamily._allTransitiveDependencies,
-          id: id,
-        );
+    : this._internal(
+        (ref) => videoById(ref as VideoByIdRef, id),
+        from: videoByIdProvider,
+        name: r'videoByIdProvider',
+        debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+            ? null
+            : _$videoByIdHash,
+        dependencies: VideoByIdFamily._dependencies,
+        allTransitiveDependencies: VideoByIdFamily._allTransitiveDependencies,
+        id: id,
+      );
 
   VideoByIdProvider._internal(
     super._createNotifier, {
@@ -291,6 +288,7 @@ class VideoByIdProvider extends AutoDisposeFutureProvider<VideoResource> {
   int get hashCode {
     var hash = _SystemHash.combine(0, runtimeType.hashCode);
     hash = _SystemHash.combine(hash, id.hashCode);
+
     return _SystemHash.finish(hash);
   }
 }
@@ -303,14 +301,22 @@ mixin VideoByIdRef on AutoDisposeFutureProviderRef<VideoResource> {
 }
 
 class _VideoByIdProviderElement
-    extends AutoDisposeFutureProviderElement<VideoResource> with VideoByIdRef {
+    extends AutoDisposeFutureProviderElement<VideoResource>
+    with VideoByIdRef {
   _VideoByIdProviderElement(super.provider);
 
   @override
   int get id => (origin as VideoByIdProvider).id;
 }
 
-String _$videoManagerHash() => r'abcdef012345videomanager6789012345678901';
+String _$videoManagerHash() => r'0dccc4fa4d89805132e712fc84cbf7948cda90fd';
+
+abstract class _$VideoManager
+    extends BuildlessAutoDisposeAsyncNotifier<List<VideoResource>> {
+  late final int? studentId;
+
+  FutureOr<List<VideoResource>> build({int? studentId});
+}
 
 /// Provider class for video CRUD operations
 ///
@@ -360,24 +366,27 @@ class VideoManagerFamily extends Family<AsyncValue<List<VideoResource>>> {
 ///
 /// Copied from [VideoManager].
 class VideoManagerProvider
-    extends AutoDisposeAsyncNotifierProviderImpl<VideoManager, List<VideoResource>> {
+    extends
+        AutoDisposeAsyncNotifierProviderImpl<
+          VideoManager,
+          List<VideoResource>
+        > {
   /// Provider class for video CRUD operations
   ///
   /// Copied from [VideoManager].
   VideoManagerProvider({int? studentId})
-      : this._internal(
-          () => VideoManager()..studentId = studentId,
-          from: videoManagerProvider,
-          name: r'videoManagerProvider',
-          debugGetCreateSourceHash:
-              const bool.fromEnvironment('dart.vm.product')
-                  ? null
-                  : _$videoManagerHash,
-          dependencies: VideoManagerFamily._dependencies,
-          allTransitiveDependencies:
-              VideoManagerFamily._allTransitiveDependencies,
-          studentId: studentId,
-        );
+    : this._internal(
+        () => VideoManager()..studentId = studentId,
+        from: videoManagerProvider,
+        name: r'videoManagerProvider',
+        debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+            ? null
+            : _$videoManagerHash,
+        dependencies: VideoManagerFamily._dependencies,
+        allTransitiveDependencies:
+            VideoManagerFamily._allTransitiveDependencies,
+        studentId: studentId,
+      );
 
   VideoManagerProvider._internal(
     super._createNotifier, {
@@ -416,7 +425,7 @@ class VideoManagerProvider
 
   @override
   AutoDisposeAsyncNotifierProviderElement<VideoManager, List<VideoResource>>
-      createElement() {
+  createElement() {
     return _VideoManagerProviderElement(this);
   }
 
@@ -429,6 +438,7 @@ class VideoManagerProvider
   int get hashCode {
     var hash = _SystemHash.combine(0, runtimeType.hashCode);
     hash = _SystemHash.combine(hash, studentId.hashCode);
+
     return _SystemHash.finish(hash);
   }
 }
@@ -442,7 +452,11 @@ mixin VideoManagerRef
 }
 
 class _VideoManagerProviderElement
-    extends AutoDisposeAsyncNotifierProviderElement<VideoManager, List<VideoResource>>
+    extends
+        AutoDisposeAsyncNotifierProviderElement<
+          VideoManager,
+          List<VideoResource>
+        >
     with VideoManagerRef {
   _VideoManagerProviderElement(super.provider);
 
@@ -450,9 +464,5 @@ class _VideoManagerProviderElement
   int? get studentId => (origin as VideoManagerProvider).studentId;
 }
 
-abstract class _$VideoManager
-    extends BuildlessAutoDisposeAsyncNotifier<List<VideoResource>> {
-  late final int? studentId;
-
-  FutureOr<List<VideoResource>> build({int? studentId});
-}
+// ignore_for_file: type=lint
+// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package

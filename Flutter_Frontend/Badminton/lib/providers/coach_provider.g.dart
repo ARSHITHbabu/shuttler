@@ -287,7 +287,7 @@ class _CoachBatchesProviderElement
   int get coachId => (origin as CoachBatchesProvider).coachId;
 }
 
-String _$coachStatsHash() => r'41b7ca2b69022a523ef440f1ead19288df48c333';
+String _$coachStatsHash() => r'28db8df8c874d42c576f60010122c7fdc1b92c5f';
 
 /// Provider for coach statistics
 ///

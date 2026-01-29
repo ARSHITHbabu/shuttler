@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import '../core/services/storage_service.dart';
+import 'service_providers.dart';
 
 part 'theme_provider.g.dart';
 
@@ -46,10 +46,4 @@ class ThemeNotifier extends _$ThemeNotifier {
   }
 
   bool get isDarkMode => state == ThemeMode.dark;
-}
-
-/// Storage service provider
-@riverpod
-StorageService storageService(StorageServiceRef ref) {
-  throw UnimplementedError('Storage service must be overridden');
 }
