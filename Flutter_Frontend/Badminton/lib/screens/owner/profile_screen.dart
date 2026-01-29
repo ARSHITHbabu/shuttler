@@ -307,6 +307,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         'profile_photo': imageUrl,
       });
 
+      // Invalidate provider to refresh the owner data
+      ref.invalidate(ownerByIdProvider(ownerId));
+
       setState(() {
         _isUploadingImage = false;
         _owner = null; // Force refresh
@@ -349,6 +352,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       await ownerService.updateOwner(ownerId, {
         'profile_photo': imageUrl,
       });
+
+      // Invalidate provider to refresh the owner data
+      ref.invalidate(ownerByIdProvider(ownerId));
 
       setState(() {
         _isUploadingImage = false;
