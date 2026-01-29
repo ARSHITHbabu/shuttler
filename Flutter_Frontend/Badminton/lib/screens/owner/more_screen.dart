@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
-import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../providers/auth_provider.dart';
 import 'session_management_screen.dart';
@@ -31,6 +30,9 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     if (_currentView != null) {
       return _buildSubScreen();
     }
@@ -42,22 +44,24 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Header
-            const Text(
+            Text(
               'More',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
+                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
               ),
             ),
             const SizedBox(height: AppDimensions.spacingL),
 
-            // Management Section
-            _SectionTitle(title: 'Management'),
+            // Information Section
+            _SectionTitle(title: 'Information', isDark: isDark),
             const SizedBox(height: AppDimensions.spacingM),
             _MenuItem(
               icon: Icons.campaign_outlined,
               title: 'Announcements',
+              subtitle: 'Manage academy announcements',
+              isDark: isDark,
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
@@ -70,6 +74,8 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
             _MenuItem(
               icon: Icons.monitor_weight_outlined,
               title: 'BMI Tracking',
+              subtitle: 'Track student BMI records',
+              isDark: isDark,
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
@@ -82,6 +88,8 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
             _MenuItem(
               icon: Icons.calendar_today_outlined,
               title: 'Calendar',
+              subtitle: 'View academy calendar events',
+              isDark: isDark,
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
@@ -94,6 +102,8 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
             _MenuItem(
               icon: Icons.notifications_outlined,
               title: 'Notifications',
+              subtitle: 'View and manage notifications',
+              isDark: isDark,
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
@@ -106,6 +116,8 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
             _MenuItem(
               icon: Icons.trending_up_outlined,
               title: 'Performance Tracking',
+              subtitle: 'Track student performance metrics',
+              isDark: isDark,
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
@@ -118,6 +130,8 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
             _MenuItem(
               icon: Icons.video_library_outlined,
               title: 'Videos',
+              subtitle: 'Manage training videos',
+              isDark: isDark,
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
@@ -130,6 +144,8 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
             _MenuItem(
               icon: Icons.access_time_outlined,
               title: 'Practice Sessions',
+              subtitle: 'Manage practice sessions',
+              isDark: isDark,
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
@@ -142,6 +158,8 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
             _MenuItem(
               icon: Icons.description_outlined,
               title: 'Reports',
+              subtitle: 'View academy reports and analytics',
+              isDark: isDark,
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
@@ -154,6 +172,8 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
             _MenuItem(
               icon: Icons.event_note_outlined,
               title: 'Season Management',
+              subtitle: 'Manage seasons and sessions',
+              isDark: isDark,
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
@@ -166,11 +186,13 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
             const SizedBox(height: AppDimensions.spacingL),
 
             // App Section
-            _SectionTitle(title: 'App'),
+            _SectionTitle(title: 'App', isDark: isDark),
             const SizedBox(height: AppDimensions.spacingM),
             _MenuItem(
               icon: Icons.settings_outlined,
               title: 'Settings',
+              subtitle: 'App preferences and notifications',
+              isDark: isDark,
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
@@ -183,13 +205,10 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
             _MenuItem(
               icon: Icons.logout,
               title: 'Logout',
-              onTap: () async {
-                await ref.read(authProvider.notifier).logout();
-                if (mounted) {
-                  context.go('/');
-                }
-              },
+              subtitle: 'Sign out of your account',
+              isDark: isDark,
               isDestructive: true,
+              onTap: () => _showLogoutConfirmation(isDark),
             ),
 
             const SizedBox(height: 100), // Space for bottom nav
@@ -234,20 +253,70 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
         return const SizedBox();
     }
   }
+
+  void _showLogoutConfirmation(bool isDark) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: isDark ? AppColors.cardBackground : AppColorsLight.cardBackground,
+        title: Text(
+          'Logout',
+          style: TextStyle(
+            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+          ),
+        ),
+        content: Text(
+          'Are you sure you want to logout?',
+          style: TextStyle(
+            color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(
+              'Cancel',
+              style: TextStyle(
+                color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              final navigator = Navigator.of(dialogContext);
+              final router = GoRouter.of(context);
+              navigator.pop();
+              await ref.read(authProvider.notifier).logout();
+              if (mounted) {
+                router.go('/');
+              }
+            },
+            child: Text(
+              'Logout',
+              style: TextStyle(
+                color: isDark ? AppColors.error : AppColorsLight.error,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _SectionTitle extends StatelessWidget {
   final String title;
+  final bool isDark;
 
-  const _SectionTitle({required this.title});
+  const _SectionTitle({required this.title, required this.isDark});
 
   @override
   Widget build(BuildContext context) {
     return Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 14,
-        color: AppColors.textSecondary,
+        color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
         fontWeight: FontWeight.w500,
       ),
     );
@@ -257,12 +326,16 @@ class _SectionTitle extends StatelessWidget {
 class _MenuItem extends StatelessWidget {
   final IconData icon;
   final String title;
+  final String subtitle;
+  final bool isDark;
   final VoidCallback onTap;
   final bool isDestructive;
 
   const _MenuItem({
     required this.icon,
     required this.title,
+    required this.subtitle,
+    required this.isDark,
     required this.onTap,
     this.isDestructive = false,
   });
@@ -274,24 +347,51 @@ class _MenuItem extends StatelessWidget {
       onTap: onTap,
       child: Row(
         children: [
-          Icon(
-            icon,
-            color: isDestructive ? AppColors.error : AppColors.iconPrimary,
-            size: 20,
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: isDestructive
+                  ? (isDark ? AppColors.error : AppColorsLight.error).withValues(alpha: 0.1)
+                  : (isDark ? AppColors.accent : AppColorsLight.accent).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+            ),
+            child: Icon(
+              icon,
+              color: isDestructive
+                  ? (isDark ? AppColors.error : AppColorsLight.error)
+                  : (isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary),
+              size: 20,
+            ),
           ),
           const SizedBox(width: AppDimensions.spacingM),
           Expanded(
-            child: Text(
-              title,
-              style: TextStyle(
-                fontSize: 16,
-                color: isDestructive ? AppColors.error : AppColors.textPrimary,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: isDestructive
+                        ? (isDark ? AppColors.error : AppColorsLight.error)
+                        : (isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                  ),
+                ),
+              ],
             ),
           ),
-          const Icon(
+          Icon(
             Icons.chevron_right,
-            color: AppColors.textTertiary,
+            color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
             size: 20,
           ),
         ],
@@ -343,7 +443,6 @@ class _ProfileView extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: AppColors.background,
                       shape: BoxShape.circle,
-                      boxShadow: NeumorphicStyles.getInsetShadow(),
                     ),
                     child: const Center(
                       child: Text(
@@ -372,58 +471,6 @@ class _ProfileView extends StatelessWidget {
                     ),
                   ),
                 ],
-              ),
-            ),
-            const SizedBox(height: AppDimensions.spacingM),
-            NeumorphicInsetContainer(
-              padding: const EdgeInsets.all(AppDimensions.paddingL),
-              child: const TextField(
-                style: TextStyle(color: AppColors.textPrimary),
-                decoration: InputDecoration(
-                  hintText: 'Full Name',
-                  hintStyle: TextStyle(color: AppColors.textHint),
-                  border: InputBorder.none,
-                ),
-              ),
-            ),
-            const SizedBox(height: AppDimensions.spacingM),
-            NeumorphicInsetContainer(
-              padding: const EdgeInsets.all(AppDimensions.paddingL),
-              child: const TextField(
-                style: TextStyle(color: AppColors.textPrimary),
-                decoration: InputDecoration(
-                  hintText: 'Email',
-                  hintStyle: TextStyle(color: AppColors.textHint),
-                  border: InputBorder.none,
-                ),
-              ),
-            ),
-            const SizedBox(height: AppDimensions.spacingM),
-            NeumorphicInsetContainer(
-              padding: const EdgeInsets.all(AppDimensions.paddingL),
-              child: const TextField(
-                style: TextStyle(color: AppColors.textPrimary),
-                decoration: InputDecoration(
-                  hintText: 'Phone',
-                  hintStyle: TextStyle(color: AppColors.textHint),
-                  border: InputBorder.none,
-                ),
-              ),
-            ),
-            const SizedBox(height: AppDimensions.spacingL),
-            NeumorphicContainer(
-              padding: const EdgeInsets.all(AppDimensions.paddingM),
-              onTap: () {
-                // Save changes
-              },
-              child: const Center(
-                child: Text(
-                  'Save Changes',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
               ),
             ),
             const SizedBox(height: 100),
@@ -467,43 +514,12 @@ class _AcademyView extends StatelessWidget {
               ),
             ),
             const SizedBox(height: AppDimensions.spacingL),
-            NeumorphicInsetContainer(
-              padding: const EdgeInsets.all(AppDimensions.paddingL),
-              child: const TextField(
-                style: TextStyle(color: AppColors.textPrimary),
-                decoration: InputDecoration(
-                  hintText: 'Academy Name',
-                  hintStyle: TextStyle(color: AppColors.textHint),
-                  border: InputBorder.none,
-                ),
-              ),
-            ),
-            const SizedBox(height: AppDimensions.spacingM),
-            NeumorphicInsetContainer(
-              padding: const EdgeInsets.all(AppDimensions.paddingL),
-              child: const TextField(
-                style: TextStyle(color: AppColors.textPrimary),
-                decoration: InputDecoration(
-                  hintText: 'Address',
-                  hintStyle: TextStyle(color: AppColors.textHint),
-                  border: InputBorder.none,
-                ),
-                maxLines: 3,
-              ),
-            ),
-            const SizedBox(height: AppDimensions.spacingL),
-            NeumorphicContainer(
-              padding: const EdgeInsets.all(AppDimensions.paddingM),
-              onTap: () {
-                // Save changes
-              },
-              child: const Center(
-                child: Text(
-                  'Save Changes',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: AppColors.textPrimary,
-                  ),
+            const Center(
+              child: Text(
+                'Navigate to Academy Details from Settings',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: AppColors.textSecondary,
                 ),
               ),
             ),
