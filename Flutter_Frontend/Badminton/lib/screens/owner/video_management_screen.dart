@@ -1,13 +1,9 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
-import '../../core/constants/api_endpoints.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/error_widget.dart';
-import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
 import '../../providers/service_providers.dart';
@@ -15,7 +11,6 @@ import '../../providers/batch_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/video_resource.dart';
 import '../../models/student.dart';
-import '../../models/batch.dart';
 
 /// Video Management Screen - Upload and manage training videos for students
 class VideoManagementScreen extends ConsumerStatefulWidget {
@@ -149,9 +144,9 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
 
       int completed = 0;
       for (final video in _selectedVideos) {
-        await videoService.uploadVideo(
+        await videoService.uploadVideoFromFile(
           studentId: _selectedStudentId!,
-          videoFilePath: video.path,
+          videoFile: video,
           title: video.name,
           remarks: remarks,
           uploadedBy: uploadedBy,

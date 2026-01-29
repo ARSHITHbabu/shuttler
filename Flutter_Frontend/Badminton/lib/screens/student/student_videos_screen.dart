@@ -1,8 +1,10 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:dio/dio.dart';
+// Conditional import for File/Directory (only on non-web platforms)
+import 'dart:io' if (dart.library.html) '../../utils/dart_io_stub.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/constants/api_endpoints.dart';
@@ -12,6 +14,11 @@ import '../../widgets/video/video_player_dialog.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/video_resource.dart';
+// Conditional imports for web file download
+import '../../utils/file_download_helper_stub.dart'
+    if (dart.library.html) '../../utils/file_download_helper_web.dart';
+// Platform-agnostic path helper
+import '../../utils/path_helper.dart';
 
 /// Student Videos Screen - View training videos uploaded by owner/coach
 class StudentVideosScreen extends ConsumerStatefulWidget {
@@ -77,6 +84,16 @@ class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
     );
   }
 
+  /// Sanitize filename to remove invalid characters for file system
+  String _sanitizeFileName(String fileName) {
+    // Remove or replace invalid characters
+    return fileName
+        .replaceAll(RegExp(r'[<>:"/\\|?*]'), '_') // Replace invalid chars with underscore
+        .replaceAll(RegExp(r'\s+'), '_') // Replace spaces with underscore
+        .replaceAll(RegExp(r'_+'), '_') // Replace multiple underscores with single
+        .trim();
+  }
+
   Future<void> _downloadVideo(VideoResource video) async {
     setState(() {
       _isDownloading = true;
@@ -87,30 +104,91 @@ class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
     try {
       final dio = Dio();
       final fullUrl = '${ApiEndpoints.baseUrl}${video.url}';
-
-      // Get the downloads directory
-      final directory = await getApplicationDocumentsDirectory();
       final fileName = video.title ?? 'video_${video.id}.mp4';
-      final filePath = '${directory.path}/$fileName';
 
-      await dio.download(
-        fullUrl,
-        filePath,
-        onReceiveProgress: (received, total) {
-          if (total != -1 && mounted) {
+      if (kIsWeb) {
+        // Web download: fetch as bytes and use web helper
+        final response = await dio.get<Uint8List>(
+          fullUrl,
+          options: Options(
+            responseType: ResponseType.bytes,
+          ),
+          onReceiveProgress: (received, total) {
+            if (total != -1 && mounted) {
+              setState(() {
+                _downloadProgress = received / total;
+              });
+            }
+          },
+        );
+
+        if (response.data != null && mounted) {
+          downloadFileWeb(
+            response.data!,
+            fileName,
+            'video/mp4',
+          );
+          setState(() {
+            _isDownloading = false;
+            _downloadingVideoId = null;
+          });
+          SuccessSnackbar.show(context, 'Video download started');
+        }
+      } else {
+        // Mobile/Desktop download: save to file system
+        final directoryPath = await getApplicationDocumentsPath();
+        if (directoryPath == null) {
+          // Fallback: shouldn't happen on mobile/desktop, but handle gracefully
+          if (mounted) {
             setState(() {
-              _downloadProgress = received / total;
+              _isDownloading = false;
+              _downloadingVideoId = null;
             });
+            SuccessSnackbar.showError(context, 'Download directory not available');
           }
-        },
-      );
+          return;
+        }
 
-      if (mounted) {
-        setState(() {
-          _isDownloading = false;
-          _downloadingVideoId = null;
-        });
-        SuccessSnackbar.show(context, 'Video downloaded to: $filePath');
+        // Sanitize filename to remove invalid characters
+        final sanitizedFileName = _sanitizeFileName(fileName);
+        final directory = Directory(directoryPath);
+        
+        // Ensure directory exists
+        if (!await directory.exists()) {
+          await directory.create(recursive: true);
+        }
+
+        final filePath = '${directory.path}/$sanitizedFileName';
+
+        await dio.download(
+          fullUrl,
+          filePath,
+          onReceiveProgress: (received, total) {
+            if (total != -1 && mounted) {
+              setState(() {
+                _downloadProgress = received / total;
+              });
+            }
+          },
+        );
+
+        if (mounted) {
+          setState(() {
+            _isDownloading = false;
+            _downloadingVideoId = null;
+          });
+          
+          // Show user-friendly success message
+          final displayPath = directoryPath.contains('Download') 
+              ? 'Downloads folder' 
+              : directoryPath.contains('Documents')
+                  ? 'Documents folder'
+                  : 'device storage';
+          SuccessSnackbar.show(
+            context, 
+            'Video downloaded successfully!\nSaved to: $displayPath',
+          );
+        }
       }
     } catch (e) {
       if (mounted) {

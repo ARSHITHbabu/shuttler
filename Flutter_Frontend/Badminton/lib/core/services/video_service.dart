@@ -1,4 +1,6 @@
-import 'package:dio/dio.dart' show ProgressCallback;
+import 'package:dio/dio.dart' show ProgressCallback, Response;
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:image_picker/image_picker.dart';
 import '../constants/api_endpoints.dart';
 import 'api_service.dart';
 import '../../models/video_resource.dart';
@@ -55,6 +57,7 @@ class VideoService {
   }
 
   /// Upload a video for a student
+  /// Supports both file paths (mobile/desktop) and XFile (web)
   Future<VideoResource> uploadVideo({
     required int studentId,
     required String videoFilePath,
@@ -78,6 +81,53 @@ class VideoService {
         additionalData: additionalData,
         onSendProgress: onProgress,
       );
+
+      return VideoResource.fromJson(response.data as Map<String, dynamic>);
+    } catch (e) {
+      throw Exception('Failed to upload video: ${_apiService.getErrorMessage(e)}');
+    }
+  }
+
+  /// Upload a video from XFile (supports web and mobile)
+  Future<VideoResource> uploadVideoFromFile({
+    required int studentId,
+    required XFile videoFile,
+    String? title,
+    String? remarks,
+    int? uploadedBy,
+    ProgressCallback? onProgress,
+  }) async {
+    try {
+      final additionalData = <String, dynamic>{
+        'student_id': studentId,
+        if (title != null) 'title': title,
+        if (remarks != null) 'remarks': remarks,
+        if (uploadedBy != null) 'uploaded_by': uploadedBy,
+      };
+
+      Response response;
+
+      if (kIsWeb) {
+        // On web, read bytes from XFile
+        final bytes = await videoFile.readAsBytes();
+        response = await _apiService.uploadFileBytes(
+          '${ApiEndpoints.videoResources}upload',
+          bytes,
+          videoFile.name,
+          fieldName: 'video',
+          additionalData: additionalData,
+          onSendProgress: onProgress,
+        );
+      } else {
+        // On mobile/desktop, use file path
+        response = await _apiService.uploadFile(
+          '${ApiEndpoints.videoResources}upload',
+          videoFile.path,
+          fieldName: 'video',
+          additionalData: additionalData,
+          onSendProgress: onProgress,
+        );
+      }
 
       return VideoResource.fromJson(response.data as Map<String, dynamic>);
     } catch (e) {
