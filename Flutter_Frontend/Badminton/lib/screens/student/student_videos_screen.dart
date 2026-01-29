@@ -32,10 +32,16 @@ class StudentVideosScreen extends ConsumerStatefulWidget {
 
 class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
   List<VideoResource> _videos = [];
+  Map<int, String> _uploaderNames = {}; // Map of uploadedBy ID to name
+  List<VideoResource> _filteredVideos = [];
   bool _isLoading = true;
   bool _isDownloading = false;
   double _downloadProgress = 0;
   int? _downloadingVideoId;
+  
+  // Filter state
+  int? _selectedYear;
+  int? _selectedMonth; // 1-12, null means all months
 
   @override
   void initState() {
@@ -57,11 +63,28 @@ class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
       final videoService = ref.read(videoServiceProvider);
       final videos = await videoService.getVideosForStudent(authState.userId);
 
+      // Fetch uploader names for videos that have uploadedBy
+      final Map<int, String> uploaderNames = {};
+      final ownerService = ref.read(ownerServiceProvider);
+      
+      for (final video in videos) {
+        if (video.uploadedBy != null && !uploaderNames.containsKey(video.uploadedBy)) {
+          try {
+            final owner = await ownerService.getOwnerById(video.uploadedBy!);
+            uploaderNames[video.uploadedBy!] = owner.name;
+          } catch (e) {
+            uploaderNames[video.uploadedBy!] = 'Unknown';
+          }
+        }
+      }
+
       if (mounted) {
         setState(() {
           _videos = videos;
+          _uploaderNames = uploaderNames;
           _isLoading = false;
         });
+        _applyFilters();
       }
     } catch (e) {
       if (mounted) {
@@ -69,6 +92,36 @@ class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
         SuccessSnackbar.showError(context, 'Failed to load videos: ${e.toString()}');
       }
     }
+  }
+
+  void _applyFilters() {
+    List<VideoResource> filtered = List.from(_videos);
+
+    // Filter by year
+    if (_selectedYear != null) {
+      filtered = filtered.where((video) {
+        return video.createdAt.year == _selectedYear;
+      }).toList();
+    }
+
+    // Filter by month
+    if (_selectedMonth != null) {
+      filtered = filtered.where((video) {
+        return video.createdAt.month == _selectedMonth;
+      }).toList();
+    }
+
+    setState(() {
+      _filteredVideos = filtered;
+    });
+  }
+
+  void _onFilterChanged(int? year, int? month) {
+    setState(() {
+      _selectedYear = year;
+      _selectedMonth = month;
+    });
+    _applyFilters();
   }
 
   void _playVideo(VideoResource video) {
@@ -246,6 +299,17 @@ class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
               ),
             ),
 
+            // Filter Section
+            if (!_isLoading && _videos.isNotEmpty) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppDimensions.paddingL,
+                  vertical: AppDimensions.spacingS,
+                ),
+                child: _buildFilterSection(isDark),
+              ),
+            ],
+
             // Content
             Expanded(
               child: _isLoading
@@ -254,25 +318,117 @@ class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
                       ? _buildEmptyState(isDark)
                       : RefreshIndicator(
                           onRefresh: _loadVideos,
-                          child: ListView.builder(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: AppDimensions.paddingL,
-                            ),
-                            itemCount: _videos.length,
-                            itemBuilder: (context, index) {
-                              return Padding(
-                                padding: const EdgeInsets.only(
-                                  bottom: AppDimensions.spacingM,
+                          child: _filteredVideos.isEmpty && (_selectedYear != null || _selectedMonth != null)
+                              ? _buildNoFilterResults(isDark)
+                              : ListView.builder(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: AppDimensions.paddingL,
+                                  ),
+                                  itemCount: _filteredVideos.length,
+                                  itemBuilder: (context, index) {
+                                    return Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: AppDimensions.spacingM,
+                                      ),
+                                      child: _buildVideoCard(_filteredVideos[index], isDark),
+                                    );
+                                  },
                                 ),
-                                child: _buildVideoCard(_videos[index], isDark),
-                              );
-                            },
-                          ),
                         ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildFilterSection(bool isDark) {
+    // Get available years and months from videos
+    final years = _videos.map((v) => v.createdAt.year).toSet().toList()..sort((a, b) => b.compareTo(a));
+    final months = [
+      {'value': null, 'label': 'All Months'},
+      {'value': 1, 'label': 'January'},
+      {'value': 2, 'label': 'February'},
+      {'value': 3, 'label': 'March'},
+      {'value': 4, 'label': 'April'},
+      {'value': 5, 'label': 'May'},
+      {'value': 6, 'label': 'June'},
+      {'value': 7, 'label': 'July'},
+      {'value': 8, 'label': 'August'},
+      {'value': 9, 'label': 'September'},
+      {'value': 10, 'label': 'October'},
+      {'value': 11, 'label': 'November'},
+      {'value': 12, 'label': 'December'},
+    ];
+
+    return Row(
+      children: [
+        Expanded(
+          child: NeumorphicContainer(
+            padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
+            child: DropdownButtonFormField<int?>(
+              value: _selectedYear,
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                hintText: 'All Years',
+                hintStyle: TextStyle(
+                  color: isDark ? AppColors.textHint : AppColorsLight.textHint,
+                ),
+                contentPadding: EdgeInsets.zero,
+              ),
+              dropdownColor: isDark ? AppColors.cardBackground : AppColorsLight.cardBackground,
+              style: TextStyle(
+                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                fontSize: 14,
+              ),
+              items: [
+                const DropdownMenuItem<int?>(value: null, child: Text('All Years')),
+                ...years.map((year) => DropdownMenuItem<int?>(
+                      value: year,
+                      child: Text(year.toString()),
+                    )),
+              ],
+              onChanged: (value) => _onFilterChanged(value, _selectedMonth),
+            ),
+          ),
+        ),
+        const SizedBox(width: AppDimensions.spacingM),
+        Expanded(
+          child: NeumorphicContainer(
+            padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
+            child: DropdownButtonFormField<int?>(
+              value: _selectedMonth,
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                hintText: 'All Months',
+                hintStyle: TextStyle(
+                  color: isDark ? AppColors.textHint : AppColorsLight.textHint,
+                ),
+                contentPadding: EdgeInsets.zero,
+              ),
+              dropdownColor: isDark ? AppColors.cardBackground : AppColorsLight.cardBackground,
+              style: TextStyle(
+                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                fontSize: 14,
+              ),
+              items: months.map((month) => DropdownMenuItem<int?>(
+                    value: month['value'] as int?,
+                    child: Text(month['label'] as String),
+                  )).toList(),
+              onChanged: (value) => _onFilterChanged(_selectedYear, value),
+            ),
+          ),
+        ),
+        if (_selectedYear != null || _selectedMonth != null)
+          IconButton(
+            onPressed: () => _onFilterChanged(null, null),
+            icon: Icon(
+              Icons.clear,
+              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+            ),
+            tooltip: 'Clear filters',
+          ),
+      ],
     );
   }
 
@@ -298,6 +454,39 @@ class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
           const SizedBox(height: AppDimensions.spacingS),
           Text(
             'Your coach will upload training videos here',
+            style: TextStyle(
+              fontSize: 14,
+              color: isDark ? AppColors.textHint : AppColorsLight.textHint,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoFilterResults(bool isDark) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.filter_alt_off,
+            size: 64,
+            color: isDark ? AppColors.textHint : AppColorsLight.textHint,
+          ),
+          const SizedBox(height: AppDimensions.spacingM),
+          Text(
+            'No videos found',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+            ),
+          ),
+          const SizedBox(height: AppDimensions.spacingS),
+          Text(
+            'Try adjusting your filters',
             style: TextStyle(
               fontSize: 14,
               color: isDark ? AppColors.textHint : AppColorsLight.textHint,
@@ -360,6 +549,26 @@ class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
                         color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                       ),
                     ),
+                    if (video.uploadedBy != null && _uploaderNames.containsKey(video.uploadedBy)) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.person_outline,
+                            size: 14,
+                            color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Uploaded by: ${_uploaderNames[video.uploadedBy]}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ),
