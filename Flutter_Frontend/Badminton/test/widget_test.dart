@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:badminton/main.dart';
 import 'package:badminton/core/services/storage_service.dart';
-import 'package:badminton/providers/theme_provider.dart';
+import 'package:badminton/providers/service_providers.dart';
 
 void main() {
   testWidgets('App loads placeholder screen', (WidgetTester tester) async {
