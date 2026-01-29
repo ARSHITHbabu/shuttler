@@ -26,6 +26,7 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
   bool _showAddForm = false;
   bool _isLoading = false;
   Announcement? _editingAnnouncement; // Track if we're editing
+  String _selectedFilter = 'all'; // 'all', 'urgent', 'high', 'normal'
 
   final _titleController = TextEditingController();
   final _messageController = TextEditingController();
@@ -186,39 +187,89 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          ref.invalidate(announcementManagerProvider());
-        },
-        child: Consumer(
-          builder: (context, ref, child) {
-            final announcementsAsync = ref.watch(announcementManagerProvider());
-            
-            return announcementsAsync.when(
-              loading: () => const ListSkeleton(itemCount: 5),
-              error: (error, stack) => ErrorDisplay(
-                message: 'Failed to load announcements: ${error.toString()}',
-                onRetry: () => ref.invalidate(announcementManagerProvider()),
+      body: Column(
+        children: [
+          // Filter Chips
+          Padding(
+            padding: const EdgeInsets.all(AppDimensions.paddingM),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _FilterChip(
+                    label: 'All',
+                    isSelected: _selectedFilter == 'all',
+                    onTap: () => setState(() => _selectedFilter = 'all'),
+                  ),
+                  const SizedBox(width: AppDimensions.spacingS),
+                  _FilterChip(
+                    label: 'Urgent',
+                    isSelected: _selectedFilter == 'urgent',
+                    onTap: () => setState(() => _selectedFilter = 'urgent'),
+                    color: AppColors.error,
+                  ),
+                  const SizedBox(width: AppDimensions.spacingS),
+                  _FilterChip(
+                    label: 'High',
+                    isSelected: _selectedFilter == 'high',
+                    onTap: () => setState(() => _selectedFilter = 'high'),
+                    color: AppColors.warning,
+                  ),
+                  const SizedBox(width: AppDimensions.spacingS),
+                  _FilterChip(
+                    label: 'Normal',
+                    isSelected: _selectedFilter == 'normal',
+                    onTap: () => setState(() => _selectedFilter = 'normal'),
+                    color: AppColors.success,
+                  ),
+                ],
               ),
-              data: (announcements) {
-                if (announcements.isEmpty) {
-                  return EmptyState.noAnnouncements(
-                    onCreate: () => setState(() => _showAddForm = true),
-                  );
-                }
+            ),
+          ),
 
-                return ListView.builder(
-                  padding: const EdgeInsets.all(AppDimensions.paddingL),
-                  itemCount: announcements.length,
-                  itemBuilder: (context, index) {
-                    final announcement = announcements[index];
-                    return _buildAnnouncementCard(announcement);
-                  },
-                );
+          // Announcements List
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(announcementManagerProvider());
               },
-            );
-          },
-        ),
+              child: Consumer(
+                builder: (context, ref, child) {
+                  final announcementsAsync = ref.watch(announcementManagerProvider());
+                  
+                  return announcementsAsync.when(
+                    loading: () => const ListSkeleton(itemCount: 5),
+                    error: (error, stack) => ErrorDisplay(
+                      message: 'Failed to load announcements: ${error.toString()}',
+                      onRetry: () => ref.invalidate(announcementManagerProvider()),
+                    ),
+                    data: (announcements) {
+                      // Filter by priority
+                      final filteredAnnouncements = _selectedFilter == 'all'
+                          ? announcements
+                          : announcements.where((a) => a.priority == _selectedFilter).toList();
+
+                      if (filteredAnnouncements.isEmpty) {
+                        return EmptyState.noAnnouncements(
+                          onCreate: () => setState(() => _showAddForm = true),
+                        );
+                      }
+
+                      return ListView.builder(
+                        padding: const EdgeInsets.all(AppDimensions.paddingL),
+                        itemCount: filteredAnnouncements.length,
+                        itemBuilder: (context, index) {
+                          final announcement = filteredAnnouncements[index];
+                          return _buildAnnouncementCard(announcement);
+                        },
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -585,6 +636,43 @@ class _PriorityButton extends StatelessWidget {
               color: isSelected ? AppColors.accent : AppColors.textSecondary,
               fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final Color? color;
+
+  const _FilterChip({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+    this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final chipColor = color ?? AppColors.accent;
+    
+    return GestureDetector(
+      onTap: onTap,
+      child: NeumorphicContainer(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppDimensions.paddingM,
+          vertical: AppDimensions.spacingS,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            color: isSelected ? chipColor : AppColors.textSecondary,
           ),
         ),
       ),

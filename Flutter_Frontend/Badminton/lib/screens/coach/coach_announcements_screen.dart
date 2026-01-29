@@ -25,11 +25,22 @@ class _CoachAnnouncementsScreenState extends ConsumerState<CoachAnnouncementsScr
     final announcementsAsync = ref.watch(coachAnnouncementsProvider);
 
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Announcements'),
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        backgroundColor: AppColors.background,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text(
+          'Announcements',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
       body: Column(
         children: [
@@ -78,6 +89,11 @@ class _CoachAnnouncementsScreenState extends ConsumerState<CoachAnnouncementsScr
                 ref.invalidate(coachAnnouncementsProvider);
               },
               child: announcementsAsync.when(
+                loading: () => const ListSkeleton(itemCount: 5),
+                error: (error, stack) => ErrorDisplay(
+                  message: 'Failed to load announcements: ${error.toString()}',
+                  onRetry: () => ref.invalidate(coachAnnouncementsProvider),
+                ),
                 data: (announcements) {
                   // Filter by priority
                   final filteredAnnouncements = _selectedFilter == 'all'
@@ -85,33 +101,105 @@ class _CoachAnnouncementsScreenState extends ConsumerState<CoachAnnouncementsScr
                       : announcements.where((a) => a.priority == _selectedFilter).toList();
 
                   if (filteredAnnouncements.isEmpty) {
-                    return Center(
-                      child: EmptyState.noAnnouncements(),
-                    );
+                    return EmptyState.noAnnouncements();
                   }
 
                   return ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+                    padding: const EdgeInsets.all(AppDimensions.paddingL),
                     itemCount: filteredAnnouncements.length,
                     itemBuilder: (context, index) {
                       final announcement = filteredAnnouncements[index];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
-                        child: _AnnouncementCard(
-                          announcement: announcement,
-                          onTap: () => _showAnnouncementDetails(context, announcement),
-                        ),
-                      );
+                      return _buildAnnouncementCard(announcement);
                     },
                   );
                 },
-                loading: () => const Center(child: ListSkeleton(itemCount: 5)),
-                error: (error, stack) => ErrorDisplay(
-                  message: 'Failed to load announcements',
-                  onRetry: () => ref.invalidate(coachAnnouncementsProvider),
-                ),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAnnouncementCard(Announcement announcement) {
+    return NeumorphicContainer(
+      padding: const EdgeInsets.all(AppDimensions.paddingM),
+      margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
+      onTap: () => _showAnnouncementDetails(context, announcement),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        if (announcement.priority == 'urgent' || announcement.priority == 'high')
+                          const Icon(
+                            Icons.priority_high,
+                            size: 16,
+                            color: AppColors.error,
+                          ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            announcement.title,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppDimensions.spacingS),
+                    Text(
+                      announcement.message,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppDimensions.spacingM),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppDimensions.spacingM,
+                  vertical: AppDimensions.spacingS,
+                ),
+                decoration: BoxDecoration(
+                  color: announcement.priorityColor.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                ),
+                child: Text(
+                  announcement.priority.toUpperCase(),
+                  style: TextStyle(
+                    color: announcement.priorityColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                DateFormat('dd MMM, yyyy').format(announcement.createdAt),
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -122,29 +210,14 @@ class _CoachAnnouncementsScreenState extends ConsumerState<CoachAnnouncementsScr
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        title: Row(
-          children: [
-            Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                color: announcement.priorityColor,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: AppDimensions.spacingS),
-            Expanded(
-              child: Text(
-                announcement.title,
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-            ),
-          ],
+        backgroundColor: AppColors.background,
+        title: Text(
+          announcement.title,
+          style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          ),
         ),
         content: SingleChildScrollView(
           child: Column(
@@ -153,27 +226,25 @@ class _CoachAnnouncementsScreenState extends ConsumerState<CoachAnnouncementsScr
             children: [
               Row(
                 children: [
-                  Icon(
-                    Icons.priority_high,
-                    size: 16,
-                    color: announcement.priorityColor,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    announcement.priority.toUpperCase(),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: announcement.priorityColor,
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppDimensions.spacingM,
+                      vertical: AppDimensions.spacingS,
+                    ),
+                    decoration: BoxDecoration(
+                      color: announcement.priorityColor.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                    ),
+                    child: Text(
+                      announcement.priority.toUpperCase(),
+                      style: TextStyle(
+                        color: announcement.priorityColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                   const SizedBox(width: AppDimensions.spacingM),
-                  Icon(
-                    Icons.calendar_today_outlined,
-                    size: 16,
-                    color: AppColors.textSecondary,
-                  ),
-                  const SizedBox(width: 4),
                   Text(
                     DateFormat('dd MMM, yyyy').format(announcement.createdAt),
                     style: const TextStyle(
@@ -220,7 +291,10 @@ class _CoachAnnouncementsScreenState extends ConsumerState<CoachAnnouncementsScr
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
+            child: const Text(
+              'Close',
+              style: TextStyle(color: AppColors.textPrimary),
+            ),
           ),
         ],
       ),
@@ -260,91 +334,6 @@ class _FilterChip extends StatelessWidget {
             color: isSelected ? chipColor : AppColors.textSecondary,
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _AnnouncementCard extends StatelessWidget {
-  final Announcement announcement;
-  final VoidCallback onTap;
-
-  const _AnnouncementCard({
-    required this.announcement,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return NeumorphicContainer(
-      padding: const EdgeInsets.all(AppDimensions.paddingM),
-      onTap: onTap,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: announcement.priorityColor,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: AppDimensions.spacingS),
-              Expanded(
-                child: Text(
-                  announcement.title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppDimensions.spacingS),
-          Text(
-            announcement.message,
-            style: const TextStyle(
-              fontSize: 14,
-              color: AppColors.textSecondary,
-            ),
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: AppDimensions.spacingM),
-          Row(
-            children: [
-              Icon(
-                Icons.calendar_today_outlined,
-                size: 14,
-                color: AppColors.textSecondary,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                DateFormat('dd MMM, yyyy').format(announcement.createdAt),
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                announcement.priority.toUpperCase(),
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: announcement.priorityColor,
-                ),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
