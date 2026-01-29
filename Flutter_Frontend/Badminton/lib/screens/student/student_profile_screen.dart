@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/colors.dart';
@@ -56,6 +58,8 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
 
   Future<void> _handleImagePicked(File? image) async {
     if (image == null) {
+      // On web, this might be called with null when bytes are handled separately
+      if (kIsWeb) return;
       return;
     }
 
@@ -68,7 +72,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
       int? userId;
       final authStateAsync = ref.read(authProvider);
       final authState = authStateAsync.value;
-      
+
       if (authState is Authenticated) {
         userId = authState.userId;
       } else {
@@ -84,6 +88,61 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
       // Upload image
       final apiService = ref.read(apiServiceProvider);
       final imageUrl = await apiService.uploadImage(image.path);
+
+      // Update profile with new image URL using provider
+      final studentList = ref.read(studentListProvider.notifier);
+      await studentList.updateStudent(userId, {'profile_photo': imageUrl});
+
+      setState(() {
+        _isUploadingImage = false;
+      });
+
+      // Invalidate to refresh data
+      ref.invalidate(studentByIdProvider(userId));
+
+      if (mounted) {
+        SuccessSnackbar.show(context, 'Profile photo updated successfully');
+      }
+    } catch (e) {
+      setState(() {
+        _isUploadingImage = false;
+      });
+      if (mounted) {
+        SuccessSnackbar.showError(context, 'Failed to upload image: ${e.toString()}');
+      }
+    }
+  }
+
+  Future<void> _handleImageBytesPickedForWeb(Uint8List? bytes) async {
+    if (bytes == null) {
+      return;
+    }
+
+    setState(() {
+      _isUploadingImage = true;
+    });
+
+    try {
+      // Get user ID
+      int? userId;
+      final authStateAsync = ref.read(authProvider);
+      final authState = authStateAsync.value;
+
+      if (authState is Authenticated) {
+        userId = authState.userId;
+      } else {
+        final storageService = ref.read(storageServiceProvider);
+        if (!storageService.isInitialized) await storageService.init();
+        userId = storageService.getUserId();
+      }
+
+      if (userId == null) {
+        throw Exception('User not logged in');
+      }
+
+      // Upload image bytes (for web)
+      final apiService = ref.read(apiServiceProvider);
+      final imageUrl = await apiService.uploadImageBytes(bytes);
 
       // Update profile with new image URL using provider
       final studentList = ref.read(studentListProvider.notifier);
@@ -430,6 +489,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
             initialImageUrl: student.profilePhoto,
             size: 100,
             onImagePicked: _handleImagePicked,
+            onImageBytesPickedForWeb: _handleImageBytesPickedForWeb,
             isLoading: _isUploadingImage,
           ),
           const SizedBox(height: AppDimensions.spacingM),
