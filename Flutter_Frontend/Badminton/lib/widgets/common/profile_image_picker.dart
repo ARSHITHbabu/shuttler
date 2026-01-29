@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -13,6 +14,7 @@ class ProfileImagePicker extends StatefulWidget {
   final String? initialImageUrl;
   final double size;
   final ValueChanged<File?>? onImagePicked;
+  final ValueChanged<Uint8List?>? onImageBytesPickedForWeb;
   final bool isLoading;
 
   const ProfileImagePicker({
@@ -20,6 +22,7 @@ class ProfileImagePicker extends StatefulWidget {
     this.initialImageUrl,
     this.size = AppDimensions.avatarXl,
     this.onImagePicked,
+    this.onImageBytesPickedForWeb,
     this.isLoading = false,
   });
 
@@ -29,6 +32,7 @@ class ProfileImagePicker extends StatefulWidget {
 
 class _ProfileImagePickerState extends State<ProfileImagePicker> {
   File? _pickedImage;
+  Uint8List? _pickedImageBytes; // For web
   final ImagePicker _picker = ImagePicker();
 
   Future<void> _showImageSourceDialog() async {
@@ -96,17 +100,24 @@ class _ProfileImagePickerState extends State<ProfileImagePicker> {
       );
 
       if (image != null) {
-        // Crop the image
+        // Handle image based on platform
         if (kIsWeb) {
-          // On web, skip cropping for now (web support requires additional setup)
-          // The image_cropper package supports web but needs proper configuration
-          // For now, we'll just pass null and let the parent handle the XFile
+          // On web, read image as bytes since dart:io File doesn't work
+          final bytes = await image.readAsBytes();
+          setState(() {
+            _pickedImageBytes = bytes;
+            _pickedImage = null;
+          });
+          widget.onImageBytesPickedForWeb?.call(bytes);
+          // Also try to call the regular callback with a pseudo-path for compatibility
+          // Some implementations might handle this differently
           widget.onImagePicked?.call(null);
         } else {
           final croppedFile = await _cropImage(File(image.path));
           if (croppedFile != null) {
             setState(() {
               _pickedImage = croppedFile;
+              _pickedImageBytes = null;
             });
             widget.onImagePicked?.call(croppedFile);
           }
@@ -201,19 +212,24 @@ class _ProfileImagePickerState extends State<ProfileImagePicker> {
                           _pickedImage!,
                           fit: BoxFit.cover,
                         )
-                      : widget.initialImageUrl != null && widget.initialImageUrl!.isNotEmpty
-                          ? CachedProfileImage(
-                              imageUrl: widget.initialImageUrl!,
-                              size: widget.size,
+                      : _pickedImageBytes != null
+                          ? Image.memory(
+                              _pickedImageBytes!,
+                              fit: BoxFit.cover,
                             )
-                          : Container(
-                              color: AppColors.cardBackground,
-                              child: Icon(
-                                Icons.person,
-                                size: widget.size * 0.5,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
+                          : widget.initialImageUrl != null && widget.initialImageUrl!.isNotEmpty
+                              ? CachedProfileImage(
+                                  imageUrl: widget.initialImageUrl!,
+                                  size: widget.size,
+                                )
+                              : Container(
+                                  color: AppColors.cardBackground,
+                                  child: Icon(
+                                    Icons.person,
+                                    size: widget.size * 0.5,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
             ),
           ),
           // Camera icon overlay

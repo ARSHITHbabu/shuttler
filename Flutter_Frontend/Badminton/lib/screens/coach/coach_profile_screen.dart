@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/colors.dart';
@@ -140,6 +142,7 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
                       initialImageUrl: coach.profilePhoto,
                       size: 100,
                       onImagePicked: _handleImagePicked,
+                      onImageBytesPickedForWeb: _handleImageBytesPickedForWeb,
                       isLoading: _isUploadingImage,
                     ),
                     const SizedBox(height: AppDimensions.spacingM),
@@ -292,6 +295,8 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
 
   Future<void> _handleImagePicked(File? image) async {
     if (image == null) {
+      // On web, this might be called with null when bytes are handled separately
+      if (kIsWeb) return;
       setState(() {
         _selectedImage = null;
       });
@@ -311,9 +316,54 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
 
       final coachId = (authState.value as Authenticated).userId;
       final apiService = ref.read(apiServiceProvider);
-      
+
       // Upload image
       final imageUrl = await apiService.uploadImage(image.path);
+
+      // Update profile with new image URL
+      final coachService = ref.read(coachServiceProvider);
+      await coachService.updateCoach(coachId, {
+        'profile_photo': imageUrl,
+      });
+
+      setState(() {
+        _isUploadingImage = false;
+        _coach = null; // Force refresh
+      });
+
+      if (mounted) {
+        SuccessSnackbar.show(context, 'Profile photo updated successfully');
+      }
+    } catch (e) {
+      setState(() {
+        _isUploadingImage = false;
+      });
+      if (mounted) {
+        SuccessSnackbar.showError(context, 'Failed to upload image: ${e.toString()}');
+      }
+    }
+  }
+
+  Future<void> _handleImageBytesPickedForWeb(Uint8List? bytes) async {
+    if (bytes == null) {
+      return;
+    }
+
+    setState(() {
+      _isUploadingImage = true;
+    });
+
+    try {
+      final authState = ref.read(authProvider);
+      if (authState.value is! Authenticated) {
+        throw Exception('Not authenticated');
+      }
+
+      final coachId = (authState.value as Authenticated).userId;
+      final apiService = ref.read(apiServiceProvider);
+
+      // Upload image bytes (for web)
+      final imageUrl = await apiService.uploadImageBytes(bytes);
 
       // Update profile with new image URL
       final coachService = ref.read(coachServiceProvider);

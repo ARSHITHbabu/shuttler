@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import '../constants/api_endpoints.dart';
 import 'storage_service.dart';
@@ -350,6 +351,43 @@ class ApiService {
         fieldName: 'file',
       );
       
+      if (response.statusCode == 200) {
+        final data = response.data;
+        if (data is Map<String, dynamic> && data.containsKey('url')) {
+          // Return full URL
+          final url = data['url'] as String;
+          if (url.startsWith('http')) {
+            return url;
+          } else {
+            // Prepend base URL if relative
+            return '${ApiEndpoints.baseUrl}$url';
+          }
+        }
+      }
+      throw Exception('Failed to upload image: Invalid response');
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// Upload image from bytes (for web support)
+  /// Returns the image URL from the response
+  Future<String> uploadImageBytes(Uint8List bytes, {String filename = 'image.jpg'}) async {
+    try {
+      final formData = FormData.fromMap({
+        'file': MultipartFile.fromBytes(bytes, filename: filename),
+      });
+
+      final response = await _dio.post(
+        ApiEndpoints.uploadImage,
+        data: formData,
+        options: Options(
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        ),
+      );
+
       if (response.statusCode == 200) {
         final data = response.data;
         if (data is Map<String, dynamic> && data.containsKey('url')) {

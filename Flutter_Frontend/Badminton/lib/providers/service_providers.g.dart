@@ -63,7 +63,7 @@ final authServiceProvider = AutoDisposeProvider<AuthService>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef AuthServiceRef = AutoDisposeProviderRef<AuthService>;
-String _$batchServiceHash() => r'81e5f0f75043ea7bfefa58f325ee8cf2a26f842b';
+String _$batchServiceHash() => r'a1b2c3d4e5f6789012345678901234567890abcd';
 
 /// Provider for BatchService singleton
 ///
@@ -82,27 +82,26 @@ final batchServiceProvider = AutoDisposeProvider<BatchService>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef BatchServiceRef = AutoDisposeProviderRef<BatchService>;
-String _$attendanceServiceHash() => r'd6ddba9d8c9b305d444dc8bcdd4a66a736e0f5c6';
+String _$attendanceServiceHash() => r'b2c3d4e5f6789012345678901234567890abcdef';
 
 /// Provider for AttendanceService singleton
 ///
 /// Copied from [attendanceService].
 @ProviderFor(attendanceService)
-final attendanceServiceProvider =
-    AutoDisposeProvider<AttendanceService>.internal(
-      attendanceService,
-      name: r'attendanceServiceProvider',
-      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
-          ? null
-          : _$attendanceServiceHash,
-      dependencies: null,
-      allTransitiveDependencies: null,
-    );
+final attendanceServiceProvider = AutoDisposeProvider<AttendanceService>.internal(
+  attendanceService,
+  name: r'attendanceServiceProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$attendanceServiceHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
 
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef AttendanceServiceRef = AutoDisposeProviderRef<AttendanceService>;
-String _$feeServiceHash() => r'419a019e484757dab15add5b164d4ae44f4abe27';
+String _$feeServiceHash() => r'c3d4e5f6789012345678901234567890abcdef01';
 
 /// Provider for FeeService singleton
 ///
@@ -121,7 +120,7 @@ final feeServiceProvider = AutoDisposeProvider<FeeService>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef FeeServiceRef = AutoDisposeProviderRef<FeeService>;
-String _$dashboardServiceHash() => r'766fef9588e4427e1ca1530e4fa5d5b900e98763';
+String _$dashboardServiceHash() => r'd4e5f6789012345678901234567890abcdef0123';
 
 /// Provider for DashboardService singleton
 ///
@@ -140,7 +139,7 @@ final dashboardServiceProvider = AutoDisposeProvider<DashboardService>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef DashboardServiceRef = AutoDisposeProviderRef<DashboardService>;
-String _$studentServiceHash() => r'6ed14084a9a38e0ca83cbc78bc89d79f3eed0abd';
+String _$studentServiceHash() => r'e5f6789012345678901234567890abcdef012345';
 
 /// Provider for StudentService singleton
 ///
@@ -159,7 +158,7 @@ final studentServiceProvider = AutoDisposeProvider<StudentService>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef StudentServiceRef = AutoDisposeProviderRef<StudentService>;
-String _$coachServiceHash() => r'35a0ba3e6f482bf2b2a832a263c77b8f4595a4df';
+String _$coachServiceHash() => r'f6789012345678901234567890abcdef01234567';
 
 /// Provider for CoachService singleton
 ///
@@ -178,7 +177,7 @@ final coachServiceProvider = AutoDisposeProvider<CoachService>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef CoachServiceRef = AutoDisposeProviderRef<CoachService>;
-String _$ownerServiceHash() => r'6cd62824db5c5b5f641022278bfa8f54c3c24600';
+String _$ownerServiceHash() => r'789012345678901234567890abcdef0123456789';
 
 /// Provider for OwnerService singleton
 ///
@@ -197,23 +196,21 @@ final ownerServiceProvider = AutoDisposeProvider<OwnerService>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef OwnerServiceRef = AutoDisposeProviderRef<OwnerService>;
-String _$performanceServiceHash() =>
-    r'b092b9998588c68abb272ad6d6910a503a4e93b1';
+String _$performanceServiceHash() => r'b092b9998588c68abb272ad6d6910a503a4e93b1';
 
 /// Provider for PerformanceService singleton
 ///
 /// Copied from [performanceService].
 @ProviderFor(performanceService)
-final performanceServiceProvider =
-    AutoDisposeProvider<PerformanceService>.internal(
-      performanceService,
-      name: r'performanceServiceProvider',
-      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
-          ? null
-          : _$performanceServiceHash,
-      dependencies: null,
-      allTransitiveDependencies: null,
-    );
+final performanceServiceProvider = AutoDisposeProvider<PerformanceService>.internal(
+  performanceService,
+  name: r'performanceServiceProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$performanceServiceHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
 
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
@@ -256,23 +253,21 @@ final scheduleServiceProvider = AutoDisposeProvider<ScheduleService>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef ScheduleServiceRef = AutoDisposeProviderRef<ScheduleService>;
-String _$announcementServiceHash() =>
-    r'0feeb2b5744a32dd9565d3af430ed0eeb584c64a';
+String _$announcementServiceHash() => r'0feeb2b5744a32dd9565d3af430ed0eeb584c64a';
 
 /// Provider for AnnouncementService singleton
 ///
 /// Copied from [announcementService].
 @ProviderFor(announcementService)
-final announcementServiceProvider =
-    AutoDisposeProvider<AnnouncementService>.internal(
-      announcementService,
-      name: r'announcementServiceProvider',
-      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
-          ? null
-          : _$announcementServiceHash,
-      dependencies: null,
-      allTransitiveDependencies: null,
-    );
+final announcementServiceProvider = AutoDisposeProvider<AnnouncementService>.internal(
+  announcementService,
+  name: r'announcementServiceProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$announcementServiceHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
 
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
@@ -302,37 +297,34 @@ String _$invitationServiceHash() => r'c14beb5162aef298d8269a46cbc9523b6c4837a1';
 ///
 /// Copied from [invitationService].
 @ProviderFor(invitationService)
-final invitationServiceProvider =
-    AutoDisposeProvider<InvitationService>.internal(
-      invitationService,
-      name: r'invitationServiceProvider',
-      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
-          ? null
-          : _$invitationServiceHash,
-      dependencies: null,
-      allTransitiveDependencies: null,
-    );
+final invitationServiceProvider = AutoDisposeProvider<InvitationService>.internal(
+  invitationService,
+  name: r'invitationServiceProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$invitationServiceHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
 
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef InvitationServiceRef = AutoDisposeProviderRef<InvitationService>;
-String _$notificationServiceHash() =>
-    r'841c588f74028a3fafda2fb906fcc13d92e49482';
+String _$notificationServiceHash() => r'841c588f74028a3fafda2fb906fcc13d92e49482';
 
 /// Provider for NotificationService singleton
 ///
 /// Copied from [notificationService].
 @ProviderFor(notificationService)
-final notificationServiceProvider =
-    AutoDisposeProvider<NotificationService>.internal(
-      notificationService,
-      name: r'notificationServiceProvider',
-      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
-          ? null
-          : _$notificationServiceHash,
-      dependencies: null,
-      allTransitiveDependencies: null,
-    );
+final notificationServiceProvider = AutoDisposeProvider<NotificationService>.internal(
+  notificationService,
+  name: r'notificationServiceProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$notificationServiceHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
 
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
@@ -343,16 +335,15 @@ String _$tournamentServiceHash() => r'e001e925ec2be8b52f463cc0b28b6faca649f290';
 ///
 /// Copied from [tournamentService].
 @ProviderFor(tournamentService)
-final tournamentServiceProvider =
-    AutoDisposeProvider<TournamentService>.internal(
-      tournamentService,
-      name: r'tournamentServiceProvider',
-      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
-          ? null
-          : _$tournamentServiceHash,
-      dependencies: null,
-      allTransitiveDependencies: null,
-    );
+final tournamentServiceProvider = AutoDisposeProvider<TournamentService>.internal(
+  tournamentService,
+  name: r'tournamentServiceProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$tournamentServiceHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
 
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
@@ -376,31 +367,47 @@ final sessionServiceProvider = AutoDisposeProvider<SessionService>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef SessionServiceRef = AutoDisposeProviderRef<SessionService>;
-String _$connectivityServiceHash() =>
-    r'2514faa3d7f3227d473e300af7d0188339855ef3';
+String _$videoServiceHash() => r'abc123def456789012345678901234567890abcd';
+
+/// Provider for VideoService singleton
+///
+/// Copied from [videoService].
+@ProviderFor(videoService)
+final videoServiceProvider = AutoDisposeProvider<VideoService>.internal(
+  videoService,
+  name: r'videoServiceProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$videoServiceHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef VideoServiceRef = AutoDisposeProviderRef<VideoService>;
+String _$connectivityServiceHash() => r'2514faa3d7f3227d473e300af7d0188339855ef3';
 
 /// Provider for ConnectivityService singleton
 ///
 /// Copied from [connectivityService].
 @ProviderFor(connectivityService)
-final connectivityServiceProvider =
-    AutoDisposeProvider<ConnectivityService>.internal(
-      connectivityService,
-      name: r'connectivityServiceProvider',
-      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
-          ? null
-          : _$connectivityServiceHash,
-      dependencies: null,
-      allTransitiveDependencies: null,
-    );
+final connectivityServiceProvider = AutoDisposeProvider<ConnectivityService>.internal(
+  connectivityService,
+  name: r'connectivityServiceProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$connectivityServiceHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
 
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef ConnectivityServiceRef = AutoDisposeProviderRef<ConnectivityService>;
-String _$requestQueueHash() => r'162b38e9be3558221772227e935e1fd15405aa03';
+String _$requestQueueHash() => r'1234567890abcdef1234567890abcdef12345678';
 
 /// Provider for RequestQueue singleton
-/// Note: RequestQueue requires ConnectivityService and Dio from ApiService
 ///
 /// Copied from [requestQueue].
 @ProviderFor(requestQueue)
@@ -417,5 +424,3 @@ final requestQueueProvider = AutoDisposeProvider<RequestQueue>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef RequestQueueRef = AutoDisposeProviderRef<RequestQueue>;
-// ignore_for_file: type=lint
-// ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package

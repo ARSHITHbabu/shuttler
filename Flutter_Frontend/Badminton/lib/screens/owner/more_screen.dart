@@ -13,6 +13,7 @@ import 'calendar_view_screen.dart';
 import 'reports_screen.dart';
 import 'bmi_tracking_screen.dart';
 import 'performance_tracking_screen.dart';
+import 'video_management_screen.dart';
 import 'settings_screen.dart';
 import 'notifications_screen.dart';
 
@@ -109,6 +110,18 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (context) => const PerformanceTrackingScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.video_library_outlined,
+              title: 'Videos',
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const VideoManagementScreen(),
                   ),
                 );
               },
