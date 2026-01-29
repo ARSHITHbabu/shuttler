@@ -15,7 +15,6 @@ import 'performance_tracking_screen.dart';
 import 'video_management_screen.dart';
 import 'settings_screen.dart';
 import 'notifications_screen.dart';
-import 'profile_screen.dart';
 
 /// More Screen - Settings and additional features
 /// Matches React reference: MoreScreen.tsx
@@ -53,25 +52,6 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                 color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
               ),
             ),
-            const SizedBox(height: AppDimensions.spacingL),
-
-            // Account Section
-            _SectionTitle(title: 'Account', isDark: isDark),
-            const SizedBox(height: AppDimensions.spacingM),
-            _MenuItem(
-              icon: Icons.person_outline,
-              title: 'My Profile',
-              subtitle: 'View and edit your profile',
-              isDark: isDark,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const ProfileScreen(),
-                  ),
-                );
-              },
-            ),
-
             const SizedBox(height: AppDimensions.spacingL),
 
             // Information Section

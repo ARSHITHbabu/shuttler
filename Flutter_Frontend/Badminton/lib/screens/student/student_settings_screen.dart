@@ -135,6 +135,31 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
 
                   const SizedBox(height: AppDimensions.spacingL),
 
+                  // Account Section
+                  _buildSection(
+                    title: 'Account',
+                    icon: Icons.account_circle_outlined,
+                    isDark: isDark,
+                    children: [
+                      _buildActionTile(
+                        title: 'Change Password',
+                        icon: Icons.lock_outline,
+                        isDark: isDark,
+                        onTap: () => _showChangePassword(isDark),
+                      ),
+                      const Divider(height: 1),
+                      _buildActionTile(
+                        title: 'Logout',
+                        icon: Icons.logout,
+                        isDark: isDark,
+                        isDestructive: true,
+                        onTap: () => _showLogoutConfirmation(isDark),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: AppDimensions.spacingL),
+
                   // Notifications Section
                   _buildSection(
                     title: 'Notifications',
@@ -248,31 +273,6 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                             ),
                           );
                         },
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: AppDimensions.spacingL),
-
-                  // Account Section
-                  _buildSection(
-                    title: 'Account',
-                    icon: Icons.account_circle_outlined,
-                    isDark: isDark,
-                    children: [
-                      _buildActionTile(
-                        title: 'Change Password',
-                        icon: Icons.lock_outline,
-                        isDark: isDark,
-                        onTap: () => _showChangePassword(isDark),
-                      ),
-                      const Divider(height: 1),
-                      _buildActionTile(
-                        title: 'Logout',
-                        icon: Icons.logout,
-                        isDark: isDark,
-                        isDestructive: true,
-                        onTap: () => _showLogoutConfirmation(isDark),
                       ),
                     ],
                   ),

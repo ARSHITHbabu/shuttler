@@ -126,6 +126,36 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
 
                   const SizedBox(height: AppDimensions.spacingL),
 
+                  // Account Section
+                  _buildSection(
+                    title: 'Account',
+                    icon: Icons.account_circle_outlined,
+                    isDark: isDark,
+                    children: [
+                      _buildActionTile(
+                        title: 'Profile',
+                        icon: Icons.person_outline,
+                        isDark: isDark,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const CoachProfileScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      const Divider(height: 1),
+                      _buildActionTile(
+                        title: 'Change Password',
+                        icon: Icons.lock_outline,
+                        isDark: isDark,
+                        onTap: () => _showChangePassword(isDark),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: AppDimensions.spacingL),
+
                   // Notifications Section
                   _buildSection(
                     title: 'Notifications',
@@ -207,36 +237,6 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
                             ),
                           );
                         },
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: AppDimensions.spacingL),
-
-                  // Account Section
-                  _buildSection(
-                    title: 'Account',
-                    icon: Icons.account_circle_outlined,
-                    isDark: isDark,
-                    children: [
-                      _buildActionTile(
-                        title: 'Profile',
-                        icon: Icons.person_outline,
-                        isDark: isDark,
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => const CoachProfileScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                      const Divider(height: 1),
-                      _buildActionTile(
-                        title: 'Change Password',
-                        icon: Icons.lock_outline,
-                        isDark: isDark,
-                        onTap: () => _showChangePassword(isDark),
                       ),
                     ],
                   ),

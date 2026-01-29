@@ -52,19 +52,6 @@ class _StudentMoreScreenState extends ConsumerState<StudentMoreScreen> {
             ),
             const SizedBox(height: AppDimensions.spacingL),
 
-            // Profile Section
-            _SectionTitle(title: 'Account', isDark: isDark),
-            const SizedBox(height: AppDimensions.spacingM),
-            _MenuItem(
-              icon: Icons.person_outline,
-              title: 'My Profile',
-              subtitle: 'View and edit your profile',
-              isDark: isDark,
-              onTap: () => setState(() => _currentView = 'profile'),
-            ),
-
-            const SizedBox(height: AppDimensions.spacingL),
-
             // Information Section (READ-ONLY)
             _SectionTitle(title: 'Information', isDark: isDark),
             const SizedBox(height: AppDimensions.spacingM),

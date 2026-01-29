@@ -15,7 +15,6 @@ import 'coach_settings_screen.dart';
 import '../owner/bmi_tracking_screen.dart';
 import '../owner/performance_tracking_screen.dart';
 import 'coach_fees_screen.dart';
-import 'coach_profile_screen.dart';
 
 /// Coach More Screen - Navigation hub for additional features
 class CoachMoreScreen extends ConsumerStatefulWidget {
@@ -46,25 +45,6 @@ class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
                 color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
               ),
             ),
-            const SizedBox(height: AppDimensions.spacingL),
-
-            // Account Section
-            _SectionTitle(title: 'Account', isDark: isDark),
-            const SizedBox(height: AppDimensions.spacingM),
-            _MenuItem(
-              icon: Icons.person_outline,
-              title: 'My Profile',
-              subtitle: 'View and edit your profile',
-              isDark: isDark,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const CoachProfileScreen(),
-                  ),
-                );
-              },
-            ),
-
             const SizedBox(height: AppDimensions.spacingL),
 
             // Information Section
