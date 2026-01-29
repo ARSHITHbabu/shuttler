@@ -22,7 +22,19 @@ class StudentPerformanceScreen extends ConsumerStatefulWidget {
 }
 
 class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScreen> {
-  // Removed manual state management - using providers instead
+  // Filter options
+  String _selectionMode = 'all'; // 'date', 'month', 'year', 'all'
+  DateTime? _selectedDate;
+  DateTime? _selectedMonth;
+  int? _selectedYear;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedMonth = DateTime.now();
+    _selectedDate = DateTime.now();
+    _selectedYear = DateTime.now().year;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -56,13 +68,56 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
         }
 
         final userId = authState.userId;
-        final performanceAsync = ref.watch(performanceByStudentProvider(userId));
+        
+        // Determine date range based on selection mode
+        DateTime? startDate;
+        DateTime? endDate;
+        
+        if (_selectionMode == 'date' && _selectedDate != null) {
+          // Single date selection
+          startDate = DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day);
+          endDate = DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day, 23, 59, 59);
+        } else if (_selectionMode == 'month' && _selectedMonth != null) {
+          // Month selection
+          startDate = DateTime(_selectedMonth!.year, _selectedMonth!.month, 1);
+          endDate = DateTime(_selectedMonth!.year, _selectedMonth!.month + 1, 0, 23, 59, 59);
+        } else if (_selectionMode == 'year' && _selectedYear != null) {
+          // Year selection
+          startDate = DateTime(_selectedYear!, 1, 1);
+          endDate = DateTime(_selectedYear!, 12, 31, 23, 59, 59);
+        }
+        // If 'all', startDate and endDate remain null
+        
+        final performanceAsync = ref.watch(performanceByStudentProvider(
+          userId,
+          startDate: startDate,
+          endDate: endDate,
+        ));
 
         return Scaffold(
           backgroundColor: Colors.transparent,
           body: RefreshIndicator(
             onRefresh: () async {
-              ref.invalidate(performanceByStudentProvider(userId));
+              DateTime? startDate;
+              DateTime? endDate;
+              
+              if (_selectionMode == 'date' && _selectedDate != null) {
+                startDate = DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day);
+                endDate = DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day, 23, 59, 59);
+              } else if (_selectionMode == 'month' && _selectedMonth != null) {
+                startDate = DateTime(_selectedMonth!.year, _selectedMonth!.month, 1);
+                endDate = DateTime(_selectedMonth!.year, _selectedMonth!.month + 1, 0, 23, 59, 59);
+              } else if (_selectionMode == 'year' && _selectedYear != null) {
+                startDate = DateTime(_selectedYear!, 1, 1);
+                endDate = DateTime(_selectedYear!, 12, 31, 23, 59, 59);
+              }
+              
+              ref.invalidate(performanceByStudentProvider(
+                userId,
+                startDate: startDate,
+                endDate: endDate,
+              ));
+              ref.invalidate(averagePerformanceProvider(userId));
             },
             child: CustomScrollView(
               slivers: [
@@ -90,22 +145,50 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                     ),
                     error: (error, stack) => ErrorDisplay(
                       message: 'Failed to load performance records: ${error.toString()}',
-                      onRetry: () => ref.invalidate(performanceByStudentProvider(userId)),
+                      onRetry: () {
+                        DateTime? startDate;
+                        DateTime? endDate;
+                        
+                        if (_selectionMode == 'date' && _selectedDate != null) {
+                          startDate = DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day);
+                          endDate = DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day, 23, 59, 59);
+                        } else if (_selectionMode == 'month' && _selectedMonth != null) {
+                          startDate = DateTime(_selectedMonth!.year, _selectedMonth!.month, 1);
+                          endDate = DateTime(_selectedMonth!.year, _selectedMonth!.month + 1, 0, 23, 59, 59);
+                        } else if (_selectionMode == 'year' && _selectedYear != null) {
+                          startDate = DateTime(_selectedYear!, 1, 1);
+                          endDate = DateTime(_selectedYear!, 12, 31, 23, 59, 59);
+                        }
+                        
+                        ref.invalidate(performanceByStudentProvider(
+                          userId,
+                          startDate: startDate,
+                          endDate: endDate,
+                        ));
+                      },
                     ),
                     data: (performanceRecords) {
                       if (performanceRecords.isEmpty) {
-                        return EmptyState.noPerformance();
+                        return Column(
+                          children: [
+                            _buildDateSelector(isDark, userId),
+                            const SizedBox(height: AppDimensions.spacingL),
+                            EmptyState.noPerformance(),
+                          ],
+                        );
                       }
+
+                      // Calculate averages from filtered records
+                      final overallStats = _calculateOverallStats(performanceRecords);
 
                       // Sort by date descending (latest first)
                       final sortedRecords = List<Performance>.from(performanceRecords)
                         ..sort((a, b) => b.date.compareTo(a.date));
-                      final latestPerformance = sortedRecords.first;
 
                       return Column(
                         children: [
-                          // Latest Performance Overview
-                          _buildLatestPerformance(isDark, latestPerformance),
+                          // Overall Performance Overview (based on filtered records)
+                          _buildOverallPerformance(isDark, overallStats),
 
                           const SizedBox(height: AppDimensions.spacingL),
 
@@ -116,10 +199,15 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                           if (sortedRecords.length >= 2)
                             const SizedBox(height: AppDimensions.spacingL),
 
-                          // Skill Breakdown
-                          _buildSkillBreakdown(isDark, latestPerformance),
+                          // Overall Skill Breakdown (based on filtered records)
+                          _buildOverallSkillBreakdown(isDark, overallStats),
 
                           const SizedBox(height: AppDimensions.spacingL),
+
+                          // Date Selector
+                          _buildDateSelector(isDark, userId),
+
+                          const SizedBox(height: AppDimensions.spacingM),
 
                           // Performance History Header
                           Padding(
@@ -195,9 +283,9 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
     );
   }
 
-  Widget _buildLatestPerformance(bool isDark, Performance latestPerformance) {
-    final avgScore = latestPerformance.averageRating;
-    final date = latestPerformance.date;
+  Widget _buildOverallPerformance(bool isDark, Map<String, dynamic> overallStats) {
+    final avgScore = (overallStats['average'] ?? 0.0).toDouble();
+    final totalRecords = (overallStats['totalRecords'] ?? 0) as int;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
@@ -206,7 +294,7 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
         child: Column(
           children: [
             Text(
-              'Latest Assessment',
+              'Overall Performance Record',
               style: TextStyle(
                 fontSize: 14,
                 color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
@@ -256,7 +344,7 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
             const SizedBox(height: AppDimensions.spacingM),
 
             Text(
-              _formatDate(date.toIso8601String()),
+              'Based on $totalRecords ${totalRecords == 1 ? 'record' : 'records'}',
               style: TextStyle(
                 fontSize: 12,
                 color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
@@ -268,13 +356,13 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
     );
   }
 
-  Widget _buildSkillBreakdown(bool isDark, Performance latestPerformance) {
+  Widget _buildOverallSkillBreakdown(bool isDark, Map<String, dynamic> overallStats) {
     final skills = [
-      {'name': 'Serve', 'rating': latestPerformance.serve, 'icon': Icons.sports_tennis},
-      {'name': 'Smash', 'rating': latestPerformance.smash, 'icon': Icons.bolt},
-      {'name': 'Footwork', 'rating': latestPerformance.footwork, 'icon': Icons.directions_run},
-      {'name': 'Defense', 'rating': latestPerformance.defense, 'icon': Icons.shield},
-      {'name': 'Stamina', 'rating': latestPerformance.stamina, 'icon': Icons.favorite},
+      {'name': 'Serve', 'rating': (overallStats['serve'] ?? 0.0).toDouble(), 'icon': Icons.sports_tennis},
+      {'name': 'Smash', 'rating': (overallStats['smash'] ?? 0.0).toDouble(), 'icon': Icons.bolt},
+      {'name': 'Footwork', 'rating': (overallStats['footwork'] ?? 0.0).toDouble(), 'icon': Icons.directions_run},
+      {'name': 'Defense', 'rating': (overallStats['defense'] ?? 0.0).toDouble(), 'icon': Icons.shield},
+      {'name': 'Stamina', 'rating': (overallStats['stamina'] ?? 0.0).toDouble(), 'icon': Icons.favorite},
     ];
 
     return Padding(
@@ -295,7 +383,7 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
             padding: const EdgeInsets.all(AppDimensions.paddingM),
             child: Column(
               children: skills.map((skill) {
-                final rating = (skill['rating'] as int).toDouble();
+                final rating = (skill['rating'] as double);
                 return _SkillBar(
                   name: skill['name'] as String,
                   rating: rating,
@@ -310,7 +398,58 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
     );
   }
 
-  // Removed _calculateAverageScore - using Performance.averageRating instead
+  void _refreshPerformanceData(int userId) {
+    DateTime? startDate;
+    DateTime? endDate;
+    
+    if (_selectionMode == 'date' && _selectedDate != null) {
+      startDate = DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day);
+      endDate = DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day, 23, 59, 59);
+    } else if (_selectionMode == 'month' && _selectedMonth != null) {
+      startDate = DateTime(_selectedMonth!.year, _selectedMonth!.month, 1);
+      endDate = DateTime(_selectedMonth!.year, _selectedMonth!.month + 1, 0, 23, 59, 59);
+    } else if (_selectionMode == 'year' && _selectedYear != null) {
+      startDate = DateTime(_selectedYear!, 1, 1);
+      endDate = DateTime(_selectedYear!, 12, 31, 23, 59, 59);
+    }
+    
+    ref.invalidate(performanceByStudentProvider(
+      userId,
+      startDate: startDate,
+      endDate: endDate,
+    ));
+  }
+
+  Map<String, dynamic> _calculateOverallStats(List<Performance> records) {
+    if (records.isEmpty) {
+      return {
+        'average': 0.0,
+        'serve': 0.0,
+        'smash': 0.0,
+        'footwork': 0.0,
+        'defense': 0.0,
+        'stamina': 0.0,
+        'totalRecords': 0,
+      };
+    }
+
+    final serveAvg = records.map((r) => r.serve).reduce((a, b) => a + b) / records.length;
+    final smashAvg = records.map((r) => r.smash).reduce((a, b) => a + b) / records.length;
+    final footworkAvg = records.map((r) => r.footwork).reduce((a, b) => a + b) / records.length;
+    final defenseAvg = records.map((r) => r.defense).reduce((a, b) => a + b) / records.length;
+    final staminaAvg = records.map((r) => r.stamina).reduce((a, b) => a + b) / records.length;
+    final overallAvg = (serveAvg + smashAvg + footworkAvg + defenseAvg + staminaAvg) / 5.0;
+
+    return {
+      'average': overallAvg,
+      'serve': serveAvg,
+      'smash': smashAvg,
+      'footwork': footworkAvg,
+      'defense': defenseAvg,
+      'stamina': staminaAvg,
+      'totalRecords': records.length,
+    };
+  }
 
   Color _getScoreColor(double score, bool isDark) {
     if (score >= 4) {
@@ -324,13 +463,361 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
     }
   }
 
-  String _formatDate(String dateStr) {
-    try {
-      final date = DateTime.parse(dateStr);
-      final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      return '${date.day} ${months[date.month - 1]} ${date.year}';
-    } catch (e) {
-      return dateStr;
+  Widget _buildDateSelector(bool isDark, int userId) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+      child: Column(
+        children: [
+          // Selection Mode Tabs
+          Row(
+            children: [
+              Expanded(
+                child: _SelectionModeTab(
+                  label: 'Date',
+                  isSelected: _selectionMode == 'date',
+                  isDark: isDark,
+                  onTap: () {
+                    setState(() {
+                      _selectionMode = 'date';
+                    });
+                    _refreshPerformanceData(userId);
+                  },
+                ),
+              ),
+              const SizedBox(width: AppDimensions.spacingS),
+              Expanded(
+                child: _SelectionModeTab(
+                  label: 'Month',
+                  isSelected: _selectionMode == 'month',
+                  isDark: isDark,
+                  onTap: () {
+                    setState(() {
+                      _selectionMode = 'month';
+                    });
+                    _refreshPerformanceData(userId);
+                  },
+                ),
+              ),
+              const SizedBox(width: AppDimensions.spacingS),
+              Expanded(
+                child: _SelectionModeTab(
+                  label: 'Year',
+                  isSelected: _selectionMode == 'year',
+                  isDark: isDark,
+                  onTap: () {
+                    setState(() {
+                      _selectionMode = 'year';
+                    });
+                    _refreshPerformanceData(userId);
+                  },
+                ),
+              ),
+              const SizedBox(width: AppDimensions.spacingS),
+              Expanded(
+                child: _SelectionModeTab(
+                  label: 'All',
+                  isSelected: _selectionMode == 'all',
+                  isDark: isDark,
+                  onTap: () {
+                    setState(() {
+                      _selectionMode = 'all';
+                    });
+                    _refreshPerformanceData(userId);
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppDimensions.spacingM),
+          // Date/Month/Year Display and Navigation
+          _buildDateDisplay(isDark, userId),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDateDisplay(bool isDark, int userId) {
+    if (_selectionMode == 'date') {
+      final date = _selectedDate ?? DateTime.now();
+      return GestureDetector(
+        onTap: () => _showDatePicker(isDark),
+        child: NeumorphicContainer(
+          padding: const EdgeInsets.all(AppDimensions.paddingM),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                icon: Icon(
+                  Icons.chevron_left,
+                  color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
+                ),
+                onPressed: () {
+                  final newDate = date.subtract(const Duration(days: 1));
+                  setState(() {
+                    _selectedDate = newDate;
+                  });
+                  _refreshPerformanceData(userId);
+                },
+              ),
+              Text(
+                DateFormat('EEE, d MMM yyyy').format(date),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                ),
+              ),
+              IconButton(
+                icon: Icon(
+                  Icons.chevron_right,
+                  color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
+                ),
+                onPressed: () {
+                  final now = DateTime.now();
+                  final nextDate = date.add(const Duration(days: 1));
+                  if (nextDate.isBefore(now) || nextDate.isAtSameMomentAs(now)) {
+                    setState(() {
+                      _selectedDate = nextDate;
+                    });
+                    _refreshPerformanceData(userId);
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    } else if (_selectionMode == 'month') {
+      final months = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+      ];
+      final currentMonth = _selectedMonth ?? DateTime.now();
+      return GestureDetector(
+        onTap: () => _showMonthPicker(isDark),
+        child: NeumorphicContainer(
+          padding: const EdgeInsets.all(AppDimensions.paddingM),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                icon: Icon(
+                  Icons.chevron_left,
+                  color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _selectedMonth = DateTime(currentMonth.year, currentMonth.month - 1);
+                  });
+                },
+              ),
+              Text(
+                '${months[currentMonth.month - 1]} ${currentMonth.year}',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                ),
+              ),
+              IconButton(
+                icon: Icon(
+                  Icons.chevron_right,
+                  color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
+                ),
+                onPressed: () {
+                  final now = DateTime.now();
+                  if (currentMonth.year < now.year ||
+                      (currentMonth.year == now.year && currentMonth.month < now.month)) {
+                    setState(() {
+                      _selectedMonth = DateTime(currentMonth.year, currentMonth.month + 1);
+                    });
+                    _refreshPerformanceData(userId);
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    } else if (_selectionMode == 'year') {
+      final currentYear = _selectedYear ?? DateTime.now().year;
+      return GestureDetector(
+        onTap: () => _showYearPicker(isDark),
+        child: NeumorphicContainer(
+          padding: const EdgeInsets.all(AppDimensions.paddingM),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                icon: Icon(
+                  Icons.chevron_left,
+                  color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _selectedYear = currentYear - 1;
+                  });
+                  _refreshPerformanceData(userId);
+                },
+              ),
+              Text(
+                currentYear.toString(),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                ),
+              ),
+              IconButton(
+                icon: Icon(
+                  Icons.chevron_right,
+                  color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
+                ),
+                onPressed: () {
+                  final now = DateTime.now();
+                  if (currentYear < now.year) {
+                    setState(() {
+                      _selectedYear = currentYear + 1;
+                    });
+                    _refreshPerformanceData(userId);
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    } else {
+      // All mode
+      return NeumorphicContainer(
+        padding: const EdgeInsets.all(AppDimensions.paddingM),
+        child: Center(
+          child: Text(
+            'All Performance Records',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  void _showDatePicker(bool isDark) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: isDark
+                ? const ColorScheme.dark(
+                    primary: AppColors.accent,
+                    surface: AppColors.cardBackground,
+                  )
+                : const ColorScheme.light(
+                    primary: AppColorsLight.accent,
+                    surface: AppColorsLight.cardBackground,
+                  ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _selectedDate = picked;
+      });
+      // Get userId to refresh provider
+      final authState = ref.read(authProvider);
+      authState.whenData((auth) {
+        if (auth is Authenticated) {
+          _refreshPerformanceData(auth.userId);
+        }
+      });
+    }
+  }
+
+  void _showMonthPicker(bool isDark) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedMonth ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      initialDatePickerMode: DatePickerMode.year,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: isDark
+                ? const ColorScheme.dark(
+                    primary: AppColors.accent,
+                    surface: AppColors.cardBackground,
+                  )
+                : const ColorScheme.light(
+                    primary: AppColorsLight.accent,
+                    surface: AppColorsLight.cardBackground,
+                  ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _selectedMonth = picked;
+      });
+      // Get userId to refresh provider
+      final authState = ref.read(authProvider);
+      authState.whenData((auth) {
+        if (auth is Authenticated) {
+          _refreshPerformanceData(auth.userId);
+        }
+      });
+    }
+  }
+
+  void _showYearPicker(bool isDark) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime(_selectedYear ?? DateTime.now().year),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      initialDatePickerMode: DatePickerMode.year,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: isDark
+                ? const ColorScheme.dark(
+                    primary: AppColors.accent,
+                    surface: AppColors.cardBackground,
+                  )
+                : const ColorScheme.light(
+                    primary: AppColorsLight.accent,
+                    surface: AppColorsLight.cardBackground,
+                  ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _selectedYear = picked.year;
+      });
+      // Get userId to refresh provider
+      final authState = ref.read(authProvider);
+      authState.whenData((auth) {
+        if (auth is Authenticated) {
+          _refreshPerformanceData(auth.userId);
+        }
+      });
     }
   }
 
@@ -466,6 +953,49 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SelectionModeTab extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _SelectionModeTab({
+    required this.label,
+    required this.isSelected,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? (isDark ? AppColors.accent : AppColorsLight.accent)
+              : (isDark ? AppColors.cardBackground : AppColorsLight.cardBackground),
+          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+          boxShadow: isSelected ? null : NeumorphicStyles.getElevatedShadow(),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              color: isSelected
+                  ? Colors.white
+                  : (isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
+            ),
+          ),
         ),
       ),
     );

@@ -143,13 +143,9 @@ Future<StudentDashboardData> studentDashboard(StudentDashboardRef ref, int stude
     attendanceRate = (present / attendanceRecords.length) * 100;
   }
   
-  // Get latest performance
-  final performanceRecords = await ref.watch(performanceByStudentProvider(studentId).future);
-  double performanceScore = 0.0;
-  if (performanceRecords.isNotEmpty) {
-    performanceRecords.sort((a, b) => b.date.compareTo(a.date));
-    performanceScore = performanceRecords.first.averageRating;
-  }
+  // Get overall performance average
+  final overallPerformance = await ref.watch(averagePerformanceProvider(studentId).future);
+  double performanceScore = overallPerformance['average'] ?? 0.0;
   
   // Get latest BMI
   final bmiRecords = await ref.watch(bmiByStudentProvider(studentId).future);
