@@ -161,6 +161,20 @@ class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
                 );
               },
             ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.event_busy_outlined,
+              title: 'Requests',
+              subtitle: 'Submit and view leave requests',
+              isDark: isDark,
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const LeaveRequestScreen(),
+                  ),
+                );
+              },
+            ),
 
             const SizedBox(height: AppDimensions.spacingL),
 

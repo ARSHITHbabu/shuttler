@@ -827,6 +827,7 @@ class CoachCreate(BaseModel):
     password: str
     specialization: Optional[str] = None
     experience_years: Optional[int] = None
+    invitation_token: Optional[str] = None  # Optional invitation token from owner
 
 class Coach(BaseModel):
     id: int
@@ -1004,6 +1005,7 @@ class StudentCreate(BaseModel):
     address: Optional[str] = None  # Required for profile completion
     t_shirt_size: Optional[str] = None  # Required for profile completion
     blood_group: Optional[str] = None  # Blood group (A+, A-, B+, B-, AB+, AB-, O+, O-)
+    invitation_token: Optional[str] = None  # Optional invitation token from coach or owner
 
 class Student(BaseModel):
     id: int
@@ -1531,9 +1533,39 @@ def create_coach(coach: CoachCreate):
         if existing_owner:
             raise HTTPException(status_code=400, detail="Email already registered as an owner. Coaches and owners must have unique emails.")
         
-        # Hash password before storing
+        # Prepare coach data
         coach_dict = coach.model_dump()
+        invitation_token = coach_dict.pop('invitation_token', None)  # Remove from coach_dict
+        
+        # Check if coach was invited by owner
+        invited_by_owner = False
+        
+        if invitation_token:
+            # Check for coach invitation (from owner)
+            invitation = db.query(CoachInvitationDB).filter(
+                CoachInvitationDB.invite_token == invitation_token
+            ).first()
+            
+            if invitation:
+                # Coach was invited by owner
+                invited_by_owner = True
+                # Verify email/phone matches invitation if provided
+                if invitation.coach_email and invitation.coach_email != coach.email:
+                    raise HTTPException(status_code=400, detail="Email does not match invitation")
+                if invitation.coach_phone and invitation.coach_phone != coach.phone:
+                    raise HTTPException(status_code=400, detail="Phone does not match invitation")
+        
+        # Hash password before storing
         coach_dict['password'] = hash_password(coach_dict['password'])
+        
+        # Determine account status based on invitation
+        # If invited by owner: status = 'active' (no request needed)
+        # If not invited: status = 'pending' (request needed)
+        if not coach_dict.get('status'):
+            if invited_by_owner:
+                coach_dict['status'] = 'active'  # Owner invited, auto-active
+            else:
+                coach_dict['status'] = 'pending'  # Requires owner approval
         
         # Explicitly create CoachDB instance (saves to coaches table)
         db_coach = CoachDB(**coach_dict)
@@ -1549,6 +1581,25 @@ def create_coach(coach: CoachCreate):
         db.add(db_coach)
         db.commit()
         db.refresh(db_coach)
+        
+        # Create approval request if status is pending
+        if coach_dict.get('status') == 'pending':
+            request_data = {
+                'request_type': 'coach_registration',
+                'requester_type': 'coach',
+                'requester_id': db_coach.id,
+                'title': f'Coach Registration: {db_coach.name}',
+                'description': f'New coach {db_coach.name} ({db_coach.email}) has registered and is awaiting approval.',
+                'request_metadata': {
+                    'coach_name': db_coach.name,
+                    'coach_email': db_coach.email,
+                    'coach_phone': db_coach.phone
+                }
+            }
+            db_request = RequestDB(**request_data)
+            db.add(db_request)
+            db.commit()
+            db.refresh(db_coach)
         
         # Verify it was saved to coaches table by querying it back
         verify_coach = db.query(CoachDB).filter(CoachDB.id == db_coach.id).first()
@@ -1647,6 +1698,20 @@ def login_coach(login_data: CoachLogin):
                 return {
                     "success": False,
                     "message": "Invalid email or password"
+                }
+            
+            # Check if account is pending approval
+            if coach.status == "pending":
+                return {
+                    "success": False,
+                    "message": "Your account is pending approval. Please wait for the owner to approve your registration."
+                }
+            
+            # Check if account was rejected
+            if coach.status == "rejected":
+                return {
+                    "success": False,
+                    "message": "Your registration has been rejected. Please contact the academy owner for more information."
                 }
             
             if coach.status == "inactive":
@@ -2548,40 +2613,84 @@ def create_student(student: StudentCreate):
     try:
         # Prepare student data with defaults
         student_data = student.model_dump()
+        invitation_token = student_data.pop('invitation_token', None)  # Remove from student_data
         
         # Hash password before storing
         student_data['password'] = hash_password(student_data['password'])
+        
+        # Check if student was invited
+        invited_by_owner = False
+        invited_by_coach = False
+        inviter_name = None
+        
+        if invitation_token:
+            # Check for student invitation (from coach or owner)
+            invitation = db.query(InvitationDB).filter(
+                InvitationDB.invite_token == invitation_token
+            ).first()
+            
+            if invitation:
+                # Check if inviter is an owner or coach
+                owner = db.query(OwnerDB).filter(OwnerDB.id == invitation.coach_id).first()
+                if owner:
+                    # Student was invited by owner
+                    invited_by_owner = True
+                    inviter_name = invitation.coach_name  # Actually owner name stored as coach_name
+                else:
+                    # Student was invited by coach
+                    invited_by_coach = True
+                    inviter_name = invitation.coach_name
+                
+                # Verify email/phone matches invitation if provided
+                if invitation.student_email and invitation.student_email != student.email:
+                    raise HTTPException(status_code=400, detail="Email does not match invitation")
+                if invitation.student_phone and invitation.student_phone != student.phone:
+                    raise HTTPException(status_code=400, detail="Phone does not match invitation")
+                # Mark invitation as used (optional - you might want to track this)
+                # invitation.status = "used"  # Uncomment if you want to track used invitations
         
         # Set default values for optional fields
         if not student_data.get('added_by'):
             student_data['added_by'] = 'self'
         
-        # Set status to 'pending' for self-registered students (requires approval)
-        # If added_by is not 'self', set to 'active' (owner/coach added directly)
+        # Determine account status based on invitation
+        # If invited by owner: status = 'active' (no request needed)
+        # If invited by coach: status = 'pending' (request needed, show coach name)
+        # If not invited: status = 'pending' (request needed)
         if not student_data.get('status'):
-            if student_data.get('added_by') == 'self':
-                student_data['status'] = 'pending'  # Requires owner approval
+            if invited_by_owner:
+                student_data['status'] = 'active'  # Owner invited, auto-active
             else:
-                student_data['status'] = 'active'  # Owner/coach added, auto-active
+                student_data['status'] = 'pending'  # Requires owner approval
         
         db_student = StudentDB(**student_data)
         db.add(db_student)
         db.commit()
         db.refresh(db_student)
         
-        # If student registered themselves, create an approval request
-        if student_data.get('added_by') == 'self' and student_data.get('status') == 'pending':
+        # Create approval request if status is pending
+        if student_data.get('status') == 'pending':
+            request_metadata = {
+                'student_name': db_student.name,
+                'student_email': db_student.email,
+                'student_phone': db_student.phone
+            }
+            
+            # Add inviter info if invited by coach
+            if invited_by_coach and inviter_name:
+                request_metadata['invited_by'] = 'coach'
+                request_metadata['inviter_name'] = inviter_name
+                description = f'New student {db_student.name} ({db_student.email}) has registered via coach invitation from {inviter_name} and is awaiting approval.'
+            else:
+                description = f'New student {db_student.name} ({db_student.email}) has registered and is awaiting approval.'
+            
             request_data = {
                 'request_type': 'student_registration',
                 'requester_type': 'student',
                 'requester_id': db_student.id,
                 'title': f'Student Registration: {db_student.name}',
-                'description': f'New student {db_student.name} ({db_student.email}) has registered and is awaiting approval.',
-                'request_metadata': {  # Use request_metadata for database
-                    'student_name': db_student.name,
-                    'student_email': db_student.email,
-                    'student_phone': db_student.phone
-                }
+                'description': description,
+                'request_metadata': request_metadata
             }
             db_request = RequestDB(**request_data)
             db.add(db_request)
@@ -2603,9 +2712,11 @@ def create_student(student: StudentCreate):
 
 @app.get("/students/", response_model=List[Student])
 def get_students():
+    """Get all students - excludes rejected students from the list"""
     db = SessionLocal()
     try:
-        students = db.query(StudentDB).all()
+        # Filter out rejected students - they should not appear in the list
+        students = db.query(StudentDB).filter(StudentDB.status != "rejected").all()
         return students
     finally:
         db.close()
@@ -2719,6 +2830,21 @@ def login_student(login_data: StudentLogin):
                     "success": False,
                     "message": "Invalid email or password"
                 }
+            
+            # Check if account is pending approval
+            if student.status == "pending":
+                return {
+                    "success": False,
+                    "message": "Your account is pending approval. Please wait for the owner to approve your registration."
+                }
+            
+            # Check if account was rejected
+            if student.status == "rejected":
+                return {
+                    "success": False,
+                    "message": "Your registration has been rejected. Please contact the academy owner for more information."
+                }
+            
             # Check if student has any approved batches
             approved_batches = db.query(BatchStudentDB).filter(
                 BatchStudentDB.student_id == student.id,
@@ -4949,6 +5075,11 @@ def approve_request(request_id: int, response_message: Optional[str] = None):
             student = db.query(StudentDB).filter(StudentDB.id == request.requester_id).first()
             if student:
                 student.status = "active"
+        elif request.request_type == "coach_registration":
+            # Activate coach account
+            coach = db.query(CoachDB).filter(CoachDB.id == request.requester_id).first()
+            if coach:
+                coach.status = "active"
         
         db.commit()
         db.refresh(request)
@@ -4979,8 +5110,32 @@ def reject_request(request_id: int, response_message: Optional[str] = None):
         request.responded_at = datetime.now()
         # Note: responded_by should be set from auth context in production
         
+        # Handle request-specific rejection logic
+        if request.request_type == "student_registration":
+            # Mark student account as rejected
+            student = db.query(StudentDB).filter(StudentDB.id == request.requester_id).first()
+            if student:
+                student.status = "rejected"
+                db.flush()  # Ensure status is updated before commit
+        elif request.request_type == "coach_registration":
+            # Mark coach account as rejected
+            coach = db.query(CoachDB).filter(CoachDB.id == request.requester_id).first()
+            if coach:
+                coach.status = "rejected"
+                db.flush()  # Ensure status is updated before commit
+        
         db.commit()
         db.refresh(request)
+        
+        # Refresh student/coach to ensure status is persisted
+        if request.request_type == "student_registration":
+            student = db.query(StudentDB).filter(StudentDB.id == request.requester_id).first()
+            if student:
+                db.refresh(student)
+        elif request.request_type == "coach_registration":
+            coach = db.query(CoachDB).filter(CoachDB.id == request.requester_id).first()
+            if coach:
+                db.refresh(coach)
         return _db_to_api_request(request)
     except HTTPException:
         db.rollback()
