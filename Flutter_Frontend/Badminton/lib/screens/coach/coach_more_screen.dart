@@ -4,8 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/success_snackbar.dart';
-import '../../providers/service_providers.dart';
 import '../../providers/auth_provider.dart';
 import 'coach_announcements_screen.dart';
 import 'coach_attendance_view_screen.dart';
@@ -152,6 +150,8 @@ class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
             _MenuItem(
               icon: Icons.video_library_outlined,
               title: 'Video Management',
+              subtitle: 'Upload and manage training videos',
+              isDark: isDark,
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
