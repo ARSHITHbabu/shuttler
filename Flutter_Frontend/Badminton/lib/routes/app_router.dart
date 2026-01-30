@@ -5,6 +5,7 @@ import '../screens/auth/login_screen.dart';
 import '../screens/auth/signup_screen.dart';
 import '../screens/auth/forgot_password_screen.dart';
 import '../screens/student/profile_completion_screen.dart';
+import '../screens/student/pending_approval_screen.dart';
 import '../screens/student/student_dashboard.dart';
 import '../screens/owner/academy_setup_screen.dart';
 import '../screens/owner/owner_dashboard.dart';
@@ -74,6 +75,13 @@ class AppRouter {
           path: '/student-profile-complete',
           name: 'student-profile-complete',
           builder: (context, state) => const ProfileCompletionScreen(),
+        ),
+
+        // Student Pending Approval route
+        GoRoute(
+          path: '/student-pending',
+          name: 'student-pending',
+          builder: (context, state) => const PendingApprovalScreen(),
         ),
 
         // Student Dashboard route

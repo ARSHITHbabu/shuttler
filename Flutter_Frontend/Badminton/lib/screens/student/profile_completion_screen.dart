@@ -60,6 +60,28 @@ class _ProfileCompletionScreenState
     super.dispose();
   }
 
+  Future<Map<String, dynamic>> _checkStudentStatus() async {
+    try {
+      final authState = ref.read(authProvider);
+      int? studentId;
+      
+      authState.whenData((authValue) {
+        if (authValue is Authenticated && authValue.userType == 'student') {
+          studentId = authValue.userId;
+        }
+      });
+
+      if (studentId != null) {
+        final studentService = ref.read(studentServiceProvider);
+        final student = await studentService.getStudentById(studentId!);
+        return {'status': student.status};
+      }
+      return {'status': 'active'};
+    } catch (e) {
+      return {'status': 'active'};
+    }
+  }
+
   Future<void> _selectDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -194,6 +216,60 @@ class _ProfileCompletionScreenState
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: AppDimensions.spacingM),
+
+                // Pending Approval Message (if status is pending)
+                FutureBuilder<Map<String, dynamic>>(
+                  future: _checkStudentStatus(),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasData && snapshot.data!['status'] == 'pending') {
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
+                        padding: const EdgeInsets.all(AppDimensions.paddingM),
+                        decoration: BoxDecoration(
+                          color: AppColors.warning.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                          border: Border.all(
+                            color: AppColors.warning.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.pending_outlined,
+                              color: AppColors.warning,
+                              size: 24,
+                            ),
+                            const SizedBox(width: AppDimensions.spacingM),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Account Pending Approval',
+                                    style: const TextStyle(
+                                      color: AppColors.warning,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Your registration is pending owner approval. You can complete your profile now, but you\'ll need approval to access the dashboard.',
+                                    style: const TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
 
                 // Info message
                 Container(
