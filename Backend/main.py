@@ -2712,9 +2712,11 @@ def create_student(student: StudentCreate):
 
 @app.get("/students/", response_model=List[Student])
 def get_students():
+    """Get all students - excludes rejected students from the list"""
     db = SessionLocal()
     try:
-        students = db.query(StudentDB).all()
+        # Filter out rejected students - they should not appear in the list
+        students = db.query(StudentDB).filter(StudentDB.status != "rejected").all()
         return students
     finally:
         db.close()
@@ -5114,14 +5116,26 @@ def reject_request(request_id: int, response_message: Optional[str] = None):
             student = db.query(StudentDB).filter(StudentDB.id == request.requester_id).first()
             if student:
                 student.status = "rejected"
+                db.flush()  # Ensure status is updated before commit
         elif request.request_type == "coach_registration":
             # Mark coach account as rejected
             coach = db.query(CoachDB).filter(CoachDB.id == request.requester_id).first()
             if coach:
                 coach.status = "rejected"
+                db.flush()  # Ensure status is updated before commit
         
         db.commit()
         db.refresh(request)
+        
+        # Refresh student/coach to ensure status is persisted
+        if request.request_type == "student_registration":
+            student = db.query(StudentDB).filter(StudentDB.id == request.requester_id).first()
+            if student:
+                db.refresh(student)
+        elif request.request_type == "coach_registration":
+            coach = db.query(CoachDB).filter(CoachDB.id == request.requester_id).first()
+            if coach:
+                db.refresh(coach)
         return _db_to_api_request(request)
     except HTTPException:
         db.rollback()

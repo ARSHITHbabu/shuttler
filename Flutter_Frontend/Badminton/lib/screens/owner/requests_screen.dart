@@ -10,6 +10,8 @@ import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
 import '../../providers/request_provider.dart';
 import '../../providers/service_providers.dart';
+import '../../providers/student_provider.dart';
+import '../../providers/coach_provider.dart';
 import '../../models/request.dart';
 
 /// Requests Screen - Owner's centralized request management
@@ -335,6 +337,13 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
           SuccessSnackbar.show(context, 'Request approved successfully');
           ref.invalidate(requestListProvider);
           ref.invalidate(pendingRequestsCountProvider);
+          
+          // Invalidate student/coach lists if registration request was approved
+          if (request.requestType == 'student_registration') {
+            ref.invalidate(studentListProvider);
+          } else if (request.requestType == 'coach_registration') {
+            ref.invalidate(coachListProvider);
+          }
         }
       } catch (e) {
         if (mounted) {
@@ -364,6 +373,13 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
           SuccessSnackbar.show(context, 'Request rejected');
           ref.invalidate(requestListProvider);
           ref.invalidate(pendingRequestsCountProvider);
+          
+          // Invalidate student/coach lists if registration request was rejected
+          if (request.requestType == 'student_registration') {
+            ref.invalidate(studentListProvider);
+          } else if (request.requestType == 'coach_registration') {
+            ref.invalidate(coachListProvider);
+          }
         }
       } catch (e) {
         if (mounted) {
