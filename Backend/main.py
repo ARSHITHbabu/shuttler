@@ -2728,7 +2728,30 @@ def get_student_batches(student_id: int):
         if not batch_ids:
             return []
         try:
-            batches = db.query(BatchDB).filter(BatchDB.id.in_(batch_ids)).all()
+            batches_db = db.query(BatchDB).filter(BatchDB.id.in_(batch_ids)).all()
+            batches = []
+            for batch_db in batches_db:
+                # Get coaches from junction table
+                coaches = _get_batch_coaches(db, batch_db.id)
+                coach_ids_list = [c.id for c in coaches]
+                
+                batch = Batch(
+                    id=batch_db.id,
+                    batch_name=batch_db.batch_name,
+                    capacity=batch_db.capacity,
+                    fees=batch_db.fees,
+                    start_date=batch_db.start_date,
+                    timing=batch_db.timing,
+                    period=batch_db.period,
+                    location=batch_db.location,
+                    created_by=batch_db.created_by,
+                    assigned_coach_id=coach_ids_list[0] if coach_ids_list else batch_db.assigned_coach_id,  # Backward compatibility
+                    assigned_coach_name=coaches[0].name if coaches else batch_db.assigned_coach_name,  # Backward compatibility
+                    assigned_coach_ids=coach_ids_list,
+                    assigned_coaches=coaches,
+                    session_id=batch_db.session_id
+                )
+                batches.append(batch)
             return batches
         except Exception as e:
             # If error is about missing session_id column, rollback and use raw SQL
@@ -2743,8 +2766,13 @@ def get_student_batches(student_id: int):
                 """), {"batch_ids": batch_ids})
                 batches = []
                 for row in result:
+                    batch_id = row[0]
+                    # Get coaches from junction table even in fallback case
+                    coaches = _get_batch_coaches(db, batch_id)
+                    coach_ids_list = [c.id for c in coaches]
+                    
                     batch = Batch(
-                        id=row[0],
+                        id=batch_id,
                         batch_name=row[1],
                         capacity=row[2],
                         fees=row[3],
@@ -2753,8 +2781,10 @@ def get_student_batches(student_id: int):
                         period=row[6],
                         location=row[7],
                         created_by=row[8],
-                        assigned_coach_id=row[9],
-                        assigned_coach_name=row[10],
+                        assigned_coach_id=coach_ids_list[0] if coach_ids_list else row[9],  # Backward compatibility
+                        assigned_coach_name=coaches[0].name if coaches else row[10],  # Backward compatibility
+                        assigned_coach_ids=coach_ids_list,
+                        assigned_coaches=coaches,
                         session_id=None,
                     )
                     batches.append(batch)

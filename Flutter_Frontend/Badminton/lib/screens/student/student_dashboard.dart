@@ -3,6 +3,7 @@ import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import 'student_home_screen.dart';
+import 'student_batches_screen.dart';
 import 'student_attendance_screen.dart';
 import 'student_performance_screen.dart';
 import 'student_more_screen.dart';
@@ -21,6 +22,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
 
   final List<Widget> _screens = [
     const StudentHomeScreen(),
+    const StudentBatchesScreen(),
     const StudentAttendanceScreen(),
     const StudentPerformanceScreen(),
     const StudentMoreScreen(),
@@ -28,6 +30,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
 
   final List<_BottomNavItem> _navItems = [
     _BottomNavItem(icon: Icons.home, label: 'Home'),
+    _BottomNavItem(icon: Icons.groups_outlined, label: 'Batches'),
     _BottomNavItem(icon: Icons.check_circle_outline, label: 'Attendance'),
     _BottomNavItem(icon: Icons.trending_up, label: 'Performance'),
     _BottomNavItem(icon: Icons.more_horiz, label: 'More'),
