@@ -41,32 +41,33 @@ class _StudentDashboardState extends State<StudentDashboard> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final backgroundColor = theme.scaffoldBackgroundColor;
-    final surfaceColor = isDark ? AppColors.surfaceLight : AppColorsLight.surfaceLight;
-    final shadowColor = isDark ? AppColors.shadowDark : AppColorsLight.shadowDark;
+    final surfaceColor = isDark
+        ? AppColors.surfaceLight
+        : AppColorsLight.surfaceLight;
+    final shadowColor = isDark
+        ? AppColors.shadowDark
+        : AppColorsLight.shadowDark;
 
     return Scaffold(
       backgroundColor: backgroundColor,
       body: Container(
         decoration: BoxDecoration(
-          gradient: isDark ? AppColors.backgroundGradient : AppColorsLight.backgroundGradient,
+          gradient: isDark
+              ? AppColors.backgroundGradient
+              : AppColorsLight.backgroundGradient,
         ),
         child: SafeArea(
           child: Column(
             children: [
               // Content Area
-              Expanded(
-                child: _screens[_currentIndex],
-              ),
+              Expanded(child: _screens[_currentIndex]),
 
               // Bottom Navigation
               Container(
                 decoration: BoxDecoration(
                   color: backgroundColor,
                   border: Border(
-                    top: BorderSide(
-                      color: surfaceColor,
-                      width: 1,
-                    ),
+                    top: BorderSide(color: surfaceColor, width: 1),
                   ),
                   boxShadow: [
                     BoxShadow(
@@ -105,9 +106,15 @@ class _StudentDashboardState extends State<StudentDashboard> {
     final isActive = _currentIndex == index;
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final cardColor = isDark ? AppColors.cardBackground : AppColorsLight.cardBackground;
-    final activeColor = isDark ? AppColors.iconActive : AppColorsLight.iconActive;
-    final inactiveColor = isDark ? AppColors.textTertiary : AppColorsLight.textTertiary;
+    final cardColor = isDark
+        ? AppColors.cardBackground
+        : AppColorsLight.cardBackground;
+    final activeColor = isDark
+        ? AppColors.iconActive
+        : AppColorsLight.iconActive;
+    final inactiveColor = isDark
+        ? AppColors.textTertiary
+        : AppColorsLight.textTertiary;
 
     return GestureDetector(
       onTap: () {
