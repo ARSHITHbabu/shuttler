@@ -15,6 +15,7 @@ import 'performance_tracking_screen.dart';
 import 'video_management_screen.dart';
 import 'settings_screen.dart';
 import 'notifications_screen.dart';
+import 'requests_screen.dart';
 
 /// More Screen - Settings and additional features
 /// Matches React reference: MoreScreen.tsx
@@ -108,6 +109,20 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (context) => const NotificationsScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.pending_actions_outlined,
+              title: 'Requests',
+              subtitle: 'Approve or reject requests',
+              isDark: isDark,
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const RequestsScreen(),
                   ),
                 );
               },

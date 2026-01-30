@@ -327,6 +327,23 @@ class CoachInvitationDB(Base):
     status = Column(String, default="pending")  # pending, approved, rejected
     created_at = Column(String, nullable=False)
 
+class RequestDB(Base):
+    """Requests system for approvals (student registration, coach leave, etc.)"""
+    __tablename__ = "requests"
+    id = Column(Integer, primary_key=True, index=True)
+    request_type = Column(String(50), nullable=False)  # 'student_registration', 'coach_leave', 'batch_enrollment', etc.
+    requester_type = Column(String(20), nullable=False)  # 'student', 'coach'
+    requester_id = Column(Integer, nullable=False)  # ID of student/coach making request
+    status = Column(String(20), default="pending")  # 'pending', 'approved', 'rejected', 'cancelled'
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    request_metadata = Column(JSON, nullable=True)  # Flexible JSON for request-specific data (renamed from 'metadata' to avoid SQLAlchemy conflict)
+    response_message = Column(Text, nullable=True)  # Owner's response/reason
+    responded_by = Column(Integer, nullable=True)  # Owner ID who responded
+    responded_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
 # ==================== NEW MODELS FOR PHASE 0 ====================
 
 class AnnouncementDB(Base):
@@ -1345,6 +1362,37 @@ class CoachInvitation(BaseModel):
 
 class CoachInvitationUpdate(BaseModel):
     status: str  # approved, rejected
+
+# Request Models
+class RequestCreate(BaseModel):
+    request_type: str  # 'student_registration', 'coach_leave', 'batch_enrollment', etc.
+    requester_type: str  # 'student', 'coach'
+    requester_id: int
+    title: str
+    description: Optional[str] = None
+    metadata: Optional[dict] = None  # JSON data for request-specific fields
+
+class RequestUpdate(BaseModel):
+    status: Optional[str] = None  # 'approved', 'rejected', 'cancelled'
+    response_message: Optional[str] = None
+
+class Request(BaseModel):
+    id: int
+    request_type: str
+    requester_type: str
+    requester_id: int
+    status: str
+    title: str
+    description: Optional[str] = None
+    metadata: Optional[dict] = None
+    response_message: Optional[str] = None
+    responded_by: Optional[int] = None
+    responded_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    
+    class Config:
+        from_attributes = True
 
 # Other Models
 class BatchStudentAssign(BaseModel):
@@ -2508,14 +2556,48 @@ def create_student(student: StudentCreate):
         if not student_data.get('added_by'):
             student_data['added_by'] = 'self'
         
+        # Set status to 'pending' for self-registered students (requires approval)
+        # If added_by is not 'self', set to 'active' (owner/coach added directly)
         if not student_data.get('status'):
-            student_data['status'] = 'active'
+            if student_data.get('added_by') == 'self':
+                student_data['status'] = 'pending'  # Requires owner approval
+            else:
+                student_data['status'] = 'active'  # Owner/coach added, auto-active
         
         db_student = StudentDB(**student_data)
         db.add(db_student)
         db.commit()
         db.refresh(db_student)
+        
+        # If student registered themselves, create an approval request
+        if student_data.get('added_by') == 'self' and student_data.get('status') == 'pending':
+            request_data = {
+                'request_type': 'student_registration',
+                'requester_type': 'student',
+                'requester_id': db_student.id,
+                'title': f'Student Registration: {db_student.name}',
+                'description': f'New student {db_student.name} ({db_student.email}) has registered and is awaiting approval.',
+                'request_metadata': {  # Use request_metadata for database
+                    'student_name': db_student.name,
+                    'student_email': db_student.email,
+                    'student_phone': db_student.phone
+                }
+            }
+            db_request = RequestDB(**request_data)
+            db.add(db_request)
+            db.commit()
+            db.refresh(db_student)  # Refresh student to keep it attached to session
+        
         return db_student
+    except IntegrityError as e:
+        db.rollback()
+        error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
+        if 'email' in error_msg.lower() or 'unique' in error_msg.lower():
+            raise HTTPException(status_code=400, detail='Email already registered')
+        raise HTTPException(status_code=400, detail=f'Database constraint violation: {error_msg}')
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f'Error creating student: {str(e)}')
     finally:
         db.close()
 
@@ -4763,6 +4845,236 @@ def update_invitation(invitation_id: int, invitation_update: InvitationUpdate):
         db.commit()
         db.refresh(invitation)
         return invitation
+    finally:
+        db.close()
+
+# ==================== Request Routes ====================
+
+def _db_to_api_request(db_request: RequestDB) -> Request:
+    """Convert RequestDB to Request API model, mapping request_metadata to metadata"""
+    return Request(
+        id=db_request.id,
+        request_type=db_request.request_type,
+        requester_type=db_request.requester_type,
+        requester_id=db_request.requester_id,
+        status=db_request.status,
+        title=db_request.title,
+        description=db_request.description,
+        metadata=db_request.request_metadata,  # Map request_metadata to metadata for API
+        response_message=db_request.response_message,
+        responded_by=db_request.responded_by,
+        responded_at=db_request.responded_at,
+        created_at=db_request.created_at,
+        updated_at=db_request.updated_at,
+    )
+
+@app.post("/requests/", response_model=Request)
+def create_request(request: RequestCreate):
+    """Create a new request"""
+    db = SessionLocal()
+    try:
+        request_data = request.model_dump()
+        # Map 'metadata' to 'request_metadata' for database
+        if 'metadata' in request_data:
+            request_data['request_metadata'] = request_data.pop('metadata')
+        db_request = RequestDB(**request_data)
+        db.add(db_request)
+        db.commit()
+        db.refresh(db_request)
+        return _db_to_api_request(db_request)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error creating request: {str(e)}")
+    finally:
+        db.close()
+
+@app.get("/requests/", response_model=List[Request])
+def get_requests(
+    request_type: Optional[str] = Query(None, description="Filter by request type"),
+    status: Optional[str] = Query(None, description="Filter by status"),
+    requester_type: Optional[str] = Query(None, description="Filter by requester type"),
+    requester_id: Optional[int] = Query(None, description="Filter by requester ID")
+):
+    """Get all requests with optional filters (owner view) or user's requests"""
+    db = SessionLocal()
+    try:
+        query = db.query(RequestDB)
+        
+        if request_type:
+            query = query.filter(RequestDB.request_type == request_type)
+        if status:
+            query = query.filter(RequestDB.status == status)
+        if requester_type:
+            query = query.filter(RequestDB.requester_type == requester_type)
+        if requester_id:
+            query = query.filter(RequestDB.requester_id == requester_id)
+        
+        requests = query.order_by(RequestDB.created_at.desc()).all()
+        return [_db_to_api_request(req) for req in requests]
+    finally:
+        db.close()
+
+@app.get("/requests/{request_id}", response_model=Request)
+def get_request(request_id: int):
+    """Get a specific request by ID"""
+    db = SessionLocal()
+    try:
+        request = db.query(RequestDB).filter(RequestDB.id == request_id).first()
+        if not request:
+            raise HTTPException(status_code=404, detail="Request not found")
+        return _db_to_api_request(request)
+    finally:
+        db.close()
+
+@app.put("/requests/{request_id}/approve", response_model=Request)
+def approve_request(request_id: int, response_message: Optional[str] = None):
+    """Approve a request (owner only)"""
+    db = SessionLocal()
+    try:
+        request = db.query(RequestDB).filter(RequestDB.id == request_id).first()
+        if not request:
+            raise HTTPException(status_code=404, detail="Request not found")
+        
+        if request.status != "pending":
+            raise HTTPException(status_code=400, detail=f"Request is already {request.status}")
+        
+        request.status = "approved"
+        request.response_message = response_message
+        request.responded_at = datetime.now()
+        # Note: responded_by should be set from auth context in production
+        
+        # Handle request-specific approval logic
+        if request.request_type == "student_registration":
+            # Activate student account
+            student = db.query(StudentDB).filter(StudentDB.id == request.requester_id).first()
+            if student:
+                student.status = "active"
+        
+        db.commit()
+        db.refresh(request)
+        return _db_to_api_request(request)
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error approving request: {str(e)}")
+    finally:
+        db.close()
+
+@app.put("/requests/{request_id}/reject", response_model=Request)
+def reject_request(request_id: int, response_message: Optional[str] = None):
+    """Reject a request (owner only)"""
+    db = SessionLocal()
+    try:
+        request = db.query(RequestDB).filter(RequestDB.id == request_id).first()
+        if not request:
+            raise HTTPException(status_code=404, detail="Request not found")
+        
+        if request.status != "pending":
+            raise HTTPException(status_code=400, detail=f"Request is already {request.status}")
+        
+        request.status = "rejected"
+        request.response_message = response_message
+        request.responded_at = datetime.now()
+        # Note: responded_by should be set from auth context in production
+        
+        db.commit()
+        db.refresh(request)
+        return _db_to_api_request(request)
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error rejecting request: {str(e)}")
+    finally:
+        db.close()
+
+@app.put("/requests/{request_id}", response_model=Request)
+def update_request(request_id: int, request_update: RequestUpdate):
+    """Update a request (general update endpoint)"""
+    db = SessionLocal()
+    try:
+        request = db.query(RequestDB).filter(RequestDB.id == request_id).first()
+        if not request:
+            raise HTTPException(status_code=404, detail="Request not found")
+        
+        if request_update.status:
+            request.status = request_update.status
+        if request_update.response_message is not None:
+            request.response_message = request_update.response_message
+        
+        if request_update.status in ["approved", "rejected"]:
+            request.responded_at = datetime.now()
+        
+        db.commit()
+        db.refresh(request)
+        return _db_to_api_request(request)
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error updating request: {str(e)}")
+    finally:
+        db.close()
+
+@app.delete("/requests/{request_id}")
+def delete_request(request_id: int):
+    """Cancel/delete a request (by requester)"""
+    db = SessionLocal()
+    try:
+        request = db.query(RequestDB).filter(RequestDB.id == request_id).first()
+        if not request:
+            raise HTTPException(status_code=404, detail="Request not found")
+        
+        # Only allow cancellation if pending
+        if request.status != "pending":
+            raise HTTPException(status_code=400, detail="Can only cancel pending requests")
+        
+        request.status = "cancelled"
+        db.commit()
+        return {"message": "Request cancelled successfully"}
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error cancelling request: {str(e)}")
+    finally:
+        db.close()
+
+@app.get("/requests/stats/summary")
+def get_request_stats():
+    """Get request statistics for owner dashboard"""
+    db = SessionLocal()
+    try:
+        total = db.query(RequestDB).count()
+        pending = db.query(RequestDB).filter(RequestDB.status == "pending").count()
+        approved = db.query(RequestDB).filter(RequestDB.status == "approved").count()
+        rejected = db.query(RequestDB).filter(RequestDB.status == "rejected").count()
+        
+        # Count by type
+        student_reg = db.query(RequestDB).filter(
+            RequestDB.request_type == "student_registration",
+            RequestDB.status == "pending"
+        ).count()
+        leave_requests = db.query(RequestDB).filter(
+            RequestDB.request_type == "coach_leave",
+            RequestDB.status == "pending"
+        ).count()
+        
+        return {
+            "total": total,
+            "pending": pending,
+            "approved": approved,
+            "rejected": rejected,
+            "by_type": {
+                "student_registration": student_reg,
+                "coach_leave": leave_requests
+            }
+        }
     finally:
         db.close()
 

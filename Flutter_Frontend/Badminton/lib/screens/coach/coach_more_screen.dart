@@ -14,6 +14,7 @@ import 'coach_video_management_screen.dart';
 import '../owner/bmi_tracking_screen.dart';
 import '../owner/performance_tracking_screen.dart';
 import 'coach_fees_screen.dart';
+import 'leave_request_screen.dart';
 
 /// Coach More Screen - Navigation hub for additional features
 class CoachMoreScreen extends ConsumerStatefulWidget {
