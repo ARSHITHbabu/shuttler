@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:table_calendar/table_calendar.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
@@ -21,8 +22,11 @@ class LeaveRequestScreen extends ConsumerStatefulWidget {
 class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
   final _formKey = GlobalKey<FormState>();
   final _reasonController = TextEditingController();
-  DateTime? _startDate;
-  DateTime? _endDate;
+  String _selectedStatusFilter = 'all'; // 'all', 'pending', 'approved', 'rejected'
+  bool _showAddForm = false;
+  Set<DateTime> _selectedDates = {};
+  bool _isHalfDay = false;
+  DateTime _focusedDay = DateTime.now();
 
   @override
   void dispose() {
@@ -46,7 +50,13 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
     });
 
     final leaveRequestsAsync = coachId != null
-        ? ref.watch(requestsByTypeProvider('coach_leave', status: null))
+        ? ref.watch(
+            requestListProvider(
+              requestType: 'coach_leave',
+              requesterId: coachId,
+              status: _selectedStatusFilter == 'all' ? null : _selectedStatusFilter,
+            ),
+          )
         : const AsyncValue<List<Request>>.data([]);
 
     return Scaffold(
@@ -69,185 +79,41 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
             fontWeight: FontWeight.w600,
           ),
         ),
+        actions: [
+          // Plus button to add request
+          IconButton(
+            icon: Icon(
+              _showAddForm ? Icons.close : Icons.add,
+              color: isDark ? AppColors.accent : AppColorsLight.accent,
+            ),
+            onPressed: () {
+              setState(() {
+                _showAddForm = !_showAddForm;
+                if (!_showAddForm) {
+                  _selectedDates.clear();
+                  _reasonController.clear();
+                  _isHalfDay = false;
+                }
+              });
+            },
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppDimensions.paddingL),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Submit Leave Request Form
-            Text(
-              'Request Leave',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-              ),
-            ),
-            const SizedBox(height: AppDimensions.spacingM),
-            NeumorphicContainer(
-              padding: const EdgeInsets.all(AppDimensions.paddingM),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Start Date
-                    Text(
-                      'Start Date',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    InkWell(
-                      onTap: () => _selectDate(context, isStartDate: true),
-                      child: NeumorphicContainer(
-                        padding: const EdgeInsets.all(AppDimensions.paddingM),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.calendar_today,
-                              size: 20,
-                              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-                            ),
-                            const SizedBox(width: AppDimensions.spacingM),
-                            Expanded(
-                              child: Text(
-                                _startDate != null
-                                    ? DateFormat('MMM dd, yyyy').format(_startDate!)
-                                    : 'Select start date',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: _startDate != null
-                                      ? (isDark ? AppColors.textPrimary : AppColorsLight.textPrimary)
-                                      : (isDark ? AppColors.textSecondary : AppColorsLight.textSecondary),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: AppDimensions.spacingM),
-                    // End Date
-                    Text(
-                      'End Date',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    InkWell(
-                      onTap: () => _selectDate(context, isStartDate: false),
-                      child: NeumorphicContainer(
-                        padding: const EdgeInsets.all(AppDimensions.paddingM),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.calendar_today,
-                              size: 20,
-                              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-                            ),
-                            const SizedBox(width: AppDimensions.spacingM),
-                            Expanded(
-                              child: Text(
-                                _endDate != null
-                                    ? DateFormat('MMM dd, yyyy').format(_endDate!)
-                                    : 'Select end date',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: _endDate != null
-                                      ? (isDark ? AppColors.textPrimary : AppColorsLight.textPrimary)
-                                      : (isDark ? AppColors.textSecondary : AppColorsLight.textSecondary),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: AppDimensions.spacingM),
-                    // Reason
-                    Text(
-                      'Reason',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _reasonController,
-                      maxLines: 4,
-                      style: TextStyle(
-                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: 'Enter reason for leave...',
-                        hintStyle: TextStyle(
-                          color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(
-                            color: isDark ? AppColors.border : AppColorsLight.border,
-                          ),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(
-                            color: isDark ? AppColors.border : AppColorsLight.border,
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(
-                            color: isDark ? AppColors.accent : AppColorsLight.accent,
-                          ),
-                        ),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Please enter a reason';
-                        }
-                        return null;
-                      },
-                    ),
-                    const SizedBox(height: AppDimensions.spacingL),
-                    // Submit Button
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _submitLeaveRequest,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: isDark ? AppColors.accent : AppColorsLight.accent,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: const Text(
-                          'Submit Leave Request',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            // Status Filter
+            _buildStatusFilter(isDark),
 
-            const SizedBox(height: AppDimensions.spacingXl),
+            const SizedBox(height: AppDimensions.spacingL),
+
+            // Add Leave Request Form
+            if (_showAddForm) ...[
+              _buildAddForm(isDark),
+              const SizedBox(height: AppDimensions.spacingL),
+            ],
 
             // Leave Request History
             Text(
@@ -293,31 +159,13 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
                   );
                 }
 
-                // Filter to show only this coach's requests
-                final coachRequests = requests.where((r) => r.requesterId == coachId).toList();
-
-                if (coachRequests.isEmpty) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(AppDimensions.spacingXl),
-                      child: Text(
-                        'No leave requests yet',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-                        ),
-                      ),
-                    ),
-                  );
-                }
-
                 return ListView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  itemCount: coachRequests.length,
+                  itemCount: requests.length,
                   itemBuilder: (context, index) {
                     return _LeaveRequestCard(
-                      request: coachRequests[index],
+                      request: requests[index],
                       isDark: isDark,
                     );
                   },
@@ -330,27 +178,407 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
     );
   }
 
-  Future<void> _selectDate(BuildContext context, {required bool isStartDate}) async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+  Widget _buildStatusFilter(bool isDark) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _FilterChip(
+            label: 'All',
+            isSelected: _selectedStatusFilter == 'all',
+            onTap: () => setState(() => _selectedStatusFilter = 'all'),
+            isDark: isDark,
+          ),
+          const SizedBox(width: AppDimensions.spacingS),
+          _FilterChip(
+            label: 'Pending',
+            isSelected: _selectedStatusFilter == 'pending',
+            onTap: () => setState(() => _selectedStatusFilter = 'pending'),
+            color: Colors.orange,
+            isDark: isDark,
+          ),
+          const SizedBox(width: AppDimensions.spacingS),
+          _FilterChip(
+            label: 'Approved',
+            isSelected: _selectedStatusFilter == 'approved',
+            onTap: () => setState(() => _selectedStatusFilter = 'approved'),
+            color: Colors.green,
+            isDark: isDark,
+          ),
+          const SizedBox(width: AppDimensions.spacingS),
+          _FilterChip(
+            label: 'Rejected',
+            isSelected: _selectedStatusFilter == 'rejected',
+            onTap: () => setState(() => _selectedStatusFilter = 'rejected'),
+            color: Colors.red,
+            isDark: isDark,
+          ),
+        ],
+      ),
     );
+  }
 
-    if (picked != null) {
-      setState(() {
-        if (isStartDate) {
-          _startDate = picked;
-          // If end date is before start date, reset it
-          if (_endDate != null && _endDate!.isBefore(_startDate!)) {
-            _endDate = null;
-          }
-        } else {
-          _endDate = picked;
-        }
-      });
+  Widget _buildAddForm(bool isDark) {
+    return NeumorphicContainer(
+      padding: const EdgeInsets.all(AppDimensions.paddingM),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Leave Type (Fixed as Leave)
+            Text(
+              'Type',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            NeumorphicContainer(
+              padding: const EdgeInsets.all(AppDimensions.paddingM),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.event_busy,
+                    size: 20,
+                    color: isDark ? AppColors.accent : AppColorsLight.accent,
+                  ),
+                  const SizedBox(width: AppDimensions.spacingM),
+                  Text(
+                    'Leave',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppDimensions.spacingM),
+
+            // Date Selection with Calendar
+            Text(
+              'Select Dates',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            InkWell(
+              onTap: () => _showCalendarPicker(isDark),
+              child: NeumorphicContainer(
+                padding: const EdgeInsets.all(AppDimensions.paddingM),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.calendar_today,
+                      size: 20,
+                      color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                    ),
+                    const SizedBox(width: AppDimensions.spacingM),
+                    Expanded(
+                      child: Text(
+                        _selectedDates.isEmpty
+                            ? 'Tap to select dates'
+                            : _formatSelectedDates(),
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: _selectedDates.isEmpty
+                              ? (isDark ? AppColors.textSecondary : AppColorsLight.textSecondary)
+                              : (isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
+                        ),
+                      ),
+                    ),
+                    if (_selectedDates.isNotEmpty)
+                      IconButton(
+                        icon: Icon(
+                          Icons.clear,
+                          size: 18,
+                          color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _selectedDates.clear();
+                          });
+                        },
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            if (_selectedDates.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                '${_selectedDates.length} day${_selectedDates.length > 1 ? 's' : ''} selected',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                ),
+              ),
+            ],
+
+            const SizedBox(height: AppDimensions.spacingM),
+
+            // Half Day Option
+            Row(
+              children: [
+                Checkbox(
+                  value: _isHalfDay,
+                  onChanged: (value) {
+                    setState(() {
+                      _isHalfDay = value ?? false;
+                    });
+                  },
+                  activeColor: isDark ? AppColors.accent : AppColorsLight.accent,
+                ),
+                Text(
+                  'Half Day',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: AppDimensions.spacingM),
+
+            // Reason
+            Text(
+              'Reason',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: _reasonController,
+              maxLines: 4,
+              style: TextStyle(
+                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+              ),
+              decoration: InputDecoration(
+                hintText: 'Enter reason for leave...',
+                hintStyle: TextStyle(
+                  color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(
+                    color: isDark ? AppColors.border : AppColorsLight.border,
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(
+                    color: isDark ? AppColors.border : AppColorsLight.border,
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(
+                    color: isDark ? AppColors.accent : AppColorsLight.accent,
+                  ),
+                ),
+              ),
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Please enter a reason';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: AppDimensions.spacingL),
+
+            // Submit Button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _submitLeaveRequest,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: isDark ? AppColors.accent : AppColorsLight.accent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text(
+                  'Send Request',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatSelectedDates() {
+    if (_selectedDates.isEmpty) return '';
+    
+    final sortedDates = _selectedDates.toList()..sort();
+    if (sortedDates.length == 1) {
+      return DateFormat('MMM dd, yyyy').format(sortedDates[0]);
     }
+    
+    // Check if dates are consecutive
+    bool isConsecutive = true;
+    for (int i = 1; i < sortedDates.length; i++) {
+      final diff = sortedDates[i].difference(sortedDates[i - 1]).inDays;
+      if (diff != 1) {
+        isConsecutive = false;
+        break;
+      }
+    }
+    
+    if (isConsecutive) {
+      return '${DateFormat('MMM dd').format(sortedDates.first)} - ${DateFormat('MMM dd, yyyy').format(sortedDates.last)}';
+    } else {
+      return '${sortedDates.length} days selected';
+    }
+  }
+
+  Future<void> _showCalendarPicker(bool isDark) async {
+    await showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: isDark ? AppColors.cardBackground : AppColorsLight.cardBackground,
+        child: Container(
+          padding: const EdgeInsets.all(AppDimensions.paddingM),
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: StatefulBuilder(
+            builder: (context, setDialogState) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Select Leave Dates',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: AppDimensions.spacingM),
+                  TableCalendar<dynamic>(
+                    firstDay: DateTime.now(),
+                    lastDay: DateTime.now().add(const Duration(days: 365)),
+                    focusedDay: _focusedDay,
+                    selectedDayPredicate: (day) {
+                      final dateKey = DateTime(day.year, day.month, day.day);
+                      return _selectedDates.contains(dateKey);
+                    },
+                    calendarFormat: CalendarFormat.month,
+                    startingDayOfWeek: StartingDayOfWeek.sunday,
+                    calendarStyle: CalendarStyle(
+                      outsideDaysVisible: false,
+                      weekendTextStyle: TextStyle(color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary),
+                      defaultTextStyle: TextStyle(color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
+                      selectedDecoration: BoxDecoration(
+                        color: isDark ? AppColors.accent : AppColorsLight.accent,
+                        shape: BoxShape.circle,
+                      ),
+                      todayDecoration: BoxDecoration(
+                        color: (isDark ? AppColors.accent : AppColorsLight.accent).withOpacity(0.3),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    headerStyle: HeaderStyle(
+                      formatButtonVisible: false,
+                      titleCentered: true,
+                      titleTextStyle: TextStyle(
+                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      leftChevronIcon: Icon(
+                        Icons.chevron_left,
+                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                      ),
+                      rightChevronIcon: Icon(
+                        Icons.chevron_right,
+                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                      ),
+                    ),
+                    onDaySelected: (selectedDay, focusedDay) {
+                      setDialogState(() {
+                        final dateKey = DateTime(selectedDay.year, selectedDay.month, selectedDay.day);
+                        if (_selectedDates.contains(dateKey)) {
+                          _selectedDates.remove(dateKey);
+                        } else {
+                          // Check if adding this date would exceed 1 week
+                          if (_selectedDates.length >= 7) {
+                            SuccessSnackbar.showError(context, 'Maximum 7 days allowed');
+                            return;
+                          }
+                          _selectedDates.add(dateKey);
+                        }
+                      });
+                    },
+                    onPageChanged: (focusedDay) {
+                      setDialogState(() {
+                        _focusedDay = focusedDay;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: AppDimensions.spacingM),
+                  if (_selectedDates.isNotEmpty) ...[
+                    Text(
+                      'Selected: ${_formatSelectedDates()}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: AppDimensions.spacingS),
+                  ],
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () {
+                          setDialogState(() {
+                            _selectedDates.clear();
+                          });
+                        },
+                        child: Text(
+                          'Clear',
+                          style: TextStyle(
+                            color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: AppDimensions.spacingS),
+                      ElevatedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isDark ? AppColors.accent : AppColorsLight.accent,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Done'),
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    setState(() {}); // Refresh UI after dialog closes
   }
 
   Future<void> _submitLeaveRequest() async {
@@ -358,13 +586,14 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
       return;
     }
 
-    if (_startDate == null || _endDate == null) {
-      SuccessSnackbar.showError(context, 'Please select both start and end dates');
+    if (_selectedDates.isEmpty) {
+      SuccessSnackbar.showError(context, 'Please select at least one date');
       return;
     }
 
-    if (_endDate!.isBefore(_startDate!)) {
-      SuccessSnackbar.showError(context, 'End date must be after start date');
+    // Validate max 7 days
+    if (_selectedDates.length > 7) {
+      SuccessSnackbar.showError(context, 'Maximum 7 days allowed for leave request');
       return;
     }
 
@@ -385,17 +614,26 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
     }
 
     try {
+      final sortedDates = _selectedDates.toList()..sort();
+      final startDate = sortedDates.first;
+      final endDate = sortedDates.last;
+      
+      final dateStrings = sortedDates.map((d) => d.toIso8601String().split('T')[0]).toList();
+      
       final requestService = ref.read(requestServiceProvider);
       await requestService.createRequest(
         requestType: 'coach_leave',
         requesterType: 'coach',
         requesterId: coachId!,
-        title: 'Leave Request: ${DateFormat('MMM dd - MMM dd, yyyy').format(_startDate!)} - ${DateFormat('MMM dd, yyyy').format(_endDate!)}',
+        title: 'Leave Request: ${DateFormat('MMM dd').format(startDate)} - ${DateFormat('MMM dd, yyyy').format(endDate)}${_isHalfDay ? ' (Half Day)' : ''}',
         description: _reasonController.text.trim(),
         metadata: {
-          'start_date': _startDate!.toIso8601String(),
-          'end_date': _endDate!.toIso8601String(),
+          'start_date': startDate.toIso8601String(),
+          'end_date': endDate.toIso8601String(),
+          'dates': dateStrings,
+          'is_half_day': _isHalfDay,
           'coach_name': coachName,
+          'total_days': sortedDates.length,
         },
       );
 
@@ -404,10 +642,11 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
         _formKey.currentState!.reset();
         _reasonController.clear();
         setState(() {
-          _startDate = null;
-          _endDate = null;
+          _selectedDates.clear();
+          _isHalfDay = false;
+          _showAddForm = false;
         });
-        ref.invalidate(requestsByTypeProvider);
+        ref.invalidate(requestListProvider);
       }
     } catch (e) {
       if (mounted) {
@@ -430,6 +669,8 @@ class _LeaveRequestCard extends StatelessWidget {
   Widget build(BuildContext context) {
     String? startDate;
     String? endDate;
+    bool isHalfDay = false;
+    int? totalDays;
 
     if (request.metadata != null) {
       try {
@@ -441,6 +682,8 @@ class _LeaveRequestCard extends StatelessWidget {
           endDate = DateFormat('MMM dd, yyyy')
               .format(DateTime.parse(request.metadata!['end_date']));
         }
+        isHalfDay = request.metadata!['is_half_day'] == true;
+        totalDays = request.metadata!['total_days'] as int?;
       } catch (e) {
         // Handle parsing error
       }
@@ -460,11 +703,21 @@ class _LeaveRequestCard extends StatelessWidget {
                   children: [
                     if (startDate != null && endDate != null)
                       Text(
-                        '$startDate - $endDate',
+                        startDate == endDate
+                            ? '$startDate${isHalfDay ? ' (Half Day)' : ''}'
+                            : '$startDate - $endDate${isHalfDay ? ' (Half Day)' : ''}',
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
                           color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                        ),
+                      ),
+                    if (totalDays != null && totalDays > 1)
+                      Text(
+                        '$totalDays days',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                         ),
                       ),
                     const SizedBox(height: 4),
@@ -564,6 +817,56 @@ class _StatusBadge extends StatelessWidget {
           fontSize: 10,
           fontWeight: FontWeight.w600,
           color: color,
+        ),
+      ),
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final Color? color;
+  final bool isDark;
+
+  const _FilterChip({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+    this.color,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final chipColor = color ?? (isDark ? AppColors.accent : AppColorsLight.accent);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? chipColor.withValues(alpha: 0.2)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected
+                ? chipColor
+                : (isDark ? AppColors.textTertiary : AppColorsLight.textTertiary),
+            width: 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            color: isSelected
+                ? chipColor
+                : (isDark ? AppColors.textSecondary : AppColorsLight.textSecondary),
+          ),
         ),
       ),
     );

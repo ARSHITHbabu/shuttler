@@ -57,13 +57,13 @@ class Auth extends _$Auth {
   Future<AuthState> build() async {
     // Keep provider alive to maintain state
     ref.keepAlive();
-    
+
     // Ensure storage is initialized before checking
     final storageService = ref.read(storageServiceProvider);
     if (!storageService.isInitialized) {
       await storageService.init();
     }
-    
+
     // Check if user is already logged in on app start
     final authService = ref.read(authServiceProvider);
 
@@ -120,7 +120,7 @@ class Auth extends _$Auth {
           userEmail: user['email'] as String,
         ),
       );
-      
+
       // Return the full result including profile_complete
       return result;
     } catch (e, stackTrace) {
@@ -160,7 +160,7 @@ class Auth extends _$Auth {
       // Don't auto-login - user needs to wait for approval or login manually if invited by owner
       // Keep state as Unauthenticated so user is redirected to login
       state = const AsyncValue.data(Unauthenticated());
-      
+
       // Return the full result
       return result;
     } catch (e, stackTrace) {

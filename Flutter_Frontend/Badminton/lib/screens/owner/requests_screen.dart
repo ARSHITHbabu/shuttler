@@ -12,6 +12,8 @@ import '../../providers/request_provider.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/student_provider.dart';
 import '../../providers/coach_provider.dart';
+import '../../providers/calendar_provider.dart';
+import '../../providers/auth_provider.dart';
 import '../../models/request.dart';
 
 /// Requests Screen - Owner's centralized request management
@@ -23,8 +25,10 @@ class RequestsScreen extends ConsumerStatefulWidget {
 }
 
 class _RequestsScreenState extends ConsumerState<RequestsScreen> {
-  String _selectedStatusFilter = 'all'; // 'all', 'pending', 'approved', 'rejected'
-  String _selectedTypeFilter = 'all'; // 'all', 'student_registration', 'coach_leave', etc.
+  String _selectedStatusFilter =
+      'all'; // 'all', 'pending', 'approved', 'rejected'
+  String _selectedTypeFilter =
+      'all'; // 'all', 'student_registration', 'coach_leave', etc.
 
   @override
   Widget build(BuildContext context) {
@@ -32,16 +36,20 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
     final isDark = theme.brightness == Brightness.dark;
 
     // Get requests based on filters
-    final requestsAsync = ref.watch(requestListProvider(
-      requestType: _selectedTypeFilter == 'all' ? null : _selectedTypeFilter,
-      status: _selectedStatusFilter == 'all' ? null : _selectedStatusFilter,
-    ));
+    final requestsAsync = ref.watch(
+      requestListProvider(
+        requestType: _selectedTypeFilter == 'all' ? null : _selectedTypeFilter,
+        status: _selectedStatusFilter == 'all' ? null : _selectedStatusFilter,
+      ),
+    );
 
     // Get pending count for badge
     final pendingCountAsync = ref.watch(pendingRequestsCountProvider);
 
     return Scaffold(
-      backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+      backgroundColor: isDark
+          ? AppColors.background
+          : AppColorsLight.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -112,7 +120,8 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
                         isDark: isDark,
                         onApprove: () => _handleApprove(requests[index]),
                         onReject: () => _handleReject(requests[index]),
-                        onView: () => _showRequestDetails(requests[index], isDark),
+                        onView: () =>
+                            _showRequestDetails(requests[index], isDark),
                       );
                     },
                   ),
@@ -140,7 +149,9 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
                     'Pending',
                     style: TextStyle(
                       fontSize: 12,
-                      color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                      color: isDark
+                          ? AppColors.textSecondary
+                          : AppColorsLight.textSecondary,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -152,16 +163,24 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
                         style: TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.w600,
-                          color: isDark ? AppColors.accent : AppColorsLight.accent,
+                          color: isDark
+                              ? AppColors.accent
+                              : AppColorsLight.accent,
                         ),
                       ),
                       if (pendingCount > 0)
                         Container(
                           margin: const EdgeInsets.only(left: 8, bottom: 4),
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
-                            color: (isDark ? AppColors.accent : AppColorsLight.accent)
-                                .withValues(alpha: 0.2),
+                            color:
+                                (isDark
+                                        ? AppColors.accent
+                                        : AppColorsLight.accent)
+                                    .withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -169,7 +188,9 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
-                              color: isDark ? AppColors.accent : AppColorsLight.accent,
+                              color: isDark
+                                  ? AppColors.accent
+                                  : AppColorsLight.accent,
                             ),
                           ),
                         ),
@@ -195,7 +216,9 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
             'Status',
             style: TextStyle(
               fontSize: 12,
-              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+              color: isDark
+                  ? AppColors.textSecondary
+                  : AppColorsLight.textSecondary,
             ),
           ),
           const SizedBox(height: 8),
@@ -213,7 +236,8 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
                 _FilterChip(
                   label: 'Pending',
                   isSelected: _selectedStatusFilter == 'pending',
-                  onTap: () => setState(() => _selectedStatusFilter = 'pending'),
+                  onTap: () =>
+                      setState(() => _selectedStatusFilter = 'pending'),
                   color: Colors.orange,
                   isDark: isDark,
                 ),
@@ -221,7 +245,8 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
                 _FilterChip(
                   label: 'Approved',
                   isSelected: _selectedStatusFilter == 'approved',
-                  onTap: () => setState(() => _selectedStatusFilter = 'approved'),
+                  onTap: () =>
+                      setState(() => _selectedStatusFilter = 'approved'),
                   color: Colors.green,
                   isDark: isDark,
                 ),
@@ -229,7 +254,8 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
                 _FilterChip(
                   label: 'Rejected',
                   isSelected: _selectedStatusFilter == 'rejected',
-                  onTap: () => setState(() => _selectedStatusFilter = 'rejected'),
+                  onTap: () =>
+                      setState(() => _selectedStatusFilter = 'rejected'),
                   color: Colors.red,
                   isDark: isDark,
                 ),
@@ -242,7 +268,9 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
             'Type',
             style: TextStyle(
               fontSize: 12,
-              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+              color: isDark
+                  ? AppColors.textSecondary
+                  : AppColorsLight.textSecondary,
             ),
           ),
           const SizedBox(height: 8),
@@ -260,21 +288,26 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
                 _FilterChip(
                   label: 'Student Reg',
                   isSelected: _selectedTypeFilter == 'student_registration',
-                  onTap: () => setState(() => _selectedTypeFilter = 'student_registration'),
+                  onTap: () => setState(
+                    () => _selectedTypeFilter = 'student_registration',
+                  ),
                   isDark: isDark,
                 ),
                 const SizedBox(width: AppDimensions.spacingS),
                 _FilterChip(
                   label: 'Coach Reg',
                   isSelected: _selectedTypeFilter == 'coach_registration',
-                  onTap: () => setState(() => _selectedTypeFilter = 'coach_registration'),
+                  onTap: () => setState(
+                    () => _selectedTypeFilter = 'coach_registration',
+                  ),
                   isDark: isDark,
                 ),
                 const SizedBox(width: AppDimensions.spacingS),
                 _FilterChip(
                   label: 'Leave',
                   isSelected: _selectedTypeFilter == 'coach_leave',
-                  onTap: () => setState(() => _selectedTypeFilter = 'coach_leave'),
+                  onTap: () =>
+                      setState(() => _selectedTypeFilter = 'coach_leave'),
                   isDark: isDark,
                 ),
               ],
@@ -294,7 +327,9 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
           Icon(
             Icons.inbox_outlined,
             size: 64,
-            color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
+            color: isDark
+                ? AppColors.textTertiary
+                : AppColorsLight.textTertiary,
           ),
           const SizedBox(height: AppDimensions.spacingM),
           Text(
@@ -302,7 +337,9 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w500,
-              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+              color: isDark
+                  ? AppColors.textSecondary
+                  : AppColorsLight.textSecondary,
             ),
           ),
           const SizedBox(height: 4),
@@ -310,7 +347,9 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
             'All requests have been processed',
             style: TextStyle(
               fontSize: 14,
-              color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
+              color: isDark
+                  ? AppColors.textTertiary
+                  : AppColorsLight.textTertiary,
             ),
           ),
         ],
@@ -332,12 +371,79 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
       try {
         final requestService = ref.read(requestServiceProvider);
         await requestService.approveRequest(request.id);
-        
+
+        // If it's a coach leave request, create calendar events
+        if (request.requestType == 'coach_leave' && request.metadata != null) {
+          try {
+            final authState = ref.read(authProvider);
+            int? ownerId;
+            String? coachName;
+
+            authState.whenData((authValue) {
+              if (authValue is Authenticated && authValue.userType == 'owner') {
+                ownerId = authValue.userId;
+              }
+            });
+
+            coachName = request.metadata!['coach_name'] as String? ?? 'Coach';
+            final isHalfDay = request.metadata!['is_half_day'] == true;
+
+            // Get dates from metadata
+            List<DateTime> leaveDates = [];
+            if (request.metadata!['dates'] != null) {
+              // If dates array exists, use it
+              final datesList = request.metadata!['dates'] as List<dynamic>?;
+              if (datesList != null) {
+                leaveDates = datesList.map((d) => DateTime.parse(d as String)).toList();
+              }
+            } else if (request.metadata!['start_date'] != null && request.metadata!['end_date'] != null) {
+              // Otherwise, generate dates from start to end
+              final startDate = DateTime.parse(request.metadata!['start_date']);
+              final endDate = DateTime.parse(request.metadata!['end_date']);
+              var currentDate = startDate;
+              while (!currentDate.isAfter(endDate)) {
+                leaveDates.add(currentDate);
+                currentDate = currentDate.add(const Duration(days: 1));
+              }
+            }
+
+            if (ownerId != null && leaveDates.isNotEmpty) {
+              // Create calendar events for each leave date
+              final calendarService = ref.read(calendarServiceProvider);
+              
+              for (final date in leaveDates) {
+                final eventTitle = isHalfDay 
+                    ? '$coachName - Leave (Half Day)'
+                    : '$coachName - Leave';
+                
+                final eventData = {
+                  'title': eventTitle,
+                  'event_type': 'leave',
+                  'date': date.toIso8601String().split('T')[0],
+                  'created_by': ownerId,
+                  'creator_type': 'owner',
+                  'description': request.description ?? 'Coach leave request',
+                };
+
+                await calendarService.createCalendarEvent(eventData);
+              }
+              
+              // Invalidate calendar providers to refresh the calendar
+              // Invalidate all calendar event providers by invalidating the family
+              ref.invalidate(calendarEventsProvider);
+              ref.invalidate(calendarEventListProvider);
+            }
+          } catch (e) {
+            // Log error but don't fail the approval
+            debugPrint('Failed to create calendar events: $e');
+          }
+        }
+
         if (mounted) {
           SuccessSnackbar.show(context, 'Request approved successfully');
           ref.invalidate(requestListProvider);
           ref.invalidate(pendingRequestsCountProvider);
-          
+
           // Invalidate student/coach lists if registration request was approved
           if (request.requestType == 'student_registration') {
             ref.invalidate(studentListProvider);
@@ -347,7 +453,10 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
         }
       } catch (e) {
         if (mounted) {
-          SuccessSnackbar.showError(context, 'Failed to approve request: ${e.toString()}');
+          SuccessSnackbar.showError(
+            context,
+            'Failed to approve request: ${e.toString()}',
+          );
         }
       }
     }
@@ -368,12 +477,12 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
       try {
         final requestService = ref.read(requestServiceProvider);
         await requestService.rejectRequest(request.id);
-        
+
         if (mounted) {
           SuccessSnackbar.show(context, 'Request rejected');
           ref.invalidate(requestListProvider);
           ref.invalidate(pendingRequestsCountProvider);
-          
+
           // Invalidate student/coach lists if registration request was rejected
           if (request.requestType == 'student_registration') {
             ref.invalidate(studentListProvider);
@@ -383,17 +492,55 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
         }
       } catch (e) {
         if (mounted) {
-          SuccessSnackbar.showError(context, 'Failed to reject request: ${e.toString()}');
+          SuccessSnackbar.showError(
+            context,
+            'Failed to reject request: ${e.toString()}',
+          );
         }
       }
     }
   }
 
   void _showRequestDetails(Request request, bool isDark) {
+    // Extract leave-specific information
+    String? coachName;
+    String? leaveDates;
+    bool isHalfDay = false;
+    int? totalDays;
+    
+    if (request.requestType == 'coach_leave' && request.metadata != null) {
+      coachName = request.metadata!['coach_name'] as String?;
+      isHalfDay = request.metadata!['is_half_day'] == true;
+      totalDays = request.metadata!['total_days'] as int?;
+      
+      try {
+        if (request.metadata!['start_date'] != null && request.metadata!['end_date'] != null) {
+          final startDate = DateTime.parse(request.metadata!['start_date']);
+          final endDate = DateTime.parse(request.metadata!['end_date']);
+          
+          if (startDate.year == endDate.year && 
+              startDate.month == endDate.month && 
+              startDate.day == endDate.day) {
+            leaveDates = DateFormat('MMM dd, yyyy').format(startDate);
+          } else {
+            leaveDates = '${DateFormat('MMM dd').format(startDate)} - ${DateFormat('MMM dd, yyyy').format(endDate)}';
+          }
+          
+          if (isHalfDay) {
+            leaveDates += ' (Half Day)';
+          }
+        }
+      } catch (e) {
+        // Handle parsing error
+      }
+    }
+    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: isDark ? AppColors.cardBackground : AppColorsLight.cardBackground,
+        backgroundColor: isDark
+            ? AppColors.cardBackground
+            : AppColorsLight.cardBackground,
         title: Text(
           request.title,
           style: TextStyle(
@@ -410,6 +557,13 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
                 value: _formatRequestType(request.requestType),
                 isDark: isDark,
               ),
+              // Show coach name for leave requests
+              if (request.requestType == 'coach_leave' && coachName != null)
+                _DetailRow(
+                  label: 'Coach',
+                  value: coachName,
+                  isDark: isDark,
+                ),
               _DetailRow(
                 label: 'Status',
                 value: request.status.toUpperCase(),
@@ -417,29 +571,51 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
               ),
               _DetailRow(
                 label: 'Created',
-                value: DateFormat('MMM dd, yyyy • hh:mm a').format(request.createdAt),
+                value: DateFormat(
+                  'MMM dd, yyyy • hh:mm a',
+                ).format(request.createdAt),
                 isDark: isDark,
               ),
+              // Show leave dates for leave requests
+              if (request.requestType == 'coach_leave' && leaveDates != null) ...[
+                const SizedBox(height: 8),
+                _DetailRow(
+                  label: 'Leave Dates',
+                  value: leaveDates,
+                  isDark: isDark,
+                ),
+                if (totalDays != null && totalDays > 1)
+                  _DetailRow(
+                    label: 'Total Days',
+                    value: '$totalDays days',
+                    isDark: isDark,
+                  ),
+              ],
+              // Show description (reason for leave)
               if (request.description != null) ...[
                 const SizedBox(height: 8),
                 Text(
-                  'Description',
+                  request.requestType == 'coach_leave' ? 'Reason' : 'Description',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                    color: isDark
+                        ? AppColors.textSecondary
+                        : AppColorsLight.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   request.description!,
                   style: TextStyle(
-                    color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                    color: isDark
+                        ? AppColors.textPrimary
+                        : AppColorsLight.textPrimary,
                   ),
                 ),
               ],
               // Show "invited by" info if available
-              if (request.metadata != null && 
+              if (request.metadata != null &&
                   request.metadata!['invited_by'] == 'coach' &&
                   request.metadata!['inviter_name'] != null) ...[
                 const SizedBox(height: 12),
@@ -457,7 +633,9 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
                         fontSize: 14,
                         fontWeight: FontWeight.w500,
                         fontStyle: FontStyle.italic,
-                        color: isDark ? AppColors.accent : AppColorsLight.accent,
+                        color: isDark
+                            ? AppColors.accent
+                            : AppColorsLight.accent,
                       ),
                     ),
                   ],
@@ -470,14 +648,18 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                    color: isDark
+                        ? AppColors.textSecondary
+                        : AppColorsLight.textSecondary,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   request.responseMessage!,
                   style: TextStyle(
-                    color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                    color: isDark
+                        ? AppColors.textPrimary
+                        : AppColorsLight.textPrimary,
                   ),
                 ),
               ],
@@ -510,9 +692,13 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
       case 'batch_enrollment':
         return 'Batch Enrollment';
       default:
-        return type.replaceAll('_', ' ').split(' ').map((word) {
-          return word[0].toUpperCase() + word.substring(1);
-        }).join(' ');
+        return type
+            .replaceAll('_', ' ')
+            .split(' ')
+            .map((word) {
+              return word[0].toUpperCase() + word.substring(1);
+            })
+            .join(' ');
     }
   }
 }
@@ -566,15 +752,21 @@ class _RequestCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                        color: isDark
+                            ? AppColors.textPrimary
+                            : AppColorsLight.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      DateFormat('MMM dd, yyyy • hh:mm a').format(request.createdAt),
+                      DateFormat(
+                        'MMM dd, yyyy • hh:mm a',
+                      ).format(request.createdAt),
                       style: TextStyle(
                         fontSize: 12,
-                        color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                        color: isDark
+                            ? AppColors.textSecondary
+                            : AppColorsLight.textSecondary,
                       ),
                     ),
                   ],
@@ -591,12 +783,14 @@ class _RequestCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 14,
-                color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                color: isDark
+                    ? AppColors.textSecondary
+                    : AppColorsLight.textSecondary,
               ),
             ),
           ],
           // Show "invited by" info if available
-          if (request.metadata != null && 
+          if (request.metadata != null &&
               request.metadata!['invited_by'] == 'coach' &&
               request.metadata!['inviter_name'] != null) ...[
             const SizedBox(height: AppDimensions.spacingS),
@@ -629,7 +823,9 @@ class _RequestCard extends StatelessWidget {
                   icon: const Icon(Icons.close, size: 18),
                   label: const Text('Reject'),
                   style: TextButton.styleFrom(
-                    foregroundColor: isDark ? AppColors.error : AppColorsLight.error,
+                    foregroundColor: isDark
+                        ? AppColors.error
+                        : AppColorsLight.error,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -638,7 +834,9 @@ class _RequestCard extends StatelessWidget {
                   icon: const Icon(Icons.check, size: 18),
                   label: const Text('Approve'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: isDark ? AppColors.accent : AppColorsLight.accent,
+                    backgroundColor: isDark
+                        ? AppColors.accent
+                        : AppColorsLight.accent,
                     foregroundColor: Colors.white,
                   ),
                 ),
@@ -724,8 +922,9 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chipColor = color ?? (isDark ? AppColors.accent : AppColorsLight.accent);
-    
+    final chipColor =
+        color ?? (isDark ? AppColors.accent : AppColorsLight.accent);
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -736,7 +935,11 @@ class _FilterChip extends StatelessWidget {
               : Colors.transparent,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? chipColor : (isDark ? AppColors.textTertiary : AppColorsLight.textTertiary),
+            color: isSelected
+                ? chipColor
+                : (isDark
+                      ? AppColors.textTertiary
+                      : AppColorsLight.textTertiary),
             width: 1,
           ),
         ),
@@ -747,7 +950,9 @@ class _FilterChip extends StatelessWidget {
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
             color: isSelected
                 ? chipColor
-                : (isDark ? AppColors.textSecondary : AppColorsLight.textSecondary),
+                : (isDark
+                      ? AppColors.textSecondary
+                      : AppColorsLight.textSecondary),
           ),
         ),
       ),
@@ -780,7 +985,9 @@ class _DetailRow extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                color: isDark
+                    ? AppColors.textSecondary
+                    : AppColorsLight.textSecondary,
               ),
             ),
           ),
@@ -789,7 +996,9 @@ class _DetailRow extends StatelessWidget {
               value,
               style: TextStyle(
                 fontSize: 12,
-                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                color: isDark
+                    ? AppColors.textPrimary
+                    : AppColorsLight.textPrimary,
               ),
             ),
           ),
