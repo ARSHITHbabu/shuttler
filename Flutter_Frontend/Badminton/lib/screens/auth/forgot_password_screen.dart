@@ -147,7 +147,11 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
             // Navigate back to login
             Future.delayed(const Duration(seconds: 1), () {
               if (mounted) {
-                context.pop();
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go('/login', extra: widget.userType);
+                }
               }
             });
           }
@@ -183,7 +187,13 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () => context.pop(),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/login', extra: widget.userType);
+            }
+          },
         ),
       ),
       body: SafeArea(
@@ -405,7 +415,11 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                       onPressed: _isLoading
                           ? null
                           : () {
-                              context.pop();
+                              if (context.canPop()) {
+                                context.pop();
+                              } else {
+                                context.go('/login', extra: widget.userType);
+                              }
                             },
                       child: const Text(
                         'Back to Login',

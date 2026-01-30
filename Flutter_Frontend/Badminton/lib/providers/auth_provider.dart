@@ -132,6 +132,7 @@ class Auth extends _$Auth {
 
   /// Register new user
   /// Returns the full result for profile completeness check
+  /// Note: Does NOT auto-login - user must wait for approval if not invited by owner
   Future<Map<String, dynamic>> register({
     required String name,
     required String email,
@@ -139,6 +140,7 @@ class Auth extends _$Auth {
     required String password,
     required String userType,
     Map<String, dynamic>? additionalData,
+    String? invitationToken,
   }) async {
     state = const AsyncValue.loading();
 
@@ -152,19 +154,12 @@ class Auth extends _$Auth {
         password: password,
         userType: userType,
         additionalData: additionalData,
+        invitationToken: invitationToken,
       );
 
-      final user = result['user'];
-
-      // Auto-login after successful registration
-      state = AsyncValue.data(
-        Authenticated(
-          userType: userType,
-          userId: user['id'] as int,
-          userName: user['name'] as String,
-          userEmail: user['email'] as String,
-        ),
-      );
+      // Don't auto-login - user needs to wait for approval or login manually if invited by owner
+      // Keep state as Unauthenticated so user is redirected to login
+      state = const AsyncValue.data(Unauthenticated());
       
       // Return the full result
       return result;

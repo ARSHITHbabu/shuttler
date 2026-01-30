@@ -263,6 +263,13 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
                 ),
                 const SizedBox(width: AppDimensions.spacingS),
                 _FilterChip(
+                  label: 'Coach Reg',
+                  isSelected: _selectedTypeFilter == 'coach_registration',
+                  onTap: () => setState(() => _selectedTypeFilter = 'coach_registration'),
+                  isDark: isDark,
+                ),
+                const SizedBox(width: AppDimensions.spacingS),
+                _FilterChip(
                   label: 'Leave',
                   isSelected: _selectedTypeFilter == 'coach_leave',
                   onTap: () => setState(() => _selectedTypeFilter = 'coach_leave'),
@@ -415,6 +422,31 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
                   ),
                 ),
               ],
+              // Show "invited by" info if available
+              if (request.metadata != null && 
+                  request.metadata!['invited_by'] == 'coach' &&
+                  request.metadata!['inviter_name'] != null) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.person_add,
+                      size: 16,
+                      color: isDark ? AppColors.accent : AppColorsLight.accent,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Invited by ${request.metadata!['inviter_name']}',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        fontStyle: FontStyle.italic,
+                        color: isDark ? AppColors.accent : AppColorsLight.accent,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               if (request.responseMessage != null) ...[
                 const SizedBox(height: 12),
                 Text(
@@ -455,6 +487,8 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
     switch (type) {
       case 'student_registration':
         return 'Student Registration';
+      case 'coach_registration':
+        return 'Coach Registration';
       case 'coach_leave':
         return 'Coach Leave Request';
       case 'batch_enrollment':
@@ -545,6 +579,30 @@ class _RequestCard extends StatelessWidget {
               ),
             ),
           ],
+          // Show "invited by" info if available
+          if (request.metadata != null && 
+              request.metadata!['invited_by'] == 'coach' &&
+              request.metadata!['inviter_name'] != null) ...[
+            const SizedBox(height: AppDimensions.spacingS),
+            Row(
+              children: [
+                Icon(
+                  Icons.person_add,
+                  size: 14,
+                  color: isDark ? AppColors.accent : AppColorsLight.accent,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'Invited by ${request.metadata!['inviter_name']}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontStyle: FontStyle.italic,
+                    color: isDark ? AppColors.accent : AppColorsLight.accent,
+                  ),
+                ),
+              ],
+            ),
+          ],
           if (request.isPending) ...[
             const SizedBox(height: AppDimensions.spacingM),
             Row(
@@ -580,6 +638,8 @@ class _RequestCard extends StatelessWidget {
     switch (type) {
       case 'student_registration':
         return Icons.person_add;
+      case 'coach_registration':
+        return Icons.person_add_outlined;
       case 'coach_leave':
         return Icons.event_busy;
       case 'batch_enrollment':

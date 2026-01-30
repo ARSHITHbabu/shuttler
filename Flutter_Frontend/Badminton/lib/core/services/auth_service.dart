@@ -217,6 +217,7 @@ class AuthService {
   }
 
   /// Register a new user
+  /// Note: Does NOT auto-login - user must wait for approval if not invited by owner
   Future<Map<String, dynamic>> register({
     required String name,
     required String email,
@@ -224,6 +225,7 @@ class AuthService {
     required String password,
     required String userType,
     Map<String, dynamic>? additionalData,
+    String? invitationToken,
   }) async {
     try {
       // Determine endpoint based on user type
@@ -244,6 +246,11 @@ class AuthService {
         'phone': phone,
         'password': password,
       };
+
+      // Add invitation token if provided
+      if (invitationToken != null && invitationToken.isNotEmpty) {
+        requestData['invitation_token'] = invitationToken;
+      }
 
       // Add any additional data (specialization, experience_years, etc.)
       if (additionalData != null) {
@@ -266,14 +273,9 @@ class AuthService {
           throw Exception('Invalid response format');
         }
 
-        // Auto-login after successful registration
-        final sessionToken = 'session-${userData['id']}';
-        await _storageService.saveAuthToken(sessionToken);
-        await _storageService.saveUserId(userData['id']);
-        await _storageService.saveUserType(userType);
-        await _storageService.saveUserEmail(email);
-        await _storageService.saveUserName(userData['name']);
-        await _storageService.saveRememberMe(false);
+        // Don't auto-login - user needs to wait for approval or login manually if invited by owner
+        // Only save minimal data if needed, but don't set as logged in
+        // The account status will determine if they can login
 
         return {'user': userData};
       } else {

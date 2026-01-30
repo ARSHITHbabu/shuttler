@@ -36,13 +36,44 @@ class AppRouter {
           },
         ),
 
-        // Signup route
+        // Signup route - supports invitation token via query params
         GoRoute(
           path: '/signup',
           name: 'signup',
           builder: (context, state) {
-            final userType = state.extra as String? ?? 'student';
-            return SignupScreen(userType: userType);
+            final userType = state.extra as String? ?? 
+                (state.uri.queryParameters['userType'] ?? 'student');
+            final invitationToken = state.uri.queryParameters['token'];
+            return SignupScreen(
+              userType: userType,
+              invitationToken: invitationToken,
+            );
+          },
+        ),
+
+        // Invite route handler - redirects to signup with token
+        GoRoute(
+          path: '/invite/:token',
+          name: 'invite-student',
+          builder: (context, state) {
+            final token = state.pathParameters['token']!;
+            return SignupScreen(
+              userType: 'student',
+              invitationToken: token,
+            );
+          },
+        ),
+
+        // Coach invite route handler
+        GoRoute(
+          path: '/invite/coach/:token',
+          name: 'invite-coach',
+          builder: (context, state) {
+            final token = state.pathParameters['token']!;
+            return SignupScreen(
+              userType: 'coach',
+              invitationToken: token,
+            );
           },
         ),
 

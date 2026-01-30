@@ -13,8 +13,13 @@ import '../../providers/auth_provider.dart';
 /// Signup screen for user registration
 class SignupScreen extends ConsumerStatefulWidget {
   final String userType;
+  final String? invitationToken;
 
-  const SignupScreen({super.key, required this.userType});
+  const SignupScreen({
+    super.key,
+    required this.userType,
+    this.invitationToken,
+  });
 
   @override
   ConsumerState<SignupScreen> createState() => _SignupScreenState();
@@ -85,28 +90,20 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             password: _passwordController.text,
             userType: widget.userType,
             additionalData: additionalData,
+            invitationToken: widget.invitationToken,
           );
 
       if (mounted) {
-        // For students, always redirect to profile completion after signup
-        if (widget.userType == 'student') {
-          context.go('/student-profile-complete');
-          return;
-        }
-
-        // Navigate to appropriate dashboard for other user types
-        String route;
-        switch (widget.userType) {
-          case 'owner':
-            route = '/owner-dashboard';
-            break;
-          case 'coach':
-            route = '/coach-dashboard';
-            break;
-          default:
-            route = '/';
-        }
-        context.go(route);
+        // Show success message
+        SuccessSnackbar.show(
+          context,
+          widget.invitationToken != null
+              ? 'Account created successfully! You can now log in.'
+              : 'Account created successfully! Your registration request has been sent to the owner for approval. You will be able to log in once approved.',
+        );
+        
+        // Redirect to login screen
+        context.go('/login', extra: widget.userType);
       }
     } catch (e) {
       if (mounted) {
@@ -144,7 +141,13 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () => context.pop(),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/');
+            }
+          },
         ),
         title: Text(
           'Sign Up as ${_getRoleTitle()}',
@@ -347,7 +350,11 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                       onPressed: _isLoading
                           ? null
                           : () {
-                              context.pop();
+                              if (context.canPop()) {
+                                context.pop();
+                              } else {
+                                context.go('/login', extra: widget.userType);
+                              }
                             },
                       child: Text(
                         'Sign In',
