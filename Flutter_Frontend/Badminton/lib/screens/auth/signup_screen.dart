@@ -14,10 +14,7 @@ import '../../providers/auth_provider.dart';
 class SignupScreen extends ConsumerStatefulWidget {
   final String userType;
 
-  const SignupScreen({
-    super.key,
-    required this.userType,
-  });
+  const SignupScreen({super.key, required this.userType});
 
   @override
   ConsumerState<SignupScreen> createState() => _SignupScreenState();
@@ -32,6 +29,18 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _confirmPasswordController = TextEditingController();
   bool _acceptTerms = false;
   bool _isLoading = false;
+  String? _selectedBloodGroup;
+
+  final List<String> _bloodGroups = [
+    'A+',
+    'A-',
+    'B+',
+    'B-',
+    'AB+',
+    'AB-',
+    'O+',
+    'O-',
+  ];
 
   @override
   void dispose() {
@@ -61,13 +70,22 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await ref.read(authProvider.notifier).register(
-        name: _nameController.text.trim(),
-        email: _emailController.text.trim(),
-        phone: _phoneController.text.trim(),
-        password: _passwordController.text,
-        userType: widget.userType,
-      );
+      // Prepare additional data for students (blood group)
+      Map<String, dynamic>? additionalData;
+      if (widget.userType == 'student' && _selectedBloodGroup != null) {
+        additionalData = {'blood_group': _selectedBloodGroup};
+      }
+
+      await ref
+          .read(authProvider.notifier)
+          .register(
+            name: _nameController.text.trim(),
+            email: _emailController.text.trim(),
+            phone: _phoneController.text.trim(),
+            password: _passwordController.text,
+            userType: widget.userType,
+            additionalData: additionalData,
+          );
 
       if (mounted) {
         // For students, always redirect to profile completion after signup
@@ -92,7 +110,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       }
     } catch (e) {
       if (mounted) {
-        SuccessSnackbar.showError(context, e.toString().replaceAll('Exception: ', ''));
+        SuccessSnackbar.showError(
+          context,
+          e.toString().replaceAll('Exception: ', ''),
+        );
       }
     } finally {
       if (mounted) {
@@ -199,11 +220,70 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   hint: 'Re-enter your password',
                   obscureText: true,
                   prefixIcon: Icons.lock_outline,
-                  validator: (value) =>
-                      Validators.validateConfirmPassword(value, _passwordController.text),
+                  validator: (value) => Validators.validateConfirmPassword(
+                    value,
+                    _passwordController.text,
+                  ),
                   enabled: !_isLoading,
                   textInputAction: TextInputAction.done,
                 ),
+                // Blood Group Field (only for students, optional)
+                if (widget.userType == 'student') ...[
+                  const SizedBox(height: AppDimensions.spacingL),
+                  DropdownButtonFormField<String>(
+                    value: _selectedBloodGroup,
+                    decoration: InputDecoration(
+                      labelText: 'Blood Group (Optional)',
+                      hintText: 'Select your blood group',
+                      prefixIcon: const Icon(
+                        Icons.bloodtype_outlined,
+                        color: AppColors.textSecondary,
+                      ),
+                      filled: true,
+                      fillColor: AppColors.cardBackground,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(
+                          AppDimensions.radiusM,
+                        ),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(
+                          AppDimensions.radiusM,
+                        ),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(
+                          AppDimensions.radiusM,
+                        ),
+                        borderSide: const BorderSide(
+                          color: AppColors.accent,
+                          width: 2,
+                        ),
+                      ),
+                      labelStyle: const TextStyle(
+                        color: AppColors.textSecondary,
+                      ),
+                      hintStyle: const TextStyle(color: AppColors.textHint),
+                    ),
+                    dropdownColor: AppColors.cardBackground,
+                    style: const TextStyle(color: AppColors.textPrimary),
+                    items: _bloodGroups.map((String group) {
+                      return DropdownMenuItem<String>(
+                        value: group,
+                        child: Text(group),
+                      );
+                    }).toList(),
+                    onChanged: _isLoading
+                        ? null
+                        : (String? newValue) {
+                            setState(() {
+                              _selectedBloodGroup = newValue;
+                            });
+                          },
+                  ),
+                ],
                 const SizedBox(height: AppDimensions.spacingM),
 
                 // Terms & Conditions
@@ -233,8 +313,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                       child: Text(
                         'I accept the Terms & Conditions',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: AppColors.textSecondary,
-                            ),
+                          color: AppColors.textSecondary,
+                        ),
                       ),
                     ),
                   ],
@@ -260,8 +340,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     Text(
                       'Already have an account? ',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AppColors.textSecondary,
-                          ),
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                     TextButton(
                       onPressed: _isLoading
@@ -272,9 +352,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                       child: Text(
                         'Sign In',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: AppColors.accent,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          color: AppColors.accent,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ],
@@ -284,9 +364,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 if (_isLoading)
                   const Padding(
                     padding: EdgeInsets.only(top: AppDimensions.spacingL),
-                    child: Center(
-                      child: LoadingSpinner(),
-                    ),
+                    child: Center(child: LoadingSpinner()),
                   ),
               ],
             ),

@@ -176,6 +176,7 @@ class StudentDB(Base):
     address = Column(Text, nullable=True)  # Required for profile completion
     status = Column(String, default="active")
     t_shirt_size = Column(String, nullable=True)  # Required for profile completion
+    blood_group = Column(String, nullable=True)  # Blood group (A+, A-, B+, B-, AB+, AB-, O+, O-)
 
     # NEW COLUMNS for Phase 0 enhancements:
     profile_photo = Column(String(500), nullable=True)  # Profile photo URL/path, required for profile completion
@@ -430,6 +431,7 @@ def migrate_database_schema(engine):
             check_and_add_column(engine, 'students', 'profile_photo', 'VARCHAR(500)', nullable=True)
             check_and_add_column(engine, 'students', 'fcm_token', 'VARCHAR(500)', nullable=True)
             check_and_add_column(engine, 'students', 't_shirt_size', 'VARCHAR', nullable=True)
+            check_and_add_column(engine, 'students', 'blood_group', 'VARCHAR', nullable=True)
             
             # Make existing columns nullable if they aren't already
             try:
@@ -984,6 +986,7 @@ class StudentCreate(BaseModel):
     date_of_birth: Optional[str] = None  # Required for profile completion
     address: Optional[str] = None  # Required for profile completion
     t_shirt_size: Optional[str] = None  # Required for profile completion
+    blood_group: Optional[str] = None  # Blood group (A+, A-, B+, B-, AB+, AB-, O+, O-)
 
 class Student(BaseModel):
     id: int
@@ -1018,6 +1021,7 @@ class StudentUpdate(BaseModel):
     date_of_birth: Optional[str] = None
     address: Optional[str] = None
     t_shirt_size: Optional[str] = None
+    blood_group: Optional[str] = None
     status: Optional[str] = None
     profile_photo: Optional[str] = None
 

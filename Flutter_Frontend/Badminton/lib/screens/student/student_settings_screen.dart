@@ -14,6 +14,7 @@ import '../common/privacy_policy_screen.dart';
 import '../common/terms_conditions_screen.dart';
 import '../common/help_support_screen.dart';
 import '../../widgets/forms/change_password_dialog.dart';
+import 'student_profile_screen.dart';
 
 /// Student Settings Screen - App preferences and account settings
 /// Students can toggle theme, manage notifications, and logout
@@ -23,7 +24,8 @@ class StudentSettingsScreen extends ConsumerStatefulWidget {
   const StudentSettingsScreen({super.key, this.onBack});
 
   @override
-  ConsumerState<StudentSettingsScreen> createState() => _StudentSettingsScreenState();
+  ConsumerState<StudentSettingsScreen> createState() =>
+      _StudentSettingsScreenState();
 }
 
 class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
@@ -94,7 +96,9 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                 ? IconButton(
                     icon: Icon(
                       Icons.arrow_back,
-                      color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                      color: isDark
+                          ? AppColors.textPrimary
+                          : AppColorsLight.textPrimary,
                     ),
                     onPressed: widget.onBack,
                   )
@@ -102,7 +106,9 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
             title: Text(
               'Settings',
               style: TextStyle(
-                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                color: isDark
+                    ? AppColors.textPrimary
+                    : AppColorsLight.textPrimary,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -121,7 +127,9 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                      color: isDark
+                          ? AppColors.textPrimary
+                          : AppColorsLight.textPrimary,
                     ),
                   ),
                   const SizedBox(height: AppDimensions.spacingM),
@@ -141,6 +149,13 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                     icon: Icons.account_circle_outlined,
                     isDark: isDark,
                     children: [
+                      _buildActionTile(
+                        title: 'Profile',
+                        icon: Icons.person_outline,
+                        isDark: isDark,
+                        onTap: () => _navigateToProfile(),
+                      ),
+                      const Divider(height: 1),
                       _buildActionTile(
                         title: 'Change Password',
                         icon: Icons.lock_outline,
@@ -256,7 +271,8 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (context) => const TermsConditionsScreen(),
+                              builder: (context) =>
+                                  const TermsConditionsScreen(),
                             ),
                           );
                         },
@@ -269,7 +285,8 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (context) => const HelpSupportScreen(userRole: 'student'),
+                              builder: (context) =>
+                                  const HelpSupportScreen(userRole: 'student'),
                             ),
                           );
                         },
@@ -310,7 +327,8 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: (isDark ? AppColors.accent : AppColorsLight.accent).withValues(alpha: 0.1),
+                  color: (isDark ? AppColors.accent : AppColorsLight.accent)
+                      .withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(AppDimensions.radiusS),
                 ),
                 child: Icon(
@@ -325,7 +343,9 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                  color: isDark
+                      ? AppColors.textPrimary
+                      : AppColorsLight.textPrimary,
                 ),
               ),
             ],
@@ -340,15 +360,12 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
               borderRadius: BorderRadius.circular(AppDimensions.radiusS),
               boxShadow: NeumorphicStyles.getSmallInsetShadow(),
             ),
-            child: Column(
-              children: children,
-            ),
+            child: Column(children: children),
           ),
         ],
       ),
     );
   }
-
 
   Widget _buildSwitchTile({
     required String title,
@@ -373,14 +390,18 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
-                    color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                    color: isDark
+                        ? AppColors.textPrimary
+                        : AppColorsLight.textPrimary,
                   ),
                 ),
                 Text(
                   subtitle,
                   style: TextStyle(
                     fontSize: 12,
-                    color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                    color: isDark
+                        ? AppColors.textSecondary
+                        : AppColorsLight.textSecondary,
                   ),
                 ),
               ],
@@ -389,7 +410,10 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
           Switch(
             value: value,
             onChanged: onChanged,
-            activeTrackColor: (isDark ? AppColors.accent : AppColorsLight.accent).withValues(alpha: 0.5),
+            activeTrackColor:
+                (isDark ? AppColors.accent : AppColorsLight.accent).withValues(
+                  alpha: 0.5,
+                ),
             thumbColor: WidgetStateProperty.resolveWith((states) {
               if (states.contains(WidgetState.selected)) {
                 return isDark ? AppColors.accent : AppColorsLight.accent;
@@ -417,14 +441,18 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w500,
-              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+              color: isDark
+                  ? AppColors.textPrimary
+                  : AppColorsLight.textPrimary,
             ),
           ),
           Text(
             value,
             style: TextStyle(
               fontSize: 14,
-              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+              color: isDark
+                  ? AppColors.textSecondary
+                  : AppColorsLight.textSecondary,
             ),
           ),
         ],
@@ -450,7 +478,9 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
               size: 20,
               color: isDestructive
                   ? (isDark ? AppColors.error : AppColorsLight.error)
-                  : (isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary),
+                  : (isDark
+                        ? AppColors.iconPrimary
+                        : AppColorsLight.iconPrimary),
             ),
             const SizedBox(width: AppDimensions.spacingM),
             Expanded(
@@ -461,14 +491,18 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                   fontWeight: FontWeight.w500,
                   color: isDestructive
                       ? (isDark ? AppColors.error : AppColorsLight.error)
-                      : (isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
+                      : (isDark
+                            ? AppColors.textPrimary
+                            : AppColorsLight.textPrimary),
                 ),
               ),
             ),
             Icon(
               Icons.chevron_right,
               size: 20,
-              color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
+              color: isDark
+                  ? AppColors.textTertiary
+                  : AppColorsLight.textTertiary,
             ),
           ],
         ),
@@ -486,11 +520,7 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
             color: isDark ? AppColors.accent : AppColorsLight.accent,
             borderRadius: BorderRadius.circular(AppDimensions.radiusL),
           ),
-          child: const Icon(
-            Icons.sports_tennis,
-            size: 32,
-            color: Colors.white,
-          ),
+          child: const Icon(Icons.sports_tennis, size: 32, color: Colors.white),
         ),
         const SizedBox(height: AppDimensions.spacingM),
         Text(
@@ -505,7 +535,9 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
           'Badminton Academy Management',
           style: TextStyle(
             fontSize: 12,
-            color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+            color: isDark
+                ? AppColors.textSecondary
+                : AppColorsLight.textSecondary,
           ),
         ),
         const SizedBox(height: AppDimensions.spacingS),
@@ -513,10 +545,21 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
           'Made with love for badminton',
           style: TextStyle(
             fontSize: 11,
-            color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
+            color: isDark
+                ? AppColors.textTertiary
+                : AppColorsLight.textTertiary,
           ),
         ),
       ],
+    );
+  }
+
+  void _navigateToProfile() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) =>
+            StudentProfileScreen(onBack: () => Navigator.of(context).pop()),
+      ),
     );
   }
 
@@ -539,7 +582,9 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: isDark ? AppColors.cardBackground : AppColorsLight.cardBackground,
+        backgroundColor: isDark
+            ? AppColors.cardBackground
+            : AppColorsLight.cardBackground,
         title: Text(
           'Logout',
           style: TextStyle(
@@ -549,7 +594,9 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
         content: Text(
           'Are you sure you want to logout?',
           style: TextStyle(
-            color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+            color: isDark
+                ? AppColors.textSecondary
+                : AppColorsLight.textSecondary,
           ),
         ),
         actions: [
@@ -558,7 +605,9 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
             child: Text(
               'Cancel',
               style: TextStyle(
-                color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                color: isDark
+                    ? AppColors.textSecondary
+                    : AppColorsLight.textSecondary,
               ),
             ),
           ),
