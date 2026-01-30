@@ -12,6 +12,7 @@ class Student {
   final String? medicalConditions;
   final String status;
   final String? tShirtSize;
+  final String? bloodGroup;
   final String? profilePhoto;
   final String? fcmToken;
 
@@ -28,6 +29,7 @@ class Student {
     this.medicalConditions,
     required this.status,
     this.tShirtSize,
+    this.bloodGroup,
     this.profilePhoto,
     this.fcmToken,
   });
@@ -67,6 +69,7 @@ class Student {
       'medical_conditions': medicalConditions,
       'status': status,
       't_shirt_size': tShirtSize,
+      'blood_group': bloodGroup,
       'profile_photo': profilePhoto,
       'fcm_token': fcmToken,
     };
@@ -86,6 +89,7 @@ class Student {
     String? medicalConditions,
     String? status,
     String? tShirtSize,
+    String? bloodGroup,
     String? profilePhoto,
     String? fcmToken,
   }) {
@@ -102,6 +106,7 @@ class Student {
       medicalConditions: medicalConditions ?? this.medicalConditions,
       status: status ?? this.status,
       tShirtSize: tShirtSize ?? this.tShirtSize,
+      bloodGroup: bloodGroup ?? this.bloodGroup,
       profilePhoto: profilePhoto ?? this.profilePhoto,
       fcmToken: fcmToken ?? this.fcmToken,
     );
@@ -151,6 +156,7 @@ class Student {
       medicalConditions,
       status,
       tShirtSize,
+      bloodGroup,
       profilePhoto,
       fcmToken,
     );

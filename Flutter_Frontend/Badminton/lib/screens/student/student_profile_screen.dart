@@ -39,6 +39,18 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
   final _guardianNameController = TextEditingController();
   final _guardianPhoneController = TextEditingController();
   final _addressController = TextEditingController();
+  String? _selectedBloodGroup;
+
+  final List<String> _bloodGroups = [
+    'A+',
+    'A-',
+    'B+',
+    'B-',
+    'AB+',
+    'AB-',
+    'O+',
+    'O-',
+  ];
 
   @override
   void dispose() {
@@ -54,6 +66,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     _guardianNameController.text = student.guardianName ?? '';
     _guardianPhoneController.text = student.guardianPhone ?? '';
     _addressController.text = student.address ?? '';
+    _selectedBloodGroup = student.bloodGroup;
   }
 
   Future<void> _handleImagePicked(File? image) async {
@@ -204,6 +217,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
         'guardian_name': _guardianNameController.text.trim(),
         'guardian_phone': _guardianPhoneController.text.trim(),
         'address': _addressController.text.trim(),
+        if (_selectedBloodGroup != null) 'blood_group': _selectedBloodGroup,
       };
 
       // Update using provider
@@ -246,24 +260,46 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     final authStateAsync = ref.watch(authProvider);
     
     return authStateAsync.when(
-      loading: () => Scaffold(
-        backgroundColor: Colors.transparent,
-        body: const Center(child: ProfileSkeleton()),
-      ),
-      error: (error, stack) => Scaffold(
-        backgroundColor: Colors.transparent,
-        body: ErrorDisplay(
-          message: 'Failed to load user data: ${error.toString()}',
-          onRetry: () => ref.invalidate(authProvider),
-        ),
-      ),
+      loading: () {
+        final backgroundColor = isDark ? AppColors.background : AppColorsLight.background;
+        return Scaffold(
+          backgroundColor: backgroundColor,
+          body: Container(
+            decoration: BoxDecoration(
+              gradient: isDark ? AppColors.backgroundGradient : AppColorsLight.backgroundGradient,
+            ),
+            child: const Center(child: ProfileSkeleton()),
+          ),
+        );
+      },
+      error: (error, stack) {
+        final backgroundColor = isDark ? AppColors.background : AppColorsLight.background;
+        return Scaffold(
+          backgroundColor: backgroundColor,
+          body: Container(
+            decoration: BoxDecoration(
+              gradient: isDark ? AppColors.backgroundGradient : AppColorsLight.backgroundGradient,
+            ),
+            child: ErrorDisplay(
+              message: 'Failed to load user data: ${error.toString()}',
+              onRetry: () => ref.invalidate(authProvider),
+            ),
+          ),
+        );
+      },
       data: (authState) {
         if (authState is! Authenticated) {
+          final backgroundColor = isDark ? AppColors.background : AppColorsLight.background;
           return Scaffold(
-            backgroundColor: Colors.transparent,
-            body: ErrorDisplay(
-              message: 'Please log in to view profile',
-              onRetry: () => ref.invalidate(authProvider),
+            backgroundColor: backgroundColor,
+            body: Container(
+              decoration: BoxDecoration(
+                gradient: isDark ? AppColors.backgroundGradient : AppColorsLight.backgroundGradient,
+              ),
+              child: ErrorDisplay(
+                message: 'Please log in to view profile',
+                onRetry: () => ref.invalidate(authProvider),
+              ),
             ),
           );
         }
@@ -271,19 +307,30 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
         final userId = authState.userId;
         final studentAsync = ref.watch(studentByIdProvider(userId));
 
+        final backgroundColor = isDark ? AppColors.background : AppColorsLight.background;
+
         return Scaffold(
-          backgroundColor: Colors.transparent,
-          body: RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(studentByIdProvider(userId));
-            },
-            child: CustomScrollView(
-              slivers: [
+          backgroundColor: backgroundColor,
+          body: Container(
+            decoration: BoxDecoration(
+              gradient: isDark ? AppColors.backgroundGradient : AppColorsLight.backgroundGradient,
+            ),
+            child: RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(studentByIdProvider(userId));
+              },
+              child: CustomScrollView(
+                slivers: [
                 // App Bar
                 SliverAppBar(
-                  backgroundColor: Colors.transparent,
+                  backgroundColor: backgroundColor,
                   elevation: 0,
                   pinned: true,
+                  flexibleSpace: Container(
+                    decoration: BoxDecoration(
+                      gradient: isDark ? AppColors.backgroundGradient : AppColorsLight.backgroundGradient,
+                    ),
+                  ),
                   leading: widget.onBack != null
                       ? IconButton(
                           icon: Icon(
@@ -316,7 +363,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                             }),
                       ),
                       loading: () => const SizedBox.shrink(),
-                      error: (_, __) => const SizedBox.shrink(),
+                      error: (_, _) => const SizedBox.shrink(),
                     ),
                   ],
                 ),
@@ -374,6 +421,10 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                                   isDark,
                                 ),
                                 _buildInfoRow('Age', student.age?.toString() ?? 'Not set', isDark),
+                                if (_isEditing)
+                                  _buildBloodGroupDropdown(isDark)
+                                else
+                                  _buildInfoRow('Blood Group', student.bloodGroup ?? 'Not set', isDark),
                               ],
                             ),
 
@@ -424,7 +475,10 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                                     maxLines: 3,
                                   )
                                 else
-                                  _buildInfoRow('Address', student.address ?? 'Not set', isDark, isFullWidth: true),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingM),
+                                    child: _buildInfoRow('Address', student.address ?? 'Not set', isDark, isFullWidth: true),
+                                  ),
                               ],
                             ),
 
@@ -471,7 +525,9 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
               ],
             ),
           ),
+        ),
         );
+        
       },
     );
   }
@@ -561,14 +617,14 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
 
           // Section Content
           Container(
-            padding: const EdgeInsets.all(AppDimensions.paddingS),
+            padding: const EdgeInsets.all(AppDimensions.paddingM),
             decoration: BoxDecoration(
               color: isDark ? AppColors.background : AppColorsLight.background,
               borderRadius: BorderRadius.circular(AppDimensions.radiusS),
               boxShadow: NeumorphicStyles.getSmallInsetShadow(),
             ),
             child: Column(
-              children: children,
+              children: _addDividers(children, isDark),
             ),
           ),
         ],
@@ -576,9 +632,38 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     );
   }
 
+  List<Widget> _addDividers(List<Widget> children, bool isDark) {
+    if (children.isEmpty) return children;
+    
+    List<Widget> result = [];
+    for (int i = 0; i < children.length; i++) {
+      final child = children[i];
+      result.add(child);
+      
+      // Add divider between consecutive info rows (not after editable fields or dropdowns)
+      if (i < children.length - 1) {
+        final nextChild = children[i + 1];
+        // Only add divider if both current and next are info rows (not editable fields)
+        if (child.toString().contains('Padding') && 
+            nextChild.toString().contains('Padding') &&
+            !child.toString().contains('CustomTextField') &&
+            !nextChild.toString().contains('CustomTextField') &&
+            !child.toString().contains('DropdownButtonFormField') &&
+            !nextChild.toString().contains('DropdownButtonFormField')) {
+          result.add(Divider(
+            height: 1,
+            thickness: 1,
+            color: (isDark ? AppColors.textTertiary : AppColorsLight.textTertiary).withValues(alpha: 0.2),
+          ));
+        }
+      }
+    }
+    return result;
+  }
+
   Widget _buildInfoRow(String label, String value, bool isDark, {bool isFullWidth = false}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
+      padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingM),
       child: isFullWidth
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -595,6 +680,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                   value,
                   style: TextStyle(
                     fontSize: 14,
+                    fontWeight: FontWeight.w500,
                     color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                   ),
                 ),
@@ -602,20 +688,26 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
             )
           : Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                    ),
                   ),
                 ),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                Expanded(
+                  child: Text(
+                    value,
+                    textAlign: TextAlign.end,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                    ),
                   ),
                 ),
               ],
@@ -691,6 +783,59 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
       keyboardType: keyboardType,
       maxLines: maxLines,
       enabled: !_isSaving,
+    );
+  }
+
+  Widget _buildBloodGroupDropdown(bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingM),
+      child: DropdownButtonFormField<String>(
+        initialValue: _selectedBloodGroup,
+        decoration: InputDecoration(
+          labelText: 'Blood Group',
+          prefixIcon: Icon(
+            Icons.bloodtype_outlined,
+            color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+          ),
+          filled: true,
+          fillColor: isDark ? AppColors.cardBackground : AppColorsLight.cardBackground,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+            borderSide: BorderSide(
+              color: isDark ? AppColors.accent : AppColorsLight.accent,
+              width: 2,
+            ),
+          ),
+          labelStyle: TextStyle(
+            color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+          ),
+        ),
+        dropdownColor: isDark ? AppColors.cardBackground : AppColorsLight.cardBackground,
+        style: TextStyle(
+          color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+        ),
+        items: _bloodGroups.map((String group) {
+          return DropdownMenuItem<String>(
+            value: group,
+            child: Text(group),
+          );
+        }).toList(),
+        onChanged: _isSaving
+            ? null
+            : (String? newValue) {
+                setState(() {
+                  _selectedBloodGroup = newValue;
+                });
+              },
+      ),
     );
   }
 

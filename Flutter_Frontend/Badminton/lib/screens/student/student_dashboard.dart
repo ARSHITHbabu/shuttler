@@ -3,6 +3,7 @@ import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import 'student_home_screen.dart';
+import 'student_batches_screen.dart';
 import 'student_attendance_screen.dart';
 import 'student_performance_screen.dart';
 import 'student_more_screen.dart';
@@ -21,6 +22,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
 
   final List<Widget> _screens = [
     const StudentHomeScreen(),
+    const StudentBatchesScreen(),
     const StudentAttendanceScreen(),
     const StudentPerformanceScreen(),
     const StudentMoreScreen(),
@@ -28,6 +30,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
 
   final List<_BottomNavItem> _navItems = [
     _BottomNavItem(icon: Icons.home, label: 'Home'),
+    _BottomNavItem(icon: Icons.groups_outlined, label: 'Batches'),
     _BottomNavItem(icon: Icons.check_circle_outline, label: 'Attendance'),
     _BottomNavItem(icon: Icons.trending_up, label: 'Performance'),
     _BottomNavItem(icon: Icons.more_horiz, label: 'More'),
@@ -38,32 +41,33 @@ class _StudentDashboardState extends State<StudentDashboard> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final backgroundColor = theme.scaffoldBackgroundColor;
-    final surfaceColor = isDark ? AppColors.surfaceLight : AppColorsLight.surfaceLight;
-    final shadowColor = isDark ? AppColors.shadowDark : AppColorsLight.shadowDark;
+    final surfaceColor = isDark
+        ? AppColors.surfaceLight
+        : AppColorsLight.surfaceLight;
+    final shadowColor = isDark
+        ? AppColors.shadowDark
+        : AppColorsLight.shadowDark;
 
     return Scaffold(
       backgroundColor: backgroundColor,
       body: Container(
         decoration: BoxDecoration(
-          gradient: isDark ? AppColors.backgroundGradient : AppColorsLight.backgroundGradient,
+          gradient: isDark
+              ? AppColors.backgroundGradient
+              : AppColorsLight.backgroundGradient,
         ),
         child: SafeArea(
           child: Column(
             children: [
               // Content Area
-              Expanded(
-                child: _screens[_currentIndex],
-              ),
+              Expanded(child: _screens[_currentIndex]),
 
               // Bottom Navigation
               Container(
                 decoration: BoxDecoration(
                   color: backgroundColor,
                   border: Border(
-                    top: BorderSide(
-                      color: surfaceColor,
-                      width: 1,
-                    ),
+                    top: BorderSide(color: surfaceColor, width: 1),
                   ),
                   boxShadow: [
                     BoxShadow(
@@ -102,9 +106,15 @@ class _StudentDashboardState extends State<StudentDashboard> {
     final isActive = _currentIndex == index;
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final cardColor = isDark ? AppColors.cardBackground : AppColorsLight.cardBackground;
-    final activeColor = isDark ? AppColors.iconActive : AppColorsLight.iconActive;
-    final inactiveColor = isDark ? AppColors.textTertiary : AppColorsLight.textTertiary;
+    final cardColor = isDark
+        ? AppColors.cardBackground
+        : AppColorsLight.cardBackground;
+    final activeColor = isDark
+        ? AppColors.iconActive
+        : AppColorsLight.iconActive;
+    final inactiveColor = isDark
+        ? AppColors.textTertiary
+        : AppColorsLight.textTertiary;
 
     return GestureDetector(
       onTap: () {
