@@ -1707,6 +1707,13 @@ def login_coach(login_data: CoachLogin):
                     "message": "Your account is pending approval. Please wait for the owner to approve your registration."
                 }
             
+            # Check if account was rejected
+            if coach.status == "rejected":
+                return {
+                    "success": False,
+                    "message": "Your registration has been rejected. Please contact the academy owner for more information."
+                }
+            
             if coach.status == "inactive":
                 return {
                     "success": False,
@@ -2827,6 +2834,13 @@ def login_student(login_data: StudentLogin):
                 return {
                     "success": False,
                     "message": "Your account is pending approval. Please wait for the owner to approve your registration."
+                }
+            
+            # Check if account was rejected
+            if student.status == "rejected":
+                return {
+                    "success": False,
+                    "message": "Your registration has been rejected. Please contact the academy owner for more information."
                 }
             
             # Check if student has any approved batches
@@ -5093,6 +5107,18 @@ def reject_request(request_id: int, response_message: Optional[str] = None):
         request.response_message = response_message
         request.responded_at = datetime.now()
         # Note: responded_by should be set from auth context in production
+        
+        # Handle request-specific rejection logic
+        if request.request_type == "student_registration":
+            # Mark student account as rejected
+            student = db.query(StudentDB).filter(StudentDB.id == request.requester_id).first()
+            if student:
+                student.status = "rejected"
+        elif request.request_type == "coach_registration":
+            # Mark coach account as rejected
+            coach = db.query(CoachDB).filter(CoachDB.id == request.requester_id).first()
+            if coach:
+                coach.status = "rejected"
         
         db.commit()
         db.refresh(request)
