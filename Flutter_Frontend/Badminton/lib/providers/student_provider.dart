@@ -1,7 +1,8 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../models/student.dart';
+import '../models/owner.dart';
+import '../models/coach.dart';
 import '../models/schedule.dart';
-import '../models/batch.dart';
 import '../utils/batch_time_utils.dart';
 import 'service_providers.dart';
 import 'batch_provider.dart';
@@ -324,6 +325,44 @@ Future<List<Schedule>> studentSchedules(
   allSchedules.sort((a, b) => b.date.compareTo(a.date));
 
   return allSchedules;
+}
+
+/// Provider for the active owner
+@riverpod
+Future<Owner?> activeOwner(ActiveOwnerRef ref) async {
+  final ownerService = ref.watch(ownerServiceProvider);
+  final owners = await ownerService.getOwners();
+  if (owners.isNotEmpty) {
+    return owners.first; // Return the first owner for now
+  }
+  return null;
+}
+
+/// Provider for student's coaches
+@riverpod
+Future<List<Coach>> studentCoaches(StudentCoachesRef ref, int studentId) async {
+  final coachService = ref.watch(coachServiceProvider);
+  // Get student batches to find assigned coaches
+  final batches = await ref.watch(studentBatchesProvider(studentId).future);
+  
+  final Set<int> coachIds = {};
+  for (final batch in batches) {
+    coachIds.addAll(batch.assignedCoachIds);
+    // Backward compatibility
+    if (batch.assignedCoachIds.isEmpty && batch.assignedCoachId != null) {
+      coachIds.add(batch.assignedCoachId!);
+    }
+  }
+
+  if (coachIds.isEmpty) {
+    return [];
+  }
+
+  // Fetch all coaches and filter
+  // This is more efficient than making N API calls if N is small, 
+  // but for larger systems we should have a bulk fetch API.
+  final allCoaches = await coachService.getCoaches();
+  return allCoaches.where((c) => coachIds.contains(c.id)).toList();
 }
 
 /// Student dashboard data class

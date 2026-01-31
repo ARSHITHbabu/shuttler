@@ -134,6 +134,12 @@ class OwnerDB(Base):
     profile_photo = Column(String(500), nullable=True)  # Profile photo URL/path
     fcm_token = Column(String(500), nullable=True)  # Firebase Cloud Messaging token for push notifications
     
+    # Academy Details:
+    academy_name = Column(String(255), nullable=True)
+    academy_address = Column(Text, nullable=True)
+    academy_contact = Column(String(50), nullable=True)
+    academy_email = Column(String(100), nullable=True)
+    
     # RELATIONSHIPS (will be defined after the related models are created):
     # Note: Announcements and calendar events now support both coaches and owners via polymorphic relationships
 
@@ -473,6 +479,13 @@ def migrate_database_schema(engine):
         if 'coaches' in tables:
             check_and_add_column(engine, 'coaches', 'profile_photo', 'VARCHAR(500)', nullable=True)
             check_and_add_column(engine, 'coaches', 'fcm_token', 'VARCHAR(500)', nullable=True)
+        
+        # Migrate owners table
+        if 'owners' in tables:
+            check_and_add_column(engine, 'owners', 'academy_name', 'VARCHAR(255)', nullable=True)
+            check_and_add_column(engine, 'owners', 'academy_address', 'TEXT', nullable=True)
+            check_and_add_column(engine, 'owners', 'academy_contact', 'VARCHAR(50)', nullable=True)
+            check_and_add_column(engine, 'owners', 'academy_email', 'VARCHAR(100)', nullable=True)
         
         # Migrate students table
         if 'students' in tables:
@@ -970,6 +983,10 @@ class Owner(BaseModel):
     status: str = "active"
     profile_photo: Optional[str] = None
     fcm_token: Optional[str] = None
+    academy_name: Optional[str] = None
+    academy_address: Optional[str] = None
+    academy_contact: Optional[str] = None
+    academy_email: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -987,6 +1004,10 @@ class OwnerUpdate(BaseModel):
     experience_years: Optional[int] = None
     profile_photo: Optional[str] = None
     fcm_token: Optional[str] = None
+    academy_name: Optional[str] = None
+    academy_address: Optional[str] = None
+    academy_contact: Optional[str] = None
+    academy_email: Optional[str] = None
 
 # Batch Models
 # Session Models
@@ -2925,7 +2946,7 @@ def get_batch_students(batch_id: int):
     finally:
         db.close()
 
-@app.get("/student-batches/{student_id}")
+@app.get("/student-batches/{student_id}", response_model=List[Batch])
 def get_student_batches(student_id: int):
     db = SessionLocal()
     try:
@@ -2936,8 +2957,32 @@ def get_student_batches(student_id: int):
         batch_ids = [a.batch_id for a in assignments]
         if not batch_ids:
             return []
+        
         try:
-            batches = db.query(BatchDB).filter(BatchDB.id.in_(batch_ids)).all()
+            batches_db = db.query(BatchDB).filter(BatchDB.id.in_(batch_ids)).all()
+            batches = []
+            for batch_db in batches_db:
+                # Get coaches from junction table
+                coaches = _get_batch_coaches(db, batch_db.id)
+                coach_ids_list = [c.id for c in coaches]
+                
+                batch = Batch(
+                    id=batch_db.id,
+                    batch_name=batch_db.batch_name,
+                    capacity=batch_db.capacity,
+                    fees=batch_db.fees,
+                    start_date=batch_db.start_date,
+                    timing=batch_db.timing,
+                    period=batch_db.period,
+                    location=batch_db.location,
+                    created_by=batch_db.created_by,
+                    assigned_coach_id=coach_ids_list[0] if coach_ids_list else batch_db.assigned_coach_id,
+                    assigned_coach_name=coaches[0].name if coaches else batch_db.assigned_coach_name,
+                    assigned_coach_ids=coach_ids_list,
+                    assigned_coaches=coaches,
+                    session_id=batch_db.session_id
+                )
+                batches.append(batch)
             return batches
         except Exception as e:
             # If error is about missing session_id column, rollback and use raw SQL
@@ -2950,10 +2995,15 @@ def get_student_batches(student_id: int):
                     FROM batches
                     WHERE id = ANY(:batch_ids)
                 """), {"batch_ids": batch_ids})
+                
                 batches = []
                 for row in result:
+                    batch_id = row[0]
+                    coaches = _get_batch_coaches(db, batch_id)
+                    coach_ids_list = [c.id for c in coaches]
+                    
                     batch = Batch(
-                        id=row[0],
+                        id=batch_id,
                         batch_name=row[1],
                         capacity=row[2],
                         fees=row[3],
@@ -2962,8 +3012,10 @@ def get_student_batches(student_id: int):
                         period=row[6],
                         location=row[7],
                         created_by=row[8],
-                        assigned_coach_id=row[9],
-                        assigned_coach_name=row[10],
+                        assigned_coach_id=coach_ids_list[0] if coach_ids_list else row[9],
+                        assigned_coach_name=coaches[0].name if coaches else row[10],
+                        assigned_coach_ids=coach_ids_list,
+                        assigned_coaches=coaches,
                         session_id=None,
                     )
                     batches.append(batch)

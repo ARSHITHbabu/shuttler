@@ -8,6 +8,7 @@ import '../../../widgets/common/confirmation_dialog.dart';
 import '../../../widgets/forms/edit_coach_dialog.dart';
 import '../../../providers/coach_provider.dart';
 import '../../../models/coach.dart';
+import '../../../core/utils/contact_utils.dart';
 
 /// Profile Tab - Shows coach information and management actions
 class CoachProfileTab extends ConsumerStatefulWidget {
@@ -137,11 +138,21 @@ class _CoachProfileTabState extends ConsumerState<CoachProfileTab> {
           child: Column(
             children: [
               if (widget.coach.email.isNotEmpty)
-                _buildInfoRow(Icons.email_outlined, 'Email', widget.coach.email),
+                _buildInfoRow(
+                  Icons.email_outlined, 
+                  'Email', 
+                  widget.coach.email,
+                  onTap: () => ContactUtils.launchEmail(widget.coach.email),
+                ),
               if (widget.coach.email.isNotEmpty && widget.coach.phone.isNotEmpty)
                 const Divider(color: AppColors.textSecondary, height: 24),
               if (widget.coach.phone.isNotEmpty)
-                _buildInfoRow(Icons.phone_outlined, 'Phone', widget.coach.phone),
+                _buildInfoRow(
+                  Icons.phone_outlined, 
+                  'Phone', 
+                  widget.coach.phone,
+                  onTap: () => ContactUtils.showContactOptions(context, widget.coach.phone, name: widget.coach.name),
+                ),
             ],
           ),
         ),
@@ -234,35 +245,58 @@ class _CoachProfileTabState extends ConsumerState<CoachProfileTab> {
     );
   }
 
-  Widget _buildInfoRow(IconData icon, String label, String value) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: AppColors.textSecondary),
-        const SizedBox(width: AppDimensions.spacingM),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
+  Widget _buildInfoRow(IconData icon, String label, String value, {VoidCallback? onTap}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: AppColors.textSecondary),
+          const SizedBox(width: AppDimensions.spacingM),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
+                const SizedBox(height: 4),
+                onTap != null 
+                  ? InkWell(
+                      onTap: onTap,
+                      borderRadius: BorderRadius.circular(4),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+                        child: Text(
+                          value,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: AppColors.accent,
+                            fontWeight: FontWeight.w500,
+                            decoration: TextDecoration.underline,
+                            decorationColor: AppColors.accent.withOpacity(0.5),
+                          ),
+                        ),
+                      ),
+                    )
+                  : Text(
+                      value,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+              ],
+            ),
           ),
-        ),
-      ],
+          if (onTap != null)
+            const Icon(Icons.open_in_new, size: 14, color: AppColors.textTertiary),
+        ],
+      ),
     );
   }
 
