@@ -6006,6 +6006,18 @@ async def get_uploaded_image(filename: str):
 
 if __name__ == "__main__":
     import uvicorn
+    
+    # Start schema registry watcher automatically
+    try:
+        from schema_watcher import start_schema_watcher
+        start_schema_watcher()
+    except ImportError:
+        # Schema watcher not available - continue without it
+        pass
+    except Exception as e:
+        # Don't crash if watcher fails
+        print(f"[Schema Watcher] Could not start: {e}")
+    
     print("🚀 Starting Badminton Academy Management System API...")
     print("📖 API Documentation (Local): http://127.0.0.1:8000/docs")
     print("📖 API Documentation (Network): http://192.168.1.7:8000/docs")
