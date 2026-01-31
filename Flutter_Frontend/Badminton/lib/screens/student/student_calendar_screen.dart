@@ -286,8 +286,7 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
                   ),
                 );
               },
-            ),
-          );
+            );
           },
         ),
       ),
@@ -303,7 +302,6 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
     final hasHoliday = holidayName != null;
 
     final textPrimary = isDark ? AppColors.textPrimary : AppColorsLight.textPrimary;
-    final textSecondary = isDark ? AppColors.textSecondary : AppColorsLight.textSecondary;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
