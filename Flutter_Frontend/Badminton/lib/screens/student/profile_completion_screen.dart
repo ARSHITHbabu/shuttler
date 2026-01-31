@@ -1,4 +1,8 @@
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import '../../widgets/common/profile_image_picker.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -32,6 +36,7 @@ class _ProfileCompletionScreenState
   final _tShirtSizeController = TextEditingController();
 
   bool _isLoading = false;
+  bool _isUploadingImage = false;
   DateTime? _selectedDate;
   String? _selectedTShirtSize;
   String? _selectedBloodGroup;
@@ -69,6 +74,57 @@ class _ProfileCompletionScreenState
     super.dispose();
   }
 
+  Future<void> _handleImagePicked(File? image) async {
+    if (image == null) return;
+
+    setState(() => _isUploadingImage = true);
+
+    try {
+      final apiService = ref.read(apiServiceProvider);
+      // Upload returns relative path e.g. /uploads/uuid.jpg
+      final imageUrl = await apiService.uploadImage(image.path);
+      
+      setState(() {
+        _profilePhotoUrl = imageUrl;
+        _isUploadingImage = false;
+      });
+      
+      if (mounted) {
+        SuccessSnackbar.show(context, 'Photo uploaded successfully');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isUploadingImage = false);
+        SuccessSnackbar.showError(context, 'Failed to upload image: ${e.toString()}');
+      }
+    }
+  }
+
+  Future<void> _handleImageBytesPickedForWeb(Uint8List? bytes) async {
+    if (bytes == null) return;
+
+    setState(() => _isUploadingImage = true);
+
+    try {
+      final apiService = ref.read(apiServiceProvider);
+      final imageUrl = await apiService.uploadImageBytes(bytes);
+      
+      setState(() {
+        _profilePhotoUrl = imageUrl;
+        _isUploadingImage = false;
+      });
+      
+      if (mounted) {
+        SuccessSnackbar.show(context, 'Photo uploaded successfully');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isUploadingImage = false);
+        SuccessSnackbar.showError(context, 'Failed to upload image: ${e.toString()}');
+      }
+    }
+  }
+
   Future<void> _selectDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -104,6 +160,16 @@ class _ProfileCompletionScreenState
 
     if (_selectedTShirtSize == null) {
       SuccessSnackbar.showError(context, 'Please select a T-shirt size');
+      return;
+    }
+
+    if (_selectedBloodGroup == null) {
+      SuccessSnackbar.showError(context, 'Please select a blood group');
+      return;
+    }
+
+    if (_profilePhotoUrl == null) {
+      SuccessSnackbar.showError(context, 'Please upload a profile photo');
       return;
     }
 
@@ -400,42 +466,25 @@ class _ProfileCompletionScreenState
 
                 // Profile Photo Section (Placeholder for Phase 3)
                 // TODO: Implement image picker in Phase 3
-                Container(
-                  padding: const EdgeInsets.all(AppDimensions.paddingM),
-                  decoration: BoxDecoration(
-                    color: AppColors.cardBackground,
-                    borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-                  ),
-                  child: Column(
-                    children: [
-                      const Row(
-                        children: [
-                          Icon(
-                            Icons.camera_alt_outlined,
-                            color: AppColors.textSecondary,
-                            size: 20,
-                          ),
-                          SizedBox(width: AppDimensions.spacingS),
-                          Text(
-                            'Profile Photo *',
-                            style: TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppDimensions.spacingM),
-                      Text(
-                        'Profile photo upload will be available in Phase 3',
-                        style: const TextStyle(
-                          color: AppColors.textHint,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
+                Center(
+                  child: ProfileImagePicker(
+                    initialImageUrl: _profilePhotoUrl,
+                    size: 120,
+                    onImagePicked: _handleImagePicked,
+                    onImageBytesPickedForWeb: _handleImageBytesPickedForWeb,
+                    isLoading: _isUploadingImage,
                   ),
                 ),
+                if (_profilePhotoUrl == null)
+                   Padding(
+                     padding: const EdgeInsets.only(top: AppDimensions.spacingS),
+                     child: const Center(
+                       child: Text(
+                         'Profile photo is required *',
+                         style: TextStyle(color: AppColors.error, fontSize: 12),
+                       ),
+                     ),
+                   ),
                 const SizedBox(height: AppDimensions.spacingXl),
 
                 // Submit Button

@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, File, UploadFile, Query, Form
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, Text, Date, DateTime, ForeignKey, JSON, func, and_
@@ -176,6 +177,7 @@ class StudentDB(Base):
     address = Column(Text, nullable=True)  # Required for profile completion
     status = Column(String, default="active")
     t_shirt_size = Column(String, nullable=True)  # Required for profile completion
+    blood_group = Column(String, nullable=True)
 
     # NEW COLUMNS for Phase 0 enhancements:
     profile_photo = Column(String(500), nullable=True)  # Profile photo URL/path, required for profile completion
@@ -470,6 +472,7 @@ def migrate_database_schema(engine):
             check_and_add_column(engine, 'students', 'profile_photo', 'VARCHAR(500)', nullable=True)
             check_and_add_column(engine, 'students', 'fcm_token', 'VARCHAR(500)', nullable=True)
             check_and_add_column(engine, 'students', 't_shirt_size', 'VARCHAR', nullable=True)
+            check_and_add_column(engine, 'students', 'blood_group', 'VARCHAR(20)', nullable=True)
             
             # Make existing columns nullable if they aren't already
             try:
@@ -1596,6 +1599,7 @@ app.add_middleware(
 UPLOAD_DIR = Path("./uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 print(f"✅ Upload directory ready at: {UPLOAD_DIR.absolute()}")
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 def get_db():
     db = SessionLocal()
@@ -1609,6 +1613,20 @@ def get_db():
 @app.get("/")
 def read_root():
     return {"message": "Badminton Academy Management System API", "version": "2.0"}
+
+@app.post("/upload")
+async def upload_file(file: UploadFile = File(...)):
+    try:
+        file_ext = os.path.splitext(file.filename)[1]
+        filename = f"{uuid.uuid4()}{file_ext}"
+        file_path = UPLOAD_DIR / filename
+        
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        return {"url": f"/uploads/{filename}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ==================== Coach Routes ====================
 
