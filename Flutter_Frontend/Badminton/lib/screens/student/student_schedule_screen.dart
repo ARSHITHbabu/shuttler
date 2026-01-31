@@ -7,7 +7,6 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/error_widget.dart';
-import '../../widgets/common/more_screen_app_bar.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/student_provider.dart';
 import '../../providers/batch_provider.dart';
@@ -189,17 +188,33 @@ class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
     ));
 
     return Scaffold(
-      backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
-      appBar: MoreScreenAppBar(
-        title: 'My Schedule',
-        onReload: _handleReload,
-        isDark: isDark,
-        onBack: widget.onBack,
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        leading: widget.onBack != null
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+                onPressed: widget.onBack,
+              )
+            : null,
+        title: const Text(
+          'My Schedule',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          _handleReload();
-          await Future.delayed(const Duration(milliseconds: 300));
+          ref.invalidate(studentSchedulesProvider(userId));
+          ref.invalidate(studentBatchesProvider(userId));
+          ref.invalidate(calendarEventsProvider(
+            startDate: firstDay,
+            endDate: lastDay,
+          ));
         },
         child: scheduleAsync.when(
           loading: () => const Center(child: ListSkeleton(itemCount: 5)),

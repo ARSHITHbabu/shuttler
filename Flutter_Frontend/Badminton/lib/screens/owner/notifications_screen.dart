@@ -8,7 +8,6 @@ import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
-import '../../widgets/common/more_screen_app_bar.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../models/notification.dart';
@@ -110,35 +109,47 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     ));
 
     return Scaffold(
-      backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
-      appBar: MoreScreenAppBar(
-        title: 'Notifications',
-        onReload: _handleReload,
-        isDark: isDark,
-        additionalActions: [
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text(
+          'Notifications',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        actions: [
           IconButton(
-            icon: Icon(
-              Icons.check_circle_outline,
-              color: isDark ? AppColors.accent : AppColorsLight.accent,
-            ),
+            icon: const Icon(Icons.check_circle_outline, color: AppColors.accent),
             tooltip: 'Mark all as read',
             onPressed: () => _markAllAsRead(authState),
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          _handleReload();
-          await Future.delayed(const Duration(milliseconds: 300));
-        },
-        child: Column(
+      body: Column(
         children: [
           // Filters
           _buildFilters(),
           
           // Notifications List
           Expanded(
-            child: notificationsAsync.when(
+            child: RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(notificationManagerProvider(
+                  userId: authState.userId,
+                  userType: authState.userType,
+                  type: typeFilter,
+                  isRead: isReadFilter,
+                ));
+              },
+              child: notificationsAsync.when(
                 loading: () => const ListSkeleton(itemCount: 5),
                 error: (error, stack) => ErrorDisplay(
                   message: 'Failed to load notifications: ${error.toString()}',
@@ -171,7 +182,6 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             ),
           ),
         ],
-        ),
       ),
     );
   }

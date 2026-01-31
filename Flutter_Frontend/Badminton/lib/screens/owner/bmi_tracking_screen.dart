@@ -9,7 +9,6 @@ import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
 import '../../widgets/common/custom_text_field.dart';
-import '../../widgets/common/more_screen_app_bar.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/bmi_provider.dart';
 import '../../providers/student_provider.dart';
@@ -278,28 +277,26 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
       );
     }
 
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    
-    void _handleReload() {
-      if (_selectedStudentId != null) {
-        ref.invalidate(bmiHistoryProvider(_selectedStudentId!));
-      }
-      ref.invalidate(allStudentsProvider);
-    }
-
     return Scaffold(
-      backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
-      appBar: MoreScreenAppBar(
-        title: 'BMI Tracking',
-        onReload: _handleReload,
-        isDark: isDark,
-        additionalActions: [
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text(
+          'BMI Tracking',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        actions: [
           IconButton(
-            icon: Icon(
-              Icons.add,
-              color: isDark ? AppColors.accent : AppColorsLight.accent,
-            ),
+            icon: const Icon(Icons.add, color: AppColors.accent),
             onPressed: () {
               if (_selectedStudentId == null) {
                 SuccessSnackbar.showError(context, 'Please select a student first');
@@ -310,23 +307,17 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          _handleReload();
-          await Future.delayed(const Duration(milliseconds: 300));
+      body: GestureDetector(
+        onTap: () {
+          // Close dropdown when tapping outside
+          if (_showDropdown) {
+            setState(() {
+              _showDropdown = false;
+              _searchFocusNode.unfocus();
+            });
+          }
         },
-        child: GestureDetector(
-          onTap: () {
-            // Close dropdown when tapping outside
-            if (_showDropdown) {
-              setState(() {
-                _showDropdown = false;
-                _searchFocusNode.unfocus();
-              });
-            }
-          },
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
+        child: SingleChildScrollView(
           child: Padding(
             padding: const EdgeInsets.all(AppDimensions.paddingL),
             child: Column(
@@ -627,8 +618,6 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
               ),
             ),
           ],
-        ),
-          ),
         ),
       ),
     );

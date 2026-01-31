@@ -8,7 +8,6 @@ import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
-import '../../widgets/common/more_screen_app_bar.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/announcement_provider.dart';
 import '../../models/announcement.dart';
@@ -160,80 +159,80 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    
     if (_showAddForm) {
       return _buildAddForm();
     }
 
-    void _handleReload() {
-      ref.invalidate(announcementManagerProvider);
-    }
-
     return Scaffold(
-      backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
-      appBar: MoreScreenAppBar(
-        title: 'Announcements',
-        onReload: _handleReload,
-        isDark: isDark,
-        additionalActions: [
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text(
+          'Announcements',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        actions: [
           IconButton(
-            icon: Icon(
-              Icons.add,
-              color: isDark ? AppColors.accent : AppColorsLight.accent,
-            ),
+            icon: const Icon(Icons.add, color: AppColors.accent),
             onPressed: () => setState(() => _showAddForm = true),
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          _handleReload();
-          await Future.delayed(const Duration(milliseconds: 300));
-        },
-        child: Column(
-          children: [
-            // Filter Chips
-            Padding(
-              padding: const EdgeInsets.all(AppDimensions.paddingM),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _FilterChip(
-                      label: 'All',
-                      isSelected: _selectedFilter == 'all',
-                      onTap: () => setState(() => _selectedFilter = 'all'),
-                    ),
-                    const SizedBox(width: AppDimensions.spacingS),
-                    _FilterChip(
-                      label: 'Urgent',
-                      isSelected: _selectedFilter == 'urgent',
-                      onTap: () => setState(() => _selectedFilter = 'urgent'),
-                      color: AppColors.error,
-                    ),
-                    const SizedBox(width: AppDimensions.spacingS),
-                    _FilterChip(
-                      label: 'High',
-                      isSelected: _selectedFilter == 'high',
-                      onTap: () => setState(() => _selectedFilter = 'high'),
-                      color: AppColors.warning,
-                    ),
-                    const SizedBox(width: AppDimensions.spacingS),
-                    _FilterChip(
-                      label: 'Normal',
-                      isSelected: _selectedFilter == 'normal',
-                      onTap: () => setState(() => _selectedFilter = 'normal'),
-                      color: AppColors.success,
-                    ),
-                  ],
-                ),
+      body: Column(
+        children: [
+          // Filter Chips
+          Padding(
+            padding: const EdgeInsets.all(AppDimensions.paddingM),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _FilterChip(
+                    label: 'All',
+                    isSelected: _selectedFilter == 'all',
+                    onTap: () => setState(() => _selectedFilter = 'all'),
+                  ),
+                  const SizedBox(width: AppDimensions.spacingS),
+                  _FilterChip(
+                    label: 'Urgent',
+                    isSelected: _selectedFilter == 'urgent',
+                    onTap: () => setState(() => _selectedFilter = 'urgent'),
+                    color: AppColors.error,
+                  ),
+                  const SizedBox(width: AppDimensions.spacingS),
+                  _FilterChip(
+                    label: 'High',
+                    isSelected: _selectedFilter == 'high',
+                    onTap: () => setState(() => _selectedFilter = 'high'),
+                    color: AppColors.warning,
+                  ),
+                  const SizedBox(width: AppDimensions.spacingS),
+                  _FilterChip(
+                    label: 'Normal',
+                    isSelected: _selectedFilter == 'normal',
+                    onTap: () => setState(() => _selectedFilter = 'normal'),
+                    color: AppColors.success,
+                  ),
+                ],
               ),
             ),
+          ),
 
-            // Announcements List
-            Expanded(
+          // Announcements List
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(announcementManagerProvider());
+              },
               child: Consumer(
                 builder: (context, ref, child) {
                   final announcementsAsync = ref.watch(announcementManagerProvider());
@@ -258,7 +257,6 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
 
                       return ListView.builder(
                         padding: const EdgeInsets.all(AppDimensions.paddingL),
-                        physics: const AlwaysScrollableScrollPhysics(),
                         itemCount: filteredAnnouncements.length,
                         itemBuilder: (context, index) {
                           final announcement = filteredAnnouncements[index];

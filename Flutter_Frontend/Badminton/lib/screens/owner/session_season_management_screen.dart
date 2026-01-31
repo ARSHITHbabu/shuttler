@@ -152,27 +152,26 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
       return _buildAddForm();
     }
 
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    
-    void _handleReload() {
-      final statusFilter = _selectedTab == 'active' ? 'active' : 'archived';
-      ref.invalidate(sessionListProvider(status: statusFilter));
-      ref.invalidate(sessionManagerProvider(status: statusFilter));
-    }
-
     return Scaffold(
-      backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
-      appBar: MoreScreenAppBar(
-        title: 'Session Management',
-        onReload: _handleReload,
-        isDark: isDark,
-        additionalActions: [
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text(
+          'Session Management',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        actions: [
           IconButton(
-            icon: Icon(
-              Icons.add,
-              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-            ),
+            icon: const Icon(Icons.add, color: AppColors.textPrimary),
             onPressed: _openAddForm,
           ),
         ],
@@ -397,8 +396,9 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
         Expanded(
           child: RefreshIndicator(
             onRefresh: () async {
-              _handleReload();
-              await Future.delayed(const Duration(milliseconds: 300));
+              final statusFilter = _selectedTab == 'active' ? 'active' : 'archived';
+              ref.invalidate(sessionListProvider(status: statusFilter));
+              ref.invalidate(sessionManagerProvider(status: statusFilter));
             },
             child: sessionsAsync.when(
               loading: () => const Center(child: ListSkeleton(itemCount: 5)),

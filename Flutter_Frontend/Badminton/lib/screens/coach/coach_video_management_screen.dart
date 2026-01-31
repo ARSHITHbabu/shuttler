@@ -6,7 +6,6 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
-import '../../widgets/common/more_screen_app_bar.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/coach_provider.dart';
 import '../../providers/auth_provider.dart';
@@ -392,35 +391,27 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
           ),
         );
       },
-      loading: () {
-        final theme = Theme.of(context);
-        final isDark = theme.brightness == Brightness.dark;
-        return Scaffold(
-          appBar: MoreScreenAppBar(
-            title: 'Video Management',
-            onReload: null,
-            isDark: isDark,
+      loading: () => Scaffold(
+        appBar: AppBar(
+          title: const Text('Video Management'),
+          backgroundColor: AppColors.background,
+          elevation: 0,
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      ),
+      error: (error, _) => Scaffold(
+        appBar: AppBar(
+          title: const Text('Video Management'),
+          backgroundColor: AppColors.background,
+          elevation: 0,
+        ),
+        body: Center(
+          child: Text(
+            'Error: ${error.toString()}',
+            style: const TextStyle(color: AppColors.error),
           ),
-          body: const Center(child: CircularProgressIndicator()),
-        );
-      },
-      error: (error, _) {
-        final theme = Theme.of(context);
-        final isDark = theme.brightness == Brightness.dark;
-        return Scaffold(
-          appBar: MoreScreenAppBar(
-            title: 'Video Management',
-            onReload: null,
-            isDark: isDark,
-          ),
-          body: Center(
-            child: Text(
-              'Error: ${error.toString()}',
-              style: const TextStyle(color: AppColors.error),
-            ),
-          ),
-        );
-      },
+        ),
+      ),
     );
   }
 

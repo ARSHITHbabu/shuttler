@@ -6,7 +6,6 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
-import '../../widgets/common/more_screen_app_bar.dart';
 import '../../providers/calendar_provider.dart';
 import '../../models/calendar_event.dart';
 import '../../core/utils/canadian_holidays.dart';
@@ -38,32 +37,26 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    
-    void _handleReload() {
-      final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
-      final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
-      ref.invalidate(calendarEventsProvider(
-        startDate: firstDay,
-        endDate: lastDay,
-      ));
-    }
-
     return Scaffold(
-      backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
-      appBar: MoreScreenAppBar(
-        title: 'Calendar',
-        onReload: _handleReload,
-        isDark: isDark,
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text(
+          'Calendar',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        // No add button - read-only for coaches
       ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          _handleReload();
-          await Future.delayed(const Duration(milliseconds: 300));
-        },
-        child: _buildCalendarBody(),
-      ),
+      body: _buildCalendarBody(),
     );
   }
 
@@ -75,8 +68,15 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
       endDate: lastDay,
     ));
 
-    return SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
+    return RefreshIndicator(
+      onRefresh: () async {
+        ref.invalidate(calendarEventsProvider(
+          startDate: firstDay,
+          endDate: lastDay,
+        ));
+      },
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
         child: eventsAsync.when(
           loading: () => const Center(child: ListSkeleton(itemCount: 5)),
           error: (error, stack) => ErrorDisplay(

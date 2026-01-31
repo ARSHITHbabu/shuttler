@@ -14,7 +14,6 @@ import '../../providers/student_provider.dart';
 import '../../providers/coach_provider.dart';
 import '../../providers/calendar_provider.dart';
 import '../../providers/auth_provider.dart';
-import '../../widgets/common/more_screen_app_bar.dart';
 import '../../models/request.dart';
 
 /// Requests Screen - Owner's centralized request management
@@ -47,26 +46,43 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
     // Get pending count for badge
     final pendingCountAsync = ref.watch(pendingRequestsCountProvider);
 
-    void _handleReload() {
-      ref.invalidate(requestListProvider);
-      ref.invalidate(pendingRequestsCountProvider);
-    }
-
     return Scaffold(
       backgroundColor: isDark
           ? AppColors.background
           : AppColorsLight.background,
-      appBar: MoreScreenAppBar(
-        title: 'Requests',
-        onReload: _handleReload,
-        isDark: isDark,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(
+            Icons.arrow_back,
+            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+          ),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: Text(
+          'Requests',
+          style: TextStyle(
+            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        actions: [
+          // Refresh button
+          IconButton(
+            icon: Icon(
+              Icons.refresh,
+              color: isDark ? AppColors.accent : AppColorsLight.accent,
+            ),
+            onPressed: () {
+              ref.invalidate(requestListProvider);
+              ref.invalidate(pendingRequestsCountProvider);
+            },
+          ),
+        ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          _handleReload();
-          await Future.delayed(const Duration(milliseconds: 300));
-        },
-        child: Column(
+      body: Column(
         children: [
           // Stats Cards
           pendingCountAsync.when(
@@ -90,27 +106,32 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
                 if (requests.isEmpty) {
                   return _buildEmptyState(isDark);
                 }
-                return ListView.builder(
-                  padding: const EdgeInsets.all(AppDimensions.paddingL),
-                  itemCount: requests.length,
-                  itemBuilder: (context, index) {
-                    return _RequestCard(
-                      request: requests[index],
-                      isDark: isDark,
-                      onApprove: () => requests[index].requestType == 'coach_leave_modification'
-                          ? _handleModificationRequest(requests[index])
-                          : _handleApprove(requests[index]),
-                      onReject: () => _handleReject(requests[index]),
-                      onView: () =>
-                          _showRequestDetails(requests[index], isDark),
-                    );
+                return RefreshIndicator(
+                  onRefresh: () async {
+                    ref.invalidate(requestListProvider);
+                    ref.invalidate(pendingRequestsCountProvider);
                   },
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(AppDimensions.paddingL),
+                    itemCount: requests.length,
+                    itemBuilder: (context, index) {
+                      return _RequestCard(
+                        request: requests[index],
+                        isDark: isDark,
+                        onApprove: () => requests[index].requestType == 'coach_leave_modification'
+                            ? _handleModificationRequest(requests[index])
+                            : _handleApprove(requests[index]),
+                        onReject: () => _handleReject(requests[index]),
+                        onView: () =>
+                            _showRequestDetails(requests[index], isDark),
+                      );
+                    },
+                  ),
                 );
               },
             ),
           ),
         ],
-      ),
       ),
     );
   }
