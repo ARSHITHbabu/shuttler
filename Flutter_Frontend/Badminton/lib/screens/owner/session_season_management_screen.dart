@@ -9,7 +9,6 @@ import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
-import '../../widgets/common/more_screen_app_bar.dart';
 import '../../providers/session_provider.dart';
 import '../../providers/batch_provider.dart';
 import '../../models/session.dart';

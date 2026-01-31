@@ -11,6 +11,7 @@ import '../../providers/batch_provider.dart';
 import '../../providers/attendance_provider.dart';
 import '../../providers/service_providers.dart';
 import '../../models/batch.dart';
+import '../../models/attendance.dart';
 
 /// Attendance Screen - Dual-mode attendance marking
 /// Matches React reference: AttendanceScreen.tsx

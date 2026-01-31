@@ -10,6 +10,7 @@ import '../../core/constants/dimensions.dart';
 import '../../core/constants/api_endpoints.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/success_snackbar.dart';
+import '../../widgets/common/more_screen_app_bar.dart';
 import '../../widgets/video/video_player_dialog.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/auth_provider.dart';

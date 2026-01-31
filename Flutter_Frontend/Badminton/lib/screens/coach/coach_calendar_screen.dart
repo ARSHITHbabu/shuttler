@@ -268,9 +268,8 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
                           false;
                       final isSelected = isSameDay(_selectedDay, date);
 
-                      if (isSelected) {
+                      if (isSelected)
                         return null; // Let selectedBuilder handle it
-                      }
 
                       Color bgColor = AppColors.accent.withValues(alpha: 0.3);
                       Color textColor = AppColors.textPrimary;
