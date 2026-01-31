@@ -761,23 +761,46 @@ class _LeaveRequestCard extends ConsumerWidget {
             }
           }
         } else {
-          // Regular leave request
-          if (request.metadata!['start_date'] != null) {
-            startDate = DateFormat('MMM dd, yyyy')
-                .format(DateTime.parse(request.metadata!['start_date']));
-          }
-          if (request.metadata!['end_date'] != null) {
-            endDate = DateFormat('MMM dd, yyyy')
-                .format(DateTime.parse(request.metadata!['end_date']));
-          }
-          isHalfDay = request.metadata!['is_half_day'] == true;
-          totalDays = request.metadata!['total_days'] as int?;
-          
-          // Extract original dates for modification button
-          if (request.metadata!['dates'] != null) {
-            final datesList = request.metadata!['dates'] as List<dynamic>?;
-            if (datesList != null) {
-              originalDates = datesList.map((d) => DateTime.parse(d as String)).toList();
+          // Regular leave request - check if it has been modified
+          if (request.metadata!['has_approved_modification'] == true) {
+            // Show modified dates
+            if (request.metadata!['start_date'] != null) {
+              startDate = DateFormat('MMM dd, yyyy')
+                  .format(DateTime.parse(request.metadata!['start_date']));
+            }
+            if (request.metadata!['end_date'] != null) {
+              endDate = DateFormat('MMM dd, yyyy')
+                  .format(DateTime.parse(request.metadata!['end_date']));
+            }
+            isHalfDay = request.metadata!['is_half_day'] == true;
+            totalDays = request.metadata!['total_days'] as int?;
+            
+            // Use modified dates for edit button
+            if (request.metadata!['dates'] != null) {
+              final datesList = request.metadata!['dates'] as List<dynamic>?;
+              if (datesList != null) {
+                originalDates = datesList.map((d) => DateTime.parse(d as String)).toList();
+              }
+            }
+          } else {
+            // Original request without modification
+            if (request.metadata!['start_date'] != null) {
+              startDate = DateFormat('MMM dd, yyyy')
+                  .format(DateTime.parse(request.metadata!['start_date']));
+            }
+            if (request.metadata!['end_date'] != null) {
+              endDate = DateFormat('MMM dd, yyyy')
+                  .format(DateTime.parse(request.metadata!['end_date']));
+            }
+            isHalfDay = request.metadata!['is_half_day'] == true;
+            totalDays = request.metadata!['total_days'] as int?;
+            
+            // Extract original dates for modification button
+            if (request.metadata!['dates'] != null) {
+              final datesList = request.metadata!['dates'] as List<dynamic>?;
+              if (datesList != null) {
+                originalDates = datesList.map((d) => DateTime.parse(d as String)).toList();
+              }
             }
           }
         }
@@ -915,13 +938,27 @@ class _LeaveRequestCard extends ConsumerWidget {
               ),
             ),
           ],
-          // Edit button for approved requests
-          if (request.isApproved && originalDates != null) ...[
+          // Edit button for approved requests (only for original leave requests, not modifications)
+          if (request.isApproved && 
+              !isModification && 
+              originalDates != null && 
+              originalDates.isNotEmpty) ...[
             const SizedBox(height: AppDimensions.spacingM),
             SizedBox(
               width: double.infinity,
               child: OutlinedButton.icon(
-                onPressed: () => _showModifyDialog(context, ref, request, originalDates!, isHalfDay, isDark),
+                onPressed: () {
+                  // Use current dates if modified, otherwise use original dates
+                  final datesToUse = (request.metadata != null && 
+                                     request.metadata!['has_approved_modification'] == true &&
+                                     request.metadata!['dates'] != null)
+                      ? (request.metadata!['dates'] as List<dynamic>)
+                          .map((d) => DateTime.parse(d as String))
+                          .toList()
+                      : originalDates!;
+                  
+                  _showModifyDialog(context, ref, request, datesToUse, isHalfDay, isDark);
+                },
                 icon: const Icon(Icons.edit, size: 18),
                 label: const Text('Modify Leave'),
                 style: OutlinedButton.styleFrom(
