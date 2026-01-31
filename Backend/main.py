@@ -396,6 +396,12 @@ class LeaveRequestDB(Base):
     reviewed_by = Column(Integer, nullable=True)  # Owner ID who reviewed
     reviewed_at = Column(DateTime(timezone=True), nullable=True)
     review_notes = Column(Text, nullable=True)
+    
+    # Modification request columns (sub-request)
+    modification_start_date = Column(Date, nullable=True)
+    modification_end_date = Column(Date, nullable=True)
+    modification_reason = Column(Text, nullable=True)
+    modification_status = Column(String(20), nullable=True)  # "pending", "approved", "rejected"
 
 class StudentRegistrationRequestDB(Base):
     """Student registration requests awaiting owner approval"""
@@ -614,6 +620,13 @@ def migrate_database_schema(engine):
             check_and_add_column(engine, 'student_registration_requests', 'blood_group', 'VARCHAR', nullable=True)
             check_and_add_column(engine, 'student_registration_requests', 'invitation_id', 'INTEGER', nullable=True)
             check_and_add_column(engine, 'student_registration_requests', 'invited_by_coach_id', 'INTEGER', nullable=True)
+
+        # Migrate leave_requests table - add modification columns
+        if 'leave_requests' in tables:
+            check_and_add_column(engine, 'leave_requests', 'modification_start_date', 'DATE', nullable=True)
+            check_and_add_column(engine, 'leave_requests', 'modification_end_date', 'DATE', nullable=True)
+            check_and_add_column(engine, 'leave_requests', 'modification_reason', 'TEXT', nullable=True)
+            check_and_add_column(engine, 'leave_requests', 'modification_status', 'VARCHAR(20)', nullable=True)
 
         
         # Migrate fees table - add payee_student_id column
@@ -1451,12 +1464,28 @@ class LeaveRequest(BaseModel):
     reviewed_by: Optional[int] = None
     reviewed_at: Optional[str] = None
     review_notes: Optional[str] = None
+    
+    # Modification fields
+    modification_start_date: Optional[str] = None
+    modification_end_date: Optional[str] = None
+    modification_reason: Optional[str] = None
+    modification_status: Optional[str] = None
 
     class Config:
         from_attributes = True
 
 class LeaveRequestUpdate(BaseModel):
     status: str  # "approved" or "rejected"
+    review_notes: Optional[str] = None
+
+class LeaveRequestModificationCreate(BaseModel):
+    start_date: str
+    end_date: str
+    reason: str
+
+class LeaveRequestModificationReview(BaseModel):
+    action: str  # "approve", "reject_modification", "reject_all"
+    owner_id: int
     review_notes: Optional[str] = None
 
 # Student Registration Request Models
@@ -5803,6 +5832,169 @@ def delete_leave_request(request_id: int, coach_id: int):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error deleting leave request: {str(e)}")
+    finally:
+        db.close()
+
+@app.post("/leave-requests/{request_id}/modify", response_model=LeaveRequest)
+def submit_leave_modification(request_id: int, modification: LeaveRequestModificationCreate):
+    """Submit a modification to an approved leave request"""
+    db = SessionLocal()
+    try:
+        db_request = db.query(LeaveRequestDB).filter(LeaveRequestDB.id == request_id).first()
+        if not db_request:
+            raise HTTPException(status_code=404, detail="Leave request not found")
+        
+        # Only allowed if original request is approved
+        if db_request.status != "approved":
+            raise HTTPException(status_code=400, detail="Only approved leave requests can be modified")
+        
+        # Verify modification date range (max 7 days)
+        from datetime import datetime
+        start = datetime.strptime(modification.start_date, "%Y-%m-%d")
+        end = datetime.strptime(modification.end_date, "%Y-%m-%d")
+        days = (end - start).days + 1
+        
+        if days > 7:
+            raise HTTPException(status_code=400, detail="Modification leave duration cannot exceed 7 days")
+        
+        if days < 1:
+            raise HTTPException(status_code=400, detail="End date must be after start date")
+        
+        # Update modification fields
+        db_request.modification_start_date = start.date()
+        db_request.modification_end_date = end.date()
+        db_request.modification_reason = modification.reason
+        db_request.modification_status = "pending"
+        
+        db.commit()
+        db.refresh(db_request)
+        
+        # Determine effective response values
+        mod_start = db_request.modification_start_date.strftime("%Y-%m-%d") if db_request.modification_start_date else None
+        mod_end = db_request.modification_end_date.strftime("%Y-%m-%d") if db_request.modification_end_date else None
+        
+        return LeaveRequest(
+            id=db_request.id,
+            coach_id=db_request.coach_id,
+            coach_name=db_request.coach_name,
+            start_date=db_request.start_date.strftime("%Y-%m-%d"),
+            end_date=db_request.end_date.strftime("%Y-%m-%d"),
+            leave_type=db_request.leave_type,
+            reason=db_request.reason,
+            status=db_request.status,
+            submitted_at=db_request.submitted_at.isoformat() if db_request.submitted_at else "",
+            reviewed_by=db_request.reviewed_by,
+            reviewed_at=db_request.reviewed_at.isoformat() if db_request.reviewed_at else None,
+            review_notes=db_request.review_notes,
+            modification_start_date=mod_start,
+            modification_end_date=mod_end,
+            modification_reason=db_request.modification_reason,
+            modification_status=db_request.modification_status
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error submitting modification: {str(e)}")
+    finally:
+        db.close()
+
+@app.put("/leave-requests/{request_id}/review-modification", response_model=LeaveRequest)
+def review_modification_request(request_id: int, review: LeaveRequestModificationReview):
+    """Review a leave modification request (approve mod, reject mod, or reject all)"""
+    db = SessionLocal()
+    try:
+        # Verify owner exists
+        owner = db.query(OwnerDB).filter(OwnerDB.id == review.owner_id).first()
+        if not owner:
+            raise HTTPException(status_code=404, detail="Owner not found")
+            
+        db_request = db.query(LeaveRequestDB).filter(LeaveRequestDB.id == request_id).first()
+        if not db_request:
+            raise HTTPException(status_code=404, detail="Leave request not found")
+        
+        if db_request.modification_status != "pending":
+            raise HTTPException(status_code=400, detail="No pending modification to review")
+            
+        if review.action == "approve":
+            # Approve Modification: Update main dates to modified dates
+            db_request.modification_status = "approved"
+            db_request.start_date = db_request.modification_start_date
+            db_request.end_date = db_request.modification_end_date
+            # Original reason is kept? Or updated? 
+            # Plan says: "Update Calendar". Reason implies we might want to append modification reason?
+            # Let's append mod reason to notes or keep purely as modification metadata.
+            # We will rely on updated start/end dates for the calendar.
+            
+            # Update Calendar Events
+            existing_event = db.query(CalendarEventDB).filter(
+                CalendarEventDB.related_leave_request_id == request_id
+            ).first()
+            
+            if existing_event:
+                existing_event.date = db_request.start_date
+                existing_event.end_date = db_request.end_date
+                existing_event.description = f"Leave request: {db_request.reason} (Modified: {db_request.modification_reason})"
+            
+        elif review.action == "reject_modification":
+            # Reject Modification: Keep original dates
+            db_request.modification_status = "rejected"
+            # No change to Calendar
+            
+        elif review.action == "reject_all":
+            # Reject Both: Cancel entire leave
+            db_request.status = "rejected"
+            db_request.modification_status = "rejected"
+            
+            # Remove from Calendar
+            existing_events = db.query(CalendarEventDB).filter(
+                CalendarEventDB.related_leave_request_id == request_id
+            ).all()
+            for event in existing_events:
+                db.delete(event)
+                
+        else:
+            raise HTTPException(status_code=400, detail="Invalid action")
+            
+        db_request.reviewed_by = review.owner_id
+        from datetime import datetime
+        db_request.reviewed_at = datetime.now()
+        if review.review_notes:
+            db_request.review_notes = review.review_notes
+
+        db.commit()
+        db.refresh(db_request)
+        
+        # Prepare response
+        mod_start = db_request.modification_start_date.strftime("%Y-%m-%d") if db_request.modification_start_date else None
+        mod_end = db_request.modification_end_date.strftime("%Y-%m-%d") if db_request.modification_end_date else None
+        
+        return LeaveRequest(
+            id=db_request.id,
+            coach_id=db_request.coach_id,
+            coach_name=db_request.coach_name,
+            start_date=db_request.start_date.strftime("%Y-%m-%d"),
+            end_date=db_request.end_date.strftime("%Y-%m-%d"),
+            leave_type=db_request.leave_type,
+            reason=db_request.reason,
+            status=db_request.status,
+            submitted_at=db_request.submitted_at.isoformat() if db_request.submitted_at else "",
+            reviewed_by=db_request.reviewed_by,
+            reviewed_at=db_request.reviewed_at.isoformat() if db_request.reviewed_at else None,
+            review_notes=db_request.review_notes,
+            modification_start_date=mod_start,
+            modification_end_date=mod_end,
+            modification_reason=db_request.modification_reason,
+            modification_status=db_request.modification_status
+        )
+        
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error reviewing modification: {str(e)}")
     finally:
         db.close()
 

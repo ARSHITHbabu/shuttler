@@ -13,6 +13,12 @@ class LeaveRequest {
   final DateTime? reviewedAt;
   final String? reviewNotes;
 
+  // Modification fields
+  final DateTime? modificationStartDate;
+  final DateTime? modificationEndDate;
+  final String? modificationReason;
+  final String? modificationStatus; // "pending", "approved", "rejected"
+
   LeaveRequest({
     required this.id,
     required this.coachId,
@@ -26,6 +32,10 @@ class LeaveRequest {
     this.reviewedBy,
     this.reviewedAt,
     this.reviewNotes,
+    this.modificationStartDate,
+    this.modificationEndDate,
+    this.modificationReason,
+    this.modificationStatus,
   });
 
   /// Create LeaveRequest instance from JSON
@@ -45,6 +55,14 @@ class LeaveRequest {
           ? DateTime.parse(json['reviewed_at'] as String)
           : null,
       reviewNotes: json['review_notes'] as String?,
+      modificationStartDate: json['modification_start_date'] != null
+          ? DateTime.parse(json['modification_start_date'] as String)
+          : null,
+      modificationEndDate: json['modification_end_date'] != null
+          ? DateTime.parse(json['modification_end_date'] as String)
+          : null,
+      modificationReason: json['modification_reason'] as String?,
+      modificationStatus: json['modification_status'] as String?,
     );
   }
 
@@ -63,6 +81,12 @@ class LeaveRequest {
       'reviewed_by': reviewedBy,
       'reviewed_at': reviewedAt?.toIso8601String(),
       'review_notes': reviewNotes,
+      'modification_start_date':
+          modificationStartDate?.toIso8601String().split('T')[0],
+      'modification_end_date':
+          modificationEndDate?.toIso8601String().split('T')[0],
+      'modification_reason': modificationReason,
+      'modification_status': modificationStatus,
     };
   }
 
@@ -80,6 +104,10 @@ class LeaveRequest {
     int? reviewedBy,
     DateTime? reviewedAt,
     String? reviewNotes,
+    DateTime? modificationStartDate,
+    DateTime? modificationEndDate,
+    String? modificationReason,
+    String? modificationStatus,
   }) {
     return LeaveRequest(
       id: id ?? this.id,
@@ -94,6 +122,11 @@ class LeaveRequest {
       reviewedBy: reviewedBy ?? this.reviewedBy,
       reviewedAt: reviewedAt ?? this.reviewedAt,
       reviewNotes: reviewNotes ?? this.reviewNotes,
+      modificationStartDate:
+          modificationStartDate ?? this.modificationStartDate,
+      modificationEndDate: modificationEndDate ?? this.modificationEndDate,
+      modificationReason: modificationReason ?? this.modificationReason,
+      modificationStatus: modificationStatus ?? this.modificationStatus,
     );
   }
 
@@ -115,12 +148,15 @@ class LeaveRequest {
   bool get isPending => status.toLowerCase() == 'pending';
   bool get isApproved => status.toLowerCase() == 'approved';
   bool get isRejected => status.toLowerCase() == 'rejected';
+  
+  bool get hasPendingModification => modificationStatus == 'pending';
 
   @override
   String toString() {
     return 'LeaveRequest(id: $id, coachId: $coachId, coachName: $coachName, '
         'startDate: $startDate, endDate: $endDate, leaveType: $leaveType, '
-        'reason: $reason, status: $status)';
+        'reason: $reason, status: $status, '
+        'modificationStatus: $modificationStatus)';
   }
 
   @override
@@ -135,7 +171,8 @@ class LeaveRequest {
         other.endDate == endDate &&
         other.leaveType == leaveType &&
         other.reason == reason &&
-        other.status == status;
+        other.status == status &&
+        other.modificationStatus == modificationStatus;
   }
 
   @override
@@ -149,6 +186,7 @@ class LeaveRequest {
       leaveType,
       reason,
       status,
+      modificationStatus,
     );
   }
 }
