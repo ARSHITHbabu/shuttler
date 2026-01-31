@@ -376,6 +376,23 @@ class CalendarEventDB(Base):
 
     # Note: Relationships are handled via creator_type field - use creator_type to determine if created_by refers to coach or owner
 
+class LeaveRequestDB(Base):
+    """Leave requests from coaches"""
+    __tablename__ = "leave_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    coach_id = Column(Integer, nullable=False, index=True)
+    coach_name = Column(String, nullable=False)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+    leave_type = Column(String(50), nullable=False)  # "sick", "personal", "emergency", "other"
+    reason = Column(Text, nullable=False)
+    status = Column(String(20), default="pending")  # "pending", "approved", "rejected"
+    submitted_at = Column(DateTime(timezone=True), server_default=func.now())
+    reviewed_by = Column(Integer, nullable=True)  # Owner ID who reviewed
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    review_notes = Column(Text, nullable=True)
+
 # ==================== Database Migration Functions ====================
 
 def check_and_add_column(engine, table_name: str, column_name: str, column_type: str, nullable: bool = True, default_value: str = None):
@@ -786,6 +803,17 @@ def migrate_database_schema(engine):
         else:
             print("📹 video_resources table will be created by SQLAlchemy")
 
+        # Check if leave_requests table exists
+        if 'leave_requests' not in tables:
+            print("⚠️  leave_requests table not found. Creating...")
+            try:
+                LeaveRequestDB.__table__.create(bind=engine)
+                print("✅ leave_requests table created!")
+            except Exception as e:
+                print(f"❌ Error creating leave_requests table: {e}")
+        else:
+            print("✅ leave_requests table exists")
+        
         print("✅ Database schema migration completed!")
     except Exception as e:
         print(f"⚠️  Migration error: {e}")
@@ -1341,6 +1369,36 @@ class CoachInvitation(BaseModel):
 
 class CoachInvitationUpdate(BaseModel):
     status: str  # approved, rejected
+
+# Leave Request Models
+class LeaveRequestCreate(BaseModel):
+    coach_id: int
+    coach_name: str
+    start_date: str  # YYYY-MM-DD format
+    end_date: str  # YYYY-MM-DD format
+    leave_type: str  # "sick", "personal", "emergency", "other"
+    reason: str
+
+class LeaveRequest(BaseModel):
+    id: int
+    coach_id: int
+    coach_name: str
+    start_date: str
+    end_date: str
+    leave_type: str
+    reason: str
+    status: str  # "pending", "approved", "rejected"
+    submitted_at: str
+    reviewed_by: Optional[int] = None
+    reviewed_at: Optional[str] = None
+    review_notes: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class LeaveRequestUpdate(BaseModel):
+    status: str  # "approved" or "rejected"
+    review_notes: Optional[str] = None
 
 # Other Models
 class BatchStudentAssign(BaseModel):
@@ -5205,6 +5263,304 @@ def delete_calendar_event(event_id: int):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        db.close()
+
+# ==================== Leave Request Routes ====================
+
+@app.post("/leave-requests/", response_model=LeaveRequest)
+def create_leave_request(request: LeaveRequestCreate):
+    """Create a leave request - coaches can submit leave requests"""
+    db = SessionLocal()
+    try:
+        # Verify coach exists
+        coach = db.query(CoachDB).filter(CoachDB.id == request.coach_id).first()
+        if not coach:
+            raise HTTPException(status_code=404, detail="Coach not found")
+        
+        # Parse dates
+        from datetime import datetime
+        start_date = datetime.strptime(request.start_date, "%Y-%m-%d").date()
+        end_date = datetime.strptime(request.end_date, "%Y-%m-%d").date()
+        
+        if start_date > end_date:
+            raise HTTPException(status_code=400, detail="End date must be after start date")
+        
+        # Create leave request
+        db_request = LeaveRequestDB(
+            coach_id=request.coach_id,
+            coach_name=request.coach_name,
+            start_date=start_date,
+            end_date=end_date,
+            leave_type=request.leave_type,
+            reason=request.reason,
+            status="pending"
+        )
+        db.add(db_request)
+        db.commit()
+        db.refresh(db_request)
+        
+        # Convert to response model
+        return LeaveRequest(
+            id=db_request.id,
+            coach_id=db_request.coach_id,
+            coach_name=db_request.coach_name,
+            start_date=db_request.start_date.strftime("%Y-%m-%d"),
+            end_date=db_request.end_date.strftime("%Y-%m-%d"),
+            leave_type=db_request.leave_type,
+            reason=db_request.reason,
+            status=db_request.status,
+            submitted_at=db_request.submitted_at.isoformat() if db_request.submitted_at else "",
+            reviewed_by=db_request.reviewed_by,
+            reviewed_at=db_request.reviewed_at.isoformat() if db_request.reviewed_at else None,
+            review_notes=db_request.review_notes
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error creating leave request: {str(e)}")
+    finally:
+        db.close()
+
+@app.get("/leave-requests/", response_model=List[LeaveRequest])
+def get_leave_requests(
+    coach_id: Optional[int] = None,
+    status: Optional[str] = None,
+    owner_id: Optional[int] = None
+):
+    """Get leave requests - owners can see all, coaches can see their own"""
+    # #region agent log
+    import json
+    log_data = {
+        "location": "main.py:5319",
+        "message": "get_leave_requests endpoint called",
+        "data": {"coach_id": coach_id, "status": status, "owner_id": owner_id},
+        "timestamp": __import__("time").time() * 1000,
+        "sessionId": "debug-session",
+        "runId": "run1",
+        "hypothesisId": "A"
+    }
+    try:
+        with open(r"c:\Users\morch\Documents\Code\RallyOn\shuttler\.cursor\debug.log", "a") as f:
+            f.write(json.dumps(log_data) + "\n")
+    except: pass
+    # #endregion
+    db = SessionLocal()
+    try:
+        # #region agent log
+        from sqlalchemy import inspect
+        inspector = inspect(db.bind)
+        tables = inspector.get_table_names()
+        table_exists = 'leave_requests' in tables
+        log_data2 = {
+            "location": "main.py:5330",
+            "message": "Checking if leave_requests table exists",
+            "data": {"table_exists": table_exists, "all_tables": tables},
+            "timestamp": __import__("time").time() * 1000,
+            "sessionId": "debug-session",
+            "runId": "run1",
+            "hypothesisId": "A"
+        }
+        try:
+            with open(r"c:\Users\morch\Documents\Code\RallyOn\shuttler\.cursor\debug.log", "a") as f:
+                f.write(json.dumps(log_data2) + "\n")
+        except: pass
+        # #endregion
+        
+        query = db.query(LeaveRequestDB)
+        
+        # Filter by coach_id if provided (for coaches viewing their own requests)
+        if coach_id:
+            query = query.filter(LeaveRequestDB.coach_id == coach_id)
+        
+        # Filter by status if provided
+        if status:
+            query = query.filter(LeaveRequestDB.status == status)
+        
+        # If owner_id is provided, they can see all requests (for approval)
+        # Otherwise, return all requests ordered by submission date
+        requests = query.order_by(LeaveRequestDB.submitted_at.desc()).all()
+        
+        # #region agent log
+        log_data3 = {
+            "location": "main.py:5340",
+            "message": "Query executed, found requests",
+            "data": {"request_count": len(requests), "request_ids": [r.id for r in requests]},
+            "timestamp": __import__("time").time() * 1000,
+            "sessionId": "debug-session",
+            "runId": "run1",
+            "hypothesisId": "B"
+        }
+        try:
+            with open(r"c:\Users\morch\Documents\Code\RallyOn\shuttler\.cursor\debug.log", "a") as f:
+                f.write(json.dumps(log_data3) + "\n")
+        except: pass
+        # #endregion
+        
+        result = []
+        for req in requests:
+            result.append(LeaveRequest(
+                id=req.id,
+                coach_id=req.coach_id,
+                coach_name=req.coach_name,
+                start_date=req.start_date.strftime("%Y-%m-%d"),
+                end_date=req.end_date.strftime("%Y-%m-%d"),
+                leave_type=req.leave_type,
+                reason=req.reason,
+                status=req.status,
+                submitted_at=req.submitted_at.isoformat() if req.submitted_at else "",
+                reviewed_by=req.reviewed_by,
+                reviewed_at=req.reviewed_at.isoformat() if req.reviewed_at else None,
+                review_notes=req.review_notes
+            ))
+        
+        # #region agent log
+        log_data4 = {
+            "location": "main.py:5358",
+            "message": "Returning result",
+            "data": {"result_count": len(result)},
+            "timestamp": __import__("time").time() * 1000,
+            "sessionId": "debug-session",
+            "runId": "run1",
+            "hypothesisId": "B"
+        }
+        try:
+            with open(r"c:\Users\morch\Documents\Code\RallyOn\shuttler\.cursor\debug.log", "a") as f:
+                f.write(json.dumps(log_data4) + "\n")
+        except: pass
+        # #endregion
+        
+        return result
+    except Exception as e:
+        # #region agent log
+        log_data5 = {
+            "location": "main.py:5360",
+            "message": "Error in get_leave_requests",
+            "data": {"error": str(e), "error_type": type(e).__name__},
+            "timestamp": __import__("time").time() * 1000,
+            "sessionId": "debug-session",
+            "runId": "run1",
+            "hypothesisId": "C"
+        }
+        try:
+            with open(r"c:\Users\morch\Documents\Code\RallyOn\shuttler\.cursor\debug.log", "a") as f:
+                f.write(json.dumps(log_data5) + "\n")
+        except: pass
+        # #endregion
+        raise
+    finally:
+        db.close()
+
+@app.get("/leave-requests/{request_id}", response_model=LeaveRequest)
+def get_leave_request(request_id: int):
+    """Get a specific leave request by ID"""
+    db = SessionLocal()
+    try:
+        request = db.query(LeaveRequestDB).filter(LeaveRequestDB.id == request_id).first()
+        if not request:
+            raise HTTPException(status_code=404, detail="Leave request not found")
+        
+        return LeaveRequest(
+            id=request.id,
+            coach_id=request.coach_id,
+            coach_name=request.coach_name,
+            start_date=request.start_date.strftime("%Y-%m-%d"),
+            end_date=request.end_date.strftime("%Y-%m-%d"),
+            leave_type=request.leave_type,
+            reason=request.reason,
+            status=request.status,
+            submitted_at=request.submitted_at.isoformat() if request.submitted_at else "",
+            reviewed_by=request.reviewed_by,
+            reviewed_at=request.reviewed_at.isoformat() if request.reviewed_at else None,
+            review_notes=request.review_notes
+        )
+    finally:
+        db.close()
+
+@app.put("/leave-requests/{request_id}", response_model=LeaveRequest)
+def update_leave_request(request_id: int, update: LeaveRequestUpdate, owner_id: int):
+    """Update leave request status - only owners can approve/reject"""
+    db = SessionLocal()
+    try:
+        # Verify owner exists
+        owner = db.query(OwnerDB).filter(OwnerDB.id == owner_id).first()
+        if not owner:
+            raise HTTPException(status_code=404, detail="Owner not found")
+        
+        # Get leave request
+        db_request = db.query(LeaveRequestDB).filter(LeaveRequestDB.id == request_id).first()
+        if not db_request:
+            raise HTTPException(status_code=404, detail="Leave request not found")
+        
+        # Validate status
+        if update.status not in ["approved", "rejected"]:
+            raise HTTPException(status_code=400, detail="Status must be 'approved' or 'rejected'")
+        
+        # Update request
+        from datetime import datetime
+        db_request.status = update.status
+        db_request.reviewed_by = owner_id
+        db_request.reviewed_at = datetime.now()
+        db_request.review_notes = update.review_notes
+        
+        db.commit()
+        db.refresh(db_request)
+        
+        # Convert to response model
+        return LeaveRequest(
+            id=db_request.id,
+            coach_id=db_request.coach_id,
+            coach_name=db_request.coach_name,
+            start_date=db_request.start_date.strftime("%Y-%m-%d"),
+            end_date=db_request.end_date.strftime("%Y-%m-%d"),
+            leave_type=db_request.leave_type,
+            reason=db_request.reason,
+            status=db_request.status,
+            submitted_at=db_request.submitted_at.isoformat() if db_request.submitted_at else "",
+            reviewed_by=db_request.reviewed_by,
+            reviewed_at=db_request.reviewed_at.isoformat() if db_request.reviewed_at else None,
+            review_notes=db_request.review_notes
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error updating leave request: {str(e)}")
+    finally:
+        db.close()
+
+@app.delete("/leave-requests/{request_id}")
+def delete_leave_request(request_id: int, coach_id: int):
+    """Delete a leave request - only the coach who created it can delete (if pending)"""
+    db = SessionLocal()
+    try:
+        db_request = db.query(LeaveRequestDB).filter(LeaveRequestDB.id == request_id).first()
+        if not db_request:
+            raise HTTPException(status_code=404, detail="Leave request not found")
+        
+        # Verify coach owns this request
+        if db_request.coach_id != coach_id:
+            raise HTTPException(status_code=403, detail="You can only delete your own leave requests")
+        
+        # Only allow deletion if status is pending
+        if db_request.status != "pending":
+            raise HTTPException(status_code=400, detail="Can only delete pending leave requests")
+        
+        db.delete(db_request)
+        db.commit()
+        return {"message": "Leave request deleted successfully"}
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error deleting leave request: {str(e)}")
     finally:
         db.close()
 

@@ -395,6 +395,27 @@ final videoServiceProvider = AutoDisposeProvider<VideoService>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef VideoServiceRef = AutoDisposeProviderRef<VideoService>;
+String _$leaveRequestServiceHash() =>
+    r'b0a3563ea9d2ebc699a5ca4aa42194f70da391e4';
+
+/// Provider for LeaveRequestService singleton
+///
+/// Copied from [leaveRequestService].
+@ProviderFor(leaveRequestService)
+final leaveRequestServiceProvider =
+    AutoDisposeProvider<LeaveRequestService>.internal(
+      leaveRequestService,
+      name: r'leaveRequestServiceProvider',
+      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+          ? null
+          : _$leaveRequestServiceHash,
+      dependencies: null,
+      allTransitiveDependencies: null,
+    );
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef LeaveRequestServiceRef = AutoDisposeProviderRef<LeaveRequestService>;
 String _$connectivityServiceHash() =>
     r'2514faa3d7f3227d473e300af7d0188339855ef3';
 

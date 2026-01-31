@@ -108,4 +108,8 @@ class ApiEndpoints {
   // Image Upload (NEW)
   static const String uploadImage = '/api/upload/image';
   static String imageUrl(String filename) => '/uploads/$filename';
+
+  // Leave Requests
+  static const String leaveRequests = '/leave-requests/';
+  static String leaveRequestById(int id) => '/leave-requests/$id';
 }
