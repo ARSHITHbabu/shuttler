@@ -49,8 +49,20 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
   Map<DateTime, List<CalendarEvent>> _groupEventsByDate(List<CalendarEvent> events) {
     final Map<DateTime, List<CalendarEvent>> grouped = {};
     for (var event in events) {
-      final date = DateTime(event.date.year, event.date.month, event.date.day);
-      grouped.putIfAbsent(date, () => []).add(event);
+      final startDate = DateTime(event.date.year, event.date.month, event.date.day);
+      
+      // If event has an end date (date range), add it to all days in the range
+      if (event.endDate != null) {
+        final endDate = DateTime(event.endDate!.year, event.endDate!.month, event.endDate!.day);
+        var currentDate = startDate;
+        while (currentDate.isBefore(endDate) || currentDate.isAtSameMomentAs(endDate)) {
+          grouped.putIfAbsent(currentDate, () => []).add(event);
+          currentDate = currentDate.add(const Duration(days: 1));
+        }
+      } else {
+        // Single day event
+        grouped.putIfAbsent(startDate, () => []).add(event);
+      }
     }
     return grouped;
   }
@@ -374,12 +386,13 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                       final isSelected = isSameDay(_selectedDay, date);
                       final isToday = isSameDay(DateTime.now(), date);
 
-                      // Check if events contain holiday type or non-holiday events
+                      // Check if events contain holiday, leave, or other events
                       final hasHolidayEvent = groupedEvents[dateKey]?.any((e) => e.isHoliday) ?? false;
-                      final hasNonHolidayEvent = groupedEvents[dateKey]?.any((e) => !e.isHoliday) ?? false;
+                      final hasLeaveEvent = groupedEvents[dateKey]?.any((e) => e.isLeave) ?? false;
+                      final hasOtherEvent = groupedEvents[dateKey]?.any((e) => !e.isHoliday && !e.isLeave) ?? false;
 
                       if (!isSelected && !isToday) {
-                        // Canadian holidays or holiday events - show in red
+                        // Canadian holidays or holiday events - show in red (highest priority)
                         if (isHoliday || hasHolidayEvent) {
                           return Center(
                             child: Text(
@@ -391,8 +404,20 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                             ),
                           );
                         }
-                        // Non-holiday events (tournament, event) - show in jade green
-                        if (hasNonHolidayEvent) {
+                        // Leave events - show in orange/amber
+                        if (hasLeaveEvent) {
+                          return Center(
+                            child: Text(
+                              '${date.day}',
+                              style: const TextStyle(
+                                color: Color(0xFFFF9800), // Orange/Amber
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          );
+                        }
+                        // Other events (tournament, event) - show in jade green
+                        if (hasOtherEvent) {
                           return Center(
                             child: Text(
                               '${date.day}',
@@ -410,12 +435,15 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                       final dateKey = DateTime(date.year, date.month, date.day);
                       final isHoliday = canadianHolidays.containsKey(dateKey);
                       final hasHolidayEvent = groupedEvents[dateKey]?.any((e) => e.isHoliday) ?? false;
-                      final hasNonHolidayEvent = groupedEvents[dateKey]?.any((e) => !e.isHoliday) ?? false;
+                      final hasLeaveEvent = groupedEvents[dateKey]?.any((e) => e.isLeave) ?? false;
+                      final hasOtherEvent = groupedEvents[dateKey]?.any((e) => !e.isHoliday && !e.isLeave) ?? false;
 
                       Color bgColor = AppColors.accent;
                       if (isHoliday || hasHolidayEvent) {
                         bgColor = Colors.red;
-                      } else if (hasNonHolidayEvent) {
+                      } else if (hasLeaveEvent) {
+                        bgColor = const Color(0xFFFF9800); // Orange/Amber
+                      } else if (hasOtherEvent) {
                         bgColor = const Color(0xFF00A86B); // Jade green
                       }
 
@@ -602,6 +630,16 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
   }
 
   Widget _buildEventCard(CalendarEvent event) {
+    // Format date range for multi-day events
+    String dateDisplay;
+    if (event.isMultiDay) {
+      final startDateStr = DateFormat('MMM dd').format(event.date);
+      final endDateStr = DateFormat('MMM dd, yyyy').format(event.endDate!);
+      dateDisplay = '$startDateStr - $endDateStr';
+    } else {
+      dateDisplay = DateFormat('MMM dd, yyyy').format(event.date);
+    }
+
     return NeumorphicContainer(
       padding: const EdgeInsets.all(AppDimensions.paddingM),
       margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
@@ -634,37 +672,51 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                         ),
                       ),
                     ),
-                    PopupMenuButton(
-                      icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
-                      color: AppColors.cardBackground,
-                      itemBuilder: (context) => [
-                        PopupMenuItem(
-                          child: const Row(
-                            children: [
-                              Icon(Icons.edit, size: 18, color: AppColors.textPrimary),
-                              SizedBox(width: 8),
-                              Text('Edit', style: TextStyle(color: AppColors.textPrimary)),
-                            ],
+                    // Don't show edit/delete for leave events (they're auto-generated)
+                    if (!event.isLeave)
+                      PopupMenuButton(
+                        icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+                        color: AppColors.cardBackground,
+                        itemBuilder: (context) => [
+                          PopupMenuItem(
+                            child: const Row(
+                              children: [
+                                Icon(Icons.edit, size: 18, color: AppColors.textPrimary),
+                                SizedBox(width: 8),
+                                Text('Edit', style: TextStyle(color: AppColors.textPrimary)),
+                              ],
+                            ),
+                            onTap: () {
+                              Future.delayed(Duration.zero, () {
+                                _editEvent(event);
+                              });
+                            },
                           ),
-                          onTap: () {
-                            Future.delayed(Duration.zero, () {
-                              _editEvent(event);
-                            });
-                          },
-                        ),
-                        PopupMenuItem(
-                          child: const Row(
-                            children: [
-                              Icon(Icons.delete, size: 18, color: AppColors.error),
-                              SizedBox(width: 8),
-                              Text('Delete', style: TextStyle(color: AppColors.error)),
-                            ],
+                          PopupMenuItem(
+                            child: const Row(
+                              children: [
+                                Icon(Icons.delete, size: 18, color: AppColors.error),
+                                SizedBox(width: 8),
+                                Text('Delete', style: TextStyle(color: AppColors.error)),
+                              ],
+                            ),
+                            onTap: () => _deleteEvent(event.id),
                           ),
-                          onTap: () => _deleteEvent(event.id),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
                   ],
+                ),
+                const SizedBox(height: AppDimensions.spacingS),
+                // Show date range for multi-day events
+                Text(
+                  dateDisplay,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: event.isLeave 
+                        ? const Color(0xFFFF9800).withOpacity(0.8) 
+                        : AppColors.textSecondary,
+                    fontWeight: event.isMultiDay ? FontWeight.w600 : FontWeight.normal,
+                  ),
                 ),
                 if (event.description != null && event.description!.isNotEmpty) ...[
                   const SizedBox(height: AppDimensions.spacingS),

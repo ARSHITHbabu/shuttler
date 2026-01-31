@@ -31,8 +31,20 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
   Map<DateTime, List<CalendarEvent>> _groupEventsByDate(List<CalendarEvent> events) {
     final Map<DateTime, List<CalendarEvent>> grouped = {};
     for (var event in events) {
-      final date = DateTime(event.date.year, event.date.month, event.date.day);
-      grouped.putIfAbsent(date, () => []).add(event);
+      final startDate = DateTime(event.date.year, event.date.month, event.date.day);
+      
+      // If event has an end date (date range), add it to all days in the range
+      if (event.endDate != null) {
+        final endDate = DateTime(event.endDate!.year, event.endDate!.month, event.endDate!.day);
+        var currentDate = startDate;
+        while (currentDate.isBefore(endDate) || currentDate.isAtSameMomentAs(endDate)) {
+          grouped.putIfAbsent(currentDate, () => []).add(event);
+          currentDate = currentDate.add(const Duration(days: 1));
+        }
+      } else {
+        // Single day event
+        grouped.putIfAbsent(startDate, () => []).add(event);
+      }
     }
     return grouped;
   }
@@ -180,10 +192,11 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
 
                               // Check if events contain holiday type or non-holiday events
                               final hasHolidayEvent = groupedEvents[dateKey]?.any((e) => e.isHoliday) ?? false;
-                              final hasNonHolidayEvent = groupedEvents[dateKey]?.any((e) => !e.isHoliday) ?? false;
+                              final hasLeaveEvent = groupedEvents[dateKey]?.any((e) => e.isLeave) ?? false;
+                              final hasOtherEvent = groupedEvents[dateKey]?.any((e) => !e.isHoliday && !e.isLeave) ?? false;
 
                               if (!isSelected && !isToday) {
-                                // Canadian holidays or holiday events - show in red
+                                // Canadian holidays or holiday events - show in red (highest priority)
                                 if (isHoliday || hasHolidayEvent) {
                                   return Center(
                                     child: Text(
@@ -195,8 +208,20 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
                                     ),
                                   );
                                 }
-                                // Non-holiday events (tournament, event) - show in jade green
-                                if (hasNonHolidayEvent) {
+                                // Leave events - show in orange/amber
+                                if (hasLeaveEvent) {
+                                  return Center(
+                                    child: Text(
+                                      '${date.day}',
+                                      style: const TextStyle(
+                                        color: Color(0xFFFF9800), // Orange/Amber
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  );
+                                }
+                                // Other events (tournament, event) - show in jade green
+                                if (hasOtherEvent) {
                                   return Center(
                                     child: Text(
                                       '${date.day}',
@@ -214,12 +239,15 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
                               final dateKey = DateTime(date.year, date.month, date.day);
                               final isHoliday = canadianHolidays.containsKey(dateKey);
                               final hasHolidayEvent = groupedEvents[dateKey]?.any((e) => e.isHoliday) ?? false;
-                              final hasNonHolidayEvent = groupedEvents[dateKey]?.any((e) => !e.isHoliday) ?? false;
+                              final hasLeaveEvent = groupedEvents[dateKey]?.any((e) => e.isLeave) ?? false;
+                              final hasOtherEvent = groupedEvents[dateKey]?.any((e) => !e.isHoliday && !e.isLeave) ?? false;
 
                               Color bgColor = isDark ? AppColors.accent : AppColorsLight.accent;
                               if (isHoliday || hasHolidayEvent) {
                                 bgColor = Colors.red;
-                              } else if (hasNonHolidayEvent) {
+                              } else if (hasLeaveEvent) {
+                                bgColor = const Color(0xFFFF9800); // Orange/Amber
+                              } else if (hasOtherEvent) {
                                 bgColor = const Color(0xFF00A86B); // Jade green
                               }
 
@@ -243,7 +271,8 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
                               final dateKey = DateTime(date.year, date.month, date.day);
                               final isHoliday = canadianHolidays.containsKey(dateKey);
                               final hasHolidayEvent = groupedEvents[dateKey]?.any((e) => e.isHoliday) ?? false;
-                              final hasNonHolidayEvent = groupedEvents[dateKey]?.any((e) => !e.isHoliday) ?? false;
+                              final hasLeaveEvent = groupedEvents[dateKey]?.any((e) => e.isLeave) ?? false;
+                              final hasOtherEvent = groupedEvents[dateKey]?.any((e) => !e.isHoliday && !e.isLeave) ?? false;
                               final isSelected = isSameDay(_selectedDay, date);
 
                               if (isSelected) return null; // Let selectedBuilder handle it
@@ -256,7 +285,11 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
                                 bgColor = Colors.red.withOpacity(0.5);
                                 textColorValue = Colors.red;
                                 fontWeight = FontWeight.bold;
-                              } else if (hasNonHolidayEvent) {
+                              } else if (hasLeaveEvent) {
+                                bgColor = const Color(0xFFFF9800).withOpacity(0.3);
+                                textColorValue = const Color(0xFFFF9800);
+                                fontWeight = FontWeight.bold;
+                              } else if (hasOtherEvent) {
                                 bgColor = const Color(0xFF00A86B).withOpacity(0.3);
                                 textColorValue = const Color(0xFF00A86B);
                                 fontWeight = FontWeight.bold;
