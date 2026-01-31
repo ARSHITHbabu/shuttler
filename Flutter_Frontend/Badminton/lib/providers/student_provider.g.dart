@@ -710,6 +710,157 @@ class _StudentSchedulesProviderElement
   int get studentId => (origin as StudentSchedulesProvider).studentId;
 }
 
+String _$activeOwnerHash() => r'e65c9d28770bb1d88721700290f88983170fa7a5';
+
+/// Provider for the active owner
+///
+/// Copied from [activeOwner].
+@ProviderFor(activeOwner)
+final activeOwnerProvider = AutoDisposeFutureProvider<Owner?>.internal(
+  activeOwner,
+  name: r'activeOwnerProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$activeOwnerHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef ActiveOwnerRef = AutoDisposeFutureProviderRef<Owner?>;
+String _$studentCoachesHash() => r'e7b1968d320002b42381dc181e3d11be957435c0';
+
+/// Provider for student's coaches
+///
+/// Copied from [studentCoaches].
+@ProviderFor(studentCoaches)
+const studentCoachesProvider = StudentCoachesFamily();
+
+/// Provider for student's coaches
+///
+/// Copied from [studentCoaches].
+class StudentCoachesFamily extends Family<AsyncValue<List<Coach>>> {
+  /// Provider for student's coaches
+  ///
+  /// Copied from [studentCoaches].
+  const StudentCoachesFamily();
+
+  /// Provider for student's coaches
+  ///
+  /// Copied from [studentCoaches].
+  StudentCoachesProvider call(int studentId) {
+    return StudentCoachesProvider(studentId);
+  }
+
+  @override
+  StudentCoachesProvider getProviderOverride(
+    covariant StudentCoachesProvider provider,
+  ) {
+    return call(provider.studentId);
+  }
+
+  static const Iterable<ProviderOrFamily>? _dependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get dependencies => _dependencies;
+
+  static const Iterable<ProviderOrFamily>? _allTransitiveDependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get allTransitiveDependencies =>
+      _allTransitiveDependencies;
+
+  @override
+  String? get name => r'studentCoachesProvider';
+}
+
+/// Provider for student's coaches
+///
+/// Copied from [studentCoaches].
+class StudentCoachesProvider extends AutoDisposeFutureProvider<List<Coach>> {
+  /// Provider for student's coaches
+  ///
+  /// Copied from [studentCoaches].
+  StudentCoachesProvider(int studentId)
+    : this._internal(
+        (ref) => studentCoaches(ref as StudentCoachesRef, studentId),
+        from: studentCoachesProvider,
+        name: r'studentCoachesProvider',
+        debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+            ? null
+            : _$studentCoachesHash,
+        dependencies: StudentCoachesFamily._dependencies,
+        allTransitiveDependencies:
+            StudentCoachesFamily._allTransitiveDependencies,
+        studentId: studentId,
+      );
+
+  StudentCoachesProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.studentId,
+  }) : super.internal();
+
+  final int studentId;
+
+  @override
+  Override overrideWith(
+    FutureOr<List<Coach>> Function(StudentCoachesRef provider) create,
+  ) {
+    return ProviderOverride(
+      origin: this,
+      override: StudentCoachesProvider._internal(
+        (ref) => create(ref as StudentCoachesRef),
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        studentId: studentId,
+      ),
+    );
+  }
+
+  @override
+  AutoDisposeFutureProviderElement<List<Coach>> createElement() {
+    return _StudentCoachesProviderElement(this);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is StudentCoachesProvider && other.studentId == studentId;
+  }
+
+  @override
+  int get hashCode {
+    var hash = _SystemHash.combine(0, runtimeType.hashCode);
+    hash = _SystemHash.combine(hash, studentId.hashCode);
+
+    return _SystemHash.finish(hash);
+  }
+}
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+mixin StudentCoachesRef on AutoDisposeFutureProviderRef<List<Coach>> {
+  /// The parameter `studentId` of this provider.
+  int get studentId;
+}
+
+class _StudentCoachesProviderElement
+    extends AutoDisposeFutureProviderElement<List<Coach>>
+    with StudentCoachesRef {
+  _StudentCoachesProviderElement(super.provider);
+
+  @override
+  int get studentId => (origin as StudentCoachesProvider).studentId;
+}
+
 String _$studentListHash() => r'34ee8a637f622f49796dd3b3f756b2629273a38d';
 
 /// Provider for student list state

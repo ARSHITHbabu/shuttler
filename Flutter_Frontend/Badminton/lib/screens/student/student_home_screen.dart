@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
@@ -93,7 +94,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                   const SizedBox(height: AppDimensions.spacingL),
 
                   // Quick Actions
-                  _buildQuickActions(context, isDark),
+                  _buildQuickActions(context, isDark, userId),
 
                   const SizedBox(height: 100), // Space for bottom nav
                 ],
@@ -265,7 +266,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
     );
   }
 
-  Widget _buildQuickActions(BuildContext context, bool isDark) {
+  Widget _buildQuickActions(BuildContext context, bool isDark, int studentId) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
       child: Column(
@@ -287,7 +288,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                   icon: Icons.person_outline,
                   label: 'Contact Owner',
                   isDark: isDark,
-                  onTap: () => _showContactDialog(context, isDark, 'Owner'),
+                  onTap: () => _showContactDialog(context, isDark, 'Owner', studentId),
                 ),
               ),
               const SizedBox(width: AppDimensions.spacingM),
@@ -296,7 +297,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                   icon: Icons.sports_tennis_outlined,
                   label: 'Contact Coach',
                   isDark: isDark,
-                  onTap: () => _showContactDialog(context, isDark, 'Coach'),
+                  onTap: () => _showContactDialog(context, isDark, 'Coach', studentId),
                 ),
               ),
             ],
@@ -365,7 +366,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
     );
   }
 
-  void _showContactDialog(BuildContext context, bool isDark, String contactType) {
+  void _showContactDialog(BuildContext context, bool isDark, String contactType, int studentId) {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -376,10 +377,91 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
             color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
           ),
         ),
-        content: Text(
-          'Contact information will be available here.\n\nYou can reach out through:\n• Phone\n• Email\n• In-person at the academy',
-          style: TextStyle(
-            color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Consumer(
+            builder: (context, ref, child) {
+              if (contactType == 'Owner') {
+                final ownerAsync = ref.watch(activeOwnerProvider);
+                return ownerAsync.when(
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (err, stack) => Text('Error loading owner details: $err', style: TextStyle(color: isDark ? AppColors.error : AppColorsLight.error)),
+                  data: (owner) {
+                    if (owner == null) {
+                      return Text('No owner details found.', style: TextStyle(color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary));
+                    }
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildContactDetailRow(Icons.person, owner.name, isDark),
+                        const SizedBox(height: 12),
+                        _buildContactDetailRow(
+                          Icons.phone, 
+                          owner.phone, 
+                          isDark,
+                          onTap: () => _launchPhone(owner.phone),
+                        ),
+                        const SizedBox(height: 12),
+                        _buildContactDetailRow(
+                          Icons.email, 
+                          owner.email, 
+                          isDark,
+                          onTap: () => _launchEmail(owner.email),
+                        ),
+                      ],
+                    );
+                  },
+                );
+              } else {
+                // Coach
+                final coachesAsync = ref.watch(studentCoachesProvider(studentId));
+                return coachesAsync.when(
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (err, stack) => Text('Error loading coach details: $err', style: TextStyle(color: isDark ? AppColors.error : AppColorsLight.error)),
+                  data: (coaches) {
+                    if (coaches.isEmpty) {
+                      return Text('No coaches assigned yet.', style: TextStyle(color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary));
+                    }
+                    return ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: coaches.length,
+                      separatorBuilder: (context, index) => Divider(color: isDark ? AppColors.surfaceLight : AppColorsLight.surfaceLight),
+                      itemBuilder: (context, index) {
+                        final coach = coaches[index];
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              coach.name,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            _buildContactDetailRow(
+                              Icons.phone, 
+                              coach.phone, 
+                              isDark,
+                              onTap: () => _launchPhone(coach.phone),
+                            ),
+                            const SizedBox(height: 8),
+                            _buildContactDetailRow(
+                              Icons.email, 
+                              coach.email, 
+                              isDark,
+                              onTap: () => _launchEmail(coach.email),
+                            ),
+                          ],
+                        );
+                      },
+                    );
+                  },
+                );
+              }
+            },
           ),
         ),
         actions: [
@@ -395,6 +477,63 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildContactDetailRow(IconData icon, String value, bool isDark, {VoidCallback? onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: isDark ? AppColors.accent : AppColorsLight.accent,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                value,
+                style: TextStyle(
+                  fontSize: 15,
+                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                  decoration: onTap != null ? TextDecoration.underline : null,
+                  decorationColor: isDark ? AppColors.accent.withValues(alpha: 0.5) : AppColorsLight.accent.withValues(alpha: 0.5),
+                ),
+              ),
+            ),
+            if (onTap != null)
+              Icon(
+                Icons.open_in_new,
+                size: 14,
+                color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _launchEmail(String email) async {
+    final Uri emailUri = Uri(
+      scheme: 'mailto',
+      path: email,
+    );
+    if (await canLaunchUrl(emailUri)) {
+      await launchUrl(emailUri);
+    }
+  }
+
+  Future<void> _launchPhone(String phone) async {
+    final Uri phoneUri = Uri(
+      scheme: 'tel',
+      path: phone,
+    );
+    if (await canLaunchUrl(phoneUri)) {
+      await launchUrl(phoneUri);
+    }
   }
 
   // Removed _calculateStats - now handled by studentDashboardProvider
