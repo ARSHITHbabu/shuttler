@@ -5,6 +5,7 @@ import '../../core/theme/neumorphic_styles.dart';
 import 'home_screen.dart';
 import 'batches_screen.dart';
 import 'attendance_screen.dart';
+import 'fees_screen.dart';
 import 'more_screen.dart';
 
 /// Owner Dashboard with bottom navigation
@@ -23,6 +24,7 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
     const HomeScreen(),
     const BatchesScreen(),
     const AttendanceScreen(),
+    const FeesScreen(),
     const MoreScreen(),
   ];
 
@@ -30,6 +32,7 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
     _BottomNavItem(icon: Icons.home, label: 'Home'),
     _BottomNavItem(icon: Icons.groups, label: 'Batches'),
     _BottomNavItem(icon: Icons.check_circle_outline, label: 'Attendance'),
+    _BottomNavItem(icon: Icons.payments_outlined, label: 'Fees'),
     _BottomNavItem(icon: Icons.more_horiz, label: 'More'),
   ];
 
@@ -52,7 +55,9 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
             children: [
               // Content Area
               Expanded(
-                child: _screens[_currentIndex],
+                child: RepaintBoundary(
+                  child: _screens[_currentIndex],
+                ),
               ),
 
               // Bottom Navigation
@@ -77,14 +82,16 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
                   top: false,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: AppDimensions.spacingS,
-                      vertical: AppDimensions.spacingM,
+                      horizontal: AppDimensions.spacingXs,
+                      vertical: AppDimensions.spacingS,
                     ),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: List.generate(
                         _navItems.length,
-                        (index) => _buildNavItem(index),
+                        (index) => Expanded(
+                          child: _buildNavItem(index),
+                        ),
                       ),
                     ),
                   ),
@@ -114,28 +121,34 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
       },
       child: Container(
         padding: const EdgeInsets.symmetric(
-          horizontal: AppDimensions.paddingM,
-          vertical: AppDimensions.spacingS,
+          horizontal: AppDimensions.paddingXs,
+          vertical: AppDimensions.spacingXs,
         ),
         decoration: BoxDecoration(
           color: isActive ? cardColor : Colors.transparent,
-          borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
           boxShadow: isActive ? NeumorphicStyles.getPressedShadow() : null,
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
               item.icon,
               size: 20,
               color: isActive ? activeColor : inactiveColor,
             ),
-            const SizedBox(height: 4),
-            Text(
-              item.label,
-              style: TextStyle(
-                fontSize: 12,
-                color: isActive ? activeColor : inactiveColor,
+            const SizedBox(height: 2),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                item.label,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: isActive ? activeColor : inactiveColor,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],

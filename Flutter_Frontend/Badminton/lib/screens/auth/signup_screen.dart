@@ -7,7 +7,10 @@ import '../../core/utils/validators.dart';
 import '../../widgets/common/neumorphic_button.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/loading_spinner.dart';
+import '../../widgets/common/success_snackbar.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/service_providers.dart';
+import '../../core/services/student_registration_request_service.dart';
 
 /// Signup screen for user registration
 class SignupScreen extends ConsumerStatefulWidget {
@@ -60,43 +63,50 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final result = await ref.read(authProvider.notifier).register(
-        name: _nameController.text.trim(),
-        email: _emailController.text.trim(),
-        phone: _phoneController.text.trim(),
-        password: _passwordController.text,
-        userType: widget.userType,
-      );
+      if (widget.userType == 'student') {
+        // For students, create registration request instead of direct account
+        final requestService = ref.read(studentRegistrationRequestServiceProvider);
+        
+        await requestService.createRequest(
+          name: _nameController.text.trim(),
+          email: _emailController.text.trim(),
+          phone: _phoneController.text.trim(),
+          password: _passwordController.text,
+        );
 
-      if (mounted) {
-        // For students, always redirect to profile completion after signup
-        if (widget.userType == 'student') {
-          context.go('/student-profile-complete');
-          return;
+        if (mounted) {
+          // Navigate to pending request screen
+          context.go('/student-registration-pending', extra: _emailController.text.trim());
         }
+      } else {
+        // For owner/coach, use existing registration flow
+        await ref.read(authProvider.notifier).register(
+          name: _nameController.text.trim(),
+          email: _emailController.text.trim(),
+          phone: _phoneController.text.trim(),
+          password: _passwordController.text,
+          userType: widget.userType,
+        );
 
-        // Navigate to appropriate dashboard for other user types
-        String route;
-        switch (widget.userType) {
-          case 'owner':
-            route = '/owner-dashboard';
-            break;
-          case 'coach':
-            route = '/coach-dashboard';
-            break;
-          default:
-            route = '/';
+        if (mounted) {
+          // Navigate to appropriate dashboard for other user types
+          String route;
+          switch (widget.userType) {
+            case 'owner':
+              route = '/owner-dashboard';
+              break;
+            case 'coach':
+              route = '/coach-dashboard';
+              break;
+            default:
+              route = '/';
+          }
+          context.go(route);
         }
-        context.go(route);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString().replaceAll('Exception: ', '')),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SuccessSnackbar.showError(context, e.toString().replaceAll('Exception: ', ''));
       }
     } finally {
       if (mounted) {
@@ -246,11 +256,14 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 const SizedBox(height: AppDimensions.spacingXl),
 
                 // Signup Button
-                NeumorphicButton(
-                  text: _isLoading ? 'Creating Account...' : 'Create Account',
-                  onPressed: _isLoading ? null : _handleSignup,
-                  isAccent: true,
-                  icon: _isLoading ? null : Icons.person_add,
+                SizedBox(
+                  width: double.infinity,
+                  child: NeumorphicButton(
+                    text: _isLoading ? 'Creating Account...' : 'Create Account',
+                    onPressed: _isLoading ? null : _handleSignup,
+                    isAccent: true,
+                    icon: _isLoading ? null : Icons.person_add,
+                  ),
                 ),
                 const SizedBox(height: AppDimensions.spacingL),
 

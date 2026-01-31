@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
-import '../../providers/service_providers.dart';
+import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/error_widget.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/attendance_provider.dart';
+import '../../providers/batch_provider.dart';
+import '../../models/attendance.dart';
 
 /// Student Attendance Screen - READ-ONLY view of attendance history
 /// Students can view their attendance records but cannot mark attendance
@@ -17,81 +22,49 @@ class StudentAttendanceScreen extends ConsumerStatefulWidget {
 }
 
 class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScreen> {
-  bool _isLoading = true;
-  List<Map<String, dynamic>> _attendanceRecords = [];
-  Map<String, dynamic> _attendanceStats = {};
-  String? _error;
-
   // Filter options
   String _selectedFilter = 'all'; // 'all', 'present', 'absent'
+  String _selectionMode = 'month'; // 'date', 'month', 'year', 'all'
+  DateTime? _selectedDate;
   DateTime? _selectedMonth;
+  int? _selectedYear;
 
   @override
   void initState() {
     super.initState();
     _selectedMonth = DateTime.now();
-    _loadData();
+    _selectedDate = DateTime.now();
+    _selectedYear = DateTime.now().year;
   }
 
-  Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    try {
-      final storageService = ref.read(storageServiceProvider);
-      final apiService = ref.read(apiServiceProvider);
-      final userId = storageService.getUserId();
-
-      if (userId == null) {
-        throw Exception('User not logged in');
-      }
-
-      // Load attendance records
-      try {
-        final response = await apiService.get(
-          '/api/students/$userId/attendance',
-          queryParameters: {
-            if (_selectedMonth != null) 'month': _selectedMonth!.month.toString(),
-            if (_selectedMonth != null) 'year': _selectedMonth!.year.toString(),
-          },
-        );
-        if (response.statusCode == 200) {
-          _attendanceRecords = List<Map<String, dynamic>>.from(response.data['records'] ?? []);
-          _attendanceStats = Map<String, dynamic>.from(response.data['stats'] ?? {});
-        }
-      } catch (e) {
-        // Endpoint may not exist yet - use empty data
-        _attendanceRecords = [];
-        _attendanceStats = {
-          'total_days': 0,
-          'present_days': 0,
-          'absent_days': 0,
-          'attendance_rate': 0.0,
-        };
-      }
-
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _error = e.toString().replaceAll('Exception: ', '');
-        });
-      }
+  // Calculate stats from attendance records
+  Map<String, dynamic> _calculateStats(List<Attendance> records) {
+    if (records.isEmpty) {
+      return {
+        'total_days': 0,
+        'present_days': 0,
+        'absent_days': 0,
+        'attendance_rate': 0.0,
+      };
     }
+
+    final total = records.length;
+    final present = records.where((r) => r.status.toLowerCase() == 'present').length;
+    final absent = total - present;
+
+    return {
+      'total_days': total,
+      'present_days': present,
+      'absent_days': absent,
+      'attendance_rate': total > 0 ? (present / total * 100) : 0.0,
+    };
   }
 
-  List<Map<String, dynamic>> get _filteredRecords {
+  List<Attendance> _filterRecords(List<Attendance> records) {
     if (_selectedFilter == 'all') {
-      return _attendanceRecords;
+      return records;
     }
-    return _attendanceRecords.where((record) => record['status'] == _selectedFilter).toList();
+    return records.where((record) => record.status.toLowerCase() == _selectedFilter).toList();
   }
 
   @override
@@ -99,117 +72,329 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: RefreshIndicator(
-        onRefresh: _loadData,
-        child: CustomScrollView(
-          slivers: [
-            // App Bar
-            SliverAppBar(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              pinned: true,
-              title: Text(
-                'My Attendance',
-                style: TextStyle(
-                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              centerTitle: true,
-            ),
-
-            // Content
-            SliverToBoxAdapter(
-              child: _isLoading
-                  ? const SizedBox(
-                      height: 400,
-                      child: Center(child: LoadingSpinner()),
-                    )
-                  : _error != null
-                      ? _buildErrorWidget(isDark)
-                      : Column(
-                          children: [
-                            // Stats Summary
-                            _buildStatsSummary(isDark),
-
-                            const SizedBox(height: AppDimensions.spacingL),
-
-                            // Month Selector
-                            _buildMonthSelector(isDark),
-
-                            const SizedBox(height: AppDimensions.spacingM),
-
-                            // Filter Tabs
-                            _buildFilterTabs(isDark),
-
-                            const SizedBox(height: AppDimensions.spacingM),
-                          ],
-                        ),
-            ),
-
-            // Attendance Records List
-            if (!_isLoading && _error == null)
-              _filteredRecords.isEmpty
-                  ? SliverToBoxAdapter(child: _buildEmptyState(isDark))
-                  : SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          final record = _filteredRecords[index];
-                          return _AttendanceRecordCard(
-                            record: record,
-                            isDark: isDark,
-                          );
-                        },
-                        childCount: _filteredRecords.length,
-                      ),
-                    ),
-
-            // Bottom spacing
-            const SliverToBoxAdapter(
-              child: SizedBox(height: 100),
-            ),
-          ],
+    // Get user ID from auth provider
+    final authStateAsync = ref.watch(authProvider);
+    
+    return authStateAsync.when(
+      loading: () => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: const Center(child: ListSkeleton(itemCount: 5)),
+      ),
+      error: (error, stack) => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: ErrorDisplay(
+          message: 'Failed to load user data: ${error.toString()}',
+          onRetry: () => ref.invalidate(authProvider),
         ),
       ),
-    );
-  }
-
-  Widget _buildErrorWidget(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.all(AppDimensions.paddingL),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.error_outline,
-            size: 48,
-            color: isDark ? AppColors.error : AppColorsLight.error,
-          ),
-          const SizedBox(height: AppDimensions.spacingM),
-          Text(
-            _error!,
-            style: TextStyle(
-              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+      data: (authState) {
+        if (authState is! Authenticated) {
+          return Scaffold(
+            backgroundColor: Colors.transparent,
+            body: ErrorDisplay(
+              message: 'Please log in to view attendance records',
+              onRetry: () => ref.invalidate(authProvider),
             ),
-            textAlign: TextAlign.center,
+          );
+        }
+
+        final userId = authState.userId;
+        
+        // Determine date range based on selection mode
+        DateTime? startDate;
+        DateTime? endDate;
+        int? month;
+        int? year;
+        
+        if (_selectionMode == 'date' && _selectedDate != null) {
+          // Single date selection
+          startDate = DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day);
+          endDate = DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day, 23, 59, 59);
+        } else if (_selectionMode == 'month' && _selectedMonth != null) {
+          // Month selection
+          month = _selectedMonth!.month;
+          year = _selectedMonth!.year;
+        } else if (_selectionMode == 'year' && _selectedYear != null) {
+          // Year selection
+          startDate = DateTime(_selectedYear!, 1, 1);
+          endDate = DateTime(_selectedYear!, 12, 31, 23, 59, 59);
+        }
+        // If 'all', startDate and endDate remain null
+        
+        final attendanceAsync = ref.watch(attendanceByStudentProvider(
+          userId,
+          startDate: startDate,
+          endDate: endDate,
+          month: month,
+          year: year,
+        ));
+        
+        // Fetch batches to get batch names
+        final batchesAsync = ref.watch(studentBatchesProvider(userId));
+
+        return Scaffold(
+          backgroundColor: Colors.transparent,
+          body: RefreshIndicator(
+            onRefresh: () async {
+              DateTime? startDate;
+              DateTime? endDate;
+              int? month;
+              int? year;
+              
+              if (_selectionMode == 'date' && _selectedDate != null) {
+                startDate = DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day);
+                endDate = DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day, 23, 59, 59);
+              } else if (_selectionMode == 'month' && _selectedMonth != null) {
+                month = _selectedMonth!.month;
+                year = _selectedMonth!.year;
+              } else if (_selectionMode == 'year' && _selectedYear != null) {
+                startDate = DateTime(_selectedYear!, 1, 1);
+                endDate = DateTime(_selectedYear!, 12, 31, 23, 59, 59);
+              }
+              
+              ref.invalidate(attendanceByStudentProvider(
+                userId,
+                startDate: startDate,
+                endDate: endDate,
+                month: month,
+                year: year,
+              ));
+              ref.invalidate(studentBatchesProvider(userId));
+            },
+            child: CustomScrollView(
+              slivers: [
+                // App Bar
+                SliverAppBar(
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  pinned: true,
+                  title: Text(
+                    'My Attendance',
+                    style: TextStyle(
+                      color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  centerTitle: true,
+                ),
+
+                // Content
+                SliverToBoxAdapter(
+                  child: attendanceAsync.when(
+                    loading: () => const SizedBox(
+                      height: 400,
+                      child: ListSkeleton(itemCount: 3),
+                    ),
+                    error: (error, stack) => ErrorDisplay(
+                      message: 'Failed to load attendance records: ${error.toString()}',
+                      onRetry: () {
+                        DateTime? startDate;
+                        DateTime? endDate;
+                        int? month;
+                        int? year;
+                        
+                        if (_selectionMode == 'date' && _selectedDate != null) {
+                          startDate = DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day);
+                          endDate = DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day, 23, 59, 59);
+                        } else if (_selectionMode == 'month' && _selectedMonth != null) {
+                          month = _selectedMonth!.month;
+                          year = _selectedMonth!.year;
+                        } else if (_selectionMode == 'year' && _selectedYear != null) {
+                          startDate = DateTime(_selectedYear!, 1, 1);
+                          endDate = DateTime(_selectedYear!, 12, 31, 23, 59, 59);
+                        }
+                        
+                        ref.invalidate(attendanceByStudentProvider(
+                          userId,
+                          startDate: startDate,
+                          endDate: endDate,
+                          month: month,
+                          year: year,
+                        ));
+                      },
+                    ),
+                    data: (attendanceRecords) {
+                      return batchesAsync.when(
+                        data: (batches) {
+                          final batchMap = {for (var b in batches) b.id: b.name};
+                          final enrichedRecords = attendanceRecords.map((record) {
+                            if (record.batchName == null || record.batchName == 'Unknown Batch') {
+                              final batchName = batchMap[record.batchId] ?? 'Unknown Batch';
+                              return Attendance(
+                                id: record.id,
+                                studentId: record.studentId,
+                                studentName: record.studentName,
+                                batchId: record.batchId,
+                                batchName: batchName,
+                                date: record.date,
+                                status: record.status,
+                                remarks: record.remarks,
+                                createdAt: record.createdAt,
+                              );
+                            }
+                            return record;
+                          }).toList();
+                          
+                          final attendanceStats = _calculateStats(enrichedRecords);
+
+                          return Column(
+                            children: [
+                              // Stats Summary
+                              _buildStatsSummary(isDark, attendanceStats),
+
+                              const SizedBox(height: AppDimensions.spacingL),
+
+                              // Date/Month/Year Selector
+                              _buildDateSelector(isDark),
+
+                              const SizedBox(height: AppDimensions.spacingM),
+
+                              // Filter Tabs
+                              _buildFilterTabs(isDark),
+
+                              const SizedBox(height: AppDimensions.spacingM),
+                            ],
+                          );
+                        },
+                        loading: () {
+                          final attendanceStats = _calculateStats(attendanceRecords);
+                          return Column(
+                            children: [
+                              _buildStatsSummary(isDark, attendanceStats),
+                              const SizedBox(height: AppDimensions.spacingL),
+                              _buildDateSelector(isDark),
+                              const SizedBox(height: AppDimensions.spacingM),
+                              _buildFilterTabs(isDark),
+                              const SizedBox(height: AppDimensions.spacingM),
+                            ],
+                          );
+                        },
+                        error: (_, __) {
+                          final attendanceStats = _calculateStats(attendanceRecords);
+                          return Column(
+                            children: [
+                              _buildStatsSummary(isDark, attendanceStats),
+                              const SizedBox(height: AppDimensions.spacingL),
+                              _buildDateSelector(isDark),
+                              const SizedBox(height: AppDimensions.spacingM),
+                              _buildFilterTabs(isDark),
+                              const SizedBox(height: AppDimensions.spacingM),
+                            ],
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+
+                // Attendance Records List
+                attendanceAsync.when(
+                  loading: () => const SliverToBoxAdapter(child: SizedBox()),
+                  error: (_, __) => const SliverToBoxAdapter(child: SizedBox()),
+                  data: (attendanceRecords) {
+                    return batchesAsync.when(
+                      data: (batches) {
+                        final batchMap = {for (var b in batches) b.id: b.name};
+                        final enrichedRecords = attendanceRecords.map((record) {
+                          if (record.batchName == null || record.batchName == 'Unknown Batch') {
+                            final batchName = batchMap[record.batchId] ?? 'Unknown Batch';
+                            return Attendance(
+                              id: record.id,
+                              studentId: record.studentId,
+                              studentName: record.studentName,
+                              batchId: record.batchId,
+                              batchName: batchName,
+                              date: record.date,
+                              status: record.status,
+                              remarks: record.remarks,
+                              createdAt: record.createdAt,
+                            );
+                          }
+                          return record;
+                        }).toList();
+                        
+                        final filteredRecords = _filterRecords(enrichedRecords);
+                        
+                        if (filteredRecords.isEmpty) {
+                          return SliverToBoxAdapter(
+                            child: EmptyState.noAttendance(),
+                          );
+                        }
+
+                        return SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              final record = filteredRecords[index];
+                              return _AttendanceRecordCard(
+                                record: record,
+                                isDark: isDark,
+                              );
+                            },
+                            childCount: filteredRecords.length,
+                          ),
+                        );
+                      },
+                      loading: () {
+                        final filteredRecords = _filterRecords(attendanceRecords);
+                        if (filteredRecords.isEmpty) {
+                          return SliverToBoxAdapter(
+                            child: EmptyState.noAttendance(),
+                          );
+                        }
+                        return SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              final record = filteredRecords[index];
+                              return _AttendanceRecordCard(
+                                record: record,
+                                isDark: isDark,
+                              );
+                            },
+                            childCount: filteredRecords.length,
+                          ),
+                        );
+                      },
+                      error: (_, __) {
+                        final filteredRecords = _filterRecords(attendanceRecords);
+                        if (filteredRecords.isEmpty) {
+                          return SliverToBoxAdapter(
+                            child: EmptyState.noAttendance(),
+                          );
+                        }
+                        return SliverList(
+                          delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                              final record = filteredRecords[index];
+                              return _AttendanceRecordCard(
+                                record: record,
+                                isDark: isDark,
+                              );
+                            },
+                            childCount: filteredRecords.length,
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+
+                // Bottom spacing
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 100),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: AppDimensions.spacingL),
-          ElevatedButton(
-            onPressed: _loadData,
-            child: const Text('Retry'),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildStatsSummary(bool isDark) {
-    final totalDays = _attendanceStats['total_days'] ?? 0;
-    final presentDays = _attendanceStats['present_days'] ?? 0;
-    final absentDays = _attendanceStats['absent_days'] ?? 0;
-    final attendanceRate = (_attendanceStats['attendance_rate'] ?? 0.0).toDouble();
+  Widget _buildStatsSummary(bool isDark, Map<String, dynamic> attendanceStats) {
+    final totalDays = (attendanceStats['total_days'] ?? 0) as int;
+    final presentDays = (attendanceStats['present_days'] ?? 0) as int;
+    final absentDays = (attendanceStats['absent_days'] ?? 0) as int;
+    final attendanceRate = (attendanceStats['attendance_rate'] ?? 0.0).toDouble();
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
@@ -287,16 +472,114 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
     );
   }
 
-  Widget _buildMonthSelector(bool isDark) {
-    final months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-    final currentMonth = _selectedMonth ?? DateTime.now();
-
+  Widget _buildDateSelector(bool isDark) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
-      child: GestureDetector(
+      child: Column(
+        children: [
+          // Selection Mode Tabs
+          Row(
+            children: [
+              Expanded(
+                child: _SelectionModeTab(
+                  label: 'Date',
+                  isSelected: _selectionMode == 'date',
+                  isDark: isDark,
+                  onTap: () => setState(() => _selectionMode = 'date'),
+                ),
+              ),
+              const SizedBox(width: AppDimensions.spacingS),
+              Expanded(
+                child: _SelectionModeTab(
+                  label: 'Month',
+                  isSelected: _selectionMode == 'month',
+                  isDark: isDark,
+                  onTap: () => setState(() => _selectionMode = 'month'),
+                ),
+              ),
+              const SizedBox(width: AppDimensions.spacingS),
+              Expanded(
+                child: _SelectionModeTab(
+                  label: 'Year',
+                  isSelected: _selectionMode == 'year',
+                  isDark: isDark,
+                  onTap: () => setState(() => _selectionMode = 'year'),
+                ),
+              ),
+              const SizedBox(width: AppDimensions.spacingS),
+              Expanded(
+                child: _SelectionModeTab(
+                  label: 'All',
+                  isSelected: _selectionMode == 'all',
+                  isDark: isDark,
+                  onTap: () => setState(() => _selectionMode = 'all'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppDimensions.spacingM),
+          // Date/Month/Year Display and Navigation
+          _buildDateDisplay(isDark),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDateDisplay(bool isDark) {
+    if (_selectionMode == 'date') {
+      final date = _selectedDate ?? DateTime.now();
+      return GestureDetector(
+        onTap: () => _showDatePicker(isDark),
+        child: NeumorphicContainer(
+          padding: const EdgeInsets.all(AppDimensions.paddingM),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                icon: Icon(
+                  Icons.chevron_left,
+                  color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _selectedDate = date.subtract(const Duration(days: 1));
+                  });
+                },
+              ),
+              Text(
+                DateFormat('EEE, d MMM yyyy').format(date),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                ),
+              ),
+              IconButton(
+                icon: Icon(
+                  Icons.chevron_right,
+                  color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
+                ),
+                onPressed: () {
+                  final now = DateTime.now();
+                  final nextDate = date.add(const Duration(days: 1));
+                  if (nextDate.isBefore(now) || nextDate.isAtSameMomentAs(now)) {
+                    setState(() {
+                      _selectedDate = nextDate;
+                    });
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    } else if (_selectionMode == 'month') {
+      final months = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+      ];
+      final currentMonth = _selectedMonth ?? DateTime.now();
+      return GestureDetector(
         onTap: () => _showMonthPicker(isDark),
         child: NeumorphicContainer(
           padding: const EdgeInsets.all(AppDimensions.paddingM),
@@ -312,7 +595,6 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
                   setState(() {
                     _selectedMonth = DateTime(currentMonth.year, currentMonth.month - 1);
                   });
-                  _loadData();
                 },
               ),
               Text(
@@ -335,15 +617,106 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
                     setState(() {
                       _selectedMonth = DateTime(currentMonth.year, currentMonth.month + 1);
                     });
-                    _loadData();
                   }
                 },
               ),
             ],
           ),
         ),
-      ),
+      );
+    } else if (_selectionMode == 'year') {
+      final currentYear = _selectedYear ?? DateTime.now().year;
+      return GestureDetector(
+        onTap: () => _showYearPicker(isDark),
+        child: NeumorphicContainer(
+          padding: const EdgeInsets.all(AppDimensions.paddingM),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                icon: Icon(
+                  Icons.chevron_left,
+                  color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _selectedYear = currentYear - 1;
+                  });
+                },
+              ),
+              Text(
+                currentYear.toString(),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                ),
+              ),
+              IconButton(
+                icon: Icon(
+                  Icons.chevron_right,
+                  color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
+                ),
+                onPressed: () {
+                  final now = DateTime.now();
+                  if (currentYear < now.year) {
+                    setState(() {
+                      _selectedYear = currentYear + 1;
+                    });
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    } else {
+      // All mode
+      return NeumorphicContainer(
+        padding: const EdgeInsets.all(AppDimensions.paddingM),
+        child: Center(
+          child: Text(
+            'All Attendance Records',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+            ),
+          ),
+        ),
+      );
+    }
+  }
+
+  void _showDatePicker(bool isDark) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: isDark
+                ? const ColorScheme.dark(
+                    primary: AppColors.accent,
+                    surface: AppColors.cardBackground,
+                  )
+                : const ColorScheme.light(
+                    primary: AppColorsLight.accent,
+                    surface: AppColorsLight.cardBackground,
+                  ),
+          ),
+          child: child!,
+        );
+      },
     );
+
+    if (picked != null) {
+      setState(() {
+        _selectedDate = picked;
+      });
+    }
   }
 
   void _showMonthPicker(bool isDark) async {
@@ -375,7 +748,38 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
       setState(() {
         _selectedMonth = picked;
       });
-      _loadData();
+    }
+  }
+
+  void _showYearPicker(bool isDark) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime(_selectedYear ?? DateTime.now().year),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      initialDatePickerMode: DatePickerMode.year,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: isDark
+                ? const ColorScheme.dark(
+                    primary: AppColors.accent,
+                    surface: AppColors.cardBackground,
+                  )
+                : const ColorScheme.light(
+                    primary: AppColorsLight.accent,
+                    surface: AppColorsLight.cardBackground,
+                  ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _selectedYear = picked.year;
+      });
     }
   }
 
@@ -415,39 +819,7 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
     );
   }
 
-  Widget _buildEmptyState(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.all(AppDimensions.paddingXl),
-      child: Column(
-        children: [
-          Icon(
-            Icons.event_available,
-            size: 64,
-            color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
-          ),
-          const SizedBox(height: AppDimensions.spacingM),
-          Text(
-            'No attendance records found',
-            style: TextStyle(
-              fontSize: 16,
-              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-            ),
-          ),
-          const SizedBox(height: AppDimensions.spacingS),
-          Text(
-            _selectedFilter == 'all'
-                ? 'Your attendance will appear here once recorded'
-                : 'No $_selectedFilter records for this month',
-            style: TextStyle(
-              fontSize: 14,
-              color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
+  // Removed _buildEmptyState - using EmptyState.noAttendance() instead
 
   Color _getAttendanceColor(double rate, bool isDark) {
     if (rate >= 80) {
@@ -508,6 +880,49 @@ class _StatItem extends StatelessWidget {
   }
 }
 
+class _SelectionModeTab extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _SelectionModeTab({
+    required this.label,
+    required this.isSelected,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? (isDark ? AppColors.accent : AppColorsLight.accent)
+              : (isDark ? AppColors.cardBackground : AppColorsLight.cardBackground),
+          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+          boxShadow: isSelected ? null : NeumorphicStyles.getElevatedShadow(),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              color: isSelected
+                  ? Colors.white
+                  : (isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _FilterTab extends StatelessWidget {
   final String label;
   final bool isSelected;
@@ -552,7 +967,7 @@ class _FilterTab extends StatelessWidget {
 }
 
 class _AttendanceRecordCard extends StatelessWidget {
-  final Map<String, dynamic> record;
+  final Attendance record;
   final bool isDark;
 
   const _AttendanceRecordCard({
@@ -562,10 +977,10 @@ class _AttendanceRecordCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final status = record['status']?.toString() ?? 'unknown';
-    final date = record['date']?.toString() ?? '';
-    final batchName = record['batch_name']?.toString() ?? 'Unknown Batch';
-    final remarks = record['remarks']?.toString() ?? '';
+    final status = record.status;
+    final date = record.date;
+    final batchName = record.batchName ?? 'Unknown Batch';
+    final remarks = record.remarks ?? '';
 
     final isPresent = status.toLowerCase() == 'present';
 
@@ -604,7 +1019,7 @@ class _AttendanceRecordCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    _formatDate(date),
+                    _formatDate(date.toIso8601String()),
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,

@@ -9,8 +9,10 @@ import 'student_fees_screen.dart';
 import 'student_bmi_screen.dart';
 import 'student_announcements_screen.dart';
 import 'student_schedule_screen.dart';
+import 'student_calendar_screen.dart';
 import 'student_profile_screen.dart';
 import 'student_settings_screen.dart';
+import 'student_videos_screen.dart';
 
 /// Student More Screen - Navigation hub for additional features
 /// All features are READ-ONLY for students
@@ -50,28 +52,15 @@ class _StudentMoreScreenState extends ConsumerState<StudentMoreScreen> {
             ),
             const SizedBox(height: AppDimensions.spacingL),
 
-            // Profile Section
-            _SectionTitle(title: 'Account', isDark: isDark),
-            const SizedBox(height: AppDimensions.spacingM),
-            _MenuItem(
-              icon: Icons.person_outline,
-              title: 'My Profile',
-              subtitle: 'View and edit your profile',
-              isDark: isDark,
-              onTap: () => setState(() => _currentView = 'profile'),
-            ),
-
-            const SizedBox(height: AppDimensions.spacingL),
-
             // Information Section (READ-ONLY)
             _SectionTitle(title: 'Information', isDark: isDark),
             const SizedBox(height: AppDimensions.spacingM),
             _MenuItem(
-              icon: Icons.payments_outlined,
-              title: 'Fee Status',
-              subtitle: 'View your fee records and payment history',
+              icon: Icons.campaign_outlined,
+              title: 'Announcements',
+              subtitle: 'View academy announcements',
               isDark: isDark,
-              onTap: () => setState(() => _currentView = 'fees'),
+              onTap: () => setState(() => _currentView = 'announcements'),
             ),
             const SizedBox(height: AppDimensions.spacingS),
             _MenuItem(
@@ -83,11 +72,19 @@ class _StudentMoreScreenState extends ConsumerState<StudentMoreScreen> {
             ),
             const SizedBox(height: AppDimensions.spacingS),
             _MenuItem(
-              icon: Icons.campaign_outlined,
-              title: 'Announcements',
-              subtitle: 'View academy announcements',
+              icon: Icons.calendar_month_outlined,
+              title: 'Calendar',
+              subtitle: 'View academy calendar events',
               isDark: isDark,
-              onTap: () => setState(() => _currentView = 'announcements'),
+              onTap: () => setState(() => _currentView = 'calendar'),
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.payments_outlined,
+              title: 'Fee Status',
+              subtitle: 'View your fee records and payment history',
+              isDark: isDark,
+              onTap: () => setState(() => _currentView = 'fees'),
             ),
             const SizedBox(height: AppDimensions.spacingS),
             _MenuItem(
@@ -96,6 +93,14 @@ class _StudentMoreScreenState extends ConsumerState<StudentMoreScreen> {
               subtitle: 'View your session schedule',
               isDark: isDark,
               onTap: () => setState(() => _currentView = 'schedule'),
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.video_library_outlined,
+              title: 'Training Videos',
+              subtitle: 'View videos uploaded by your coach',
+              isDark: isDark,
+              onTap: () => setState(() => _currentView = 'videos'),
             ),
 
             const SizedBox(height: AppDimensions.spacingL),
@@ -147,6 +152,14 @@ class _StudentMoreScreenState extends ConsumerState<StudentMoreScreen> {
         );
       case 'schedule':
         return StudentScheduleScreen(
+          onBack: () => setState(() => _currentView = null),
+        );
+      case 'calendar':
+        return StudentCalendarScreen(
+          onBack: () => setState(() => _currentView = null),
+        );
+      case 'videos':
+        return StudentVideosScreen(
           onBack: () => setState(() => _currentView = null),
         );
       case 'settings':

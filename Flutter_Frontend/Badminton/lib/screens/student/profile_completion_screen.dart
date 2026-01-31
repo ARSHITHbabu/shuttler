@@ -7,9 +7,10 @@ import '../../core/constants/dimensions.dart';
 import '../../core/utils/validators.dart';
 import '../../widgets/common/neumorphic_button.dart';
 import '../../widgets/common/custom_text_field.dart';
-import '../../widgets/common/loading_spinner.dart';
+import '../../widgets/common/success_snackbar.dart';
 import '../../providers/service_providers.dart';
-import '../../core/constants/api_endpoints.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/student_provider.dart';
 
 /// Profile completion screen for students
 /// Students must fill all required profile fields before accessing the dashboard
@@ -33,6 +34,7 @@ class _ProfileCompletionScreenState
   bool _isLoading = false;
   DateTime? _selectedDate;
   String? _selectedTShirtSize;
+  String? _selectedBloodGroup;
   String? _profilePhotoUrl;
 
   final List<String> _tShirtSizes = [
@@ -43,6 +45,18 @@ class _ProfileCompletionScreenState
     'XL',
     'XXL',
     'XXXL',
+  ];
+
+  final List<String> _bloodGroups = [
+    'A+',
+    'A-',
+    'B+',
+    'B-',
+    'AB+',
+    'AB-',
+    'O+',
+    'O-',
+    'Unknown',
   ];
 
   @override
@@ -89,27 +103,40 @@ class _ProfileCompletionScreenState
     }
 
     if (_selectedTShirtSize == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select a T-shirt size'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      SuccessSnackbar.showError(context, 'Please select a T-shirt size');
       return;
     }
 
     setState(() => _isLoading = true);
 
     try {
-      final storageService = ref.read(storageServiceProvider);
-      final userId = storageService.getUserId();
+      // Get user ID from auth provider (preferred) or storage (fallback)
+      int? userId;
+      
+      // Try to get from auth provider first
+      final authStateAsync = ref.read(authProvider);
+      final authState = authStateAsync.value;
+      
+      if (authState is Authenticated) {
+        userId = authState.userId;
+      }
+      
+      // Fallback: try to get from storage if auth provider doesn't have it
+      if (userId == null) {
+        final storageService = ref.read(storageServiceProvider);
+        
+        // Ensure storage is initialized
+        if (!storageService.isInitialized) {
+          await storageService.init();
+        }
+        
+        userId = storageService.getUserId();
+      }
       
       if (userId == null) {
-        throw Exception('User not logged in');
+        throw Exception('User not logged in. Please try logging in again.');
       }
 
-      final apiService = ref.read(apiServiceProvider);
-      
       // Prepare update data
       final updateData = {
         'guardian_name': _guardianNameController.text.trim(),
@@ -117,38 +144,27 @@ class _ProfileCompletionScreenState
         'date_of_birth': _dateOfBirthController.text.trim(),
         'address': _addressController.text.trim(),
         't_shirt_size': _selectedTShirtSize,
+        'blood_group': _selectedBloodGroup,
         if (_profilePhotoUrl != null) 'profile_photo': _profilePhotoUrl,
       };
 
-      // Update student profile
-      final response = await apiService.put(
-        '${ApiEndpoints.students}$userId',
-        data: updateData,
-      );
+      // Update student profile using provider
+      final studentList = ref.read(studentListProvider.notifier);
+      await studentList.updateStudent(userId, updateData);
 
-      if (response.statusCode == 200) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Profile completed successfully!'),
-              backgroundColor: AppColors.success,
-            ),
-          );
-          
-          // Navigate to student dashboard
-          context.go('/student-dashboard');
-        }
-      } else {
-        throw Exception('Failed to update profile');
+      // Invalidate to refresh data
+      ref.invalidate(studentByIdProvider(userId));
+      ref.invalidate(studentDashboardProvider(userId));
+
+      if (mounted) {
+        SuccessSnackbar.show(context, 'Profile completed successfully!');
+        
+        // Navigate to student dashboard
+        context.go('/student-dashboard');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.toString().replaceAll('Exception: ', '')),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SuccessSnackbar.showError(context, e.toString().replaceAll('Exception: ', ''));
       }
     } finally {
       if (mounted) {
@@ -325,6 +341,61 @@ class _ProfileCompletionScreenState
                     return null;
                   },
                 ),
+                const SizedBox(height: AppDimensions.spacingL),
+
+                // Blood Group Dropdown
+                DropdownButtonFormField<String>(
+                  initialValue: _selectedBloodGroup,
+                  decoration: InputDecoration(
+                    labelText: 'Blood Group',
+                    hintText: 'Select your blood group',
+                    prefixIcon: const Icon(
+                      Icons.bloodtype_outlined,
+                      color: AppColors.textSecondary,
+                    ),
+                    filled: true,
+                    fillColor: AppColors.cardBackground,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                      borderSide: const BorderSide(
+                        color: AppColors.accent,
+                        width: 2,
+                      ),
+                    ),
+                    errorBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                      borderSide: const BorderSide(
+                        color: AppColors.error,
+                        width: 1,
+                      ),
+                    ),
+                    labelStyle: const TextStyle(color: AppColors.textSecondary),
+                    hintStyle: const TextStyle(color: AppColors.textHint),
+                  ),
+                  dropdownColor: AppColors.cardBackground,
+                  style: const TextStyle(color: AppColors.textPrimary),
+                  items: _bloodGroups.map((String group) {
+                    return DropdownMenuItem<String>(
+                      value: group,
+                      child: Text(group),
+                    );
+                  }).toList(),
+                  onChanged: _isLoading
+                      ? null
+                      : (String? newValue) {
+                          setState(() {
+                            _selectedBloodGroup = newValue;
+                          });
+                        },
+                ),
                 const SizedBox(height: AppDimensions.spacingXl),
 
                 // Profile Photo Section (Placeholder for Phase 3)
@@ -368,14 +439,11 @@ class _ProfileCompletionScreenState
                 const SizedBox(height: AppDimensions.spacingXl),
 
                 // Submit Button
-                if (_isLoading)
-                  const LoadingSpinner()
-                else
-                  NeumorphicButton(
-                    text: 'Complete Profile',
-                    onPressed: _handleSubmit,
-                    icon: Icons.check_circle_outline,
-                  ),
+                NeumorphicButton(
+                  text: 'Complete Profile',
+                  onPressed: _isLoading ? null : _handleSubmit,
+                  icon: Icons.check_circle_outline,
+                ),
               ],
             ),
           ),

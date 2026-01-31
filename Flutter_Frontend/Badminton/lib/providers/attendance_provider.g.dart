@@ -307,6 +307,149 @@ class _CoachAttendanceProviderElement
   DateTime get date => (origin as CoachAttendanceProvider).date;
 }
 
+String _$coachAttendanceByCoachIdHash() =>
+    r'224c2160148d66ed5c1b0dc300050e45627fdb17';
+
+/// Provider for coach attendance by coach ID
+///
+/// Copied from [coachAttendanceByCoachId].
+@ProviderFor(coachAttendanceByCoachId)
+const coachAttendanceByCoachIdProvider = CoachAttendanceByCoachIdFamily();
+
+/// Provider for coach attendance by coach ID
+///
+/// Copied from [coachAttendanceByCoachId].
+class CoachAttendanceByCoachIdFamily
+    extends Family<AsyncValue<List<CoachAttendance>>> {
+  /// Provider for coach attendance by coach ID
+  ///
+  /// Copied from [coachAttendanceByCoachId].
+  const CoachAttendanceByCoachIdFamily();
+
+  /// Provider for coach attendance by coach ID
+  ///
+  /// Copied from [coachAttendanceByCoachId].
+  CoachAttendanceByCoachIdProvider call(int coachId) {
+    return CoachAttendanceByCoachIdProvider(coachId);
+  }
+
+  @override
+  CoachAttendanceByCoachIdProvider getProviderOverride(
+    covariant CoachAttendanceByCoachIdProvider provider,
+  ) {
+    return call(provider.coachId);
+  }
+
+  static const Iterable<ProviderOrFamily>? _dependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get dependencies => _dependencies;
+
+  static const Iterable<ProviderOrFamily>? _allTransitiveDependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get allTransitiveDependencies =>
+      _allTransitiveDependencies;
+
+  @override
+  String? get name => r'coachAttendanceByCoachIdProvider';
+}
+
+/// Provider for coach attendance by coach ID
+///
+/// Copied from [coachAttendanceByCoachId].
+class CoachAttendanceByCoachIdProvider
+    extends AutoDisposeFutureProvider<List<CoachAttendance>> {
+  /// Provider for coach attendance by coach ID
+  ///
+  /// Copied from [coachAttendanceByCoachId].
+  CoachAttendanceByCoachIdProvider(int coachId)
+    : this._internal(
+        (ref) => coachAttendanceByCoachId(
+          ref as CoachAttendanceByCoachIdRef,
+          coachId,
+        ),
+        from: coachAttendanceByCoachIdProvider,
+        name: r'coachAttendanceByCoachIdProvider',
+        debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+            ? null
+            : _$coachAttendanceByCoachIdHash,
+        dependencies: CoachAttendanceByCoachIdFamily._dependencies,
+        allTransitiveDependencies:
+            CoachAttendanceByCoachIdFamily._allTransitiveDependencies,
+        coachId: coachId,
+      );
+
+  CoachAttendanceByCoachIdProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.coachId,
+  }) : super.internal();
+
+  final int coachId;
+
+  @override
+  Override overrideWith(
+    FutureOr<List<CoachAttendance>> Function(
+      CoachAttendanceByCoachIdRef provider,
+    )
+    create,
+  ) {
+    return ProviderOverride(
+      origin: this,
+      override: CoachAttendanceByCoachIdProvider._internal(
+        (ref) => create(ref as CoachAttendanceByCoachIdRef),
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        coachId: coachId,
+      ),
+    );
+  }
+
+  @override
+  AutoDisposeFutureProviderElement<List<CoachAttendance>> createElement() {
+    return _CoachAttendanceByCoachIdProviderElement(this);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is CoachAttendanceByCoachIdProvider &&
+        other.coachId == coachId;
+  }
+
+  @override
+  int get hashCode {
+    var hash = _SystemHash.combine(0, runtimeType.hashCode);
+    hash = _SystemHash.combine(hash, coachId.hashCode);
+
+    return _SystemHash.finish(hash);
+  }
+}
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+mixin CoachAttendanceByCoachIdRef
+    on AutoDisposeFutureProviderRef<List<CoachAttendance>> {
+  /// The parameter `coachId` of this provider.
+  int get coachId;
+}
+
+class _CoachAttendanceByCoachIdProviderElement
+    extends AutoDisposeFutureProviderElement<List<CoachAttendance>>
+    with CoachAttendanceByCoachIdRef {
+  _CoachAttendanceByCoachIdProviderElement(super.provider);
+
+  @override
+  int get coachId => (origin as CoachAttendanceByCoachIdProvider).coachId;
+}
+
 String _$batchStudentsForAttendanceHash() =>
     r'456546e7482fe194bc5ade91fe0627cc19b7a326';
 
@@ -469,5 +612,214 @@ final coachesForAttendanceProvider =
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef CoachesForAttendanceRef = AutoDisposeFutureProviderRef<List<Coach>>;
+String _$attendanceByStudentHash() =>
+    r'5bed01f0b787ce77ea1200b179df4dd3dd75f90f';
+
+/// Provider for attendance records by student
+///
+/// Copied from [attendanceByStudent].
+@ProviderFor(attendanceByStudent)
+const attendanceByStudentProvider = AttendanceByStudentFamily();
+
+/// Provider for attendance records by student
+///
+/// Copied from [attendanceByStudent].
+class AttendanceByStudentFamily extends Family<AsyncValue<List<Attendance>>> {
+  /// Provider for attendance records by student
+  ///
+  /// Copied from [attendanceByStudent].
+  const AttendanceByStudentFamily();
+
+  /// Provider for attendance records by student
+  ///
+  /// Copied from [attendanceByStudent].
+  AttendanceByStudentProvider call(
+    int studentId, {
+    DateTime? startDate,
+    DateTime? endDate,
+    int? month,
+    int? year,
+  }) {
+    return AttendanceByStudentProvider(
+      studentId,
+      startDate: startDate,
+      endDate: endDate,
+      month: month,
+      year: year,
+    );
+  }
+
+  @override
+  AttendanceByStudentProvider getProviderOverride(
+    covariant AttendanceByStudentProvider provider,
+  ) {
+    return call(
+      provider.studentId,
+      startDate: provider.startDate,
+      endDate: provider.endDate,
+      month: provider.month,
+      year: provider.year,
+    );
+  }
+
+  static const Iterable<ProviderOrFamily>? _dependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get dependencies => _dependencies;
+
+  static const Iterable<ProviderOrFamily>? _allTransitiveDependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get allTransitiveDependencies =>
+      _allTransitiveDependencies;
+
+  @override
+  String? get name => r'attendanceByStudentProvider';
+}
+
+/// Provider for attendance records by student
+///
+/// Copied from [attendanceByStudent].
+class AttendanceByStudentProvider
+    extends AutoDisposeFutureProvider<List<Attendance>> {
+  /// Provider for attendance records by student
+  ///
+  /// Copied from [attendanceByStudent].
+  AttendanceByStudentProvider(
+    int studentId, {
+    DateTime? startDate,
+    DateTime? endDate,
+    int? month,
+    int? year,
+  }) : this._internal(
+         (ref) => attendanceByStudent(
+           ref as AttendanceByStudentRef,
+           studentId,
+           startDate: startDate,
+           endDate: endDate,
+           month: month,
+           year: year,
+         ),
+         from: attendanceByStudentProvider,
+         name: r'attendanceByStudentProvider',
+         debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+             ? null
+             : _$attendanceByStudentHash,
+         dependencies: AttendanceByStudentFamily._dependencies,
+         allTransitiveDependencies:
+             AttendanceByStudentFamily._allTransitiveDependencies,
+         studentId: studentId,
+         startDate: startDate,
+         endDate: endDate,
+         month: month,
+         year: year,
+       );
+
+  AttendanceByStudentProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.studentId,
+    required this.startDate,
+    required this.endDate,
+    required this.month,
+    required this.year,
+  }) : super.internal();
+
+  final int studentId;
+  final DateTime? startDate;
+  final DateTime? endDate;
+  final int? month;
+  final int? year;
+
+  @override
+  Override overrideWith(
+    FutureOr<List<Attendance>> Function(AttendanceByStudentRef provider) create,
+  ) {
+    return ProviderOverride(
+      origin: this,
+      override: AttendanceByStudentProvider._internal(
+        (ref) => create(ref as AttendanceByStudentRef),
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        studentId: studentId,
+        startDate: startDate,
+        endDate: endDate,
+        month: month,
+        year: year,
+      ),
+    );
+  }
+
+  @override
+  AutoDisposeFutureProviderElement<List<Attendance>> createElement() {
+    return _AttendanceByStudentProviderElement(this);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is AttendanceByStudentProvider &&
+        other.studentId == studentId &&
+        other.startDate == startDate &&
+        other.endDate == endDate &&
+        other.month == month &&
+        other.year == year;
+  }
+
+  @override
+  int get hashCode {
+    var hash = _SystemHash.combine(0, runtimeType.hashCode);
+    hash = _SystemHash.combine(hash, studentId.hashCode);
+    hash = _SystemHash.combine(hash, startDate.hashCode);
+    hash = _SystemHash.combine(hash, endDate.hashCode);
+    hash = _SystemHash.combine(hash, month.hashCode);
+    hash = _SystemHash.combine(hash, year.hashCode);
+
+    return _SystemHash.finish(hash);
+  }
+}
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+mixin AttendanceByStudentRef on AutoDisposeFutureProviderRef<List<Attendance>> {
+  /// The parameter `studentId` of this provider.
+  int get studentId;
+
+  /// The parameter `startDate` of this provider.
+  DateTime? get startDate;
+
+  /// The parameter `endDate` of this provider.
+  DateTime? get endDate;
+
+  /// The parameter `month` of this provider.
+  int? get month;
+
+  /// The parameter `year` of this provider.
+  int? get year;
+}
+
+class _AttendanceByStudentProviderElement
+    extends AutoDisposeFutureProviderElement<List<Attendance>>
+    with AttendanceByStudentRef {
+  _AttendanceByStudentProviderElement(super.provider);
+
+  @override
+  int get studentId => (origin as AttendanceByStudentProvider).studentId;
+  @override
+  DateTime? get startDate => (origin as AttendanceByStudentProvider).startDate;
+  @override
+  DateTime? get endDate => (origin as AttendanceByStudentProvider).endDate;
+  @override
+  int? get month => (origin as AttendanceByStudentProvider).month;
+  @override
+  int? get year => (origin as AttendanceByStudentProvider).year;
+}
+
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package

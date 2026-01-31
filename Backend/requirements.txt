@@ -27,3 +27,6 @@ python-dotenv==1.0.0
 # Testing (optional)
 # pytest==7.4.3
 # httpx==0.25.2
+
+# Schema registry auto-discovery
+watchdog==3.0.0  # File watcher for automatic schema registry updates (optional but recommended)

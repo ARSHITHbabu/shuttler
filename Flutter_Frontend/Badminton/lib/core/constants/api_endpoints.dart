@@ -9,13 +9,22 @@ class ApiEndpoints {
       return 'http://localhost:8000';
     }
     // Use your computer's local network IP address
-    // Your computer IP: 192.168.1.7 (as of Jan 12, 2026)
-    return 'http://192.168.1.7:8000';
+    // Run get_local_ip.ps1 to find your current IP address
+    // Current IP: 192.168.1.6 (detected automatically)
+    return 'http://192.168.1.6:8000';
   }
 
   // Authentication
   static const String login = '/api/auth/login';
   static const String register = '/api/auth/register';
+  static const String changePassword = '/auth/change-password';
+  static const String forgotPassword = '/auth/forgot-password';
+  static const String resetPassword = '/auth/reset-password';
+
+  // Owners
+  static const String owners = '/owners/';
+  static String ownerById(int id) => '/owners/$id';
+  static const String ownerLogin = '/owners/login';
 
   // Coaches
   static const String coaches = '/coaches/';
@@ -26,6 +35,11 @@ class ApiEndpoints {
   static String studentById(int id) => '/students/$id';
   static String studentAttendance(int id) => '/students/$id/attendance';
   static String studentPerformance(int id) => '/students/$id/performance';
+
+  // Sessions (Seasons)
+  static const String sessions = '/sessions/';
+  static String sessionById(int id) => '/sessions/$id';
+  static String sessionBatches(int id) => '/sessions/$id/batches';
 
   // Batches
   static const String batches = '/batches/';
@@ -94,4 +108,8 @@ class ApiEndpoints {
   // Image Upload (NEW)
   static const String uploadImage = '/api/upload/image';
   static String imageUrl(String filename) => '/uploads/$filename';
+
+  // Leave Requests
+  static const String leaveRequests = '/leave-requests/';
+  static String leaveRequestById(int id) => '/leave-requests/$id';
 }

@@ -11,13 +11,19 @@ import '../../models/batch.dart';
 import 'package:intl/intl.dart';
 
 /// Dialog for creating a new fee record
-/// Flow: Batch -> Student (filtered) -> Payee (from batch) -> Total Fee -> Due Date
+/// Flow: Batch -> Student (filtered) -> Payee (from batch) -> Total Fee (auto-filled from batch) -> Due Date
 class AddFeeDialog extends ConsumerStatefulWidget {
   final Function(Map<String, dynamic>)? onSubmit;
+  final int? initialBatchId;
+  final int? initialStudentId;
+  final double? initialFeeAmount;
 
   const AddFeeDialog({
     super.key,
     this.onSubmit,
+    this.initialBatchId,
+    this.initialStudentId,
+    this.initialFeeAmount,
   });
 
   @override
@@ -43,6 +49,10 @@ class _AddFeeDialogState extends ConsumerState<AddFeeDialog> {
   @override
   void initState() {
     super.initState();
+    // Set initial fee amount if provided
+    if (widget.initialFeeAmount != null) {
+      _totalFeeController.text = widget.initialFeeAmount!.toStringAsFixed(0);
+    }
     _loadBatches();
   }
 
@@ -60,6 +70,29 @@ class _AddFeeDialogState extends ConsumerState<AddFeeDialog> {
         _batches = batches;
         _loadingBatches = false;
       });
+      
+      // If initial batch ID is provided, select it and load students
+      if (widget.initialBatchId != null) {
+        final initialBatch = batches.firstWhere(
+          (b) => b.id == widget.initialBatchId,
+          orElse: () => batches.first,
+        );
+        if (initialBatch != null) {
+          _selectedBatchId = initialBatch.id;
+          _selectedBatch = initialBatch;
+          // Auto-fill fee amount from batch if not already set
+          if (widget.initialFeeAmount == null) {
+            try {
+              final feeString = initialBatch.fees.replaceAll(RegExp(r'[\$,\s]'), '');
+              final batchFee = double.parse(feeString);
+              _totalFeeController.text = batchFee.toStringAsFixed(0);
+            } catch (e) {
+              // If parsing fails, keep current value or use 0
+            }
+          }
+          await _loadBatchStudents(initialBatch.id);
+        }
+      }
     } catch (e) {
       setState(() {
         _loadingBatches = false;
@@ -76,8 +109,11 @@ class _AddFeeDialogState extends ConsumerState<AddFeeDialog> {
     setState(() {
       _loadingStudents = true;
       _batchStudents = [];
-      _selectedStudentId = null;
-      _selectedStudent = null;
+      // Don't reset selected student if it's the initial one
+      if (widget.initialStudentId == null) {
+        _selectedStudentId = null;
+        _selectedStudent = null;
+      }
       _selectedPayeeId = null;
       _selectedPayee = null;
     });
@@ -88,6 +124,22 @@ class _AddFeeDialogState extends ConsumerState<AddFeeDialog> {
       setState(() {
         _batchStudents = students;
         _loadingStudents = false;
+        
+        // Auto-select initial student if provided
+        if (widget.initialStudentId != null) {
+          try {
+            final initialStudent = students.firstWhere(
+              (s) => s.id == widget.initialStudentId,
+            );
+            _selectedStudentId = initialStudent.id;
+            _selectedStudent = initialStudent;
+            // Auto-select student as payee too
+            _selectedPayeeId = initialStudent.id;
+            _selectedPayee = initialStudent;
+          } catch (e) {
+            // Student not found in batch, ignore
+          }
+        }
       });
     } catch (e) {
       setState(() {
@@ -126,19 +178,15 @@ class _AddFeeDialogState extends ConsumerState<AddFeeDialog> {
         await widget.onSubmit!(feeData);
       }
 
+      // Only close dialog if onSubmit succeeds (doesn't throw)
       if (mounted) {
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Fee created successfully')),
-        );
+        // Note: Success message is handled by the onSubmit callback
       }
     } catch (e) {
       setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to create fee: $e')),
-        );
-      }
+      // Don't close dialog on error - let user see the error and retry
+      // Error message is handled by the onSubmit callback
     }
   }
 
@@ -189,6 +237,14 @@ class _AddFeeDialogState extends ConsumerState<AddFeeDialog> {
                         setState(() {
                           _selectedBatchId = value;
                           _selectedBatch = _batches.firstWhere((b) => b.id == value);
+                          // Auto-fill fee amount from batch
+                          try {
+                            final feeString = _selectedBatch!.fees.replaceAll(RegExp(r'[\$,\s]'), '');
+                            final batchFee = double.parse(feeString);
+                            _totalFeeController.text = batchFee.toStringAsFixed(0);
+                          } catch (e) {
+                            // If parsing fails, keep current value
+                          }
                         });
                         _loadBatchStudents(value!);
                       },
@@ -277,23 +333,79 @@ class _AddFeeDialogState extends ConsumerState<AddFeeDialog> {
                     ),
                   ),
                 const SizedBox(height: AppDimensions.spacingM),
-                // Step 4: Total Fee
-                CustomTextField(
-                  controller: _totalFeeController,
-                  label: '4. Total Fee (₹)',
-                  hint: 'Enter total fee amount',
-                  keyboardType: TextInputType.numberWithOptions(decimal: true),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter total fee amount';
-                    }
-                    final amount = double.tryParse(value.trim());
-                    if (amount == null || amount <= 0) {
-                      return 'Please enter a valid amount';
-                    }
-                    return null;
-                  },
-                ),
+                // Step 4: Total Fee (auto-filled from batch, but editable)
+                if (_selectedBatch != null)
+                  NeumorphicContainer(
+                    padding: const EdgeInsets.all(AppDimensions.paddingM),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Text(
+                              '4. Total Fee (\$)',
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(width: AppDimensions.spacingS),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppDimensions.spacingS,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.accent.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                              ),
+                              child: const Text(
+                                'Auto-filled from batch',
+                                style: TextStyle(
+                                  color: AppColors.accent,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppDimensions.spacingS),
+                        CustomTextField(
+                          controller: _totalFeeController,
+                          label: 'Fee Amount',
+                          hint: 'Enter total fee amount',
+                          keyboardType: TextInputType.numberWithOptions(decimal: true),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Please enter total fee amount';
+                            }
+                            final amount = double.tryParse(value.trim());
+                            if (amount == null || amount <= 0) {
+                              return 'Please enter a valid amount';
+                            }
+                            return null;
+                          },
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  CustomTextField(
+                    controller: _totalFeeController,
+                    label: '4. Total Fee (\$)',
+                    hint: 'Enter total fee amount',
+                    keyboardType: TextInputType.numberWithOptions(decimal: true),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please enter total fee amount';
+                      }
+                      final amount = double.tryParse(value.trim());
+                      if (amount == null || amount <= 0) {
+                        return 'Please enter a valid amount';
+                      }
+                      return null;
+                    },
+                  ),
                 const SizedBox(height: AppDimensions.spacingM),
                 // Step 5: Due Date
                 NeumorphicContainer(

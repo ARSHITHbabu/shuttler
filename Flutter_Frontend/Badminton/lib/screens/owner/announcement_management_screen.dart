@@ -3,11 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/custom_text_field.dart';
-import '../../providers/service_providers.dart';
+import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/success_snackbar.dart';
+import '../../widgets/common/confirmation_dialog.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/announcement_provider.dart';
 import '../../models/announcement.dart';
 import 'package:intl/intl.dart';
 
@@ -24,6 +26,7 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
   bool _showAddForm = false;
   bool _isLoading = false;
   Announcement? _editingAnnouncement; // Track if we're editing
+  String _selectedFilter = 'all'; // 'all', 'urgent', 'high', 'normal'
 
   final _titleController = TextEditingController();
   final _messageController = TextEditingController();
@@ -38,15 +41,6 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
     super.dispose();
   }
 
-  Future<List<Announcement>> _loadAnnouncements() async {
-    try {
-      final announcementService = ref.read(announcementServiceProvider);
-      final announcements = await announcementService.getAnnouncements();
-      return announcements;
-    } catch (e) {
-      return <Announcement>[];
-    }
-  }
 
   void _editAnnouncement(Announcement announcement) {
     setState(() {
@@ -62,27 +56,40 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
 
   Future<void> _saveAnnouncement() async {
     if (_titleController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter announcement title')),
-      );
+      SuccessSnackbar.showError(context, 'Please enter announcement title');
       return;
     }
 
     if (_messageController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter announcement message')),
-      );
+      SuccessSnackbar.showError(context, 'Please enter announcement message');
       return;
     }
 
     setState(() => _isLoading = true);
     try {
-      final announcementService = ref.read(announcementServiceProvider);
       final authState = await ref.read(authProvider.future);
       
       int? createdBy;
+      String? creatorType;
       if (authState is Authenticated) {
         createdBy = authState.userId;
+        // Map userType to creator_type for backend
+        // userType can be "owner", "coach", or "student"
+        // creator_type should be "owner" or "coach"
+        if (authState.userType == 'owner') {
+          creatorType = 'owner';
+        } else if (authState.userType == 'coach') {
+          creatorType = 'coach';
+        }
+      }
+
+      // Validate required fields
+      if (createdBy == null || creatorType == null) {
+        if (mounted) {
+          SuccessSnackbar.showError(context, 'Unable to determine user information. Please try again.');
+        }
+        setState(() => _isLoading = false);
+        return;
       }
 
       final announcementData = {
@@ -91,21 +98,25 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
         'target_audience': _selectedTargetAudience,
         'priority': _selectedPriority,
         'created_by': createdBy,
+        'creator_type': creatorType,
         'scheduled_at': _scheduledAt?.toIso8601String(),
       };
 
+      final announcementManager = ref.read(announcementManagerProvider().notifier);
+      
       if (_editingAnnouncement != null) {
-        await announcementService.updateAnnouncement(_editingAnnouncement!.id, announcementData);
+        await announcementManager.updateAnnouncement(_editingAnnouncement!.id, announcementData);
+        if (mounted) {
+          SuccessSnackbar.show(context, 'Announcement updated successfully');
+        }
       } else {
-        await announcementService.createAnnouncement(announcementData);
+        await announcementManager.createAnnouncement(announcementData);
+        if (mounted) {
+          SuccessSnackbar.show(context, 'Announcement created successfully');
+        }
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_editingAnnouncement != null
-              ? 'Announcement updated successfully'
-              : 'Announcement created successfully')),
-        );
         setState(() {
           _showAddForm = false;
           _titleController.clear();
@@ -114,53 +125,33 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
           _selectedTargetAudience = 'all';
           _scheduledAt = null;
           _editingAnnouncement = null;
+          _isLoading = false;
         });
       }
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to create announcement: $e')),
-        );
+        SuccessSnackbar.showError(context, 'Failed to ${_editingAnnouncement != null ? 'update' : 'create'} announcement: ${e.toString()}');
       }
     }
   }
 
   Future<void> _deleteAnnouncement(int id) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.cardBackground,
-        title: const Text('Delete Announcement', style: TextStyle(color: AppColors.textPrimary)),
-        content: const Text('Are you sure you want to delete this announcement?', style: TextStyle(color: AppColors.textSecondary)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: AppColors.error)),
-          ),
-        ],
-      ),
+    final confirmed = await ConfirmationDialog.showDelete(
+      context,
+      'Announcement',
     );
 
-    if (confirm == true && mounted) {
+    if (confirmed == true && mounted) {
       try {
-        final announcementService = ref.read(announcementServiceProvider);
-        await announcementService.deleteAnnouncement(id);
+        final announcementManager = ref.read(announcementManagerProvider().notifier);
+        await announcementManager.deleteAnnouncement(id);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Announcement deleted successfully')),
-          );
-          setState(() {});
+          SuccessSnackbar.show(context, 'Announcement deleted successfully');
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to delete announcement: $e')),
-          );
+          SuccessSnackbar.showError(context, 'Failed to delete announcement: ${e.toString()}');
         }
       }
     }
@@ -196,69 +187,89 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          setState(() {});
-        },
-        child: FutureBuilder<List<Announcement>>(
-          future: _loadAnnouncements(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: LoadingSpinner());
-            }
+      body: Column(
+        children: [
+          // Filter Chips
+          Padding(
+            padding: const EdgeInsets.all(AppDimensions.paddingM),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _FilterChip(
+                    label: 'All',
+                    isSelected: _selectedFilter == 'all',
+                    onTap: () => setState(() => _selectedFilter = 'all'),
+                  ),
+                  const SizedBox(width: AppDimensions.spacingS),
+                  _FilterChip(
+                    label: 'Urgent',
+                    isSelected: _selectedFilter == 'urgent',
+                    onTap: () => setState(() => _selectedFilter = 'urgent'),
+                    color: AppColors.error,
+                  ),
+                  const SizedBox(width: AppDimensions.spacingS),
+                  _FilterChip(
+                    label: 'High',
+                    isSelected: _selectedFilter == 'high',
+                    onTap: () => setState(() => _selectedFilter = 'high'),
+                    color: AppColors.warning,
+                  ),
+                  const SizedBox(width: AppDimensions.spacingS),
+                  _FilterChip(
+                    label: 'Normal',
+                    isSelected: _selectedFilter == 'normal',
+                    onTap: () => setState(() => _selectedFilter = 'normal'),
+                    color: AppColors.success,
+                  ),
+                ],
+              ),
+            ),
+          ),
 
-            if (snapshot.hasError) {
-              return ErrorDisplay(
-                message: 'Failed to load announcements',
-                onRetry: () => setState(() {}),
-              );
-            }
-
-            final announcements = snapshot.data ?? [];
-
-            if (announcements.isEmpty) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.campaign_outlined,
-                      size: 64,
-                      color: AppColors.textSecondary,
-                    ),
-                    const SizedBox(height: AppDimensions.spacingM),
-                    const Text(
-                      'No announcements yet',
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: AppDimensions.spacingL),
-                    ElevatedButton.icon(
-                      onPressed: () => setState(() => _showAddForm = true),
-                      icon: const Icon(Icons.add),
-                      label: const Text('Create Announcement'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.accent,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }
-
-            return ListView.builder(
-              padding: const EdgeInsets.all(AppDimensions.paddingL),
-              itemCount: announcements.length,
-              itemBuilder: (context, index) {
-                final announcement = announcements[index];
-                return _buildAnnouncementCard(announcement);
+          // Announcements List
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(announcementManagerProvider());
               },
-            );
-          },
-        ),
+              child: Consumer(
+                builder: (context, ref, child) {
+                  final announcementsAsync = ref.watch(announcementManagerProvider());
+                  
+                  return announcementsAsync.when(
+                    loading: () => const ListSkeleton(itemCount: 5),
+                    error: (error, stack) => ErrorDisplay(
+                      message: 'Failed to load announcements: ${error.toString()}',
+                      onRetry: () => ref.invalidate(announcementManagerProvider()),
+                    ),
+                    data: (announcements) {
+                      // Filter by priority
+                      final filteredAnnouncements = _selectedFilter == 'all'
+                          ? announcements
+                          : announcements.where((a) => a.priority == _selectedFilter).toList();
+
+                      if (filteredAnnouncements.isEmpty) {
+                        return EmptyState.noAnnouncements(
+                          onCreate: () => setState(() => _showAddForm = true),
+                        );
+                      }
+
+                      return ListView.builder(
+                        padding: const EdgeInsets.all(AppDimensions.paddingL),
+                        itemCount: filteredAnnouncements.length,
+                        itemBuilder: (context, index) {
+                          final announcement = filteredAnnouncements[index];
+                          return _buildAnnouncementCard(announcement);
+                        },
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -381,13 +392,14 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
                 padding: const EdgeInsets.all(AppDimensions.paddingM),
                 child: InkWell(
                   onTap: () async {
+                    if (!mounted) return;
                     final date = await showDatePicker(
                       context: context,
                       initialDate: _scheduledAt ?? DateTime.now(),
                       firstDate: DateTime.now(),
                       lastDate: DateTime.now().add(const Duration(days: 365)),
                     );
-                    if (date != null) {
+                    if (date != null && mounted) {
                       final time = await showTimePicker(
                         context: context,
                         initialTime: TimeOfDay.now(),
@@ -446,7 +458,11 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
                     padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingM),
                   ),
                   child: _isLoading
-                      ? const LoadingSpinner()
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
                       : Text(
                           _editingAnnouncement != null ? 'Update Announcement' : 'Publish Announcement',
                           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
@@ -620,6 +636,43 @@ class _PriorityButton extends StatelessWidget {
               color: isSelected ? AppColors.accent : AppColors.textSecondary,
               fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final Color? color;
+
+  const _FilterChip({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+    this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final chipColor = color ?? AppColors.accent;
+    
+    return GestureDetector(
+      onTap: onTap,
+      child: NeumorphicContainer(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppDimensions.paddingM,
+          vertical: AppDimensions.spacingS,
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            color: isSelected ? chipColor : AppColors.textSecondary,
           ),
         ),
       ),

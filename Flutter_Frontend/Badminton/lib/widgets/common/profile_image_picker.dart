@@ -1,6 +1,9 @@
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import 'cached_profile_image.dart';
@@ -11,6 +14,7 @@ class ProfileImagePicker extends StatefulWidget {
   final String? initialImageUrl;
   final double size;
   final ValueChanged<File?>? onImagePicked;
+  final ValueChanged<Uint8List?>? onImageBytesPickedForWeb;
   final bool isLoading;
 
   const ProfileImagePicker({
@@ -18,6 +22,7 @@ class ProfileImagePicker extends StatefulWidget {
     this.initialImageUrl,
     this.size = AppDimensions.avatarXl,
     this.onImagePicked,
+    this.onImageBytesPickedForWeb,
     this.isLoading = false,
   });
 
@@ -27,6 +32,7 @@ class ProfileImagePicker extends StatefulWidget {
 
 class _ProfileImagePickerState extends State<ProfileImagePicker> {
   File? _pickedImage;
+  Uint8List? _pickedImageBytes; // For web
   final ImagePicker _picker = ImagePicker();
 
   Future<void> _showImageSourceDialog() async {
@@ -88,17 +94,34 @@ class _ProfileImagePickerState extends State<ProfileImagePicker> {
     try {
       final XFile? image = await _picker.pickImage(
         source: source,
-        maxWidth: 1024,
-        maxHeight: 1024,
-        imageQuality: 85,
+        maxWidth: 2048,
+        maxHeight: 2048,
+        imageQuality: 90,
       );
 
       if (image != null) {
-        final file = File(image.path);
-        setState(() {
-          _pickedImage = file;
-        });
-        widget.onImagePicked?.call(file);
+        // Handle image based on platform
+        if (kIsWeb) {
+          // On web, read image as bytes since dart:io File doesn't work
+          final bytes = await image.readAsBytes();
+          setState(() {
+            _pickedImageBytes = bytes;
+            _pickedImage = null;
+          });
+          widget.onImageBytesPickedForWeb?.call(bytes);
+          // Also try to call the regular callback with a pseudo-path for compatibility
+          // Some implementations might handle this differently
+          widget.onImagePicked?.call(null);
+        } else {
+          final croppedFile = await _cropImage(File(image.path));
+          if (croppedFile != null) {
+            setState(() {
+              _pickedImage = croppedFile;
+              _pickedImageBytes = null;
+            });
+            widget.onImagePicked?.call(croppedFile);
+          }
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -109,6 +132,52 @@ class _ProfileImagePickerState extends State<ProfileImagePicker> {
           ),
         );
       }
+    }
+  }
+
+  Future<File?> _cropImage(File imageFile) async {
+    if (kIsWeb) {
+      // Skip cropping on web
+      return imageFile;
+    }
+    
+    try {
+      final croppedFile = await ImageCropper().cropImage(
+        sourcePath: imageFile.path,
+        aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Crop Image',
+            toolbarColor: AppColors.accent,
+            toolbarWidgetColor: Colors.white,
+            initAspectRatio: CropAspectRatioPreset.square,
+            lockAspectRatio: true,
+          ),
+          IOSUiSettings(
+            title: 'Crop Image',
+            aspectRatioLockEnabled: true,
+          ),
+        ],
+        compressFormat: ImageCompressFormat.jpg,
+        compressQuality: 85,
+      );
+
+      if (croppedFile != null) {
+        return File(croppedFile.path);
+      }
+      return null;
+    } catch (e) {
+      // If cropping fails, return original image
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error cropping image: $e. Using original image.'),
+            backgroundColor: AppColors.warning,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+      return imageFile;
     }
   }
 
@@ -143,19 +212,24 @@ class _ProfileImagePickerState extends State<ProfileImagePicker> {
                           _pickedImage!,
                           fit: BoxFit.cover,
                         )
-                      : widget.initialImageUrl != null && widget.initialImageUrl!.isNotEmpty
-                          ? CachedProfileImage(
-                              imageUrl: widget.initialImageUrl!,
-                              size: widget.size,
+                      : _pickedImageBytes != null
+                          ? Image.memory(
+                              _pickedImageBytes!,
+                              fit: BoxFit.cover,
                             )
-                          : Container(
-                              color: AppColors.cardBackground,
-                              child: Icon(
-                                Icons.person,
-                                size: widget.size * 0.5,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
+                          : widget.initialImageUrl != null && widget.initialImageUrl!.isNotEmpty
+                              ? CachedProfileImage(
+                                  imageUrl: widget.initialImageUrl!,
+                                  size: widget.size,
+                                )
+                              : Container(
+                                  color: AppColors.cardBackground,
+                                  child: Icon(
+                                    Icons.person,
+                                    size: widget.size * 0.5,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
             ),
           ),
           // Camera icon overlay

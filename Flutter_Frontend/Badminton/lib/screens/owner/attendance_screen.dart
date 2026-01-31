@@ -4,8 +4,9 @@ import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
+import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/success_snackbar.dart';
 import '../../providers/batch_provider.dart';
 import '../../providers/attendance_provider.dart';
 import '../../providers/service_providers.dart';
@@ -27,15 +28,21 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
   DateTime _selectedDate = DateTime.now();
   final Map<int, String> _attendance = {}; // studentId/coachId -> 'present' or 'absent'
   final Map<int, String> _remarks = {}; // studentId/coachId -> remarks
+  bool _hasUnsavedChanges = false; // Track if there are unsaved changes
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(AppDimensions.paddingL),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          physics: const ClampingScrollPhysics(),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Padding(
+              padding: const EdgeInsets.all(AppDimensions.paddingL),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
             // Header
             const Text(
               'Attendance',
@@ -63,8 +70,10 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                           _selectedBatchId = null;
                           _attendance.clear();
                           _remarks.clear();
+                          _hasUnsavedChanges = false;
                         });
                         ref.invalidate(batchStudentsForAttendanceProvider);
+                        // Note: Attendance will load when batch is selected
                       },
                     ),
                   ),
@@ -80,8 +89,11 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                           _selectedBatchId = null;
                           _attendance.clear();
                           _remarks.clear();
+                          _hasUnsavedChanges = false;
                         });
                         ref.invalidate(coachesForAttendanceProvider);
+                        // Load existing coach attendance for current date
+                        _loadExistingCoachAttendance();
                       },
                     ),
                   ),
@@ -125,11 +137,13 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                         if (date != null) {
                           setState(() {
                             _selectedDate = date;
-                            _attendance.clear();
-                            _remarks.clear();
                           });
                           // Load existing attendance for the selected date
-                          _loadExistingAttendance();
+                          if (_attendanceType == 'students' && _selectedBatchId != null) {
+                            _loadExistingAttendance();
+                          } else if (_attendanceType == 'coaches') {
+                            _loadExistingCoachAttendance();
+                          }
                         }
                       },
                       child: Text(
@@ -155,94 +169,56 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                 _buildStudentAttendanceList(),
             ],
 
-            // Coach List (for coaches)
+            // Coach Summary Metrics (at top, before coach list)
             if (_attendanceType == 'coaches') ...[
+              _buildCoachSummaryMetrics(),
+              const SizedBox(height: AppDimensions.spacingL),
+              // Coach List (for coaches)
               _buildCoachAttendanceList(),
+              // Save and Cancel Buttons (only show when there are unsaved changes)
+              if (_hasUnsavedChanges) ...[
+                const SizedBox(height: AppDimensions.spacingL),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _attendance.isEmpty
+                            ? null
+                            : () => _saveAttendance(),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.accent,
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size(double.infinity, 48),
+                        ),
+                        child: const Text('Save Attendance'),
+                      ),
+                    ),
+                    const SizedBox(width: AppDimensions.spacingM),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _attendance.isEmpty
+                            ? null
+                            : () => _cancelAttendance(),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.textPrimary,
+                          side: const BorderSide(color: AppColors.textSecondary),
+                          minimumSize: const Size(double.infinity, 48),
+                        ),
+                        child: const Text('Cancel'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
 
-            const SizedBox(height: AppDimensions.spacingL),
-
-            // View History Button
-            if ((_attendanceType == 'students' && _selectedBatchId != null) ||
-                _attendanceType == 'coaches')
-              NeumorphicContainer(
-                padding: const EdgeInsets.all(AppDimensions.paddingM),
-                onTap: () => _showAttendanceHistory(),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Icon(
-                      Icons.history,
-                      color: AppColors.iconPrimary,
-                      size: 20,
-                    ),
-                    SizedBox(width: AppDimensions.spacingS),
-                    Text(
-                      'View History',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-            const SizedBox(height: AppDimensions.spacingL),
-
-            // Summary
-            if ((_attendanceType == 'students' && _selectedBatchId != null) ||
-                _attendanceType == 'coaches')
-              NeumorphicContainer(
-                padding: const EdgeInsets.all(AppDimensions.paddingM),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _SummaryItem(
-                          label: 'Present',
-                          value: _attendance.values.where((v) => v == 'present').length.toString(),
-                          color: AppColors.success,
-                        ),
-                        _SummaryItem(
-                          label: 'Absent',
-                          value: _attendance.values.where((v) => v == 'absent').length.toString(),
-                          color: AppColors.error,
-                        ),
-                        _SummaryItem(
-                          label: 'Total',
-                          value: _attendance.length.toString(),
-                          color: AppColors.textSecondary,
-                        ),
-                        if (_attendance.isNotEmpty)
-                          _SummaryItem(
-                            label: 'Percentage',
-                            value: '${((_attendance.values.where((v) => v == 'present').length / _attendance.length) * 100).toStringAsFixed(0)}%',
-                            color: AppColors.iconPrimary,
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: AppDimensions.spacingM),
-                    ElevatedButton(
-                      onPressed: _attendance.isEmpty
-                          ? null
-                          : () => _saveAttendance(),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.accent,
-                        foregroundColor: Colors.white,
-                        minimumSize: const Size(double.infinity, 48),
-                      ),
-                      child: const Text('Save Attendance'),
-                    ),
-                  ],
-                ),
-              ),
-
             const SizedBox(height: 100), // Space for bottom nav
-          ],
-        ),
-      ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -273,6 +249,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                           _selectedBatchId = batch.id;
                           _attendance.clear();
                           _remarks.clear();
+                          _hasUnsavedChanges = false;
                         });
                         // Load existing attendance for selected batch and date
                         _loadExistingAttendance();
@@ -313,12 +290,12 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       },
       loading: () => const Padding(
         padding: EdgeInsets.all(AppDimensions.paddingM),
-        child: Center(child: LoadingSpinner()),
+        child: ListSkeleton(itemCount: 3),
       ),
       error: (error, stack) => Padding(
         padding: const EdgeInsets.all(AppDimensions.paddingM),
         child: ErrorDisplay(
-          message: 'Failed to load batches',
+          message: 'Failed to load batches. Please check your connection and try again.',
           onRetry: () => ref.read(batchListProvider.notifier).refresh(),
         ),
       ),
@@ -352,32 +329,68 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                IconButton(
-                  icon: const Icon(
-                    Icons.arrow_back,
-                    color: AppColors.textSecondary,
+            // Batch Header with Back Button
+            NeumorphicContainer(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimensions.paddingM,
+                vertical: AppDimensions.spacingS,
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(
+                      Icons.arrow_back,
+                      color: AppColors.textSecondary,
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _selectedBatchId = null;
+                        _attendance.clear();
+                        _remarks.clear();
+                      });
+                    },
                   ),
-                  onPressed: () {
-                    setState(() {
-                      _selectedBatchId = null;
-                      _attendance.clear();
-                      _remarks.clear();
-                    });
-                  },
-                ),
-                Expanded(
-                  child: Text(
-                    batch?.name ?? 'Unknown Batch',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          batch?.name ?? 'Unknown Batch',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        if (batch?.timeRange != null)
+                          Text(
+                            batch!.timeRange,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
+                ],
+              ),
+            ),
+            const SizedBox(height: AppDimensions.spacingL),
+            // Summary Metrics (at top, inside batch list for students)
+            _buildSummaryMetrics(totalCount: students.length),
+            const SizedBox(height: AppDimensions.spacingL),
+            // Attendance List Header
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
+              child: Text(
+                'Mark Attendance',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
                 ),
-              ],
+              ),
             ),
             const SizedBox(height: AppDimensions.spacingM),
             if (students.isEmpty)
@@ -405,21 +418,58 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                           } else {
                             _attendance[student.id] = 'absent';
                           }
+                          _hasUnsavedChanges = true;
                         });
                       },
                       onRemarkChanged: (remark) {
                         setState(() {
                           _remarks[student.id] = remark;
+                          _hasUnsavedChanges = true;
                         });
                       },
                     );
                   }),
+            // Save and Cancel Buttons (only show when there are unsaved changes)
+            if (_hasUnsavedChanges) ...[
+              const SizedBox(height: AppDimensions.spacingL),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _attendance.isEmpty
+                          ? null
+                          : () => _saveAttendance(),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.accent,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(double.infinity, 48),
+                      ),
+                      child: const Text('Save Attendance'),
+                    ),
+                  ),
+                  const SizedBox(width: AppDimensions.spacingM),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _attendance.isEmpty
+                          ? null
+                          : () => _cancelAttendance(),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.textPrimary,
+                        side: const BorderSide(color: AppColors.textSecondary),
+                        minimumSize: const Size(double.infinity, 48),
+                      ),
+                      child: const Text('Cancel'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         );
       },
       loading: () => const Padding(
         padding: EdgeInsets.all(AppDimensions.paddingM),
-        child: Center(child: LoadingSpinner()),
+        child: ListSkeleton(itemCount: 3),
       ),
       error: (error, stack) => Padding(
         padding: const EdgeInsets.all(AppDimensions.paddingM),
@@ -428,6 +478,76 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
           onRetry: () => ref.invalidate(batchStudentsForAttendanceProvider(_selectedBatchId!)),
         ),
       ),
+    );
+  }
+
+  Widget _buildSummaryMetrics({required int totalCount}) {
+    final presentCount = _attendance.values.where((v) => v == 'present').length;
+    final absentCount = _attendance.values.where((v) => v == 'absent').length;
+    final percentage = totalCount > 0 
+        ? ((presentCount / totalCount) * 100).toStringAsFixed(0)
+        : '0';
+
+    return NeumorphicContainer(
+      padding: const EdgeInsets.all(AppDimensions.paddingM),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _SummaryItem(
+            label: 'Total',
+            value: totalCount.toString(),
+            color: AppColors.textSecondary,
+          ),
+          _SummaryItem(
+            label: 'Present',
+            value: presentCount.toString(),
+            color: AppColors.success,
+          ),
+          _SummaryItem(
+            label: 'Absent',
+            value: absentCount.toString(),
+            color: AppColors.error,
+          ),
+          if (totalCount > 0)
+            _SummaryItem(
+              label: 'Percentage',
+              value: '$percentage%',
+              color: AppColors.iconPrimary,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCoachSummaryMetrics() {
+    final coachesAsync = ref.watch(coachesForAttendanceProvider);
+    
+    return coachesAsync.when(
+      data: (coaches) => _buildSummaryMetrics(totalCount: coaches.length),
+      loading: () => NeumorphicContainer(
+        padding: const EdgeInsets.all(AppDimensions.paddingM),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _SummaryItem(
+              label: 'Total',
+              value: '...',
+              color: AppColors.textSecondary,
+            ),
+            _SummaryItem(
+              label: 'Present',
+              value: '...',
+              color: AppColors.success,
+            ),
+            _SummaryItem(
+              label: 'Absent',
+              value: '...',
+              color: AppColors.error,
+            ),
+          ],
+        ),
+      ),
+      error: (_, __) => _buildSummaryMetrics(totalCount: 0),
     );
   }
 
@@ -449,36 +569,54 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
         }
 
         return Column(
-          children: coaches.map((coach) {
-                final attendanceStatus = _attendance[coach.id];
-                return _AttendanceItem(
-                  name: coach.specialization != null
-                      ? '${coach.name} - ${coach.specialization}'
-                      : coach.name,
-                  isPresent: attendanceStatus == 'present',
-                  hasSelection: attendanceStatus != null,
-                  remark: _remarks[coach.id] ?? '',
-                  onPresentChanged: (isPresent) {
-                    setState(() {
-                      if (isPresent) {
-                        _attendance[coach.id] = 'present';
-                      } else {
-                        _attendance[coach.id] = 'absent';
-                      }
-                    });
-                  },
-                  onRemarkChanged: (remark) {
-                    setState(() {
-                      _remarks[coach.id] = remark;
-                    });
-                  },
-                );
-              }).toList(),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Attendance List Header
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
+              child: Text(
+                'Mark Attendance',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ),
+            const SizedBox(height: AppDimensions.spacingM),
+            ...coaches.map((coach) {
+              final attendanceStatus = _attendance[coach.id];
+              return _AttendanceItem(
+                name: coach.specialization != null
+                    ? '${coach.name} - ${coach.specialization}'
+                    : coach.name,
+                isPresent: attendanceStatus == 'present',
+                hasSelection: attendanceStatus != null,
+                remark: _remarks[coach.id] ?? '',
+                onPresentChanged: (isPresent) {
+                  setState(() {
+                    if (isPresent) {
+                      _attendance[coach.id] = 'present';
+                    } else {
+                      _attendance[coach.id] = 'absent';
+                    }
+                    _hasUnsavedChanges = true;
+                  });
+                },
+                onRemarkChanged: (remark) {
+                  setState(() {
+                    _remarks[coach.id] = remark;
+                    _hasUnsavedChanges = true;
+                  });
+                },
+              );
+            }).toList(),
+          ],
         );
       },
       loading: () => const Padding(
         padding: EdgeInsets.all(AppDimensions.paddingM),
-        child: Center(child: LoadingSpinner()),
+        child: ListSkeleton(itemCount: 3),
       ),
       error: (error, stack) => Padding(
         padding: const EdgeInsets.all(AppDimensions.paddingM),
@@ -520,18 +658,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Attendance saved successfully'),
-            backgroundColor: AppColors.success,
-          ),
-        );
-
-        // Clear attendance after saving
-        setState(() {
-          _attendance.clear();
-          _remarks.clear();
-        });
+        SuccessSnackbar.show(context, 'Attendance saved successfully');
 
         // Invalidate providers to refresh data
         if (_attendanceType == 'students' && _selectedBatchId != null) {
@@ -543,17 +670,31 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
             coachAttendanceProvider(_selectedDate),
           );
         }
+
+        // Reload attendance from database to reflect saved changes
+        await Future.delayed(const Duration(milliseconds: 200)); // Small delay for DB commit
+        if (_attendanceType == 'students' && _selectedBatchId != null) {
+          await _loadExistingAttendance();
+        } else if (_attendanceType == 'coaches') {
+          await _loadExistingCoachAttendance();
+        }
+        // _hasUnsavedChanges is reset in the load methods
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${e.toString()}'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SuccessSnackbar.showError(context, 'Error: ${e.toString()}');
       }
     }
+  }
+
+  void _cancelAttendance() {
+    // Reload attendance from database to discard changes
+    if (_attendanceType == 'students' && _selectedBatchId != null) {
+      _loadExistingAttendance();
+    } else if (_attendanceType == 'coaches') {
+      _loadExistingCoachAttendance();
+    }
+    // _hasUnsavedChanges is reset in the load methods
   }
 
   Future<void> _loadExistingAttendance() async {
@@ -567,112 +708,44 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       );
 
       setState(() {
+        _attendance.clear();
+        _remarks.clear();
         for (final record in existingAttendance) {
           _attendance[record.studentId] = record.status;
           if (record.remarks != null) {
             _remarks[record.studentId] = record.remarks!;
           }
         }
+        _hasUnsavedChanges = false; // Reset flag after loading
       });
     } catch (e) {
       // Silently fail - user can mark attendance fresh
     }
   }
 
-  Future<void> _showAttendanceHistory() async {
+  Future<void> _loadExistingCoachAttendance() async {
     try {
       final attendanceService = ref.read(attendanceServiceProvider);
+      final existingAttendance = await attendanceService.getCoachAttendance(
+        date: _selectedDate,
+      );
 
-      if (mounted) {
-        if (_attendanceType == 'students' && _selectedBatchId != null) {
-          final attendance = await attendanceService.getAttendance(
-            batchId: _selectedBatchId!,
-          );
-          _showHistoryDialog(attendance, isStudent: true);
-        } else if (_attendanceType == 'coaches') {
-          final attendance = await attendanceService.getCoachAttendance();
-          _showHistoryDialog(attendance, isStudent: false);
+      setState(() {
+        _attendance.clear();
+        _remarks.clear();
+        for (final record in existingAttendance) {
+          _attendance[record.coachId] = record.status;
+          if (record.remarks != null) {
+            _remarks[record.coachId] = record.remarks!;
+          }
         }
-      }
+        _hasUnsavedChanges = false; // Reset flag after loading
+      });
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error loading history: ${e.toString()}'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
+      // Silently fail - user can mark attendance fresh
     }
   }
 
-  void _showHistoryDialog(dynamic history, {required bool isStudent}) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.cardBackground,
-        title: const Text(
-          'Attendance History',
-          style: TextStyle(color: AppColors.textPrimary),
-        ),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: (history as List).isEmpty
-              ? const Text(
-                  'No attendance records found',
-                  style: TextStyle(color: AppColors.textSecondary),
-                )
-              : ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: history.length > 10 ? 10 : history.length,
-                  itemBuilder: (context, index) {
-                    final record = history[index];
-                    String name;
-                    DateTime date;
-                    String status;
-                    
-                    if (isStudent) {
-                      final att = record as Attendance;
-                      name = att.studentName ?? 'Student ${att.studentId}';
-                      date = att.date;
-                      status = att.status;
-                    } else {
-                      final att = record as CoachAttendance;
-                      name = att.coachName ?? 'Coach ${att.coachId}';
-                      date = att.date;
-                      status = att.status;
-                    }
-                    
-                    return ListTile(
-                      title: Text(
-                        name,
-                        style: const TextStyle(color: AppColors.textPrimary),
-                      ),
-                      subtitle: Text(
-                        '${date.day}/${date.month}/${date.year} - $status',
-                        style: const TextStyle(color: AppColors.textSecondary),
-                      ),
-                      trailing: Icon(
-                        status == 'present'
-                            ? Icons.check_circle
-                            : Icons.cancel,
-                        color: status == 'present'
-                            ? AppColors.success
-                            : AppColors.error,
-                      ),
-                    );
-                  },
-                ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _TypeSelectorButton extends StatelessWidget {

@@ -1,0 +1,97 @@
+/// Video resource data model for training videos uploaded for students
+class VideoResource {
+  final int id;
+  final int studentId;
+  final String? studentName;
+  final String? title;
+  final String url;
+  final String? remarks;
+  final int? uploadedBy;
+  final DateTime createdAt;
+
+  VideoResource({
+    required this.id,
+    required this.studentId,
+    this.studentName,
+    this.title,
+    required this.url,
+    this.remarks,
+    this.uploadedBy,
+    required this.createdAt,
+  });
+
+  /// Create VideoResource instance from JSON
+  factory VideoResource.fromJson(Map<String, dynamic> json) {
+    return VideoResource(
+      id: json['id'] as int,
+      studentId: json['student_id'] as int,
+      studentName: json['student_name'] as String?,
+      title: json['title'] as String?,
+      url: json['url'] as String,
+      remarks: json['remarks'] as String?,
+      uploadedBy: json['uploaded_by'] as int?,
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'] as String)
+          : DateTime.now(),
+    );
+  }
+
+  /// Convert VideoResource instance to JSON
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'student_id': studentId,
+      'student_name': studentName,
+      'title': title,
+      'url': url,
+      'remarks': remarks,
+      'uploaded_by': uploadedBy,
+      'created_at': createdAt.toIso8601String(),
+    };
+  }
+
+  /// Create a copy of VideoResource with updated fields
+  VideoResource copyWith({
+    int? id,
+    int? studentId,
+    String? studentName,
+    String? title,
+    String? url,
+    String? remarks,
+    int? uploadedBy,
+    DateTime? createdAt,
+  }) {
+    return VideoResource(
+      id: id ?? this.id,
+      studentId: studentId ?? this.studentId,
+      studentName: studentName ?? this.studentName,
+      title: title ?? this.title,
+      url: url ?? this.url,
+      remarks: remarks ?? this.remarks,
+      uploadedBy: uploadedBy ?? this.uploadedBy,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  /// Get formatted date string
+  String get formattedDate {
+    return '${createdAt.day}/${createdAt.month}/${createdAt.year}';
+  }
+
+  /// Get display title (fallback to "Untitled Video" if null)
+  String get displayTitle => title ?? 'Untitled Video';
+
+  @override
+  String toString() {
+    return 'VideoResource(id: $id, studentId: $studentId, title: $title)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is VideoResource && other.id == id;
+  }
+
+  @override
+  int get hashCode => id.hashCode;
+}

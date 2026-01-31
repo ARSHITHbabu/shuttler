@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
-import '../../providers/service_providers.dart';
+import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/error_widget.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/bmi_provider.dart';
+import '../../models/bmi_record.dart';
 
 /// Student BMI Screen - READ-ONLY view of BMI history and health status
 /// Students can view their BMI records but cannot add new records
@@ -18,248 +23,192 @@ class StudentBMIScreen extends ConsumerStatefulWidget {
 }
 
 class _StudentBMIScreenState extends ConsumerState<StudentBMIScreen> {
-  bool _isLoading = true;
-  List<Map<String, dynamic>> _bmiRecords = [];
-  Map<String, dynamic> _latestBMI = {};
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadData();
-  }
-
-  Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    try {
-      final storageService = ref.read(storageServiceProvider);
-      final apiService = ref.read(apiServiceProvider);
-      final userId = storageService.getUserId();
-
-      if (userId == null) {
-        throw Exception('User not logged in');
-      }
-
-      try {
-        final response = await apiService.get('/api/students/$userId/bmi');
-        if (response.statusCode == 200) {
-          _bmiRecords = List<Map<String, dynamic>>.from(response.data['records'] ?? []);
-          if (_bmiRecords.isNotEmpty) {
-            _latestBMI = _bmiRecords.first;
-          }
-        }
-      } catch (e) {
-        // Endpoint may not exist yet - use empty data
-        _bmiRecords = [];
-        _latestBMI = {};
-      }
-
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _error = e.toString().replaceAll('Exception: ', '');
-        });
-      }
-    }
-  }
+  // Removed manual state management - using providers instead
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: RefreshIndicator(
-        onRefresh: _loadData,
-        child: CustomScrollView(
-          slivers: [
-            // App Bar
-            SliverAppBar(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              pinned: true,
-              leading: widget.onBack != null
-                  ? IconButton(
-                      icon: Icon(
-                        Icons.arrow_back,
-                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                      ),
-                      onPressed: widget.onBack,
-                    )
-                  : null,
-              title: Text(
-                'BMI Tracker',
-                style: TextStyle(
-                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              centerTitle: true,
-            ),
-
-            // Content
-            SliverToBoxAdapter(
-              child: _isLoading
-                  ? const SizedBox(
-                      height: 400,
-                      child: Center(child: LoadingSpinner()),
-                    )
-                  : _error != null
-                      ? _buildErrorWidget(isDark)
-                      : _bmiRecords.isEmpty
-                          ? _buildEmptyState(isDark)
-                          : Column(
-                              children: [
-                                // Current BMI Status
-                                _buildCurrentBMI(isDark),
-
-                                const SizedBox(height: AppDimensions.spacingL),
-
-                                // BMI Chart/Trend
-                                _buildBMITrend(isDark),
-
-                                const SizedBox(height: AppDimensions.spacingL),
-
-                                // Health Recommendations
-                                _buildHealthRecommendations(isDark),
-
-                                const SizedBox(height: AppDimensions.spacingL),
-
-                                // History Header
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: AppDimensions.paddingL,
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        'BMI History',
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w600,
-                                          color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                                        ),
-                                      ),
-                                      Text(
-                                        '${_bmiRecords.length} records',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-
-                                const SizedBox(height: AppDimensions.spacingM),
-                              ],
-                            ),
-            ),
-
-            // BMI Records List
-            if (!_isLoading && _error == null && _bmiRecords.isNotEmpty)
-              SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final record = _bmiRecords[index];
-                    return _BMIRecordCard(
-                      record: record,
-                      isDark: isDark,
-                      isLatest: index == 0,
-                    );
-                  },
-                  childCount: _bmiRecords.length,
-                ),
-              ),
-
-            // Bottom spacing
-            const SliverToBoxAdapter(
-              child: SizedBox(height: 100),
-            ),
-          ],
+    // Get user ID from auth provider
+    final authStateAsync = ref.watch(authProvider);
+    
+    return authStateAsync.when(
+      loading: () => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: const Center(child: ProfileSkeleton()),
+      ),
+      error: (error, stack) => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: ErrorDisplay(
+          message: 'Failed to load user data: ${error.toString()}',
+          onRetry: () => ref.invalidate(authProvider),
         ),
       ),
+      data: (authState) {
+        if (authState is! Authenticated) {
+          return Scaffold(
+            backgroundColor: Colors.transparent,
+            body: ErrorDisplay(
+              message: 'Please log in to view BMI records',
+              onRetry: () => ref.invalidate(authProvider),
+            ),
+          );
+        }
+
+        final userId = authState.userId;
+        final bmiAsync = ref.watch(bmiByStudentProvider(userId));
+
+        return Scaffold(
+          backgroundColor: Colors.transparent,
+          body: RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(bmiByStudentProvider(userId));
+            },
+            child: CustomScrollView(
+              slivers: [
+                // App Bar
+                SliverAppBar(
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  pinned: true,
+                  leading: widget.onBack != null
+                      ? IconButton(
+                          icon: Icon(
+                            Icons.arrow_back,
+                            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                          ),
+                          onPressed: widget.onBack,
+                        )
+                      : null,
+                  title: Text(
+                    'BMI Tracker',
+                    style: TextStyle(
+                      color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  centerTitle: true,
+                ),
+
+                // Content
+                SliverToBoxAdapter(
+                  child: bmiAsync.when(
+                    loading: () => const SizedBox(
+                      height: 400,
+                      child: ProfileSkeleton(),
+                    ),
+                    error: (error, stack) => ErrorDisplay(
+                      message: 'Failed to load BMI records: ${error.toString()}',
+                      onRetry: () => ref.invalidate(bmiByStudentProvider(userId)),
+                    ),
+                    data: (bmiRecords) {
+                      if (bmiRecords.isEmpty) {
+                        return EmptyState.noBmiRecords();
+                      }
+
+                      // Sort by date descending (latest first)
+                      final sortedRecords = List<BMIRecord>.from(bmiRecords)
+                        ..sort((a, b) => b.date.compareTo(a.date));
+                      final latestBMI = sortedRecords.first;
+
+                      return Column(
+                        children: [
+                          // Current BMI Status
+                          _buildCurrentBMI(isDark, latestBMI),
+
+                          const SizedBox(height: AppDimensions.spacingL),
+
+                          // BMI Chart/Trend
+                          _buildBMITrend(isDark, sortedRecords),
+
+                          const SizedBox(height: AppDimensions.spacingL),
+
+                          // Health Recommendations
+                          _buildHealthRecommendations(isDark, latestBMI),
+
+                          const SizedBox(height: AppDimensions.spacingL),
+
+                          // History Header
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppDimensions.paddingL,
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'BMI History',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                                  ),
+                                ),
+                                Text(
+                                  '${sortedRecords.length} records',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: AppDimensions.spacingM),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+
+                // BMI Records List
+                bmiAsync.when(
+                  loading: () => const SliverToBoxAdapter(child: SizedBox()),
+                  error: (_, __) => const SliverToBoxAdapter(child: SizedBox()),
+                  data: (bmiRecords) {
+                    if (bmiRecords.isEmpty) {
+                      return const SliverToBoxAdapter(child: SizedBox());
+                    }
+
+                    // Sort by date descending (latest first)
+                    final sortedRecords = List<BMIRecord>.from(bmiRecords)
+                      ..sort((a, b) => b.date.compareTo(a.date));
+
+                    return SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final record = sortedRecords[index];
+                          return _BMIRecordCard(
+                            record: record,
+                            isDark: isDark,
+                            isLatest: index == 0,
+                          );
+                        },
+                        childCount: sortedRecords.length,
+                      ),
+                    );
+                  },
+                ),
+
+                // Bottom spacing
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 100),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildErrorWidget(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.all(AppDimensions.paddingL),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.error_outline,
-            size: 48,
-            color: isDark ? AppColors.error : AppColorsLight.error,
-          ),
-          const SizedBox(height: AppDimensions.spacingM),
-          Text(
-            _error!,
-            style: TextStyle(
-              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: AppDimensions.spacingL),
-          ElevatedButton(
-            onPressed: _loadData,
-            child: const Text('Retry'),
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildEmptyState(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.all(AppDimensions.paddingXl),
-      child: Column(
-        children: [
-          const SizedBox(height: AppDimensions.spacingXxl),
-          Icon(
-            Icons.monitor_weight_outlined,
-            size: 64,
-            color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
-          ),
-          const SizedBox(height: AppDimensions.spacingM),
-          Text(
-            'No BMI records yet',
-            style: TextStyle(
-              fontSize: 16,
-              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-            ),
-          ),
-          const SizedBox(height: AppDimensions.spacingS),
-          Text(
-            'Your coach will record your BMI measurements during sessions',
-            style: TextStyle(
-              fontSize: 14,
-              color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCurrentBMI(bool isDark) {
-    final bmi = (_latestBMI['bmi'] ?? 0.0).toDouble();
-    final height = (_latestBMI['height'] ?? 0.0).toDouble();
-    final weight = (_latestBMI['weight'] ?? 0.0).toDouble();
+  Widget _buildCurrentBMI(bool isDark, BMIRecord latestBMI) {
+    final bmi = latestBMI.bmi;
+    final height = latestBMI.height;
+    final weight = latestBMI.weight;
     final category = _getBMICategory(bmi);
 
     return Padding(
@@ -356,13 +305,29 @@ class _StudentBMIScreenState extends ConsumerState<StudentBMIScreen> {
     );
   }
 
-  Widget _buildBMITrend(bool isDark) {
-    if (_bmiRecords.length < 2) {
+  Widget _buildBMITrend(bool isDark, List<BMIRecord> bmiRecords) {
+    if (bmiRecords.length < 2) {
       return const SizedBox.shrink();
     }
 
-    // Get last 6 records for trend
-    final trendRecords = _bmiRecords.take(6).toList().reversed.toList();
+    // Sort by date ascending for chart
+    final sortedHistory = List<BMIRecord>.from(bmiRecords)
+      ..sort((a, b) => a.date.compareTo(b.date));
+
+    // Prepare data for chart - BMI over time
+    final spots = sortedHistory.asMap().entries.map((entry) {
+      return FlSpot(entry.key.toDouble(), entry.value.bmi.toDouble());
+    }).toList();
+
+    // Calculate min and max BMI for Y axis
+    final minBMI = sortedHistory.map((r) => r.bmi).reduce((a, b) => a < b ? a : b);
+    final maxBMI = sortedHistory.map((r) => r.bmi).reduce((a, b) => a > b ? a : b);
+    final yMin = (minBMI - 2.0).clamp(0.0, double.infinity);
+    final yMax = (maxBMI + 2.0);
+
+    final textColor = isDark ? AppColors.textSecondary : AppColorsLight.textSecondary;
+    final accentColor = isDark ? AppColors.accent : AppColorsLight.accent;
+    final bgColor = isDark ? AppColors.background : AppColorsLight.background;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
@@ -372,7 +337,7 @@ class _StudentBMIScreenState extends ConsumerState<StudentBMIScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'BMI Trend',
+              'BMI Trend Over Time',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
@@ -381,62 +346,183 @@ class _StudentBMIScreenState extends ConsumerState<StudentBMIScreen> {
             ),
             const SizedBox(height: AppDimensions.spacingM),
 
-            // Simple trend visualization
+            // FL Chart LineChart
             SizedBox(
-              height: 100,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: trendRecords.asMap().entries.map((entry) {
-                  final record = entry.value;
-                  final bmi = (record['bmi'] ?? 0.0).toDouble();
-                  final normalizedHeight = ((bmi - 15) / 25 * 80).clamp(10.0, 80.0);
-                  final category = _getBMICategory(bmi);
-
-                  return Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Text(
-                          bmi.toStringAsFixed(1),
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: category.color,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Container(
-                          height: normalizedHeight,
-                          margin: const EdgeInsets.symmetric(horizontal: 4),
-                          decoration: BoxDecoration(
-                            color: category.color.withValues(alpha: 0.7),
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(4),
-                            ),
-                          ),
-                        ),
-                      ],
+              height: 200,
+              child: LineChart(
+                LineChartData(
+                  gridData: FlGridData(
+                    show: true,
+                    drawVerticalLine: false,
+                    horizontalInterval: 2,
+                    getDrawingHorizontalLine: (value) {
+                      return FlLine(
+                        color: textColor.withValues(alpha: 0.1),
+                        strokeWidth: 1,
+                      );
+                    },
+                  ),
+                  titlesData: FlTitlesData(
+                    show: true,
+                    rightTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
                     ),
-                  );
-                }).toList(),
+                    topTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 30,
+                        interval: 1,
+                        getTitlesWidget: (value, meta) {
+                          if (value.toInt() >= sortedHistory.length) {
+                            return const Text('');
+                          }
+                          final date = sortedHistory[value.toInt()].date;
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: Text(
+                              DateFormat('MMM dd').format(date),
+                              style: TextStyle(
+                                color: textColor,
+                                fontSize: 10,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 40,
+                        interval: 2,
+                        getTitlesWidget: (value, meta) {
+                          return Text(
+                            value.toStringAsFixed(1),
+                            style: TextStyle(
+                              color: textColor,
+                              fontSize: 10,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  borderData: FlBorderData(
+                    show: true,
+                    border: Border.all(
+                      color: textColor.withValues(alpha: 0.2),
+                      width: 1,
+                    ),
+                  ),
+                  minX: 0,
+                  maxX: (sortedHistory.length - 1).toDouble(),
+                  minY: yMin,
+                  maxY: yMax,
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: spots,
+                      isCurved: true,
+                      color: accentColor,
+                      barWidth: 3,
+                      isStrokeCapRound: true,
+                      dotData: FlDotData(
+                        show: true,
+                        getDotPainter: (spot, percent, barData, index) {
+                          final record = sortedHistory[index];
+                          return FlDotCirclePainter(
+                            radius: 4,
+                            color: _getBMICategory(record.bmi).color,
+                            strokeWidth: 2,
+                            strokeColor: bgColor,
+                          );
+                        },
+                      ),
+                      belowBarData: BarAreaData(
+                        show: true,
+                        color: accentColor.withValues(alpha: 0.1),
+                      ),
+                    ),
+                  ],
+                  lineTouchData: LineTouchData(
+                    touchTooltipData: LineTouchTooltipData(
+                      tooltipRoundedRadius: 8,
+                      getTooltipItems: (touchedSpots) {
+                        return touchedSpots.map((spot) {
+                          final record = sortedHistory[spot.spotIndex];
+                          final category = _getBMICategory(record.bmi);
+                          return LineTooltipItem(
+                            '${record.bmi.toStringAsFixed(1)}\n${category.label}',
+                            TextStyle(
+                              color: category.color,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          );
+                        }).toList();
+                      },
+                    ),
+                  ),
+                ),
               ),
             ),
 
             const SizedBox(height: AppDimensions.spacingS),
 
-            // Trend indicator
-            _buildTrendIndicator(isDark),
+            // Legend
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildLegendItem(Colors.orange, 'Under', isDark),
+                const SizedBox(width: AppDimensions.spacingM),
+                _buildLegendItem(isDark ? AppColors.success : AppColorsLight.success, 'Normal', isDark),
+                const SizedBox(width: AppDimensions.spacingM),
+                _buildLegendItem(Colors.orange, 'Over', isDark),
+                const SizedBox(width: AppDimensions.spacingM),
+                _buildLegendItem(isDark ? AppColors.error : AppColorsLight.error, 'Obese', isDark),
+              ],
+            ),
+
+            const SizedBox(height: AppDimensions.spacingS),
+
+            // Trend indicator - use original bmiRecords (already sorted descending)
+            _buildTrendIndicator(isDark, bmiRecords),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildTrendIndicator(bool isDark) {
-    if (_bmiRecords.length < 2) return const SizedBox.shrink();
+  Widget _buildLegendItem(Color color, String label, bool isDark) {
+    return Row(
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: TextStyle(
+            color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+            fontSize: 10,
+          ),
+        ),
+      ],
+    );
+  }
 
-    final latestBmi = (_bmiRecords[0]['bmi'] ?? 0.0).toDouble();
-    final previousBmi = (_bmiRecords[1]['bmi'] ?? 0.0).toDouble();
+  Widget _buildTrendIndicator(bool isDark, List<BMIRecord> bmiRecords) {
+    if (bmiRecords.length < 2) return const SizedBox.shrink();
+
+    final latestBmi = bmiRecords[0].bmi;
+    final previousBmi = bmiRecords[1].bmi;
     final diff = latestBmi - previousBmi;
 
     IconData icon;
@@ -474,8 +560,8 @@ class _StudentBMIScreenState extends ConsumerState<StudentBMIScreen> {
     );
   }
 
-  Widget _buildHealthRecommendations(bool isDark) {
-    final bmi = (_latestBMI['bmi'] ?? 0.0).toDouble();
+  Widget _buildHealthRecommendations(bool isDark, BMIRecord latestBMI) {
+    final bmi = latestBMI.bmi;
     final category = _getBMICategory(bmi);
 
     return Padding(
@@ -697,7 +783,7 @@ class _BMIScaleItem extends StatelessWidget {
 }
 
 class _BMIRecordCard extends StatelessWidget {
-  final Map<String, dynamic> record;
+  final BMIRecord record;
   final bool isDark;
   final bool isLatest;
 
@@ -709,11 +795,11 @@ class _BMIRecordCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bmi = (record['bmi'] ?? 0.0).toDouble();
-    final height = (record['height'] ?? 0.0).toDouble();
-    final weight = (record['weight'] ?? 0.0).toDouble();
-    final date = record['date']?.toString() ?? '';
-    final recordedBy = record['recorded_by']?.toString() ?? '';
+    final bmi = record.bmi;
+    final height = record.height;
+    final weight = record.weight;
+    final date = record.date;
+    final recordedBy = record.studentName;
 
     final category = _getBMICategory(bmi, isDark);
 
@@ -769,7 +855,7 @@ class _BMIRecordCard extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        _formatDate(date),
+                        _formatDate(date.toIso8601String()),
                         style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
@@ -817,7 +903,7 @@ class _BMIRecordCard extends StatelessWidget {
                       ),
                     ],
                   ),
-                  if (recordedBy.isNotEmpty) ...[
+                  if (recordedBy != null && recordedBy.isNotEmpty) ...[
                     const SizedBox(height: 2),
                     Text(
                       'By: $recordedBy',

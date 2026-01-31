@@ -1,10 +1,21 @@
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:path_provider/path_provider.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
+import '../../widgets/common/success_snackbar.dart';
 import '../../providers/service_providers.dart';
+
+// Conditional imports for web file download
+import '../../utils/file_download_helper_stub.dart'
+    if (dart.library.html) '../../utils/file_download_helper_web.dart';
 
 /// Reports Screen - Generate and view reports
 /// Matches React reference: ReportsScreen.tsx
@@ -48,12 +59,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
   Future<void> _generateReport() async {
     if (_startDate == null || _endDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select start and end dates'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      SuccessSnackbar.showError(context, 'Please select start and end dates');
       return;
     }
 
@@ -145,21 +151,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Report generated successfully'),
-            backgroundColor: AppColors.success,
-          ),
-        );
+        SuccessSnackbar.show(context, 'Report generated successfully');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error generating report: ${e.toString()}'),
-            backgroundColor: AppColors.error,
-          ),
-        );
+        SuccessSnackbar.showError(context, 'Error generating report: ${e.toString()}');
       }
     } finally {
       setState(() {
@@ -174,19 +170,30 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       return _buildReportConfig();
     }
 
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.background,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () => Navigator.of(context).pop(),
+          icon: Icon(
+            Icons.arrow_back,
+            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+          ),
+          onPressed: () {
+            // Check if we can pop, otherwise navigate to home
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            }
+          },
         ),
-        title: const Text(
+        title: Text(
           'Reports',
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
             fontSize: 20,
             fontWeight: FontWeight.w600,
           ),
@@ -198,94 +205,103 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         ),
         child: SafeArea(
           top: false,
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(AppDimensions.paddingL),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Report Type Selection
-                  Column(
-                    children: _reportTypes.map((type) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
-                        child: NeumorphicContainer(
-                          padding: const EdgeInsets.all(AppDimensions.paddingL),
-                          onTap: () {
-                            setState(() {
-                              _selectedType = type['id'];
-                            });
-                          },
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 48,
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  color: AppColors.background,
-                                  borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-                                  boxShadow: NeumorphicStyles.getInsetShadow(),
-                                ),
-                                child: Icon(
-                                  type['icon'],
-                                  color: AppColors.iconPrimary,
-                                  size: 24,
-                                ),
-                              ),
-                              const SizedBox(width: AppDimensions.spacingM),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppDimensions.paddingL),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Report Type Selection
+                        Column(
+                          children: _reportTypes.map((type) {
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
+                              child: NeumorphicContainer(
+                                padding: const EdgeInsets.all(AppDimensions.paddingL),
+                                onTap: () {
+                                  setState(() {
+                                    _selectedType = type['id'];
+                                  });
+                                },
+                                child: Row(
                                   children: [
-                                    Text(
-                                      type['title'],
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.textPrimary,
+                                    Container(
+                                      width: 48,
+                                      height: 48,
+                                      decoration: BoxDecoration(
+                                        color: AppColors.background,
+                                        borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                                        boxShadow: NeumorphicStyles.getInsetShadow(),
+                                      ),
+                                      child: Icon(
+                                        type['icon'],
+                                        color: AppColors.iconPrimary,
+                                        size: 24,
                                       ),
                                     ),
-                                    Text(
-                                      type['description'],
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: AppColors.textSecondary,
+                                    const SizedBox(width: AppDimensions.spacingM),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            type['title'],
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w600,
+                                              color: AppColors.textPrimary,
+                                            ),
+                                          ),
+                                          Text(
+                                            type['description'],
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              color: AppColors.textSecondary,
+                                            ),
+                                          ),
+                                        ],
                                       ),
+                                    ),
+                                    const Icon(
+                                      Icons.chevron_right,
+                                      color: AppColors.textTertiary,
                                     ),
                                   ],
                                 ),
                               ),
-                              const Icon(
-                                Icons.chevron_right,
-                                color: AppColors.textTertiary,
-                              ),
-                            ],
-                          ),
+                            );
+                          }).toList(),
                         ),
-                      );
-                    }).toList(),
-                  ),
 
-                  const SizedBox(height: AppDimensions.spacingXl),
+                        const SizedBox(height: AppDimensions.spacingXl),
 
-                  // Previously Generated Reports (if any)
-                  if (_generatedReport != null) ...[
-                    const SizedBox(height: AppDimensions.spacingXl),
-                    const Text(
-                      'Generated Report',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                      ),
+                        // Previously Generated Reports (if any)
+                        if (_generatedReport != null) ...[
+                          const SizedBox(height: AppDimensions.spacingXl),
+                          const Text(
+                            'Generated Report',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: AppDimensions.spacingM),
+                        ],
+
+                        const SizedBox(height: 100), // Space for bottom nav
+                      ],
                     ),
-                    const SizedBox(height: AppDimensions.spacingM),
-                  ],
-
-                  const SizedBox(height: 100), // Space for bottom nav
-                ],
-              ),
-            ),
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ),
@@ -302,256 +318,301 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           gradient: AppColors.backgroundGradient,
         ),
         child: SafeArea(
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.all(AppDimensions.paddingL),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Back Button
-                  TextButton(
-                    onPressed: () {
-                      setState(() {
-                        _selectedType = null;
-                        _startDate = null;
-                        _endDate = null;
-                      });
-                    },
-                    child: const Text(
-                      '← Back',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: AppDimensions.spacingM),
-
-                  // Header
-                  Text(
-                    reportType['title'],
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Configure and generate report',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: AppDimensions.spacingL),
-
-                  // Date Range
-                  NeumorphicContainer(
-                    padding: const EdgeInsets.all(AppDimensions.paddingM),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppDimensions.paddingL),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
+                        // Back Button
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              _selectedType = null;
+                              _startDate = null;
+                              _endDate = null;
+                            });
+                          },
+                          child: const Text(
+                            '← Back',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: AppDimensions.spacingM),
+
+                        // Header
+                        Text(
+                          reportType['title'],
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
                         const Text(
-                          'Select Date Range',
+                          'Configure and generate report',
                           style: TextStyle(
                             fontSize: 14,
                             color: AppColors.textSecondary,
                           ),
                         ),
-                        const SizedBox(height: AppDimensions.spacingM),
-                        _DatePickerField(
-                          label: 'Start Date',
-                          date: _startDate,
-                          onDateSelected: (date) {
-                            setState(() {
-                              _startDate = date;
-                            });
-                          },
-                        ),
-                        const SizedBox(height: AppDimensions.spacingM),
-                        _DatePickerField(
-                          label: 'End Date',
-                          date: _endDate,
-                          onDateSelected: (date) {
-                            setState(() {
-                              _endDate = date;
-                            });
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
+                        const SizedBox(height: AppDimensions.spacingL),
 
-                  const SizedBox(height: AppDimensions.spacingM),
-
-                  // Filters (based on report type)
-                  if (_selectedType == 'attendance')
-                    NeumorphicContainer(
-                      padding: const EdgeInsets.all(AppDimensions.paddingM),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Select Batch',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                          const SizedBox(height: AppDimensions.spacingS),
-                          NeumorphicInsetContainer(
-                            padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
-                            child: DropdownButton<String>(
-                              value: 'all',
-                              isExpanded: true,
-                              underline: const SizedBox(),
-                              dropdownColor: AppColors.cardBackground,
-                              style: const TextStyle(color: AppColors.textPrimary),
-                              items: const [
-                                DropdownMenuItem(value: 'all', child: Text('All Batches')),
-                                DropdownMenuItem(value: '1', child: Text('Morning Batch A')),
-                                DropdownMenuItem(value: '2', child: Text('Evening Batch B')),
-                                DropdownMenuItem(value: '3', child: Text('Weekend Batch')),
-                              ],
-                              onChanged: (value) {},
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                  if (_selectedType == 'fee')
-                    NeumorphicContainer(
-                      padding: const EdgeInsets.all(AppDimensions.paddingM),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Status Filter',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                          const SizedBox(height: AppDimensions.spacingS),
-                          ...['All', 'Paid', 'Pending', 'Overdue'].map((status) {
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: AppDimensions.spacingS),
-                              child: NeumorphicInsetContainer(
-                                padding: const EdgeInsets.all(AppDimensions.spacingM),
-                                child: Row(
-                                  children: [
-                                    Checkbox(
-                                      value: status == 'All',
-                                      onChanged: (value) {},
-                                      activeColor: AppColors.accent,
-                                    ),
-                                    Text(
-                                      status,
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        color: AppColors.textPrimary,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }),
-                        ],
-                      ),
-                    ),
-
-                  const SizedBox(height: AppDimensions.spacingL),
-
-                  // Generate Button
-                  NeumorphicContainer(
-                    padding: const EdgeInsets.all(AppDimensions.paddingM),
-                    onTap: _isGenerating ? null : _generateReport,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        if (_isGenerating)
-                          const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        else
-                          const Icon(
-                            Icons.description_outlined,
-                            color: AppColors.iconActive,
-                            size: 20,
-                          ),
-                        const SizedBox(width: AppDimensions.spacingS),
-                        Text(
-                          _isGenerating ? 'Generating...' : 'Generate Report',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: _isGenerating
-                                ? AppColors.textSecondary
-                                : AppColors.textPrimary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Generated Report Display
-                  if (_generatedReport != null) ...[
-                    const SizedBox(height: AppDimensions.spacingL),
-                    NeumorphicContainer(
-                      padding: const EdgeInsets.all(AppDimensions.paddingL),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        // Date Range
+                        NeumorphicContainer(
+                          padding: const EdgeInsets.all(AppDimensions.paddingM),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                _generatedReport!['type'] as String,
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.textPrimary,
+                              const Text(
+                                'Select Date Range',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: AppColors.textSecondary,
                                 ),
                               ),
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.download_outlined,
-                                  color: AppColors.iconPrimary,
-                                ),
-                                onPressed: () {
-                                  // TODO: Implement export functionality
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Export functionality coming soon'),
-                                    ),
-                                  );
+                              const SizedBox(height: AppDimensions.spacingM),
+                              _DatePickerField(
+                                label: 'Start Date',
+                                date: _startDate,
+                                onDateSelected: (date) {
+                                  setState(() {
+                                    _startDate = date;
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: AppDimensions.spacingM),
+                              _DatePickerField(
+                                label: 'End Date',
+                                date: _endDate,
+                                onDateSelected: (date) {
+                                  setState(() {
+                                    _endDate = date;
+                                  });
                                 },
                               ),
                             ],
                           ),
-                          const SizedBox(height: AppDimensions.spacingM),
-                          Text(
-                            'Period: ${_generatedReport!['period']}',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: AppColors.textSecondary,
+                        ),
+
+                        const SizedBox(height: AppDimensions.spacingM),
+
+                        // Filters (based on report type)
+                        if (_selectedType == 'attendance')
+                          NeumorphicContainer(
+                            padding: const EdgeInsets.all(AppDimensions.paddingM),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Select Batch',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(height: AppDimensions.spacingS),
+                                NeumorphicInsetContainer(
+                                  padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
+                                  child: DropdownButton<String>(
+                                    value: 'all',
+                                    isExpanded: true,
+                                    underline: const SizedBox(),
+                                    dropdownColor: AppColors.cardBackground,
+                                    style: const TextStyle(color: AppColors.textPrimary),
+                                    items: const [
+                                      DropdownMenuItem(value: 'all', child: Text('All Batches')),
+                                      DropdownMenuItem(value: '1', child: Text('Morning Batch A')),
+                                      DropdownMenuItem(value: '2', child: Text('Evening Batch B')),
+                                      DropdownMenuItem(value: '3', child: Text('Weekend Batch')),
+                                    ],
+                                    onChanged: (value) {},
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: AppDimensions.spacingM),
-                          _buildReportSummary(_generatedReport!['data'] as Map<String, dynamic>),
-                        ],
-                      ),
-                    ),
-                  ],
 
-                  const SizedBox(height: 100), // Space for bottom nav
-                ],
-              ),
-            ),
+                        if (_selectedType == 'fee')
+                          NeumorphicContainer(
+                            padding: const EdgeInsets.all(AppDimensions.paddingM),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Status Filter',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(height: AppDimensions.spacingS),
+                                ...['All', 'Paid', 'Pending', 'Overdue'].map((status) {
+                                  final statusValue = status == 'All' ? null : status.toLowerCase();
+                                  final isSelected = _selectedStatus == statusValue;
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: AppDimensions.spacingS),
+                                    child: NeumorphicInsetContainer(
+                                      padding: const EdgeInsets.all(AppDimensions.spacingM),
+                                      child: Row(
+                                        children: [
+                                          Checkbox(
+                                            value: isSelected,
+                                            onChanged: (value) {
+                                              setState(() {
+                                                _selectedStatus = value ?? false ? statusValue : null;
+                                              });
+                                            },
+                                            activeColor: AppColors.accent,
+                                          ),
+                                          Expanded(
+                                            child: GestureDetector(
+                                              onTap: () {
+                                                setState(() {
+                                                  _selectedStatus = isSelected ? null : statusValue;
+                                                });
+                                              },
+                                              child: Text(
+                                                status,
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  color: AppColors.textPrimary,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ),
+                          ),
+
+                        const SizedBox(height: AppDimensions.spacingL),
+
+                        // Generate Button
+                        NeumorphicContainer(
+                          padding: const EdgeInsets.all(AppDimensions.paddingM),
+                          onTap: _isGenerating ? null : _generateReport,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              if (_isGenerating)
+                                const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              else
+                                const Icon(
+                                  Icons.description_outlined,
+                                  color: AppColors.iconActive,
+                                  size: 20,
+                                ),
+                              const SizedBox(width: AppDimensions.spacingS),
+                              Text(
+                                _isGenerating ? 'Generating...' : 'Generate Report',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: _isGenerating
+                                      ? AppColors.textSecondary
+                                      : AppColors.textPrimary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // Generated Report Display
+                        if (_generatedReport != null) ...[
+                          const SizedBox(height: AppDimensions.spacingL),
+                          NeumorphicContainer(
+                            padding: const EdgeInsets.all(AppDimensions.paddingL),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      _generatedReport!['type'] as String,
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                    PopupMenuButton<String>(
+                                      icon: const Icon(
+                                        Icons.download_outlined,
+                                        color: AppColors.iconPrimary,
+                                      ),
+                                      itemBuilder: (context) => [
+                                        const PopupMenuItem(
+                                          value: 'csv',
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.table_chart, size: 18),
+                                              SizedBox(width: 8),
+                                              Text('Export as CSV'),
+                                            ],
+                                          ),
+                                        ),
+                                        const PopupMenuItem(
+                                          value: 'pdf',
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.picture_as_pdf, size: 18),
+                                              SizedBox(width: 8),
+                                              Text('Export as PDF'),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                      onSelected: (value) {
+                                        if (value == 'csv') {
+                                          _exportToCSV();
+                                        } else if (value == 'pdf') {
+                                          _exportToPDF();
+                                        }
+                                      },
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: AppDimensions.spacingM),
+                                Text(
+                                  'Period: ${_generatedReport!['period']}',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(height: AppDimensions.spacingM),
+                                _buildReportSummary(_generatedReport!['data'] as Map<String, dynamic>),
+                              ],
+                            ),
+                          ),
+                        ],
+
+                        const SizedBox(height: 100), // Space for bottom nav
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ),
@@ -583,7 +644,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           ),
           _SummaryRow(
             label: 'Attendance Rate',
-            value: '${(data['attendanceRate'] as double).toStringAsFixed(1)}%',
+            value: '${((data['attendanceRate'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(1)}%',
             color: AppColors.iconPrimary,
           ),
         ],
@@ -598,16 +659,16 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           ),
           _SummaryRow(
             label: 'Total Amount',
-            value: '₹${_formatCurrency(data['totalAmount'] as double)}',
+            value: '\$${_formatCurrency((data['totalAmount'] as num?)?.toDouble() ?? 0.0)}',
           ),
           _SummaryRow(
             label: 'Paid Amount',
-            value: '₹${_formatCurrency(data['paidAmount'] as double)}',
+            value: '\$${_formatCurrency((data['paidAmount'] as num?)?.toDouble() ?? 0.0)}',
             color: AppColors.success,
           ),
           _SummaryRow(
             label: 'Pending Amount',
-            value: '₹${_formatCurrency(data['pendingAmount'] as double)}',
+            value: '\$${_formatCurrency((data['pendingAmount'] as num?)?.toDouble() ?? 0.0)}',
             color: AppColors.error,
           ),
         ],
@@ -629,6 +690,484 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       return '${(amount / 1000).toStringAsFixed(1)}K';
     }
     return amount.toStringAsFixed(0);
+  }
+
+  Future<void> _exportToCSV() async {
+    if (_generatedReport == null) {
+      SuccessSnackbar.showError(context, 'Please generate a report first');
+      return;
+    }
+
+    try {
+      // Get academy details
+      final storageService = ref.read(storageServiceProvider);
+      final academyName = storageService.getAcademyName() ?? 'Badminton Academy';
+      final academyAddress = storageService.getAcademyAddress() ?? '';
+      final academyContact = storageService.getAcademyContact() ?? '';
+      final academyEmail = storageService.getAcademyEmail() ?? '';
+
+      final reportType = _generatedReport!['type'] as String;
+      final data = _generatedReport!['data'] as Map<String, dynamic>;
+      final period = _generatedReport!['period'] as String;
+      
+      String csvContent = '';
+      
+      // CSV Header with Academy Details
+      csvContent += '═══════════════════════════════════════════════════════════\n';
+      csvContent += '                    SHUTTLER\n';
+      csvContent += '          Badminton Academy Management System\n';
+      csvContent += '═══════════════════════════════════════════════════════════\n\n';
+      csvContent += 'ACADEMY DETAILS\n';
+      csvContent += '───────────────────────────────────────────────────────────\n';
+      csvContent += 'Academy Name: $academyName\n';
+      if (academyAddress.isNotEmpty) csvContent += 'Address: $academyAddress\n';
+      if (academyContact.isNotEmpty) csvContent += 'Contact: $academyContact\n';
+      if (academyEmail.isNotEmpty) csvContent += 'Email: $academyEmail\n';
+      csvContent += '───────────────────────────────────────────────────────────\n\n';
+      csvContent += 'REPORT INFORMATION\n';
+      csvContent += '───────────────────────────────────────────────────────────\n';
+      csvContent += 'Report Type: $reportType\n';
+      csvContent += 'Period: $period\n';
+      csvContent += 'Generated On: ${_generatedReport!['generatedOn']}\n';
+      csvContent += '───────────────────────────────────────────────────────────\n\n';
+      
+      if (_selectedType == 'attendance') {
+        // Attendance CSV
+        csvContent += 'ATTENDANCE DATA\n';
+        csvContent += '───────────────────────────────────────────────────────────\n';
+        csvContent += 'Date,Student Name,Student ID,Batch,Status\n';
+        final attendance = data['attendance'] as List<dynamic>;
+        for (var att in attendance) {
+          final date = att.date?.toString() ?? 'N/A';
+          final studentName = att.studentName?.toString() ?? 'N/A';
+          final studentId = att.studentId?.toString() ?? 'N/A';
+          final batchName = att.batchName?.toString() ?? 'N/A';
+          final status = att.status?.toString() ?? 'N/A';
+          csvContent += '$date,$studentName,$studentId,$batchName,$status\n';
+        }
+        csvContent += '\n';
+        csvContent += 'SUMMARY STATISTICS\n';
+        csvContent += '───────────────────────────────────────────────────────────\n';
+        csvContent += 'Metric,Value\n';
+        csvContent += 'Total Days,${data['totalDays']}\n';
+        csvContent += 'Total Records,${data['totalRecords']}\n';
+        csvContent += 'Present,${data['presentCount']}\n';
+        csvContent += 'Absent,${data['absentCount']}\n';
+        csvContent += 'Attendance Rate,${((data['attendanceRate'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(1)}%\n';
+        csvContent += '═══════════════════════════════════════════════════════════\n';
+      } else if (_selectedType == 'fee') {
+        // Fee CSV
+        csvContent += 'FEE DATA\n';
+        csvContent += '───────────────────────────────────────────────────────────\n';
+        csvContent += 'Student Name,Student ID,Amount,Status,Due Date,Paid Date\n';
+        final fees = data['fees'] as List<dynamic>;
+        for (var fee in fees) {
+          final studentName = fee.studentName?.toString() ?? 'N/A';
+          final studentId = fee.studentId?.toString() ?? 'N/A';
+          final amount = fee.amount?.toString() ?? '0';
+          final status = fee.status?.toString() ?? 'N/A';
+          final dueDate = fee.dueDate?.toString() ?? 'N/A';
+          // Get paidDate from first payment if available
+          String paidDate = 'N/A';
+          if (fee.payments != null && fee.payments is List && (fee.payments as List).isNotEmpty) {
+            final firstPayment = (fee.payments as List).first;
+            if (firstPayment.paidDate != null) {
+              paidDate = firstPayment.paidDate.toString();
+            }
+          }
+          csvContent += '$studentName,$studentId,$amount,$status,$dueDate,$paidDate\n';
+        }
+        csvContent += '\n';
+        csvContent += 'SUMMARY STATISTICS\n';
+        csvContent += '───────────────────────────────────────────────────────────\n';
+        csvContent += 'Metric,Value\n';
+        csvContent += 'Total Fees,${data['totalFees']}\n';
+        csvContent += 'Total Amount,\$${((data['totalAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}\n';
+        csvContent += 'Paid Amount,\$${((data['paidAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}\n';
+        csvContent += 'Pending Amount,\$${((data['pendingAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}\n';
+        csvContent += '═══════════════════════════════════════════════════════════\n';
+      }
+      
+      // Save CSV to file
+      final fileName = 'report_${DateTime.now().millisecondsSinceEpoch}.csv';
+      
+      if (kIsWeb) {
+        // Web: Download file using browser download
+        final bytes = Uint8List.fromList(csvContent.codeUnits);
+        downloadFileWeb(bytes, fileName, 'text/csv');
+        
+        if (mounted) {
+          SuccessSnackbar.show(
+            context,
+            'CSV exported successfully',
+          );
+        }
+      } else {
+        // Mobile/Desktop: Save to file system
+        final directory = await getApplicationDocumentsDirectory();
+        final file = File('${directory.path}/$fileName');
+        await file.writeAsString(csvContent);
+
+        if (mounted) {
+          SuccessSnackbar.show(
+            context,
+            'CSV exported successfully to: ${file.path}',
+          );
+        }
+      }
+      
+    } catch (e) {
+      SuccessSnackbar.showError(context, 'Failed to export CSV: ${e.toString()}');
+    }
+  }
+
+  Future<void> _exportToPDF() async {
+    if (_generatedReport == null) {
+      SuccessSnackbar.showError(context, 'Please generate a report first');
+      return;
+    }
+
+    try {
+      // Get academy details
+      final storageService = ref.read(storageServiceProvider);
+      final academyName = storageService.getAcademyName() ?? 'Badminton Academy';
+      final academyAddress = storageService.getAcademyAddress() ?? '';
+      final academyContact = storageService.getAcademyContact() ?? '';
+      final academyEmail = storageService.getAcademyEmail() ?? '';
+
+      final pdf = pw.Document();
+      final reportType = _generatedReport!['type'] as String;
+      final period = _generatedReport!['period'] as String;
+      final generatedOn = _generatedReport!['generatedOn'] as String;
+      final data = _generatedReport!['data'] as Map<String, dynamic>;
+
+      // Helper function to build PDF header
+      List<pw.Widget> _buildPDFHeader() {
+        return [
+          // Academy Header with Logo
+          pw.Container(
+            padding: const pw.EdgeInsets.all(20),
+            decoration: pw.BoxDecoration(
+              color: PdfColors.blueGrey900,
+              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+            ),
+            child: pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Expanded(
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(
+                        academyName,
+                        style: pw.TextStyle(
+                          fontSize: 24,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.white,
+                        ),
+                      ),
+                      if (academyAddress.isNotEmpty) ...[
+                        pw.SizedBox(height: 4),
+                        pw.Text(
+                          academyAddress,
+                          style: pw.TextStyle(
+                            fontSize: 10,
+                            color: PdfColors.grey300,
+                          ),
+                        ),
+                      ],
+                      if (academyContact.isNotEmpty || academyEmail.isNotEmpty) ...[
+                        pw.SizedBox(height: 4),
+                        pw.Row(
+                          children: [
+                            if (academyContact.isNotEmpty)
+                              pw.Text(
+                                'Phone: $academyContact',
+                                style: pw.TextStyle(
+                                  fontSize: 10,
+                                  color: PdfColors.grey300,
+                                ),
+                              ),
+                            if (academyContact.isNotEmpty && academyEmail.isNotEmpty)
+                              pw.Text(' | ', style: pw.TextStyle(fontSize: 10, color: PdfColors.grey300)),
+                            if (academyEmail.isNotEmpty)
+                              pw.Text(
+                                'Email: $academyEmail',
+                                style: pw.TextStyle(
+                                  fontSize: 10,
+                                  color: PdfColors.grey300,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                // Logo placeholder (using text icon)
+                pw.Container(
+                  width: 60,
+                  height: 60,
+                  decoration: pw.BoxDecoration(
+                    color: PdfColors.blue700,
+                    borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+                  ),
+                  child: pw.Center(
+                    child: pw.Text(
+                      '🏸',
+                      style: pw.TextStyle(fontSize: 32),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          pw.SizedBox(height: 20),
+          
+          // Report Title
+          pw.Text(
+            reportType,
+            style: pw.TextStyle(
+              fontSize: 22,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
+          pw.SizedBox(height: 10),
+          
+          // Report Info
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text('Period: $period', style: pw.TextStyle(fontSize: 11)),
+              pw.Text('Generated: $generatedOn', style: pw.TextStyle(fontSize: 11)),
+            ],
+          ),
+          pw.SizedBox(height: 20),
+        ];
+      }
+
+      // Build PDF content based on report type
+      if (reportType == 'Attendance Report') {
+        pdf.addPage(
+          pw.MultiPage(
+            pageFormat: PdfPageFormat.a4,
+            margin: const pw.EdgeInsets.all(40),
+            build: (pw.Context context) {
+              return [
+                ..._buildPDFHeader(),
+                
+                // Summary Statistics
+                pw.Text(
+                  'Summary',
+                  style: pw.TextStyle(
+                    fontSize: 18,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 10),
+                pw.Table(
+                  border: pw.TableBorder.all(),
+                  children: [
+                    pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('Total Days'),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('${data['totalDays']}'),
+                        ),
+                      ],
+                    ),
+                    pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('Total Records'),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('${data['totalRecords']}'),
+                        ),
+                      ],
+                    ),
+                    pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('Present'),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('${data['presentCount']}'),
+                        ),
+                      ],
+                    ),
+                    pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('Absent'),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('${data['absentCount']}'),
+                        ),
+                      ],
+                    ),
+                    pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('Attendance Rate'),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('${(data['attendanceRate'] as num).toStringAsFixed(1)}%'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ];
+            },
+          ),
+        );
+      } else if (reportType == 'Fee Report') {
+        pdf.addPage(
+          pw.MultiPage(
+            pageFormat: PdfPageFormat.a4,
+            margin: const pw.EdgeInsets.all(40),
+            build: (pw.Context context) {
+              return [
+                ..._buildPDFHeader(),
+                
+                // Summary Statistics
+                pw.Text(
+                  'Summary',
+                  style: pw.TextStyle(
+                    fontSize: 18,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 10),
+                pw.Table(
+                  border: pw.TableBorder.all(),
+                  children: [
+                    pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('Total Amount'),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('\$ ${((data['totalAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}'),
+                        ),
+                      ],
+                    ),
+                    pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('Paid Amount'),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('\$ ${((data['paidAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}'),
+                        ),
+                      ],
+                    ),
+                    pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('Pending Amount'),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('\$ ${((data['pendingAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}'),
+                        ),
+                      ],
+                    ),
+                    pw.TableRow(
+                      children: [
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('Overdue Amount'),
+                        ),
+                        pw.Padding(
+                          padding: const pw.EdgeInsets.all(8),
+                          child: pw.Text('\$ ${((data['overdueAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ];
+            },
+          ),
+        );
+      } else if (reportType == 'Performance Report') {
+        pdf.addPage(
+          pw.MultiPage(
+            pageFormat: PdfPageFormat.a4,
+            margin: const pw.EdgeInsets.all(40),
+            build: (pw.Context context) {
+              return [
+                ..._buildPDFHeader(),
+                
+                // Summary
+                pw.Text(
+                  'Performance Summary',
+                  style: pw.TextStyle(
+                    fontSize: 18,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
+                pw.SizedBox(height: 10),
+                pw.Text('Total Students: ${data['totalStudents']}'),
+                pw.SizedBox(height: 10),
+                pw.Text('Average Performance: ${(data['averagePerformance'] as num).toStringAsFixed(1)}'),
+              ];
+            },
+          ),
+        );
+      }
+
+      // Save PDF to file
+      final bytes = await pdf.save();
+      final fileName = 'report_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      
+      if (kIsWeb) {
+        // Web: Download file using browser download
+        downloadFileWeb(bytes, fileName, 'application/pdf');
+        
+        if (mounted) {
+          SuccessSnackbar.show(
+            context,
+            'PDF exported successfully',
+          );
+        }
+      } else {
+        // Mobile/Desktop: Save to file system
+        final directory = await getApplicationDocumentsDirectory();
+        final file = File('${directory.path}/$fileName');
+        await file.writeAsBytes(bytes);
+
+        if (mounted) {
+          SuccessSnackbar.show(
+            context,
+            'PDF exported successfully to: ${file.path}',
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        SuccessSnackbar.showError(context, 'Failed to export PDF: ${e.toString()}');
+      }
+    }
   }
 }
 

@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
-import '../../providers/service_providers.dart';
+import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/error_widget.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/performance_provider.dart';
+import '../../models/performance.dart';
 
 /// Student Performance Screen - READ-ONLY view of performance records
 /// Students can view their skill ratings and progress but cannot edit
@@ -17,60 +22,18 @@ class StudentPerformanceScreen extends ConsumerStatefulWidget {
 }
 
 class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScreen> {
-  bool _isLoading = true;
-  List<Map<String, dynamic>> _performanceRecords = [];
-  Map<String, dynamic> _latestPerformance = {};
-  String? _error;
+  // Filter options
+  String _selectionMode = 'all'; // 'date', 'month', 'year', 'all'
+  DateTime? _selectedDate;
+  DateTime? _selectedMonth;
+  int? _selectedYear;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
-  }
-
-  Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    try {
-      final storageService = ref.read(storageServiceProvider);
-      final apiService = ref.read(apiServiceProvider);
-      final userId = storageService.getUserId();
-
-      if (userId == null) {
-        throw Exception('User not logged in');
-      }
-
-      // Load performance records
-      try {
-        final response = await apiService.get('/api/students/$userId/performance');
-        if (response.statusCode == 200) {
-          _performanceRecords = List<Map<String, dynamic>>.from(response.data['records'] ?? []);
-          if (_performanceRecords.isNotEmpty) {
-            _latestPerformance = _performanceRecords.first;
-          }
-        }
-      } catch (e) {
-        // Endpoint may not exist yet - use empty data
-        _performanceRecords = [];
-        _latestPerformance = {};
-      }
-
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _error = e.toString().replaceAll('Exception: ', '');
-        });
-      }
-    }
+    _selectedMonth = DateTime.now();
+    _selectedDate = DateTime.now();
+    _selectedYear = DateTime.now().year;
   }
 
   @override
@@ -78,172 +41,251 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: RefreshIndicator(
-        onRefresh: _loadData,
-        child: CustomScrollView(
-          slivers: [
-            // App Bar
-            SliverAppBar(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              pinned: true,
-              title: Text(
-                'My Performance',
-                style: TextStyle(
-                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              centerTitle: true,
-            ),
-
-            // Content
-            SliverToBoxAdapter(
-              child: _isLoading
-                  ? const SizedBox(
-                      height: 400,
-                      child: Center(child: LoadingSpinner()),
-                    )
-                  : _error != null
-                      ? _buildErrorWidget(isDark)
-                      : _performanceRecords.isEmpty
-                          ? _buildEmptyState(isDark)
-                          : Column(
-                              children: [
-                                // Latest Performance Overview
-                                _buildLatestPerformance(isDark),
-
-                                const SizedBox(height: AppDimensions.spacingL),
-
-                                // Skill Breakdown
-                                _buildSkillBreakdown(isDark),
-
-                                const SizedBox(height: AppDimensions.spacingL),
-
-                                // Performance History Header
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: AppDimensions.paddingL,
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        'Performance History',
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w600,
-                                          color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                                        ),
-                                      ),
-                                      Text(
-                                        '${_performanceRecords.length} records',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-
-                                const SizedBox(height: AppDimensions.spacingM),
-                              ],
-                            ),
-            ),
-
-            // Performance Records List
-            if (!_isLoading && _error == null && _performanceRecords.isNotEmpty)
-              SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final record = _performanceRecords[index];
-                    return _PerformanceRecordCard(
-                      record: record,
-                      isDark: isDark,
-                    );
-                  },
-                  childCount: _performanceRecords.length,
-                ),
-              ),
-
-            // Bottom spacing
-            const SliverToBoxAdapter(
-              child: SizedBox(height: 100),
-            ),
-          ],
+    // Get user ID from auth provider
+    final authStateAsync = ref.watch(authProvider);
+    
+    return authStateAsync.when(
+      loading: () => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: const Center(child: ListSkeleton(itemCount: 5)),
+      ),
+      error: (error, stack) => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: ErrorDisplay(
+          message: 'Failed to load user data: ${error.toString()}',
+          onRetry: () => ref.invalidate(authProvider),
         ),
       ),
+      data: (authState) {
+        if (authState is! Authenticated) {
+          return Scaffold(
+            backgroundColor: Colors.transparent,
+            body: ErrorDisplay(
+              message: 'Please log in to view performance records',
+              onRetry: () => ref.invalidate(authProvider),
+            ),
+          );
+        }
+
+        final userId = authState.userId;
+        
+        // Determine date range based on selection mode
+        DateTime? startDate;
+        DateTime? endDate;
+        
+        if (_selectionMode == 'date' && _selectedDate != null) {
+          // Single date selection
+          startDate = DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day);
+          endDate = DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day, 23, 59, 59);
+        } else if (_selectionMode == 'month' && _selectedMonth != null) {
+          // Month selection
+          startDate = DateTime(_selectedMonth!.year, _selectedMonth!.month, 1);
+          endDate = DateTime(_selectedMonth!.year, _selectedMonth!.month + 1, 0, 23, 59, 59);
+        } else if (_selectionMode == 'year' && _selectedYear != null) {
+          // Year selection
+          startDate = DateTime(_selectedYear!, 1, 1);
+          endDate = DateTime(_selectedYear!, 12, 31, 23, 59, 59);
+        }
+        // If 'all', startDate and endDate remain null
+        
+        final performanceAsync = ref.watch(performanceByStudentProvider(
+          userId,
+          startDate: startDate,
+          endDate: endDate,
+        ));
+
+        return Scaffold(
+          backgroundColor: Colors.transparent,
+          body: RefreshIndicator(
+            onRefresh: () async {
+              DateTime? startDate;
+              DateTime? endDate;
+              
+              if (_selectionMode == 'date' && _selectedDate != null) {
+                startDate = DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day);
+                endDate = DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day, 23, 59, 59);
+              } else if (_selectionMode == 'month' && _selectedMonth != null) {
+                startDate = DateTime(_selectedMonth!.year, _selectedMonth!.month, 1);
+                endDate = DateTime(_selectedMonth!.year, _selectedMonth!.month + 1, 0, 23, 59, 59);
+              } else if (_selectionMode == 'year' && _selectedYear != null) {
+                startDate = DateTime(_selectedYear!, 1, 1);
+                endDate = DateTime(_selectedYear!, 12, 31, 23, 59, 59);
+              }
+              
+              ref.invalidate(performanceByStudentProvider(
+                userId,
+                startDate: startDate,
+                endDate: endDate,
+              ));
+              ref.invalidate(averagePerformanceProvider(userId));
+            },
+            child: CustomScrollView(
+              slivers: [
+                // App Bar
+                SliverAppBar(
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  pinned: true,
+                  title: Text(
+                    'My Performance',
+                    style: TextStyle(
+                      color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  centerTitle: true,
+                ),
+
+                // Content
+                SliverToBoxAdapter(
+                  child: performanceAsync.when(
+                    loading: () => const SizedBox(
+                      height: 400,
+                      child: ListSkeleton(itemCount: 3),
+                    ),
+                    error: (error, stack) => ErrorDisplay(
+                      message: 'Failed to load performance records: ${error.toString()}',
+                      onRetry: () {
+                        DateTime? startDate;
+                        DateTime? endDate;
+                        
+                        if (_selectionMode == 'date' && _selectedDate != null) {
+                          startDate = DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day);
+                          endDate = DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day, 23, 59, 59);
+                        } else if (_selectionMode == 'month' && _selectedMonth != null) {
+                          startDate = DateTime(_selectedMonth!.year, _selectedMonth!.month, 1);
+                          endDate = DateTime(_selectedMonth!.year, _selectedMonth!.month + 1, 0, 23, 59, 59);
+                        } else if (_selectionMode == 'year' && _selectedYear != null) {
+                          startDate = DateTime(_selectedYear!, 1, 1);
+                          endDate = DateTime(_selectedYear!, 12, 31, 23, 59, 59);
+                        }
+                        
+                        ref.invalidate(performanceByStudentProvider(
+                          userId,
+                          startDate: startDate,
+                          endDate: endDate,
+                        ));
+                      },
+                    ),
+                    data: (performanceRecords) {
+                      if (performanceRecords.isEmpty) {
+                        return Column(
+                          children: [
+                            _buildDateSelector(isDark, userId),
+                            const SizedBox(height: AppDimensions.spacingL),
+                            EmptyState.noPerformance(),
+                          ],
+                        );
+                      }
+
+                      // Calculate averages from filtered records
+                      final overallStats = _calculateOverallStats(performanceRecords);
+
+                      // Sort by date descending (latest first)
+                      final sortedRecords = List<Performance>.from(performanceRecords)
+                        ..sort((a, b) => b.date.compareTo(a.date));
+
+                      return Column(
+                        children: [
+                          // Overall Performance Overview (based on filtered records)
+                          _buildOverallPerformance(isDark, overallStats),
+
+                          const SizedBox(height: AppDimensions.spacingL),
+
+                          // Progress Chart
+                          if (sortedRecords.length >= 2)
+                            _buildProgressChart(isDark, sortedRecords),
+
+                          if (sortedRecords.length >= 2)
+                            const SizedBox(height: AppDimensions.spacingL),
+
+                          // Overall Skill Breakdown (based on filtered records)
+                          _buildOverallSkillBreakdown(isDark, overallStats),
+
+                          const SizedBox(height: AppDimensions.spacingL),
+
+                          // Date Selector
+                          _buildDateSelector(isDark, userId),
+
+                          const SizedBox(height: AppDimensions.spacingM),
+
+                          // Performance History Header
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppDimensions.paddingL,
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Performance History',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                                  ),
+                                ),
+                                Text(
+                                  '${sortedRecords.length} records',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          const SizedBox(height: AppDimensions.spacingM),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+
+                // Performance Records List
+                performanceAsync.when(
+                  loading: () => const SliverToBoxAdapter(child: SizedBox()),
+                  error: (_, __) => const SliverToBoxAdapter(child: SizedBox()),
+                  data: (performanceRecords) {
+                    if (performanceRecords.isEmpty) {
+                      return const SliverToBoxAdapter(child: SizedBox());
+                    }
+
+                    // Sort by date descending (latest first)
+                    final sortedRecords = List<Performance>.from(performanceRecords)
+                      ..sort((a, b) => b.date.compareTo(a.date));
+
+                    return SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final record = sortedRecords[index];
+                          return _PerformanceRecordCard(
+                            record: record,
+                            isDark: isDark,
+                          );
+                        },
+                        childCount: sortedRecords.length,
+                      ),
+                    );
+                  },
+                ),
+
+                // Bottom spacing
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 100),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildErrorWidget(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.all(AppDimensions.paddingL),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.error_outline,
-            size: 48,
-            color: isDark ? AppColors.error : AppColorsLight.error,
-          ),
-          const SizedBox(height: AppDimensions.spacingM),
-          Text(
-            _error!,
-            style: TextStyle(
-              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: AppDimensions.spacingL),
-          ElevatedButton(
-            onPressed: _loadData,
-            child: const Text('Retry'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.all(AppDimensions.paddingXl),
-      child: Column(
-        children: [
-          const SizedBox(height: AppDimensions.spacingXxl),
-          Icon(
-            Icons.trending_up,
-            size: 64,
-            color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
-          ),
-          const SizedBox(height: AppDimensions.spacingM),
-          Text(
-            'No performance records yet',
-            style: TextStyle(
-              fontSize: 16,
-              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-            ),
-          ),
-          const SizedBox(height: AppDimensions.spacingS),
-          Text(
-            'Your coach will record your performance after sessions',
-            style: TextStyle(
-              fontSize: 14,
-              color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLatestPerformance(bool isDark) {
-    final avgScore = _calculateAverageScore(_latestPerformance);
-    final date = _latestPerformance['date']?.toString() ?? '';
+  Widget _buildOverallPerformance(bool isDark, Map<String, dynamic> overallStats) {
+    final avgScore = (overallStats['average'] ?? 0.0).toDouble();
+    final totalRecords = (overallStats['totalRecords'] ?? 0) as int;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
@@ -252,7 +294,7 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
         child: Column(
           children: [
             Text(
-              'Latest Assessment',
+              'Overall Performance Record',
               style: TextStyle(
                 fontSize: 14,
                 color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
@@ -302,7 +344,7 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
             const SizedBox(height: AppDimensions.spacingM),
 
             Text(
-              _formatDate(date),
+              'Based on $totalRecords ${totalRecords == 1 ? 'record' : 'records'}',
               style: TextStyle(
                 fontSize: 12,
                 color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
@@ -314,13 +356,13 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
     );
   }
 
-  Widget _buildSkillBreakdown(bool isDark) {
+  Widget _buildOverallSkillBreakdown(bool isDark, Map<String, dynamic> overallStats) {
     final skills = [
-      {'name': 'Serve', 'key': 'serve_rating', 'icon': Icons.sports_tennis},
-      {'name': 'Smash', 'key': 'smash_rating', 'icon': Icons.bolt},
-      {'name': 'Footwork', 'key': 'footwork_rating', 'icon': Icons.directions_run},
-      {'name': 'Defense', 'key': 'defense_rating', 'icon': Icons.shield},
-      {'name': 'Stamina', 'key': 'stamina_rating', 'icon': Icons.favorite},
+      {'name': 'Serve', 'rating': (overallStats['serve'] ?? 0.0).toDouble(), 'icon': Icons.sports_tennis},
+      {'name': 'Smash', 'rating': (overallStats['smash'] ?? 0.0).toDouble(), 'icon': Icons.bolt},
+      {'name': 'Footwork', 'rating': (overallStats['footwork'] ?? 0.0).toDouble(), 'icon': Icons.directions_run},
+      {'name': 'Defense', 'rating': (overallStats['defense'] ?? 0.0).toDouble(), 'icon': Icons.shield},
+      {'name': 'Stamina', 'rating': (overallStats['stamina'] ?? 0.0).toDouble(), 'icon': Icons.favorite},
     ];
 
     return Padding(
@@ -341,7 +383,7 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
             padding: const EdgeInsets.all(AppDimensions.paddingM),
             child: Column(
               children: skills.map((skill) {
-                final rating = (_latestPerformance[skill['key']] ?? 0).toDouble();
+                final rating = (skill['rating'] as double);
                 return _SkillBar(
                   name: skill['name'] as String,
                   rating: rating,
@@ -356,20 +398,57 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
     );
   }
 
-  double _calculateAverageScore(Map<String, dynamic> record) {
-    final skills = ['serve_rating', 'smash_rating', 'footwork_rating', 'defense_rating', 'stamina_rating'];
-    double total = 0;
-    int count = 0;
+  void _refreshPerformanceData(int userId) {
+    DateTime? startDate;
+    DateTime? endDate;
+    
+    if (_selectionMode == 'date' && _selectedDate != null) {
+      startDate = DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day);
+      endDate = DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day, 23, 59, 59);
+    } else if (_selectionMode == 'month' && _selectedMonth != null) {
+      startDate = DateTime(_selectedMonth!.year, _selectedMonth!.month, 1);
+      endDate = DateTime(_selectedMonth!.year, _selectedMonth!.month + 1, 0, 23, 59, 59);
+    } else if (_selectionMode == 'year' && _selectedYear != null) {
+      startDate = DateTime(_selectedYear!, 1, 1);
+      endDate = DateTime(_selectedYear!, 12, 31, 23, 59, 59);
+    }
+    
+    ref.invalidate(performanceByStudentProvider(
+      userId,
+      startDate: startDate,
+      endDate: endDate,
+    ));
+  }
 
-    for (var skill in skills) {
-      final value = record[skill];
-      if (value != null) {
-        total += (value as num).toDouble();
-        count++;
-      }
+  Map<String, dynamic> _calculateOverallStats(List<Performance> records) {
+    if (records.isEmpty) {
+      return {
+        'average': 0.0,
+        'serve': 0.0,
+        'smash': 0.0,
+        'footwork': 0.0,
+        'defense': 0.0,
+        'stamina': 0.0,
+        'totalRecords': 0,
+      };
     }
 
-    return count > 0 ? total / count : 0;
+    final serveAvg = records.map((r) => r.serve).reduce((a, b) => a + b) / records.length;
+    final smashAvg = records.map((r) => r.smash).reduce((a, b) => a + b) / records.length;
+    final footworkAvg = records.map((r) => r.footwork).reduce((a, b) => a + b) / records.length;
+    final defenseAvg = records.map((r) => r.defense).reduce((a, b) => a + b) / records.length;
+    final staminaAvg = records.map((r) => r.stamina).reduce((a, b) => a + b) / records.length;
+    final overallAvg = (serveAvg + smashAvg + footworkAvg + defenseAvg + staminaAvg) / 5.0;
+
+    return {
+      'average': overallAvg,
+      'serve': serveAvg,
+      'smash': smashAvg,
+      'footwork': footworkAvg,
+      'defense': defenseAvg,
+      'stamina': staminaAvg,
+      'totalRecords': records.length,
+    };
   }
 
   Color _getScoreColor(double score, bool isDark) {
@@ -384,14 +463,542 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
     }
   }
 
-  String _formatDate(String dateStr) {
-    try {
-      final date = DateTime.parse(dateStr);
-      final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      return '${date.day} ${months[date.month - 1]} ${date.year}';
-    } catch (e) {
-      return dateStr;
+  Widget _buildDateSelector(bool isDark, int userId) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+      child: Column(
+        children: [
+          // Selection Mode Tabs
+          Row(
+            children: [
+              Expanded(
+                child: _SelectionModeTab(
+                  label: 'Date',
+                  isSelected: _selectionMode == 'date',
+                  isDark: isDark,
+                  onTap: () {
+                    setState(() {
+                      _selectionMode = 'date';
+                    });
+                    _refreshPerformanceData(userId);
+                  },
+                ),
+              ),
+              const SizedBox(width: AppDimensions.spacingS),
+              Expanded(
+                child: _SelectionModeTab(
+                  label: 'Month',
+                  isSelected: _selectionMode == 'month',
+                  isDark: isDark,
+                  onTap: () {
+                    setState(() {
+                      _selectionMode = 'month';
+                    });
+                    _refreshPerformanceData(userId);
+                  },
+                ),
+              ),
+              const SizedBox(width: AppDimensions.spacingS),
+              Expanded(
+                child: _SelectionModeTab(
+                  label: 'Year',
+                  isSelected: _selectionMode == 'year',
+                  isDark: isDark,
+                  onTap: () {
+                    setState(() {
+                      _selectionMode = 'year';
+                    });
+                    _refreshPerformanceData(userId);
+                  },
+                ),
+              ),
+              const SizedBox(width: AppDimensions.spacingS),
+              Expanded(
+                child: _SelectionModeTab(
+                  label: 'All',
+                  isSelected: _selectionMode == 'all',
+                  isDark: isDark,
+                  onTap: () {
+                    setState(() {
+                      _selectionMode = 'all';
+                    });
+                    _refreshPerformanceData(userId);
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppDimensions.spacingM),
+          // Date/Month/Year Display and Navigation
+          _buildDateDisplay(isDark, userId),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDateDisplay(bool isDark, int userId) {
+    if (_selectionMode == 'date') {
+      final date = _selectedDate ?? DateTime.now();
+      return GestureDetector(
+        onTap: () => _showDatePicker(isDark),
+        child: NeumorphicContainer(
+          padding: const EdgeInsets.all(AppDimensions.paddingM),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                icon: Icon(
+                  Icons.chevron_left,
+                  color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
+                ),
+                onPressed: () {
+                  final newDate = date.subtract(const Duration(days: 1));
+                  setState(() {
+                    _selectedDate = newDate;
+                  });
+                  _refreshPerformanceData(userId);
+                },
+              ),
+              Text(
+                DateFormat('EEE, d MMM yyyy').format(date),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                ),
+              ),
+              IconButton(
+                icon: Icon(
+                  Icons.chevron_right,
+                  color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
+                ),
+                onPressed: () {
+                  final now = DateTime.now();
+                  final nextDate = date.add(const Duration(days: 1));
+                  if (nextDate.isBefore(now) || nextDate.isAtSameMomentAs(now)) {
+                    setState(() {
+                      _selectedDate = nextDate;
+                    });
+                    _refreshPerformanceData(userId);
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    } else if (_selectionMode == 'month') {
+      final months = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+      ];
+      final currentMonth = _selectedMonth ?? DateTime.now();
+      return GestureDetector(
+        onTap: () => _showMonthPicker(isDark),
+        child: NeumorphicContainer(
+          padding: const EdgeInsets.all(AppDimensions.paddingM),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                icon: Icon(
+                  Icons.chevron_left,
+                  color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _selectedMonth = DateTime(currentMonth.year, currentMonth.month - 1);
+                  });
+                },
+              ),
+              Text(
+                '${months[currentMonth.month - 1]} ${currentMonth.year}',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                ),
+              ),
+              IconButton(
+                icon: Icon(
+                  Icons.chevron_right,
+                  color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
+                ),
+                onPressed: () {
+                  final now = DateTime.now();
+                  if (currentMonth.year < now.year ||
+                      (currentMonth.year == now.year && currentMonth.month < now.month)) {
+                    setState(() {
+                      _selectedMonth = DateTime(currentMonth.year, currentMonth.month + 1);
+                    });
+                    _refreshPerformanceData(userId);
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    } else if (_selectionMode == 'year') {
+      final currentYear = _selectedYear ?? DateTime.now().year;
+      return GestureDetector(
+        onTap: () => _showYearPicker(isDark),
+        child: NeumorphicContainer(
+          padding: const EdgeInsets.all(AppDimensions.paddingM),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                icon: Icon(
+                  Icons.chevron_left,
+                  color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _selectedYear = currentYear - 1;
+                  });
+                  _refreshPerformanceData(userId);
+                },
+              ),
+              Text(
+                currentYear.toString(),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                ),
+              ),
+              IconButton(
+                icon: Icon(
+                  Icons.chevron_right,
+                  color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
+                ),
+                onPressed: () {
+                  final now = DateTime.now();
+                  if (currentYear < now.year) {
+                    setState(() {
+                      _selectedYear = currentYear + 1;
+                    });
+                    _refreshPerformanceData(userId);
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      );
+    } else {
+      // All mode
+      return NeumorphicContainer(
+        padding: const EdgeInsets.all(AppDimensions.paddingM),
+        child: Center(
+          child: Text(
+            'All Performance Records',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+            ),
+          ),
+        ),
+      );
     }
+  }
+
+  void _showDatePicker(bool isDark) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: isDark
+                ? const ColorScheme.dark(
+                    primary: AppColors.accent,
+                    surface: AppColors.cardBackground,
+                  )
+                : const ColorScheme.light(
+                    primary: AppColorsLight.accent,
+                    surface: AppColorsLight.cardBackground,
+                  ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _selectedDate = picked;
+      });
+      // Get userId to refresh provider
+      final authState = ref.read(authProvider);
+      authState.whenData((auth) {
+        if (auth is Authenticated) {
+          _refreshPerformanceData(auth.userId);
+        }
+      });
+    }
+  }
+
+  void _showMonthPicker(bool isDark) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedMonth ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      initialDatePickerMode: DatePickerMode.year,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: isDark
+                ? const ColorScheme.dark(
+                    primary: AppColors.accent,
+                    surface: AppColors.cardBackground,
+                  )
+                : const ColorScheme.light(
+                    primary: AppColorsLight.accent,
+                    surface: AppColorsLight.cardBackground,
+                  ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _selectedMonth = picked;
+      });
+      // Get userId to refresh provider
+      final authState = ref.read(authProvider);
+      authState.whenData((auth) {
+        if (auth is Authenticated) {
+          _refreshPerformanceData(auth.userId);
+        }
+      });
+    }
+  }
+
+  void _showYearPicker(bool isDark) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime(_selectedYear ?? DateTime.now().year),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      initialDatePickerMode: DatePickerMode.year,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: isDark
+                ? const ColorScheme.dark(
+                    primary: AppColors.accent,
+                    surface: AppColors.cardBackground,
+                  )
+                : const ColorScheme.light(
+                    primary: AppColorsLight.accent,
+                    surface: AppColorsLight.cardBackground,
+                  ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _selectedYear = picked.year;
+      });
+      // Get userId to refresh provider
+      final authState = ref.read(authProvider);
+      authState.whenData((auth) {
+        if (auth is Authenticated) {
+          _refreshPerformanceData(auth.userId);
+        }
+      });
+    }
+  }
+
+  Widget _buildProgressChart(bool isDark, List<Performance> performanceRecords) {
+    // Sort by date ascending for chart
+    final sortedHistory = List<Performance>.from(performanceRecords)
+      ..sort((a, b) => a.date.compareTo(b.date));
+
+    // Prepare data for chart - average rating over time
+    final spots = sortedHistory.asMap().entries.map((entry) {
+      return FlSpot(entry.key.toDouble(), entry.value.averageRating);
+    }).toList();
+
+    final textColor = isDark ? AppColors.textSecondary : AppColorsLight.textSecondary;
+    final accentColor = isDark ? AppColors.accent : AppColorsLight.accent;
+    final bgColor = isDark ? AppColors.background : AppColorsLight.background;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+      child: NeumorphicContainer(
+        padding: const EdgeInsets.all(AppDimensions.paddingM),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Performance Progress',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+              ),
+            ),
+            const SizedBox(height: AppDimensions.spacingM),
+            SizedBox(
+              height: 200,
+              child: LineChart(
+                LineChartData(
+                  gridData: FlGridData(
+                    show: true,
+                    drawVerticalLine: false,
+                    horizontalInterval: 1,
+                    getDrawingHorizontalLine: (value) {
+                      return FlLine(
+                        color: textColor.withOpacity(0.1),
+                        strokeWidth: 1,
+                      );
+                    },
+                  ),
+                  titlesData: FlTitlesData(
+                    show: true,
+                    rightTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    topTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 30,
+                        interval: 1,
+                        getTitlesWidget: (value, meta) {
+                          if (value.toInt() >= sortedHistory.length) {
+                            return const Text('');
+                          }
+                          final date = sortedHistory[value.toInt()].date;
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 8.0),
+                            child: Text(
+                              DateFormat('MMM dd').format(date),
+                              style: TextStyle(
+                                color: textColor,
+                                fontSize: 10,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    leftTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        reservedSize: 40,
+                        interval: 1,
+                        getTitlesWidget: (value, meta) {
+                          return Text(
+                            value.toStringAsFixed(1),
+                            style: TextStyle(
+                              color: textColor,
+                              fontSize: 10,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  borderData: FlBorderData(
+                    show: true,
+                    border: Border.all(
+                      color: textColor.withOpacity(0.2),
+                      width: 1,
+                    ),
+                  ),
+                  minX: 0,
+                  maxX: (sortedHistory.length - 1).toDouble(),
+                  minY: 0,
+                  maxY: 5,
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: spots,
+                      isCurved: true,
+                      color: accentColor,
+                      barWidth: 3,
+                      isStrokeCapRound: true,
+                      dotData: FlDotData(
+                        show: true,
+                        getDotPainter: (spot, percent, barData, index) {
+                          return FlDotCirclePainter(
+                            radius: 4,
+                            color: accentColor,
+                            strokeWidth: 2,
+                            strokeColor: bgColor,
+                          );
+                        },
+                      ),
+                      belowBarData: BarAreaData(
+                        show: true,
+                        color: accentColor.withOpacity(0.1),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SelectionModeTab extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final bool isDark;
+  final VoidCallback onTap;
+
+  const _SelectionModeTab({
+    required this.label,
+    required this.isSelected,
+    required this.isDark,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? (isDark ? AppColors.accent : AppColorsLight.accent)
+              : (isDark ? AppColors.cardBackground : AppColorsLight.cardBackground),
+          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+          boxShadow: isSelected ? null : NeumorphicStyles.getElevatedShadow(),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              color: isSelected
+                  ? Colors.white
+                  : (isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -494,7 +1101,7 @@ class _SkillBar extends StatelessWidget {
 }
 
 class _PerformanceRecordCard extends StatelessWidget {
-  final Map<String, dynamic> record;
+  final Performance record;
   final bool isDark;
 
   const _PerformanceRecordCard({
@@ -504,9 +1111,9 @@ class _PerformanceRecordCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final date = record['date']?.toString() ?? '';
-    final comments = record['comments']?.toString() ?? '';
-    final avgScore = _calculateAverageScore(record);
+    final date = record.date;
+    final comments = record.comments ?? '';
+    final avgScore = record.averageRating;
 
     return Padding(
       padding: const EdgeInsets.symmetric(
@@ -522,7 +1129,7 @@ class _PerformanceRecordCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  _formatDate(date),
+                  _formatDate(date.toIso8601String()),
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -558,27 +1165,27 @@ class _PerformanceRecordCard extends StatelessWidget {
               children: [
                 _MiniSkillRating(
                   label: 'Serve',
-                  rating: (record['serve_rating'] ?? 0).toDouble(),
+                  rating: record.serve.toDouble(),
                   isDark: isDark,
                 ),
                 _MiniSkillRating(
                   label: 'Smash',
-                  rating: (record['smash_rating'] ?? 0).toDouble(),
+                  rating: record.smash.toDouble(),
                   isDark: isDark,
                 ),
                 _MiniSkillRating(
                   label: 'Footwork',
-                  rating: (record['footwork_rating'] ?? 0).toDouble(),
+                  rating: record.footwork.toDouble(),
                   isDark: isDark,
                 ),
                 _MiniSkillRating(
                   label: 'Defense',
-                  rating: (record['defense_rating'] ?? 0).toDouble(),
+                  rating: record.defense.toDouble(),
                   isDark: isDark,
                 ),
                 _MiniSkillRating(
                   label: 'Stamina',
-                  rating: (record['stamina_rating'] ?? 0).toDouble(),
+                  rating: record.stamina.toDouble(),
                   isDark: isDark,
                 ),
               ],
@@ -623,21 +1230,7 @@ class _PerformanceRecordCard extends StatelessWidget {
     );
   }
 
-  double _calculateAverageScore(Map<String, dynamic> record) {
-    final skills = ['serve_rating', 'smash_rating', 'footwork_rating', 'defense_rating', 'stamina_rating'];
-    double total = 0;
-    int count = 0;
-
-    for (var skill in skills) {
-      final value = record[skill];
-      if (value != null) {
-        total += (value as num).toDouble();
-        count++;
-      }
-    }
-
-    return count > 0 ? total / count : 0;
-  }
+  // Removed _calculateAverageScore - using Performance.averageRating instead
 
   Color _getScoreColor(double score, bool isDark) {
     if (score >= 4) {

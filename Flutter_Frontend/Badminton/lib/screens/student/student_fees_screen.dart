@@ -4,8 +4,11 @@ import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
-import '../../providers/service_providers.dart';
+import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/error_widget.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/fee_provider.dart';
+import '../../models/fee.dart';
 
 /// Student Fees Screen - READ-ONLY view of fee status and payment history
 /// Students can view their fee records but cannot make payments
@@ -19,118 +22,53 @@ class StudentFeesScreen extends ConsumerStatefulWidget {
 }
 
 class _StudentFeesScreenState extends ConsumerState<StudentFeesScreen> {
-  bool _isLoading = true;
-  List<Map<String, dynamic>> _feeRecords = [];
-  Map<String, dynamic> _feeStats = {};
-  String? _error;
   String _selectedFilter = 'all'; // 'all', 'paid', 'pending', 'overdue'
 
-  @override
-  void initState() {
-    super.initState();
-    _loadData();
-  }
-
-  Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    try {
-      final storageService = ref.read(storageServiceProvider);
-      final apiService = ref.read(apiServiceProvider);
-      final userId = storageService.getUserId();
-
-      if (userId == null) {
-        throw Exception('User not logged in');
-      }
-
-      try {
-        final response = await apiService.get('/api/students/$userId/fees');
-        if (response.statusCode == 200) {
-          _feeRecords = List<Map<String, dynamic>>.from(response.data['records'] ?? []);
-          _calculateStats();
-        }
-      } catch (e) {
-        // Endpoint may not exist yet - use empty data
-        _feeRecords = [];
-        _feeStats = {
-          'total_fees': 0.0,
-          'paid_fees': 0.0,
-          'pending_fees': 0.0,
-          'overdue_fees': 0.0,
-          'paid_count': 0,
-          'total_count': 0,
-        };
-      }
-
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _error = e.toString().replaceAll('Exception: ', '');
-        });
-      }
-    }
-  }
-
-  void _calculateStats() {
+  // Calculate stats from fee list
+  Map<String, dynamic> _calculateStats(List<Fee> fees) {
     double totalFees = 0;
     double paidFees = 0;
     double pendingFees = 0;
     double overdueFees = 0;
     int paidCount = 0;
 
-    for (var fee in _feeRecords) {
-      final amount = (fee['amount'] ?? 0).toDouble();
-      final status = fee['status']?.toString().toLowerCase() ?? 'pending';
-      final dueDate = DateTime.tryParse(fee['due_date']?.toString() ?? '');
+    for (var fee in fees) {
+      totalFees += fee.amount;
 
-      totalFees += amount;
-
-      if (status == 'paid') {
-        paidFees += amount;
+      if (fee.status == 'paid') {
+        paidFees += fee.amount;
         paidCount++;
       } else {
-        if (dueDate != null && dueDate.isBefore(DateTime.now())) {
-          overdueFees += amount;
+        if (fee.dueDate.isBefore(DateTime.now())) {
+          overdueFees += fee.amount;
         } else {
-          pendingFees += amount;
+          pendingFees += fee.amount;
         }
       }
     }
 
-    _feeStats = {
+    return {
       'total_fees': totalFees,
       'paid_fees': paidFees,
       'pending_fees': pendingFees,
       'overdue_fees': overdueFees,
       'paid_count': paidCount,
-      'total_count': _feeRecords.length,
+      'total_count': fees.length,
     };
   }
 
-  List<Map<String, dynamic>> get _filteredRecords {
+  List<Fee> _filterFees(List<Fee> fees) {
     if (_selectedFilter == 'all') {
-      return _feeRecords;
+      return fees;
     }
 
-    return _feeRecords.where((fee) {
-      final status = fee['status']?.toString().toLowerCase() ?? 'pending';
-      final dueDate = DateTime.tryParse(fee['due_date']?.toString() ?? '');
-
+    return fees.where((fee) {
       if (_selectedFilter == 'paid') {
-        return status == 'paid';
+        return fee.status == 'paid';
       } else if (_selectedFilter == 'pending') {
-        return status != 'paid' && (dueDate == null || !dueDate.isBefore(DateTime.now()));
+        return fee.status != 'paid' && !fee.dueDate.isBefore(DateTime.now());
       } else if (_selectedFilter == 'overdue') {
-        return status != 'paid' && dueDate != null && dueDate.isBefore(DateTime.now());
+        return fee.status != 'paid' && fee.dueDate.isBefore(DateTime.now());
       }
       return true;
     }).toList();
@@ -141,155 +79,182 @@ class _StudentFeesScreenState extends ConsumerState<StudentFeesScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: RefreshIndicator(
-        onRefresh: _loadData,
-        child: CustomScrollView(
-          slivers: [
-            // App Bar
-            SliverAppBar(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              pinned: true,
-              leading: widget.onBack != null
-                  ? IconButton(
-                      icon: Icon(
-                        Icons.arrow_back,
-                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                      ),
-                      onPressed: widget.onBack,
-                    )
-                  : null,
-              title: Text(
-                'Fee Status',
-                style: TextStyle(
-                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                  fontWeight: FontWeight.w600,
+    // Get user ID from auth provider
+    final authStateAsync = ref.watch(authProvider);
+    
+    return authStateAsync.when(
+      loading: () => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: const Center(child: ListSkeleton(itemCount: 5)),
+      ),
+      error: (error, stack) => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: ErrorDisplay(
+          message: 'Failed to load user data: ${error.toString()}',
+          onRetry: () => ref.invalidate(authProvider),
+        ),
+      ),
+      data: (authState) {
+        if (authState is! Authenticated) {
+          return Scaffold(
+            backgroundColor: Colors.transparent,
+            body: ErrorDisplay(
+              message: 'Please log in to view fee records',
+              onRetry: () => ref.invalidate(authProvider),
+            ),
+          );
+        }
+
+        final userId = authState.userId;
+        final feesAsync = ref.watch(feeByStudentProvider(userId));
+
+        return Scaffold(
+          backgroundColor: Colors.transparent,
+          body: RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(feeByStudentProvider(userId));
+            },
+            child: CustomScrollView(
+              slivers: [
+                // App Bar
+                SliverAppBar(
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  pinned: true,
+                  leading: widget.onBack != null
+                      ? IconButton(
+                          icon: Icon(
+                            Icons.arrow_back,
+                            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                          ),
+                          onPressed: widget.onBack,
+                        )
+                      : null,
+                  title: Text(
+                    'Fee Status',
+                    style: TextStyle(
+                      color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  centerTitle: true,
                 ),
-              ),
-              centerTitle: true,
-            ),
 
-            // Content
-            SliverToBoxAdapter(
-              child: _isLoading
-                  ? const SizedBox(
+                // Content
+                SliverToBoxAdapter(
+                  child: feesAsync.when(
+                    loading: () => const SizedBox(
                       height: 400,
-                      child: Center(child: LoadingSpinner()),
-                    )
-                  : _error != null
-                      ? _buildErrorWidget(isDark)
-                      : Column(
-                          children: [
-                            // Stats Summary
-                            _buildStatsSummary(isDark),
+                      child: ListSkeleton(itemCount: 3),
+                    ),
+                    error: (error, stack) => ErrorDisplay(
+                      message: 'Failed to load fee records: ${error.toString()}',
+                      onRetry: () => ref.invalidate(feeByStudentProvider(userId)),
+                    ),
+                    data: (fees) {
+                      if (fees.isEmpty) {
+                        return EmptyState.noFees();
+                      }
 
-                            const SizedBox(height: AppDimensions.spacingL),
+                      final feeStats = _calculateStats(fees);
+                      final filteredFees = _filterFees(fees);
 
-                            // Payment Progress
-                            _buildPaymentProgress(isDark),
+                      return Column(
+                        children: [
+                          // Stats Summary
+                          _buildStatsSummary(isDark, feeStats),
 
-                            const SizedBox(height: AppDimensions.spacingL),
+                          const SizedBox(height: AppDimensions.spacingL),
 
-                            // Filter Tabs
-                            _buildFilterTabs(isDark),
+                          // Payment Progress
+                          _buildPaymentProgress(isDark, feeStats),
 
-                            const SizedBox(height: AppDimensions.spacingM),
+                          const SizedBox(height: AppDimensions.spacingL),
 
-                            // Section Header
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: AppDimensions.paddingL,
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    'Fee Records',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w600,
-                                      color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                                    ),
-                                  ),
-                                  Text(
-                                    '${_filteredRecords.length} records',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                          // Filter Tabs
+                          _buildFilterTabs(isDark),
+
+                          const SizedBox(height: AppDimensions.spacingM),
+
+                          // Section Header
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppDimensions.paddingL,
                             ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Fee Records',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                                  ),
+                                ),
+                                Text(
+                                  '${filteredFees.length} records',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
 
-                            const SizedBox(height: AppDimensions.spacingM),
-                          ],
-                        ),
-            ),
+                          const SizedBox(height: AppDimensions.spacingM),
+                        ],
+                      );
+                    },
+                  ),
+                ),
 
-            // Fee Records List
-            if (!_isLoading && _error == null)
-              _filteredRecords.isEmpty
-                  ? SliverToBoxAdapter(child: _buildEmptyState(isDark))
-                  : SliverList(
+                // Fee Records List
+                feesAsync.when(
+                  loading: () => const SliverToBoxAdapter(child: SizedBox()),
+                  error: (_, __) => const SliverToBoxAdapter(child: SizedBox()),
+                  data: (fees) {
+                    final filteredFees = _filterFees(fees);
+                    
+                    if (filteredFees.isEmpty) {
+                      return SliverToBoxAdapter(
+                        child: EmptyState.noFees(),
+                      );
+                    }
+
+                    return SliverList(
                       delegate: SliverChildBuilderDelegate(
                         (context, index) {
-                          final fee = _filteredRecords[index];
+                          final fee = filteredFees[index];
                           return _FeeRecordCard(
                             fee: fee,
                             isDark: isDark,
                           );
                         },
-                        childCount: _filteredRecords.length,
+                        childCount: filteredFees.length,
                       ),
-                    ),
+                    );
+                  },
+                ),
 
-            // Bottom spacing
-            const SliverToBoxAdapter(
-              child: SizedBox(height: 100),
+                // Bottom spacing
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 100),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildErrorWidget(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.all(AppDimensions.paddingL),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.error_outline,
-            size: 48,
-            color: isDark ? AppColors.error : AppColorsLight.error,
-          ),
-          const SizedBox(height: AppDimensions.spacingM),
-          Text(
-            _error!,
-            style: TextStyle(
-              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: AppDimensions.spacingL),
-          ElevatedButton(
-            onPressed: _loadData,
-            child: const Text('Retry'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatsSummary(bool isDark) {
-    final totalFees = (_feeStats['total_fees'] ?? 0.0).toDouble();
-    final paidFees = (_feeStats['paid_fees'] ?? 0.0).toDouble();
-    final pendingFees = (_feeStats['pending_fees'] ?? 0.0).toDouble();
-    final overdueFees = (_feeStats['overdue_fees'] ?? 0.0).toDouble();
+  Widget _buildStatsSummary(bool isDark, Map<String, dynamic> feeStats) {
+    final totalFees = (feeStats['total_fees'] ?? 0.0).toDouble();
+    final paidFees = (feeStats['paid_fees'] ?? 0.0).toDouble();
+    final pendingFees = (feeStats['pending_fees'] ?? 0.0).toDouble();
+    final overdueFees = (feeStats['overdue_fees'] ?? 0.0).toDouble();
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
@@ -347,9 +312,9 @@ class _StudentFeesScreenState extends ConsumerState<StudentFeesScreen> {
     );
   }
 
-  Widget _buildPaymentProgress(bool isDark) {
-    final paidCount = (_feeStats['paid_count'] ?? 0) as int;
-    final totalCount = (_feeStats['total_count'] ?? 0) as int;
+  Widget _buildPaymentProgress(bool isDark, Map<String, dynamic> feeStats) {
+    final paidCount = (feeStats['paid_count'] ?? 0) as int;
+    final totalCount = (feeStats['total_count'] ?? 0) as int;
     final progress = totalCount > 0 ? paidCount / totalCount : 0.0;
 
     return Padding(
@@ -458,45 +423,13 @@ class _StudentFeesScreenState extends ConsumerState<StudentFeesScreen> {
     );
   }
 
-  Widget _buildEmptyState(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.all(AppDimensions.paddingXl),
-      child: Column(
-        children: [
-          Icon(
-            Icons.payments_outlined,
-            size: 64,
-            color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
-          ),
-          const SizedBox(height: AppDimensions.spacingM),
-          Text(
-            _selectedFilter == 'all'
-                ? 'No fee records found'
-                : 'No $_selectedFilter fees',
-            style: TextStyle(
-              fontSize: 16,
-              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-            ),
-          ),
-          const SizedBox(height: AppDimensions.spacingS),
-          Text(
-            'Your fee records will appear here once added by the academy',
-            style: TextStyle(
-              fontSize: 14,
-              color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
+  // Removed _buildEmptyState - using EmptyState.noFees() instead
 
   String _formatCurrency(double amount) {
     if (amount >= 1000) {
-      return '\u20B9${(amount / 1000).toStringAsFixed(1)}K';
+      return '\$${(amount / 1000).toStringAsFixed(1)}K';
     }
-    return '\u20B9${amount.toStringAsFixed(0)}';
+    return '\$${amount.toStringAsFixed(0)}';
   }
 }
 
@@ -603,7 +536,7 @@ class _FilterChip extends StatelessWidget {
 }
 
 class _FeeRecordCard extends StatelessWidget {
-  final Map<String, dynamic> fee;
+  final Fee fee;
   final bool isDark;
 
   const _FeeRecordCard({
@@ -613,15 +546,20 @@ class _FeeRecordCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final amount = (fee['amount'] ?? 0).toDouble();
-    final status = fee['status']?.toString().toLowerCase() ?? 'pending';
-    final dueDate = DateTime.tryParse(fee['due_date']?.toString() ?? '');
-    final paidDate = DateTime.tryParse(fee['paid_date']?.toString() ?? '');
-    final month = fee['month']?.toString() ?? fee['description']?.toString() ?? 'Fee';
-    final paymentMethod = fee['payment_method']?.toString() ?? '';
+    final amount = fee.amount;
+    final status = fee.status.toLowerCase();
+    final dueDate = fee.dueDate;
+    final payments = fee.payments;
+    final paidDate = (payments != null && payments.isNotEmpty)
+        ? payments.first.paidDate 
+        : null;
+    final month = fee.batchName ?? 'Fee';
+    final paymentMethod = (payments != null && payments.isNotEmpty)
+        ? payments.first.paymentMethod
+        : null;
 
     final isPaid = status == 'paid';
-    final isOverdue = !isPaid && dueDate != null && dueDate.isBefore(DateTime.now());
+    final isOverdue = !isPaid && dueDate.isBefore(DateTime.now());
 
     Color statusColor;
     String statusText;
@@ -669,7 +607,7 @@ class _FeeRecordCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '\u20B9${amount.toStringAsFixed(0)}',
+                        '\$${amount.toStringAsFixed(0)}',
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -726,19 +664,19 @@ class _FeeRecordCard extends StatelessWidget {
                   _DetailRow(
                     icon: Icons.event,
                     label: 'Due Date',
-                    value: dueDate != null ? _formatDate(dueDate) : 'Not set',
+                    value: _formatDate(dueDate),
                     isDark: isDark,
                   ),
-                  if (isPaid) ...[
+                  if (isPaid && paidDate != null) ...[
                     const SizedBox(height: AppDimensions.spacingS),
                     _DetailRow(
                       icon: Icons.check,
                       label: 'Paid Date',
-                      value: paidDate != null ? _formatDate(paidDate) : 'N/A',
+                      value: _formatDate(paidDate),
                       isDark: isDark,
                     ),
                   ],
-                  if (paymentMethod.isNotEmpty) ...[
+                  if (paymentMethod != null && paymentMethod.isNotEmpty) ...[
                     const SizedBox(height: AppDimensions.spacingS),
                     _DetailRow(
                       icon: Icons.payment,

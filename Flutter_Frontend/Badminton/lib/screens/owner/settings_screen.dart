@@ -1,9 +1,22 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
+import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
+import '../../widgets/common/success_snackbar.dart';
+import '../../widgets/common/confirmation_dialog.dart';
 import '../../providers/theme_provider.dart';
 import '../../widgets/settings/shuttlecock_theme_toggle.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/service_providers.dart';
+import '../../widgets/forms/change_password_dialog.dart';
+import '../common/privacy_policy_screen.dart';
+import '../common/terms_conditions_screen.dart';
+import '../common/help_support_screen.dart';
+import 'profile_screen.dart';
+import 'academy_details_screen.dart';
 
 /// Settings Screen - App settings, academy settings, account settings
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -14,279 +27,369 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  bool _notificationsEnabled = true;
+  bool _pushNotifications = true;
+  bool _emailNotifications = true;
+
+  static const String _settingsKey = 'owner_settings';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    try {
+      final storageService = ref.read(storageServiceProvider);
+      final settingsJson = await storageService.getString(_settingsKey);
+      if (settingsJson != null && mounted) {
+        final settings = jsonDecode(settingsJson) as Map<String, dynamic>;
+        setState(() {
+          _pushNotifications = settings['push_notifications'] ?? true;
+          _emailNotifications = settings['email_notifications'] ?? true;
+        });
+      }
+    } catch (e) {
+      // Use defaults
+    }
+  }
+
+  Future<void> _saveSettings() async {
+    try {
+      final storageService = ref.read(storageServiceProvider);
+      final settings = {
+        'push_notifications': _pushNotifications,
+        'email_notifications': _emailNotifications,
+      };
+      await storageService.setString(_settingsKey, jsonEncode(settings));
+    } catch (e) {
+      // Silent fail
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final themeMode = ref.watch(themeNotifierProvider);
     final isDarkMode = themeMode == ThemeMode.dark;
     final theme = Theme.of(context);
-    final backgroundColor = theme.scaffoldBackgroundColor;
-    final textPrimaryColor = theme.colorScheme.onSurface;
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: backgroundColor,
-      appBar: AppBar(
-        backgroundColor: backgroundColor,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: textPrimaryColor),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text(
-          'Settings',
-          style: TextStyle(
-            color: textPrimaryColor,
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
+      backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+      body: CustomScrollView(
+        slivers: [
+          // App Bar
+          SliverAppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            pinned: true,
+            leading: IconButton(
+              icon: Icon(
+                Icons.arrow_back,
+                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+              ),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            title: Text(
+              'Settings',
+              style: TextStyle(
+                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            centerTitle: true,
           ),
-        ),
+
+          // Content
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(AppDimensions.paddingL),
+              child: Column(
+                children: [
+                  // Theme Section
+                  Text(
+                    'Theme',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: AppDimensions.spacingM),
+
+                  ShuttlecockThemeToggle(
+                    isDarkMode: isDarkMode,
+                    onToggle: () {
+                      ref.read(themeNotifierProvider.notifier).toggleTheme();
+                    },
+                  ),
+
+                  const SizedBox(height: AppDimensions.spacingL),
+
+                  // Account Section
+                  _buildSection(
+                    title: 'Account',
+                    icon: Icons.account_circle_outlined,
+                    isDark: isDark,
+                    children: [
+                      _buildActionTile(
+                        title: 'Profile',
+                        icon: Icons.person_outline,
+                        isDark: isDark,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const ProfileScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      const Divider(height: 1),
+                      _buildActionTile(
+                        title: 'Change Password',
+                        icon: Icons.lock_outline,
+                        isDark: isDark,
+                        onTap: () => _showChangePassword(isDark),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: AppDimensions.spacingL),
+
+                  // Notifications Section
+                  _buildSection(
+                    title: 'Notifications',
+                    icon: Icons.notifications_outlined,
+                    isDark: isDark,
+                    children: [
+                      _buildSwitchTile(
+                        title: 'Push Notifications',
+                        subtitle: 'Receive push notifications',
+                        value: _pushNotifications,
+                        onChanged: (value) {
+                          setState(() => _pushNotifications = value);
+                          _saveSettings();
+                        },
+                        isDark: isDark,
+                      ),
+                      const Divider(height: 1),
+                      _buildSwitchTile(
+                        title: 'Email Notifications',
+                        subtitle: 'Receive notifications via email',
+                        value: _emailNotifications,
+                        onChanged: (value) {
+                          setState(() => _emailNotifications = value);
+                          _saveSettings();
+                        },
+                        isDark: isDark,
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: AppDimensions.spacingL),
+
+                  // Academy Section
+                  _buildSection(
+                    title: 'Academy',
+                    icon: Icons.business_outlined,
+                    isDark: isDark,
+                    children: [
+                      _buildActionTile(
+                        title: 'Academy Details',
+                        icon: Icons.business_outlined,
+                        isDark: isDark,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const AcademyDetailsScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: AppDimensions.spacingL),
+
+                  // About Section
+                  _buildSection(
+                    title: 'About',
+                    icon: Icons.info_outline,
+                    isDark: isDark,
+                    children: [
+                      _buildInfoTile(
+                        title: 'App Version',
+                        value: '1.0.0',
+                        isDark: isDark,
+                      ),
+                      const Divider(height: 1),
+                      _buildActionTile(
+                        title: 'Privacy Policy',
+                        icon: Icons.privacy_tip_outlined,
+                        isDark: isDark,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const PrivacyPolicyScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      const Divider(height: 1),
+                      _buildActionTile(
+                        title: 'Terms of Service',
+                        icon: Icons.description_outlined,
+                        isDark: isDark,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const TermsConditionsScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      const Divider(height: 1),
+                      _buildActionTile(
+                        title: 'Contact Support',
+                        icon: Icons.support_agent_outlined,
+                        isDark: isDark,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const HelpSupportScreen(userRole: 'owner'),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: AppDimensions.spacingL),
+
+                  // Data & Storage Section
+                  _buildSection(
+                    title: 'Data & Storage',
+                    icon: Icons.storage_outlined,
+                    isDark: isDark,
+                    children: [
+                      _buildActionTile(
+                        title: 'Export Data',
+                        icon: Icons.download_outlined,
+                        isDark: isDark,
+                        onTap: () {
+                          SuccessSnackbar.showInfo(context, 'Export data feature coming soon');
+                        },
+                      ),
+                      const Divider(height: 1),
+                      _buildActionTile(
+                        title: 'Clear Cache',
+                        icon: Icons.delete_outline,
+                        isDark: isDark,
+                        isDestructive: true,
+                        onTap: () async {
+                          final confirm = await ConfirmationDialog.show(
+                            context,
+                            'Clear Cache',
+                            'Are you sure you want to clear all cached data?',
+                            confirmText: 'Clear',
+                            cancelText: 'Cancel',
+                            icon: Icons.delete_outline,
+                            isDestructive: true,
+                          );
+                          if (confirm == true && mounted) {
+                            SuccessSnackbar.show(context, 'Cache cleared');
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: AppDimensions.spacingXl),
+
+                  // App Branding
+                  _buildAppBranding(isDark),
+
+                  const SizedBox(height: 100),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(AppDimensions.paddingL),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    );
+  }
+
+  Widget _buildSection({
+    required String title,
+    required IconData icon,
+    required bool isDark,
+    required List<Widget> children,
+  }) {
+    return NeumorphicContainer(
+      padding: const EdgeInsets.all(AppDimensions.paddingM),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Section Header
+          Row(
             children: [
-              // App Settings Section
-              const _SectionTitle(title: 'App Settings'),
-              const SizedBox(height: AppDimensions.spacingM),
-              
-              NeumorphicContainer(
-                padding: const EdgeInsets.all(AppDimensions.paddingM),
-                margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.notifications_outlined, color: textPrimaryColor.withValues(alpha: 0.6)),
-                        const SizedBox(width: AppDimensions.spacingM),
-                        Text(
-                          'Push Notifications',
-                          style: TextStyle(
-                            color: textPrimaryColor,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Switch(
-                      value: _notificationsEnabled,
-                      onChanged: (value) {
-                        setState(() => _notificationsEnabled = value);
-                      },
-                      activeTrackColor: theme.colorScheme.primary,
-                    ),
-                  ],
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: (isDark ? AppColors.accent : AppColorsLight.accent).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                ),
+                child: Icon(
+                  icon,
+                  size: 18,
+                  color: isDark ? AppColors.accent : AppColorsLight.accent,
                 ),
               ),
-
-              // Theme Toggle Section
+              const SizedBox(width: AppDimensions.spacingM),
               Text(
-                'Theme',
+                title,
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: textPrimaryColor,
+                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                 ),
-              ),
-              const SizedBox(height: AppDimensions.spacingM),
-
-              ShuttlecockThemeToggle(
-                isDarkMode: isDarkMode,
-                onToggle: () {
-                  ref.read(themeNotifierProvider.notifier).toggleTheme();
-                },
-              ),
-
-              const SizedBox(height: AppDimensions.spacingL),
-
-              // Account Settings Section
-              const _SectionTitle(title: 'Account'),
-              const SizedBox(height: AppDimensions.spacingM),
-
-              _SettingsTile(
-                icon: Icons.person_outline,
-                title: 'Profile',
-                onTap: () {
-                  // Navigate to profile edit
-                },
-              ),
-
-              _SettingsTile(
-                icon: Icons.lock_outline,
-                title: 'Change Password',
-                onTap: () {
-                  // TODO: Navigate to change password
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Change password feature coming soon')),
-                  );
-                },
-              ),
-
-              const SizedBox(height: AppDimensions.spacingL),
-
-              // Academy Settings Section
-              const _SectionTitle(title: 'Academy'),
-              const SizedBox(height: AppDimensions.spacingM),
-
-              _SettingsTile(
-                icon: Icons.business_outlined,
-                title: 'Academy Details',
-                onTap: () {
-                  // Navigate to academy details edit
-                },
-              ),
-
-              _SettingsTile(
-                icon: Icons.location_on_outlined,
-                title: 'Address & Contact',
-                onTap: () {
-                  // TODO: Navigate to address edit
-                },
-              ),
-
-              const SizedBox(height: AppDimensions.spacingL),
-
-              // Data & Storage Section
-              const _SectionTitle(title: 'Data & Storage'),
-              const SizedBox(height: AppDimensions.spacingM),
-
-              _SettingsTile(
-                icon: Icons.download_outlined,
-                title: 'Export Data',
-                onTap: () {
-                  // TODO: Export data
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Export data feature coming soon')),
-                  );
-                },
-              ),
-
-              _SettingsTile(
-                icon: Icons.delete_outline,
-                title: 'Clear Cache',
-                onTap: () async {
-                  final dialogTheme = Theme.of(context);
-                  final confirm = await showDialog<bool>(
-                    context: context,
-                    builder: (dialogContext) => AlertDialog(
-                      backgroundColor: dialogTheme.colorScheme.surface,
-                      title: Text('Clear Cache', style: TextStyle(color: dialogTheme.colorScheme.onSurface)),
-                      content: Text('Are you sure you want to clear all cached data?', style: TextStyle(color: dialogTheme.colorScheme.onSurface.withValues(alpha: 0.6))),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(dialogContext, false),
-                          child: const Text('Cancel'),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(dialogContext, true),
-                          child: Text('Clear', style: TextStyle(color: dialogTheme.colorScheme.error)),
-                        ),
-                      ],
-                    ),
-                  );
-                  if (confirm == true && mounted) {
-                    // TODO: Clear cache
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Cache cleared')),
-                    );
-                  }
-                },
-              ),
-
-              const SizedBox(height: AppDimensions.spacingL),
-
-              // About Section
-              const _SectionTitle(title: 'About'),
-              const SizedBox(height: AppDimensions.spacingM),
-
-              _SettingsTile(
-                icon: Icons.info_outline,
-                title: 'App Version',
-                subtitle: '1.0.0',
-                onTap: null,
-              ),
-
-              _SettingsTile(
-                icon: Icons.help_outline,
-                title: 'Help & Support',
-                onTap: () {
-                  // TODO: Navigate to help
-                },
-              ),
-
-              _SettingsTile(
-                icon: Icons.privacy_tip_outlined,
-                title: 'Privacy Policy',
-                onTap: () {
-                  // TODO: Navigate to privacy policy
-                },
-              ),
-
-              _SettingsTile(
-                icon: Icons.description_outlined,
-                title: 'Terms & Conditions',
-                onTap: () {
-                  // TODO: Navigate to terms
-                },
               ),
             ],
           ),
-        ),
+
+          const SizedBox(height: AppDimensions.spacingM),
+
+          // Section Content
+          Container(
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.background : AppColorsLight.background,
+              borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+              boxShadow: NeumorphicStyles.getSmallInsetShadow(),
+            ),
+            child: Column(
+              children: children,
+            ),
+          ),
+        ],
       ),
     );
   }
-}
 
-class _SectionTitle extends StatelessWidget {
-  final String title;
-
-  const _SectionTitle({required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    final textSecondaryColor = Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6);
-    return Text(
-      title,
-      style: TextStyle(
-        fontSize: 14,
-        fontWeight: FontWeight.w600,
-        color: textSecondaryColor,
-        letterSpacing: 0.5,
+  Widget _buildSwitchTile({
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+    required bool isDark,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppDimensions.paddingM,
+        vertical: AppDimensions.spacingS,
       ),
-    );
-  }
-}
-
-class _SettingsTile extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String? subtitle;
-  final VoidCallback? onTap;
-
-  const _SettingsTile({
-    required this.icon,
-    required this.title,
-    this.subtitle,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final textPrimaryColor = theme.colorScheme.onSurface;
-    final textSecondaryColor = theme.colorScheme.onSurface.withValues(alpha: 0.6);
-
-    return NeumorphicContainer(
-      padding: const EdgeInsets.all(AppDimensions.paddingM),
-      margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
-      onTap: onTap,
       child: Row(
         children: [
-          Icon(icon, color: textSecondaryColor, size: 24),
-          const SizedBox(width: AppDimensions.spacingM),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -294,31 +397,167 @@ class _SettingsTile extends StatelessWidget {
                 Text(
                   title,
                   style: TextStyle(
-                    color: textPrimaryColor,
-                    fontSize: 16,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                   ),
                 ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle!,
-                    style: TextStyle(
-                      color: textSecondaryColor,
-                      fontSize: 12,
-                    ),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                   ),
-                ],
+                ),
               ],
             ),
           ),
-          if (onTap != null)
-            Icon(
-              Icons.chevron_right,
-              color: textSecondaryColor,
-              size: 20,
-            ),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            activeTrackColor: (isDark ? AppColors.accent : AppColorsLight.accent).withValues(alpha: 0.5),
+            thumbColor: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.selected)) {
+                return isDark ? AppColors.accent : AppColorsLight.accent;
+              }
+              return null;
+            }),
+          ),
         ],
       ),
     );
+  }
+
+  Widget _buildInfoTile({
+    required String title,
+    required String value,
+    required bool isDark,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.all(AppDimensions.paddingM),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 14,
+              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionTile({
+    required String title,
+    required IconData icon,
+    required bool isDark,
+    required VoidCallback onTap,
+    bool isDestructive = false,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.all(AppDimensions.paddingM),
+        child: Row(
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: isDestructive
+                  ? (isDark ? AppColors.error : AppColorsLight.error)
+                  : (isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary),
+            ),
+            const SizedBox(width: AppDimensions.spacingM),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: isDestructive
+                      ? (isDark ? AppColors.error : AppColorsLight.error)
+                      : (isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
+                ),
+              ),
+            ),
+            Icon(
+              Icons.chevron_right,
+              size: 20,
+              color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAppBranding(bool isDark) {
+    return Column(
+      children: [
+        Container(
+          width: 60,
+          height: 60,
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.accent : AppColorsLight.accent,
+            borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+          ),
+          child: const Icon(
+            Icons.sports_tennis,
+            size: 32,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: AppDimensions.spacingM),
+        Text(
+          'Shuttler',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+          ),
+        ),
+        Text(
+          'Badminton Academy Management',
+          style: TextStyle(
+            fontSize: 12,
+            color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+          ),
+        ),
+        const SizedBox(height: AppDimensions.spacingS),
+        Text(
+          'Made with love for badminton',
+          style: TextStyle(
+            fontSize: 11,
+            color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showChangePassword(bool isDark) {
+    final authState = ref.read(authProvider);
+    authState.whenData((authValue) {
+      if (authValue is Authenticated) {
+        showDialog(
+          context: context,
+          builder: (context) => ChangePasswordDialog(
+            userType: authValue.userType,
+            userEmail: authValue.userEmail,
+          ),
+        );
+      }
+    });
   }
 }

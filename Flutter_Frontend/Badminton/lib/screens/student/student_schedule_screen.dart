@@ -4,8 +4,13 @@ import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
-import '../../providers/service_providers.dart';
+import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/error_widget.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/student_provider.dart';
+import '../../providers/batch_provider.dart';
+import '../../models/schedule.dart';
+import '../../models/batch.dart';
 
 /// Student Schedule Screen - READ-ONLY view of session schedules
 /// Students can view their batch schedules and upcoming sessions
@@ -19,88 +24,26 @@ class StudentScheduleScreen extends ConsumerStatefulWidget {
 }
 
 class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
-  bool _isLoading = true;
-  List<Map<String, dynamic>> _schedules = [];
-  List<Map<String, dynamic>> _batches = [];
-  String? _error;
-  String? _selectedBatchId;
+  int? _selectedBatchId;
   DateTime _selectedDate = DateTime.now();
 
   // Calendar view mode
   bool _showCalendarView = true;
 
-  @override
-  void initState() {
-    super.initState();
-    _loadData();
-  }
-
-  Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    try {
-      final storageService = ref.read(storageServiceProvider);
-      final apiService = ref.read(apiServiceProvider);
-      final userId = storageService.getUserId();
-
-      if (userId == null) {
-        throw Exception('User not logged in');
-      }
-
-      // Load student's batches
-      try {
-        final batchesResponse = await apiService.get('/api/students/$userId/batches');
-        if (batchesResponse.statusCode == 200) {
-          _batches = List<Map<String, dynamic>>.from(batchesResponse.data['batches'] ?? batchesResponse.data ?? []);
-        }
-      } catch (e) {
-        _batches = [];
-      }
-
-      // Load schedules
-      try {
-        final response = await apiService.get('/api/students/$userId/schedule');
-        if (response.statusCode == 200) {
-          _schedules = List<Map<String, dynamic>>.from(response.data['schedules'] ?? []);
-        }
-      } catch (e) {
-        _schedules = [];
-      }
-
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _error = e.toString().replaceAll('Exception: ', '');
-        });
-      }
+  List<Schedule> _filterSchedules(List<Schedule> schedules) {
+    if (_selectedBatchId == null) {
+      return schedules;
     }
+    return schedules.where((s) => s.batchId == _selectedBatchId).toList();
   }
 
-  List<Map<String, dynamic>> get _filteredSchedules {
-    var filtered = _schedules;
-
-    // Filter by batch
-    if (_selectedBatchId != null) {
-      filtered = filtered.where((s) => s['batch_id']?.toString() == _selectedBatchId).toList();
-    }
-
-    return filtered;
-  }
-
-  List<Map<String, dynamic>> _getSchedulesForDay(DateTime date) {
-    final dayName = _getDayName(date.weekday);
-    return _filteredSchedules.where((schedule) {
-      final daysOfWeek = schedule['days_of_week']?.toString() ?? '';
-      return daysOfWeek.toLowerCase().contains(dayName.toLowerCase());
+  List<Schedule> _getSchedulesForDay(List<Schedule> schedules, DateTime date) {
+    // For now, return all schedules for the selected date
+    // In a real implementation, you'd filter by day of week from batch schedule
+    return schedules.where((schedule) {
+      return schedule.date.year == date.year &&
+             schedule.date.month == date.month &&
+             schedule.date.day == date.day;
     }).toList();
   }
 
@@ -114,115 +57,144 @@ class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: RefreshIndicator(
-        onRefresh: _loadData,
-        child: CustomScrollView(
-          slivers: [
-            // App Bar
-            SliverAppBar(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              pinned: true,
-              leading: widget.onBack != null
-                  ? IconButton(
+    // Get user ID from auth provider
+    final authStateAsync = ref.watch(authProvider);
+    
+    return authStateAsync.when(
+      loading: () => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: const Center(child: ListSkeleton(itemCount: 5)),
+      ),
+      error: (error, stack) => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: ErrorDisplay(
+          message: 'Failed to load user data: ${error.toString()}',
+          onRetry: () => ref.invalidate(authProvider),
+        ),
+      ),
+      data: (authState) {
+        if (authState is! Authenticated) {
+          return Scaffold(
+            backgroundColor: Colors.transparent,
+            body: ErrorDisplay(
+              message: 'Please log in to view schedule',
+              onRetry: () => ref.invalidate(authProvider),
+            ),
+          );
+        }
+
+        final userId = authState.userId;
+        final schedulesAsync = ref.watch(studentSchedulesProvider(userId));
+        final batchesAsync = ref.watch(studentBatchesProvider(userId));
+
+        return Scaffold(
+          backgroundColor: Colors.transparent,
+          body: RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(studentSchedulesProvider(userId));
+              ref.invalidate(studentBatchesProvider(userId));
+            },
+            child: CustomScrollView(
+              slivers: [
+                // App Bar
+                SliverAppBar(
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  pinned: true,
+                  leading: widget.onBack != null
+                      ? IconButton(
+                          icon: Icon(
+                            Icons.arrow_back,
+                            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                          ),
+                          onPressed: widget.onBack,
+                        )
+                      : null,
+                  title: Text(
+                    'My Schedule',
+                    style: TextStyle(
+                      color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  centerTitle: true,
+                  actions: [
+                    IconButton(
                       icon: Icon(
-                        Icons.arrow_back,
+                        _showCalendarView ? Icons.view_list : Icons.calendar_month,
                         color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                       ),
-                      onPressed: widget.onBack,
-                    )
-                  : null,
-              title: Text(
-                'My Schedule',
-                style: TextStyle(
-                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                  fontWeight: FontWeight.w600,
+                      onPressed: () {
+                        setState(() {
+                          _showCalendarView = !_showCalendarView;
+                        });
+                      },
+                    ),
+                  ],
                 ),
-              ),
-              centerTitle: true,
-              actions: [
-                IconButton(
-                  icon: Icon(
-                    _showCalendarView ? Icons.view_list : Icons.calendar_month,
-                    color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      _showCalendarView = !_showCalendarView;
-                    });
-                  },
-                ),
-              ],
-            ),
 
-            // Content
-            SliverToBoxAdapter(
-              child: _isLoading
-                  ? const SizedBox(
+                // Content
+                SliverToBoxAdapter(
+                  child: schedulesAsync.when(
+                    loading: () => const SizedBox(
                       height: 400,
-                      child: Center(child: LoadingSpinner()),
-                    )
-                  : _error != null
-                      ? _buildErrorWidget(isDark)
-                      : Column(
+                      child: ListSkeleton(itemCount: 5),
+                    ),
+                    error: (error, stack) => ErrorDisplay(
+                      message: 'Failed to load schedule: ${error.toString()}',
+                      onRetry: () => ref.invalidate(studentSchedulesProvider(userId)),
+                    ),
+                    data: (schedules) {
+                      final filteredSchedules = _filterSchedules(schedules);
+                      
+                      return batchesAsync.when(
+                        data: (batches) => Column(
                           children: [
                             // Batch Filter
-                            if (_batches.isNotEmpty) ...[
-                              _buildBatchFilter(isDark),
+                            if (batches.isNotEmpty) ...[
+                              _buildBatchFilter(isDark, batches),
                               const SizedBox(height: AppDimensions.spacingM),
                             ],
 
                             // Calendar or List View
                             if (_showCalendarView)
-                              _buildCalendarView(isDark)
+                              _buildCalendarView(isDark, filteredSchedules)
                             else
-                              _buildListView(isDark),
+                              _buildListView(isDark, filteredSchedules),
                           ],
                         ),
-            ),
+                        loading: () => const SizedBox(
+                          height: 200,
+                          child: ListSkeleton(itemCount: 3),
+                        ),
+                        error: (error, stack) => Column(
+                          children: [
+                            if (filteredSchedules.isEmpty)
+                              EmptyState.noEvents()
+                            else
+                              _showCalendarView
+                                  ? _buildCalendarView(isDark, filteredSchedules)
+                                  : _buildListView(isDark, filteredSchedules),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
 
-            // Bottom spacing
-            const SliverToBoxAdapter(
-              child: SizedBox(height: 100),
+                // Bottom spacing
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 100),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildErrorWidget(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.all(AppDimensions.paddingL),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.error_outline,
-            size: 48,
-            color: isDark ? AppColors.error : AppColorsLight.error,
-          ),
-          const SizedBox(height: AppDimensions.spacingM),
-          Text(
-            _error!,
-            style: TextStyle(
-              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: AppDimensions.spacingL),
-          ElevatedButton(
-            onPressed: _loadData,
-            child: const Text('Retry'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBatchFilter(bool isDark) {
+  Widget _buildBatchFilter(bool isDark, List<Batch> batches) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
       child: SingleChildScrollView(
@@ -235,16 +207,14 @@ class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
               isDark: isDark,
               onTap: () => setState(() => _selectedBatchId = null),
             ),
-            ..._batches.map((batch) {
-              final batchId = batch['id']?.toString() ?? batch['batch_id']?.toString();
-              final batchName = batch['batch_name']?.toString() ?? batch['name']?.toString() ?? 'Batch';
+            ...batches.map((batch) {
               return Padding(
                 padding: const EdgeInsets.only(left: AppDimensions.spacingS),
                 child: _FilterChip(
-                  label: batchName,
-                  isSelected: _selectedBatchId == batchId,
+                  label: batch.name,
+                  isSelected: _selectedBatchId == batch.id,
                   isDark: isDark,
-                  onTap: () => setState(() => _selectedBatchId = batchId),
+                  onTap: () => setState(() => _selectedBatchId = batch.id),
                 ),
               );
             }),
@@ -254,7 +224,7 @@ class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
     );
   }
 
-  Widget _buildCalendarView(bool isDark) {
+  Widget _buildCalendarView(bool isDark, List<Schedule> schedules) {
     return Column(
       children: [
         // Week Navigation
@@ -263,12 +233,12 @@ class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
         const SizedBox(height: AppDimensions.spacingM),
 
         // Week Days
-        _buildWeekDays(isDark),
+        _buildWeekDays(isDark, schedules),
 
         const SizedBox(height: AppDimensions.spacingL),
 
         // Selected Day Sessions
-        _buildSelectedDaySessions(isDark),
+        _buildSelectedDaySessions(isDark, schedules),
       ],
     );
   }
@@ -333,7 +303,7 @@ class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
     );
   }
 
-  Widget _buildWeekDays(bool isDark) {
+  Widget _buildWeekDays(bool isDark, List<Schedule> schedules) {
     final startOfWeek = _selectedDate.subtract(Duration(days: _selectedDate.weekday - 1));
     final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -349,7 +319,7 @@ class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
           final isToday = date.day == DateTime.now().day &&
               date.month == DateTime.now().month &&
               date.year == DateTime.now().year;
-          final hasSession = _getSchedulesForDay(date).isNotEmpty;
+          final hasSession = _getSchedulesForDay(schedules, date).isNotEmpty;
 
           return GestureDetector(
             onTap: () {
@@ -414,8 +384,8 @@ class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
     );
   }
 
-  Widget _buildSelectedDaySessions(bool isDark) {
-    final sessions = _getSchedulesForDay(_selectedDate);
+  Widget _buildSelectedDaySessions(bool isDark, List<Schedule> schedules) {
+    final sessions = _getSchedulesForDay(schedules, _selectedDate);
     final dayName = _getDayName(_selectedDate.weekday);
 
     return Padding(
@@ -434,28 +404,7 @@ class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
           const SizedBox(height: AppDimensions.spacingM),
 
           if (sessions.isEmpty)
-            NeumorphicContainer(
-              padding: const EdgeInsets.all(AppDimensions.paddingL),
-              child: Center(
-                child: Column(
-                  children: [
-                    Icon(
-                      Icons.event_available,
-                      size: 48,
-                      color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
-                    ),
-                    const SizedBox(height: AppDimensions.spacingM),
-                    Text(
-                      'No sessions scheduled',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            )
+            EmptyState.noEvents()
           else
             ...sessions.map((session) => Padding(
                   padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
@@ -469,9 +418,12 @@ class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
     );
   }
 
-  Widget _buildListView(bool isDark) {
-    if (_filteredSchedules.isEmpty) {
-      return _buildEmptyState(isDark);
+  Widget _buildListView(bool isDark, List<Schedule> schedules) {
+    if (schedules.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.all(AppDimensions.paddingL),
+        child: EmptyState.noEvents(),
+      );
     }
 
     return Padding(
@@ -489,7 +441,7 @@ class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
           ),
           const SizedBox(height: AppDimensions.spacingM),
 
-          ..._filteredSchedules.map((schedule) => Padding(
+          ...schedules.map((schedule) => Padding(
                 padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
                 child: _ScheduleCard(
                   schedule: schedule,
@@ -497,39 +449,6 @@ class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
                   showDays: true,
                 ),
               )),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.all(AppDimensions.paddingXl),
-      child: Column(
-        children: [
-          const SizedBox(height: AppDimensions.spacingXxl),
-          Icon(
-            Icons.calendar_today_outlined,
-            size: 64,
-            color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
-          ),
-          const SizedBox(height: AppDimensions.spacingM),
-          Text(
-            'No schedule available',
-            style: TextStyle(
-              fontSize: 16,
-              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-            ),
-          ),
-          const SizedBox(height: AppDimensions.spacingS),
-          Text(
-            'You need to be assigned to a batch first',
-            style: TextStyle(
-              fontSize: 14,
-              color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
-            ),
-            textAlign: TextAlign.center,
-          ),
         ],
       ),
     );
@@ -581,7 +500,7 @@ class _FilterChip extends StatelessWidget {
 }
 
 class _ScheduleCard extends StatelessWidget {
-  final Map<String, dynamic> schedule;
+  final Schedule schedule;
   final bool isDark;
   final bool showDays;
 
@@ -593,14 +512,13 @@ class _ScheduleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final batchName = schedule['batch_name']?.toString() ?? 'Training Session';
-    final startTime = schedule['start_time']?.toString() ?? '';
-    final endTime = schedule['end_time']?.toString() ?? '';
-    final location = schedule['location']?.toString() ?? '';
-    final activityType = schedule['activity_type']?.toString() ?? 'Training';
-    final daysOfWeek = schedule['days_of_week']?.toString() ?? '';
-    final notes = schedule['notes']?.toString() ?? '';
-    final coachName = schedule['coach_name']?.toString() ?? '';
+    final batchName = schedule.batchName ?? 'Training Session';
+    final startTime = schedule.startTime ?? '';
+    final endTime = schedule.endTime ?? '';
+    final location = schedule.location ?? '';
+    final activityType = schedule.sessionType;
+    final notes = schedule.description ?? '';
+    final coachName = schedule.coachName ?? '';
 
     return NeumorphicContainer(
       padding: const EdgeInsets.all(AppDimensions.paddingM),
@@ -661,15 +579,6 @@ class _ScheduleCard extends StatelessWidget {
             ),
             child: Column(
               children: [
-                if (showDays && daysOfWeek.isNotEmpty) ...[
-                  _DetailRow(
-                    icon: Icons.calendar_today,
-                    label: 'Days',
-                    value: daysOfWeek,
-                    isDark: isDark,
-                  ),
-                  const SizedBox(height: AppDimensions.spacingS),
-                ],
                 if (startTime.isNotEmpty) ...[
                   _DetailRow(
                     icon: Icons.access_time,

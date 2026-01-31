@@ -3,16 +3,33 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
-import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../providers/service_providers.dart';
+import '../../providers/auth_provider.dart';
+import 'coach_announcements_screen.dart';
+import 'coach_attendance_view_screen.dart';
+import 'coach_schedule_screen.dart';
+import 'coach_calendar_screen.dart';
+import 'coach_settings_screen.dart';
+import 'coach_video_management_screen.dart';
+import '../owner/bmi_tracking_screen.dart';
+import '../owner/performance_tracking_screen.dart';
+import 'coach_fees_screen.dart';
+import 'leave_request_screen.dart';
 
 /// Coach More Screen - Navigation hub for additional features
-class CoachMoreScreen extends ConsumerWidget {
+class CoachMoreScreen extends ConsumerStatefulWidget {
   const CoachMoreScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CoachMoreScreen> createState() => _CoachMoreScreenState();
+}
+
+class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.all(AppDimensions.paddingL),
@@ -20,47 +37,98 @@ class CoachMoreScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Header
-            const Text(
+            Text(
               'More',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
+                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
               ),
             ),
             const SizedBox(height: AppDimensions.spacingL),
 
-            // Account Section
-            const _SectionTitle(title: 'Account'),
+            // Information Section
+            _SectionTitle(title: 'Information', isDark: isDark),
             const SizedBox(height: AppDimensions.spacingM),
             _MenuItem(
-              icon: Icons.person_outline,
-              title: 'Profile',
+              icon: Icons.campaign_outlined,
+              title: 'Announcements',
+              subtitle: 'View academy announcements',
+              isDark: isDark,
               onTap: () {
-                // TODO: Navigate to coach profile screen when implemented
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Profile screen coming soon'),
-                    duration: Duration(seconds: 2),
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const CoachAnnouncementsScreen(),
                   ),
                 );
               },
             ),
             const SizedBox(height: AppDimensions.spacingS),
-
-            // Features Section
-            const SizedBox(height: AppDimensions.spacingL),
-            const _SectionTitle(title: 'Features'),
-            const SizedBox(height: AppDimensions.spacingM),
             _MenuItem(
-              icon: Icons.campaign_outlined,
-              title: 'Announcements',
+              icon: Icons.fact_check_outlined,
+              title: 'Attendance Rate',
+              subtitle: 'View attendance statistics',
+              isDark: isDark,
               onTap: () {
-                // TODO: Navigate to coach announcements screen when implemented
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Announcements screen coming soon'),
-                    duration: Duration(seconds: 2),
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const CoachAttendanceViewScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.monitor_weight_outlined,
+              title: 'BMI Tracking',
+              subtitle: 'Track student BMI records',
+              isDark: isDark,
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const BMITrackingScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.calendar_month_outlined,
+              title: 'Calendar',
+              subtitle: 'View academy calendar events',
+              isDark: isDark,
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const CoachCalendarScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.payments_outlined,
+              title: 'Fees Management',
+              subtitle: 'Manage student fees',
+              isDark: isDark,
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const CoachFeesScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.trending_up_outlined,
+              title: 'Performance Tracking',
+              subtitle: 'Track student performance',
+              isDark: isDark,
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const PerformanceTrackingScreen(),
                   ),
                 );
               },
@@ -69,31 +137,59 @@ class CoachMoreScreen extends ConsumerWidget {
             _MenuItem(
               icon: Icons.calendar_today_outlined,
               title: 'Schedule',
+              subtitle: 'View your session schedule',
+              isDark: isDark,
               onTap: () {
-                // TODO: Navigate to coach schedule screen when implemented
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Schedule screen coming soon'),
-                    duration: Duration(seconds: 2),
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const CoachScheduleScreen(),
                   ),
                 );
               },
             ),
             const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.video_library_outlined,
+              title: 'Video Management',
+              subtitle: 'Upload and manage training videos',
+              isDark: isDark,
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const CoachVideoManagementScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.event_busy_outlined,
+              title: 'Requests',
+              subtitle: 'Submit and view leave requests',
+              isDark: isDark,
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const LeaveRequestScreen(),
+                  ),
+                );
+              },
+            ),
+
+            const SizedBox(height: AppDimensions.spacingL),
 
             // App Section
-            const SizedBox(height: AppDimensions.spacingL),
-            const _SectionTitle(title: 'App'),
+            _SectionTitle(title: 'App', isDark: isDark),
             const SizedBox(height: AppDimensions.spacingM),
             _MenuItem(
               icon: Icons.settings_outlined,
               title: 'Settings',
+              subtitle: 'App preferences and notifications',
+              isDark: isDark,
               onTap: () {
-                // TODO: Navigate to coach settings screen when implemented
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Settings screen coming soon'),
-                    duration: Duration(seconds: 2),
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const CoachSettingsScreen(),
                   ),
                 );
               },
@@ -102,8 +198,10 @@ class CoachMoreScreen extends ConsumerWidget {
             _MenuItem(
               icon: Icons.logout,
               title: 'Logout',
+              subtitle: 'Sign out of your account',
+              isDark: isDark,
               isDestructive: true,
-              onTap: () => _showLogoutDialog(context, ref),
+              onTap: () => _showLogoutConfirmation(isDark),
             ),
 
             const SizedBox(height: 100), // Space for bottom nav
@@ -113,84 +211,70 @@ class CoachMoreScreen extends ConsumerWidget {
     );
   }
 
-  void _showLogoutDialog(BuildContext context, WidgetRef ref) {
+  void _showLogoutConfirmation(bool isDark) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        title: const Text(
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: isDark ? AppColors.cardBackground : AppColorsLight.cardBackground,
+        title: Text(
           'Logout',
           style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
+            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
           ),
         ),
-        content: const Text(
+        content: Text(
           'Are you sure you want to logout?',
           style: TextStyle(
-            fontSize: 16,
-            color: AppColors.textSecondary,
+            color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
           ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(
               'Cancel',
-              style: TextStyle(color: AppColors.textSecondary),
+              style: TextStyle(
+                color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+              ),
             ),
           ),
           TextButton(
             onPressed: () async {
-              Navigator.of(context).pop();
-              await _handleLogout(context, ref);
+              final navigator = Navigator.of(dialogContext);
+              final router = GoRouter.of(context);
+              navigator.pop();
+              await ref.read(authProvider.notifier).logout();
+              if (mounted) {
+                router.go('/');
+              }
             },
-            child: const Text(
+            child: Text(
               'Logout',
-              style: TextStyle(color: AppColors.error),
+              style: TextStyle(
+                color: isDark ? AppColors.error : AppColorsLight.error,
+              ),
             ),
           ),
         ],
       ),
     );
   }
-
-  Future<void> _handleLogout(BuildContext context, WidgetRef ref) async {
-    try {
-      final authService = ref.read(authServiceProvider);
-      await authService.logout();
-      
-      if (context.mounted) {
-        context.go('/');
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to logout: ${e.toString()}'),
-            backgroundColor: AppColors.error,
-          ),
-        );
-      }
-    }
-  }
 }
 
 class _SectionTitle extends StatelessWidget {
   final String title;
+  final bool isDark;
 
-  const _SectionTitle({required this.title});
+  const _SectionTitle({required this.title, required this.isDark});
 
   @override
   Widget build(BuildContext context) {
     return Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 14,
-        fontWeight: FontWeight.w600,
-        color: AppColors.textSecondary,
-        letterSpacing: 0.5,
+        color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+        fontWeight: FontWeight.w500,
       ),
     );
   }
@@ -199,25 +283,22 @@ class _SectionTitle extends StatelessWidget {
 class _MenuItem extends StatelessWidget {
   final IconData icon;
   final String title;
+  final String subtitle;
+  final bool isDark;
   final VoidCallback onTap;
   final bool isDestructive;
 
   const _MenuItem({
     required this.icon,
     required this.title,
+    required this.subtitle,
+    required this.isDark,
     required this.onTap,
     this.isDestructive = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final iconColor = isDestructive
-        ? AppColors.error
-        : AppColors.iconPrimary;
-    final textColor = isDestructive
-        ? AppColors.error
-        : AppColors.textPrimary;
-
     return NeumorphicContainer(
       padding: const EdgeInsets.all(AppDimensions.paddingM),
       onTap: onTap,
@@ -227,31 +308,48 @@ class _MenuItem extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: AppColors.background,
+              color: isDestructive
+                  ? (isDark ? AppColors.error : AppColorsLight.error).withValues(alpha: 0.1)
+                  : (isDark ? AppColors.accent : AppColorsLight.accent).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-              boxShadow: NeumorphicStyles.getInsetShadow(),
             ),
             child: Icon(
               icon,
+              color: isDestructive
+                  ? (isDark ? AppColors.error : AppColorsLight.error)
+                  : (isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary),
               size: 20,
-              color: iconColor,
             ),
           ),
           const SizedBox(width: AppDimensions.spacingM),
           Expanded(
-            child: Text(
-              title,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: textColor,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                    color: isDestructive
+                        ? (isDark ? AppColors.error : AppColorsLight.error)
+                        : (isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                  ),
+                ),
+              ],
             ),
           ),
           Icon(
             Icons.chevron_right,
+            color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
             size: 20,
-            color: AppColors.textTertiary,
           ),
         ],
       ),

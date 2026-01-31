@@ -7,6 +7,7 @@ import '../../core/utils/validators.dart';
 import '../../widgets/common/neumorphic_button.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/loading_spinner.dart';
+import '../../widgets/common/success_snackbar.dart';
 import '../../providers/auth_provider.dart';
 
 /// Login screen for user authentication
@@ -90,18 +91,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           errorMessage = e.toString();
         }
         
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            backgroundColor: AppColors.error,
-            duration: const Duration(seconds: 4),
-            action: SnackBarAction(
-              label: 'Dismiss',
-              textColor: Colors.white,
-              onPressed: () {},
-            ),
-          ),
-        );
+        SuccessSnackbar.showError(context, errorMessage);
       }
     } finally {
       if (mounted) {
@@ -145,7 +135,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () => context.pop(),
+          onPressed: () {
+            // Check if we can pop, otherwise navigate to home
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/');
+            }
+          },
         ),
       ),
       body: SafeArea(
@@ -280,11 +277,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 const SizedBox(height: AppDimensions.spacingXl),
 
                 // Login Button
-                NeumorphicButton(
-                  text: _isLoading ? 'Signing In...' : 'Sign In',
-                  onPressed: _isLoading ? null : _handleLogin,
-                  isAccent: true,
-                  icon: _isLoading ? null : Icons.login,
+                SizedBox(
+                  width: double.infinity,
+                  child: NeumorphicButton(
+                    text: _isLoading ? 'Signing In...' : 'Sign In',
+                    onPressed: _isLoading ? null : _handleLogin,
+                    isAccent: true,
+                    icon: _isLoading ? null : Icons.login,
+                  ),
                 ),
                 const SizedBox(height: AppDimensions.spacingL),
 

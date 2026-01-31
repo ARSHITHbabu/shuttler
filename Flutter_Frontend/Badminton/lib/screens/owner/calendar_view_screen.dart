@@ -4,11 +4,14 @@ import 'package:table_calendar/table_calendar.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/custom_text_field.dart';
+import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/success_snackbar.dart';
+import '../../widgets/common/confirmation_dialog.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/calendar_provider.dart';
 import '../../models/calendar_event.dart';
 import '../../core/utils/canadian_holidays.dart';
 import 'package:intl/intl.dart';
@@ -42,27 +45,24 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
     super.dispose();
   }
 
-  Future<List<CalendarEvent>> _loadEvents() async {
-    try {
-      final calendarService = ref.read(calendarServiceProvider);
-      // Get events for the current month
-      final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
-      final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
-      final events = await calendarService.getCalendarEvents(
-        startDate: firstDay,
-        endDate: lastDay,
-      );
-      return events;
-    } catch (e) {
-      return [];
-    }
-  }
 
   Map<DateTime, List<CalendarEvent>> _groupEventsByDate(List<CalendarEvent> events) {
     final Map<DateTime, List<CalendarEvent>> grouped = {};
     for (var event in events) {
-      final date = DateTime(event.date.year, event.date.month, event.date.day);
-      grouped.putIfAbsent(date, () => []).add(event);
+      final startDate = DateTime(event.date.year, event.date.month, event.date.day);
+      
+      // If event has an end date (date range), add it to all days in the range
+      if (event.endDate != null) {
+        final endDate = DateTime(event.endDate!.year, event.endDate!.month, event.endDate!.day);
+        var currentDate = startDate;
+        while (currentDate.isBefore(endDate) || currentDate.isAtSameMomentAs(endDate)) {
+          grouped.putIfAbsent(currentDate, () => []).add(event);
+          currentDate = currentDate.add(const Duration(days: 1));
+        }
+      } else {
+        // Single day event
+        grouped.putIfAbsent(startDate, () => []).add(event);
+      }
     }
     return grouped;
   }
@@ -80,23 +80,17 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
 
   Future<void> _saveEvent() async {
     if (_titleController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter event title')),
-      );
+      SuccessSnackbar.showError(context, 'Please enter event title');
       return;
     }
 
     if (_eventDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select event date')),
-      );
+      SuccessSnackbar.showError(context, 'Please select event date');
       return;
     }
 
     setState(() => _isLoading = true);
     try {
-      final calendarService = ref.read(calendarServiceProvider);
-      
       // Get current auth state from AsyncValue instead of waiting for future
       final authAsync = ref.read(authProvider);
       AuthState? authState = authAsync.value;
@@ -135,9 +129,7 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
         // Auth state is still loading or not available
         setState(() => _isLoading = false);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Authentication state is loading. Please try again.')),
-          );
+          SuccessSnackbar.showError(context, 'Authentication state is loading. Please try again.');
         }
         return;
       }
@@ -145,9 +137,7 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
       if (authState is! Authenticated) {
         setState(() => _isLoading = false);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('You must be logged in to create events')),
-          );
+          SuccessSnackbar.showError(context, 'You must be logged in to create events');
         }
         return;
       }
@@ -157,9 +147,24 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
       if (userId <= 0) {
         setState(() => _isLoading = false);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Invalid user ID. Please log in again.')),
-          );
+          SuccessSnackbar.showError(context, 'Invalid user ID. Please log in again.');
+        }
+        return;
+      }
+
+      // Determine creator_type based on userType
+      String? creatorType;
+      if (authState.userType == 'owner') {
+        creatorType = 'owner';
+      } else if (authState.userType == 'coach') {
+        creatorType = 'coach';
+      }
+
+      // Validate creator_type
+      if (creatorType == null) {
+        setState(() => _isLoading = false);
+        if (mounted) {
+          SuccessSnackbar.showError(context, 'Unable to determine user type. Please try again.');
         }
         return;
       }
@@ -170,6 +175,7 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
         'event_type': _selectedEventType,
         'date': _eventDate!.toIso8601String().split('T')[0],
         'created_by': userId, // Explicitly cast to int
+        'creator_type': creatorType, // Add creator_type for backend validation
       };
 
       // Only add description if it's not empty
@@ -178,18 +184,28 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
         eventData['description'] = description;
       }
 
+      // Get events for current month to determine date range
+      final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
+      final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
+      
+      final calendarEventList = ref.read(calendarEventListProvider(
+        startDate: firstDay,
+        endDate: lastDay,
+      ).notifier);
+
       if (_editingEvent != null) {
-        await calendarService.updateCalendarEvent(_editingEvent!.id, eventData);
+        await calendarEventList.updateEvent(_editingEvent!.id, eventData);
+        if (mounted) {
+          SuccessSnackbar.show(context, 'Event updated successfully');
+        }
       } else {
-        await calendarService.createCalendarEvent(eventData);
+        await calendarEventList.createEvent(eventData);
+        if (mounted) {
+          SuccessSnackbar.show(context, 'Event created successfully');
+        }
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_editingEvent != null
-              ? 'Event updated successfully'
-              : 'Event created successfully')),
-        );
         setState(() {
           _showAddForm = false;
           _titleController.clear();
@@ -197,53 +213,41 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
           _eventDate = null;
           _selectedEventType = 'holiday';
           _editingEvent = null;
+          _isLoading = false;
         });
       }
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to create event: $e')),
-        );
+        SuccessSnackbar.showError(context, 'Failed to ${_editingEvent != null ? 'update' : 'create'} event: ${e.toString()}');
       }
     }
   }
 
   Future<void> _deleteEvent(int id) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.cardBackground,
-        title: const Text('Delete Event', style: TextStyle(color: AppColors.textPrimary)),
-        content: const Text('Are you sure you want to delete this event?', style: TextStyle(color: AppColors.textSecondary)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: AppColors.error)),
-          ),
-        ],
-      ),
+    final confirmed = await ConfirmationDialog.showDelete(
+      context,
+      'Event',
     );
 
-    if (confirm == true && mounted) {
+    if (confirmed == true && mounted) {
       try {
-        final calendarService = ref.read(calendarServiceProvider);
-        await calendarService.deleteCalendarEvent(id);
+        // Get events for current month to determine date range
+        final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
+        final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
+        
+        final calendarEventList = ref.read(calendarEventListProvider(
+          startDate: firstDay,
+          endDate: lastDay,
+        ).notifier);
+        
+        await calendarEventList.deleteEvent(id);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Event deleted successfully')),
-          );
-          setState(() {});
+          SuccessSnackbar.show(context, 'Event deleted successfully');
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to delete event: $e')),
-          );
+          SuccessSnackbar.showError(context, 'Failed to delete event: ${e.toString()}');
         }
       }
     }
@@ -279,27 +283,33 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
           ),
         ],
       ),
-      body: FutureBuilder<List<CalendarEvent>>(
-        future: _loadEvents(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: LoadingSpinner());
-          }
-
-          if (snapshot.hasError) {
-            return ErrorDisplay(
-              message: 'Failed to load calendar events',
-              onRetry: () => setState(() {}),
-            );
-          }
-
-          final events = snapshot.data ?? [];
-          final groupedEvents = _groupEventsByDate(events);
+      body: Consumer(
+        builder: (context, ref, child) {
+          // Get events for the current month
+          final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
+          final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
           
-          // Get Canadian holidays for the focused year
-          final canadianHolidays = CanadianHolidays.getHolidaysForYear(_focusedDay.year);
+          final eventsAsync = ref.watch(calendarEventListProvider(
+            startDate: firstDay,
+            endDate: lastDay,
+          ));
+          
+          return eventsAsync.when(
+            loading: () => const Center(child: ListSkeleton(itemCount: 3)),
+            error: (error, stack) => ErrorDisplay(
+              message: 'Failed to load calendar events: ${error.toString()}',
+              onRetry: () => ref.invalidate(calendarEventListProvider(
+                startDate: firstDay,
+                endDate: lastDay,
+              )),
+            ),
+            data: (events) {
+              final groupedEvents = _groupEventsByDate(events);
+              
+              // Get Canadian holidays for the focused year
+              final canadianHolidays = CanadianHolidays.getHolidaysForYear(_focusedDay.year);
 
-          return Column(
+              return Column(
             children: [
               // Calendar
               NeumorphicContainer(
@@ -311,6 +321,11 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                   focusedDay: _focusedDay,
                   selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
                   calendarFormat: _calendarFormat,
+                  availableCalendarFormats: const {
+                    CalendarFormat.month: 'Month',
+                    CalendarFormat.twoWeeks: '2 Weeks',
+                    CalendarFormat.week: 'Week',
+                  },
                   eventLoader: (day) {
                     final date = DateTime(day.year, day.month, day.day);
                     return groupedEvents[date] ?? [];
@@ -328,13 +343,8 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                       color: AppColors.accent.withOpacity(0.3),
                       shape: BoxShape.circle,
                     ),
-                    markerDecoration: const BoxDecoration(
-                      color: AppColors.accent,
-                      shape: BoxShape.circle,
-                    ),
-                    markersMaxCount: 3,
-                    markerSize: 6,
-                    canMarkersOverflow: true,
+                    // Hide marker dots - using colored date numbers instead
+                    markersMaxCount: 0,
                   ),
                   headerStyle: HeaderStyle(
                     formatButtonVisible: true,
@@ -375,29 +385,73 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                       final isHoliday = canadianHolidays.containsKey(dateKey);
                       final isSelected = isSameDay(_selectedDay, date);
                       final isToday = isSameDay(DateTime.now(), date);
-                      
-                      if (isHoliday && !isSelected && !isToday) {
-                        return Center(
-                          child: Text(
-                            '${date.day}',
-                            style: const TextStyle(
-                              color: Colors.red,
-                              fontWeight: FontWeight.bold,
+
+                      // Check if events contain holiday, leave, or other events
+                      final hasHolidayEvent = groupedEvents[dateKey]?.any((e) => e.isHoliday) ?? false;
+                      final hasLeaveEvent = groupedEvents[dateKey]?.any((e) => e.isLeave) ?? false;
+                      final hasOtherEvent = groupedEvents[dateKey]?.any((e) => !e.isHoliday && !e.isLeave) ?? false;
+
+                      if (!isSelected && !isToday) {
+                        // Canadian holidays or holiday events - show in red (highest priority)
+                        if (isHoliday || hasHolidayEvent) {
+                          return Center(
+                            child: Text(
+                              '${date.day}',
+                              style: const TextStyle(
+                                color: Colors.red,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
-                          ),
-                        );
+                          );
+                        }
+                        // Leave events - show in orange/amber
+                        if (hasLeaveEvent) {
+                          return Center(
+                            child: Text(
+                              '${date.day}',
+                              style: const TextStyle(
+                                color: Color(0xFFFF9800), // Orange/Amber
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          );
+                        }
+                        // Other events (tournament, event) - show in jade green
+                        if (hasOtherEvent) {
+                          return Center(
+                            child: Text(
+                              '${date.day}',
+                              style: const TextStyle(
+                                color: Color(0xFF00A86B), // Jade green
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          );
+                        }
                       }
                       return null;
                     },
                     selectedBuilder: (context, date, focusedDay) {
                       final dateKey = DateTime(date.year, date.month, date.day);
                       final isHoliday = canadianHolidays.containsKey(dateKey);
-                      
+                      final hasHolidayEvent = groupedEvents[dateKey]?.any((e) => e.isHoliday) ?? false;
+                      final hasLeaveEvent = groupedEvents[dateKey]?.any((e) => e.isLeave) ?? false;
+                      final hasOtherEvent = groupedEvents[dateKey]?.any((e) => !e.isHoliday && !e.isLeave) ?? false;
+
+                      Color bgColor = AppColors.accent;
+                      if (isHoliday || hasHolidayEvent) {
+                        bgColor = Colors.red;
+                      } else if (hasLeaveEvent) {
+                        bgColor = const Color(0xFFFF9800); // Orange/Amber
+                      } else if (hasOtherEvent) {
+                        bgColor = const Color(0xFF00A86B); // Jade green
+                      }
+
                       return Container(
                         margin: const EdgeInsets.all(4.0),
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: isHoliday ? Colors.red : AppColors.accent,
+                          color: bgColor,
                           shape: BoxShape.circle,
                         ),
                         child: Text(
@@ -412,57 +466,54 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                     todayBuilder: (context, date, focusedDay) {
                       final dateKey = DateTime(date.year, date.month, date.day);
                       final isHoliday = canadianHolidays.containsKey(dateKey);
+                      final hasHolidayEvent = groupedEvents[dateKey]?.any((e) => e.isHoliday) ?? false;
+                      final hasNonHolidayEvent = groupedEvents[dateKey]?.any((e) => !e.isHoliday) ?? false;
                       final isSelected = isSameDay(_selectedDay, date);
-                      
+
                       if (isSelected) return null; // Let selectedBuilder handle it
-                      
+
+                      Color bgColor = AppColors.accent.withOpacity(0.3);
+                      Color textColor = AppColors.textPrimary;
+                      FontWeight fontWeight = FontWeight.normal;
+
+                      if (isHoliday || hasHolidayEvent) {
+                        bgColor = Colors.red.withOpacity(0.5);
+                        textColor = Colors.red;
+                        fontWeight = FontWeight.bold;
+                      } else if (hasNonHolidayEvent) {
+                        bgColor = const Color(0xFF00A86B).withOpacity(0.3);
+                        textColor = const Color(0xFF00A86B);
+                        fontWeight = FontWeight.bold;
+                      }
+
                       return Container(
                         margin: const EdgeInsets.all(4.0),
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: isHoliday 
-                              ? Colors.red.withOpacity(0.5)
-                              : AppColors.accent.withOpacity(0.3),
+                          color: bgColor,
                           shape: BoxShape.circle,
                         ),
                         child: Text(
                           '${date.day}',
                           style: TextStyle(
-                            color: isHoliday ? Colors.red : AppColors.textPrimary,
-                            fontWeight: isHoliday ? FontWeight.bold : FontWeight.normal,
+                            color: textColor,
+                            fontWeight: fontWeight,
                           ),
                         ),
                       );
                     },
-                    markerBuilder: (context, date, events) {
-                      if (events.isEmpty) return null;
-                      
-                      final eventTypes = events.map((e) => (e).eventType).toSet();
-                      return Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: eventTypes.map((type) {
-                          final event = events.firstWhere((e) => (e).eventType == type);
-                          return Container(
-                            width: 6,
-                            height: 6,
-                            margin: const EdgeInsets.symmetric(horizontal: 1),
-                            decoration: BoxDecoration(
-                              color: event.eventColor,
-                              shape: BoxShape.circle,
-                            ),
-                          );
-                        }).toList(),
-                      );
-                    },
+                    // No marker dots needed - using colored date numbers instead
                   ),
                 ),
               ),
 
               // Selected Day Events
-              Expanded(
+              Flexible(
                 child: _buildSelectedDayEvents(groupedEvents),
               ),
             ],
+          );
+            },
           );
         },
       ),
@@ -494,32 +545,20 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
         const SizedBox(height: AppDimensions.spacingM),
         Expanded(
           child: (dayEvents.isEmpty && !hasHoliday)
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.event_outlined,
-                        size: 64,
-                        color: AppColors.textSecondary,
-                      ),
-                      const SizedBox(height: AppDimensions.spacingM),
-                      const Text(
-                        'No events on this day',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ],
-                  ),
+              ? EmptyState.noEvents(
+                  onAdd: () => setState(() => _showAddForm = true),
                 )
               : RefreshIndicator(
                   onRefresh: () async {
                     setState(() {});
                   },
                   child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+                    shrinkWrap: false,
+                    padding: EdgeInsets.only(
+                      left: AppDimensions.paddingL,
+                      right: AppDimensions.paddingL,
+                      bottom: AppDimensions.paddingL + 80, // Extra space for bottom nav
+                    ),
                     itemCount: (hasHoliday ? 1 : 0) + dayEvents.length,
                     itemBuilder: (context, index) {
                       // Show holiday first if it exists
@@ -591,6 +630,16 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
   }
 
   Widget _buildEventCard(CalendarEvent event) {
+    // Format date range for multi-day events
+    String dateDisplay;
+    if (event.isMultiDay) {
+      final startDateStr = DateFormat('MMM dd').format(event.date);
+      final endDateStr = DateFormat('MMM dd, yyyy').format(event.endDate!);
+      dateDisplay = '$startDateStr - $endDateStr';
+    } else {
+      dateDisplay = DateFormat('MMM dd, yyyy').format(event.date);
+    }
+
     return NeumorphicContainer(
       padding: const EdgeInsets.all(AppDimensions.paddingM),
       margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
@@ -623,37 +672,51 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                         ),
                       ),
                     ),
-                    PopupMenuButton(
-                      icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
-                      color: AppColors.cardBackground,
-                      itemBuilder: (context) => [
-                        PopupMenuItem(
-                          child: const Row(
-                            children: [
-                              Icon(Icons.edit, size: 18, color: AppColors.textPrimary),
-                              SizedBox(width: 8),
-                              Text('Edit', style: TextStyle(color: AppColors.textPrimary)),
-                            ],
+                    // Don't show edit/delete for leave events (they're auto-generated)
+                    if (!event.isLeave)
+                      PopupMenuButton(
+                        icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+                        color: AppColors.cardBackground,
+                        itemBuilder: (context) => [
+                          PopupMenuItem(
+                            child: const Row(
+                              children: [
+                                Icon(Icons.edit, size: 18, color: AppColors.textPrimary),
+                                SizedBox(width: 8),
+                                Text('Edit', style: TextStyle(color: AppColors.textPrimary)),
+                              ],
+                            ),
+                            onTap: () {
+                              Future.delayed(Duration.zero, () {
+                                _editEvent(event);
+                              });
+                            },
                           ),
-                          onTap: () {
-                            Future.delayed(Duration.zero, () {
-                              _editEvent(event);
-                            });
-                          },
-                        ),
-                        PopupMenuItem(
-                          child: const Row(
-                            children: [
-                              Icon(Icons.delete, size: 18, color: AppColors.error),
-                              SizedBox(width: 8),
-                              Text('Delete', style: TextStyle(color: AppColors.error)),
-                            ],
+                          PopupMenuItem(
+                            child: const Row(
+                              children: [
+                                Icon(Icons.delete, size: 18, color: AppColors.error),
+                                SizedBox(width: 8),
+                                Text('Delete', style: TextStyle(color: AppColors.error)),
+                              ],
+                            ),
+                            onTap: () => _deleteEvent(event.id),
                           ),
-                          onTap: () => _deleteEvent(event.id),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
                   ],
+                ),
+                const SizedBox(height: AppDimensions.spacingS),
+                // Show date range for multi-day events
+                Text(
+                  dateDisplay,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: event.isLeave 
+                        ? const Color(0xFFFF9800).withOpacity(0.8) 
+                        : AppColors.textSecondary,
+                    fontWeight: event.isMultiDay ? FontWeight.w600 : FontWeight.normal,
+                  ),
                 ),
                 if (event.description != null && event.description!.isNotEmpty) ...[
                   const SizedBox(height: AppDimensions.spacingS),
@@ -810,13 +873,18 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                     padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingM),
                   ),
                   child: _isLoading
-                      ? const LoadingSpinner()
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
                       : Text(
                           _editingEvent != null ? 'Update Event' : 'Add Event',
                           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                         ),
                 ),
               ),
+              const SizedBox(height: 100), // Space for bottom nav
             ],
           ),
         ),

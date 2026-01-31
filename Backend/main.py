@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, File, UploadFile
+from fastapi import FastAPI, HTTPException, File, UploadFile, Query, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, Text, Date, DateTime, ForeignKey, JSON, func, and_
@@ -13,6 +13,7 @@ import os
 import shutil
 import uuid
 import secrets
+import traceback
 from pathlib import Path
 from dotenv import load_dotenv
 from passlib.context import CryptContext
@@ -105,7 +106,6 @@ class CoachDB(Base):
     email = Column(String, nullable=False, unique=True)
     phone = Column(String, nullable=False)
     password = Column(String, nullable=False)
-    role = Column(String, default="coach")  # "coach" or "owner"
     specialization = Column(String, nullable=True)
     experience_years = Column(Integer, nullable=True)
     status = Column(String, default="active")  # active, inactive
@@ -115,8 +115,37 @@ class CoachDB(Base):
     fcm_token = Column(String(500), nullable=True)  # Firebase Cloud Messaging token for push notifications
 
     # RELATIONSHIPS (will be defined after the related models are created):
-    announcements = relationship("AnnouncementDB", back_populates="creator", cascade="all, delete-orphan")
-    calendar_events = relationship("CalendarEventDB", back_populates="creator", cascade="all, delete-orphan")
+    # Note: Announcements and calendar events now support both coaches and owners via polymorphic relationships
+
+class OwnerDB(Base):
+    """Separate table for academy owners"""
+    __tablename__ = "owners"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    email = Column(String, nullable=False, unique=True)
+    phone = Column(String, nullable=False)
+    password = Column(String, nullable=False)
+    specialization = Column(String, nullable=True)
+    experience_years = Column(Integer, nullable=True)
+    status = Column(String, default="active")  # active, inactive
+    
+    # Profile enhancements:
+    profile_photo = Column(String(500), nullable=True)  # Profile photo URL/path
+    fcm_token = Column(String(500), nullable=True)  # Firebase Cloud Messaging token for push notifications
+    
+    # RELATIONSHIPS (will be defined after the related models are created):
+    # Note: Announcements and calendar events now support both coaches and owners via polymorphic relationships
+
+class SessionDB(Base):
+    """Session/Season entity that groups multiple batches"""
+    __tablename__ = "sessions"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)  # e.g., "Fall 2026", "Winter 2026"
+    start_date = Column(String, nullable=False)
+    end_date = Column(String, nullable=False)
+    status = Column(String, default="active")  # "active" or "archived"
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
 class BatchDB(Base):
     __tablename__ = "batches"
@@ -131,6 +160,7 @@ class BatchDB(Base):
     created_by = Column(String, nullable=False)
     assigned_coach_id = Column(Integer, nullable=True)
     assigned_coach_name = Column(String, nullable=True)
+    session_id = Column(Integer, ForeignKey("sessions.id"), nullable=True)  # Link to session
 
 class StudentDB(Base):
     __tablename__ = "students"
@@ -157,6 +187,13 @@ class BatchStudentDB(Base):
     batch_id = Column(Integer, nullable=False)
     student_id = Column(Integer, nullable=False)
     status = Column(String, default="pending") 
+
+class BatchCoachDB(Base):
+    __tablename__ = "batch_coaches"
+    id = Column(Integer, primary_key=True, index=True)
+    batch_id = Column(Integer, ForeignKey("batches.id", ondelete="CASCADE"), nullable=False)
+    coach_id = Column(Integer, ForeignKey("coaches.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class AttendanceDB(Base):
     __tablename__ = "attendance"
@@ -256,10 +293,12 @@ class TournamentDB(Base):
 class VideoResourceDB(Base):
     __tablename__ = "video_resources"
     id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, nullable=False)
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
+    title = Column(String, nullable=True)
     url = Column(String, nullable=False)
-    description = Column(Text, nullable=True)
-    category = Column(String, nullable=True)
+    remarks = Column(Text, nullable=True)
+    uploaded_by = Column(Integer, nullable=True)  # Owner ID who uploaded
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class InvitationDB(Base):
     __tablename__ = "invitations"
@@ -273,6 +312,20 @@ class InvitationDB(Base):
     status = Column(String, default="pending")
     created_at = Column(String, nullable=False)
 
+class CoachInvitationDB(Base):
+    """Invitations for coaches - sent by owners"""
+    __tablename__ = "coach_invitations"
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, nullable=False)  # Owner who sent the invitation
+    owner_name = Column(String, nullable=False)  # Owner name
+    coach_name = Column(String, nullable=True)  # Optional coach name
+    coach_phone = Column(String, nullable=True)  # At least one of phone or email required
+    coach_email = Column(String, nullable=True)  # At least one of phone or email required
+    experience_years = Column(Integer, nullable=True)  # Optional experience years
+    invite_token = Column(String, nullable=False, unique=True, index=True)
+    status = Column(String, default="pending")  # pending, approved, rejected
+    created_at = Column(String, nullable=False)
+
 # ==================== NEW MODELS FOR PHASE 0 ====================
 
 class AnnouncementDB(Base):
@@ -284,13 +337,13 @@ class AnnouncementDB(Base):
     message = Column(Text, nullable=False)
     target_audience = Column(String(50), default="all")  # "all", "students", "coaches"
     priority = Column(String(20), default="normal")  # "normal", "high", "urgent"
-    created_by = Column(Integer, ForeignKey("coaches.id"), nullable=False)
+    created_by = Column(Integer, nullable=True)  # Can be coach or owner ID
+    creator_type = Column(String(20), default="coach")  # "coach" or "owner"
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     scheduled_at = Column(DateTime(timezone=True), nullable=True)
     is_sent = Column(Boolean, default=False)
 
-    # Relationship
-    creator = relationship("CoachDB", back_populates="announcements")
+    # Note: Relationships are handled via creator_type field - use creator_type to determine if created_by refers to coach or owner
 
 
 class NotificationDB(Base):
@@ -309,19 +362,59 @@ class NotificationDB(Base):
 
 
 class CalendarEventDB(Base):
-    """Calendar events: holidays, tournaments, in-house events"""
+    """Calendar events: holidays, tournaments, in-house events, leave"""
     __tablename__ = "calendar_events"
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(255), nullable=False)
-    event_type = Column(String(50), nullable=False)  # "holiday", "tournament", "event"
+    event_type = Column(String(50), nullable=False)  # "holiday", "tournament", "event", "leave"
     date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=True)  # For date ranges (e.g., multi-day leave)
     description = Column(Text, nullable=True)
-    created_by = Column(Integer, ForeignKey("coaches.id"), nullable=False)
+    created_by = Column(Integer, nullable=True)  # Can be coach or owner ID
+    creator_type = Column(String(20), default="coach")  # "coach" or "owner"
+    related_leave_request_id = Column(Integer, nullable=True)  # Link to leave_requests table if this is a leave event
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    # Relationship
-    creator = relationship("CoachDB", back_populates="calendar_events")
+    # Note: Relationships are handled via creator_type field - use creator_type to determine if created_by refers to coach or owner
+
+class LeaveRequestDB(Base):
+    """Leave requests from coaches"""
+    __tablename__ = "leave_requests"
+
+    id = Column(Integer, primary_key=True, index=True)
+    coach_id = Column(Integer, nullable=False, index=True)
+    coach_name = Column(String, nullable=False)
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+    leave_type = Column(String(50), nullable=False)  # "sick", "personal", "emergency", "other"
+    reason = Column(Text, nullable=False)
+    status = Column(String(20), default="pending")  # "pending", "approved", "rejected"
+    submitted_at = Column(DateTime(timezone=True), server_default=func.now())
+    reviewed_by = Column(Integer, nullable=True)  # Owner ID who reviewed
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    review_notes = Column(Text, nullable=True)
+
+class StudentRegistrationRequestDB(Base):
+    """Student registration requests awaiting owner approval"""
+    __tablename__ = "student_registration_requests"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    email = Column(String, nullable=False, unique=True)
+    phone = Column(String, nullable=False)
+    password = Column(String, nullable=False)  # Hashed password
+    status = Column(String, default="pending")  # "pending", "approved", "rejected"
+    submitted_at = Column(DateTime(timezone=True), server_default=func.now())
+    reviewed_by = Column(Integer, nullable=True)  # Owner ID who reviewed
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    review_notes = Column(Text, nullable=True)
+    # Store registration data temporarily
+    guardian_name = Column(String, nullable=True)
+    guardian_phone = Column(String, nullable=True)
+    date_of_birth = Column(String, nullable=True)
+    address = Column(Text, nullable=True)
+    t_shirt_size = Column(String, nullable=True)
 
 # ==================== Database Migration Functions ====================
 
@@ -365,7 +458,6 @@ def migrate_database_schema(engine):
         
         # Migrate coaches table
         if 'coaches' in tables:
-            check_and_add_column(engine, 'coaches', 'role', 'VARCHAR', nullable=True, default_value="'coach'")
             check_and_add_column(engine, 'coaches', 'profile_photo', 'VARCHAR(500)', nullable=True)
             check_and_add_column(engine, 'coaches', 'fcm_token', 'VARCHAR(500)', nullable=True)
         
@@ -401,6 +493,112 @@ def migrate_database_schema(engine):
                             conn.execute(text("ALTER TABLE students ALTER COLUMN added_by DROP NOT NULL"))
             except Exception as alter_error:
                 print(f"⚠️  Warning: Could not alter column constraints: {alter_error}")
+        
+        # Migrate announcements table - add creator_type and make created_by nullable
+        if 'announcements' in tables:
+            check_and_add_column(engine, 'announcements', 'creator_type', 'VARCHAR(20)', nullable=True, default_value="'coach'")
+            # Make created_by nullable and remove foreign key constraint (since it can reference either coaches or owners)
+            try:
+                with engine.begin() as conn:
+                    # Check if created_by is NOT NULL and make it nullable
+                    col_info = next((col for col in inspector.get_columns('announcements') if col['name'] == 'created_by'), None)
+                    if col_info and not col_info.get('nullable', True):
+                        conn.execute(text("ALTER TABLE announcements ALTER COLUMN created_by DROP NOT NULL"))
+                    
+                    # Drop foreign key constraint if it exists (since created_by can reference either coaches or owners)
+                    # Check for common foreign key constraint names
+                    fk_constraints = [
+                        'announcements_created_by_fkey',
+                        'announcements_created_by_coaches_id_fkey',
+                        'fk_announcements_created_by'
+                    ]
+                    
+                    for fk_name in fk_constraints:
+                        fk_check = text(f"""
+                            SELECT COUNT(*) 
+                            FROM information_schema.table_constraints 
+                            WHERE table_name = 'announcements' 
+                            AND constraint_name = '{fk_name}'
+                        """)
+                        result = conn.execute(fk_check).scalar()
+                        if result > 0:
+                            # Drop the foreign key constraint
+                            drop_fk_sql = text(f"ALTER TABLE announcements DROP CONSTRAINT IF EXISTS {fk_name}")
+                            conn.execute(drop_fk_sql)
+                            print(f"✅ Dropped foreign key constraint {fk_name} from announcements.created_by")
+                            break
+                    
+                    # Also try to find and drop any foreign key constraint on created_by column
+                    # This handles cases where constraint name might be different
+                    fk_check_all = text("""
+                        SELECT tc.constraint_name 
+                        FROM information_schema.table_constraints tc
+                        JOIN information_schema.key_column_usage kcu 
+                            ON tc.constraint_name = kcu.constraint_name
+                        WHERE tc.table_name = 'announcements' 
+                        AND kcu.column_name = 'created_by'
+                        AND tc.constraint_type = 'FOREIGN KEY'
+                    """)
+                    fk_results = conn.execute(fk_check_all).fetchall()
+                    for fk_row in fk_results:
+                        fk_name = fk_row[0]
+                        drop_fk_sql = text(f"ALTER TABLE announcements DROP CONSTRAINT IF EXISTS {fk_name}")
+                        conn.execute(drop_fk_sql)
+                        print(f"✅ Dropped foreign key constraint {fk_name} from announcements.created_by")
+            except Exception as alter_error:
+                print(f"⚠️  Warning: Could not alter announcements.created_by constraint: {alter_error}")
+        
+        # Migrate calendar_events table - add creator_type and make created_by nullable
+        if 'calendar_events' in tables:
+            check_and_add_column(engine, 'calendar_events', 'creator_type', 'VARCHAR(20)', nullable=True, default_value="'coach'")
+            # Make created_by nullable and remove foreign key constraint (since it can reference either coaches or owners)
+            try:
+                with engine.begin() as conn:
+                    # Check if created_by is NOT NULL and make it nullable
+                    col_info = next((col for col in inspector.get_columns('calendar_events') if col['name'] == 'created_by'), None)
+                    if col_info and not col_info.get('nullable', True):
+                        conn.execute(text("ALTER TABLE calendar_events ALTER COLUMN created_by DROP NOT NULL"))
+                    
+                    # Drop foreign key constraint if it exists (since created_by can reference either coaches or owners)
+                    fk_constraints = [
+                        'calendar_events_created_by_fkey',
+                        'calendar_events_created_by_coaches_id_fkey',
+                        'fk_calendar_events_created_by'
+                    ]
+                    
+                    for fk_name in fk_constraints:
+                        fk_check = text(f"""
+                            SELECT COUNT(*) 
+                            FROM information_schema.table_constraints 
+                            WHERE table_name = 'calendar_events' 
+                            AND constraint_name = '{fk_name}'
+                        """)
+                        result = conn.execute(fk_check).scalar()
+                        if result > 0:
+                            # Drop the foreign key constraint
+                            drop_fk_sql = text(f"ALTER TABLE calendar_events DROP CONSTRAINT IF EXISTS {fk_name}")
+                            conn.execute(drop_fk_sql)
+                            print(f"✅ Dropped foreign key constraint {fk_name} from calendar_events.created_by")
+                            break
+                    
+                    # Also try to find and drop any foreign key constraint on created_by column
+                    fk_check_all = text("""
+                        SELECT tc.constraint_name 
+                        FROM information_schema.table_constraints tc
+                        JOIN information_schema.key_column_usage kcu 
+                            ON tc.constraint_name = kcu.constraint_name
+                        WHERE tc.table_name = 'calendar_events' 
+                        AND kcu.column_name = 'created_by'
+                        AND tc.constraint_type = 'FOREIGN KEY'
+                    """)
+                    fk_results = conn.execute(fk_check_all).fetchall()
+                    for fk_row in fk_results:
+                        fk_name = fk_row[0]
+                        drop_fk_sql = text(f"ALTER TABLE calendar_events DROP CONSTRAINT IF EXISTS {fk_name}")
+                        conn.execute(drop_fk_sql)
+                        print(f"✅ Dropped foreign key constraint {fk_name} from calendar_events.created_by")
+            except Exception as alter_error:
+                print(f"⚠️  Warning: Could not alter calendar_events.created_by constraint: {alter_error}")
         
         # Migrate fees table - add payee_student_id column
         if 'fees' in tables:
@@ -442,6 +640,63 @@ def migrate_database_schema(engine):
         # Migrate schedules table - add capacity column
         if 'schedules' in tables:
             check_and_add_column(engine, 'schedules', 'capacity', 'INTEGER', nullable=True)
+        
+        # Migrate sessions table - create if it doesn't exist
+        if 'sessions' not in tables:
+            print("⚠️  Table 'sessions' missing. Creating...")
+            try:
+                with engine.begin() as conn:
+                    sessions_table_sql = text("""
+                        CREATE TABLE sessions (
+                            id SERIAL PRIMARY KEY,
+                            name VARCHAR(255) NOT NULL,
+                            start_date VARCHAR(50) NOT NULL,
+                            end_date VARCHAR(50) NOT NULL,
+                            status VARCHAR(20) DEFAULT 'active',
+                            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP WITH TIME ZONE
+                        )
+                    """)
+                    conn.execute(sessions_table_sql)
+                print("✅ Created table 'sessions'")
+            except Exception as e:
+                print(f"⚠️  Error creating sessions table: {e}")
+        else:
+            print("✅ Table 'sessions' already exists")
+        
+        # Migrate batches table - add session_id column
+        if 'batches' in tables:
+            columns = [col['name'] for col in inspector.get_columns('batches')]
+            if 'session_id' not in columns:
+                print("⚠️  Column 'session_id' missing in 'batches' table. Adding...")
+                try:
+                    with engine.begin() as conn:
+                        # First, ensure sessions table exists (should already be created above)
+                        # Add session_id column with foreign key
+                        alter_sql = text("""
+                            ALTER TABLE batches 
+                            ADD COLUMN session_id INTEGER 
+                            REFERENCES sessions(id) ON DELETE SET NULL
+                        """)
+                        conn.execute(alter_sql)
+                        print("✅ Added column 'session_id' to 'batches' table")
+                        
+                        # Create index on session_id for better query performance
+                        index_check = text("""
+                            SELECT COUNT(*) 
+                            FROM pg_indexes 
+                            WHERE tablename = 'batches' 
+                            AND indexname = 'idx_batches_session_id'
+                        """)
+                        index_result = conn.execute(index_check).scalar()
+                        if index_result == 0:
+                            create_index_sql = text("CREATE INDEX idx_batches_session_id ON batches(session_id)")
+                            conn.execute(create_index_sql)
+                            print("✅ Created index 'idx_batches_session_id' on 'batches' table")
+                except Exception as e:
+                    print(f"⚠️  Error adding session_id column: {e}")
+            else:
+                print("✅ Column 'session_id' already exists in 'batches' table")
         
         # Migrate invitations table - add invite_token and make columns nullable
         if 'invitations' in tables:
@@ -519,6 +774,85 @@ def migrate_database_schema(engine):
                             print("✅ Made batch_id nullable in invitations table")
             except Exception as alter_error:
                 print(f"⚠️  Warning: Could not alter column constraints: {alter_error}")
+
+        # Migrate video_resources table - add new columns for student video feature
+        if 'video_resources' in tables:
+            video_columns = [col['name'] for col in inspector.get_columns('video_resources')]
+            print(f"📹 video_resources table found with columns: {video_columns}")
+
+            # Check if this is the old schema (without student_id)
+            if 'student_id' not in video_columns:
+                print("⚠️  video_resources table has old schema. Migrating...")
+                try:
+                    with engine.begin() as conn:
+                        # Drop old video_resources table (since it has different structure)
+                        # First check if there's any data we should preserve
+                        count_result = conn.execute(text("SELECT COUNT(*) FROM video_resources")).scalar()
+                        if count_result > 0:
+                            print(f"⚠️  Found {count_result} existing videos. Backing up old data...")
+                            # For safety, rename old table instead of dropping
+                            conn.execute(text("ALTER TABLE video_resources RENAME TO video_resources_old_backup"))
+                            print("✅ Renamed old table to video_resources_old_backup")
+                        else:
+                            # No data, safe to drop
+                            conn.execute(text("DROP TABLE IF EXISTS video_resources"))
+                            print("✅ Dropped empty old video_resources table")
+
+                        # Create new table with correct schema
+                        conn.execute(text("""
+                            CREATE TABLE video_resources (
+                                id SERIAL PRIMARY KEY,
+                                student_id INTEGER NOT NULL REFERENCES students(id),
+                                title VARCHAR,
+                                url VARCHAR NOT NULL,
+                                remarks TEXT,
+                                uploaded_by INTEGER,
+                                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                            )
+                        """))
+                        print("✅ Created new video_resources table with student association")
+
+                        # Create index on student_id for faster lookups
+                        conn.execute(text("CREATE INDEX ix_video_resources_student_id ON video_resources (student_id)"))
+                        print("✅ Added index for video_resources.student_id")
+                except Exception as video_migration_error:
+                    print(f"⚠️  Error migrating video_resources table: {video_migration_error}")
+            else:
+                # Table already has student_id, just ensure other columns exist
+                check_and_add_column(engine, 'video_resources', 'remarks', 'TEXT', nullable=True)
+                check_and_add_column(engine, 'video_resources', 'uploaded_by', 'INTEGER', nullable=True)
+                check_and_add_column(engine, 'video_resources', 'created_at', 'TIMESTAMP WITH TIME ZONE', nullable=True, default_value='NOW()')
+                print("✅ video_resources table schema verified")
+        else:
+            print("📹 video_resources table will be created by SQLAlchemy")
+
+        # Check if leave_requests table exists
+        if 'leave_requests' not in tables:
+            print("⚠️  leave_requests table not found. Creating...")
+            try:
+                LeaveRequestDB.__table__.create(bind=engine)
+                print("✅ leave_requests table created!")
+            except Exception as e:
+                print(f"❌ Error creating leave_requests table: {e}")
+        else:
+            print("✅ leave_requests table exists")
+        
+        # Check if student_registration_requests table exists
+        if 'student_registration_requests' not in tables:
+            print("⚠️  student_registration_requests table not found. Creating...")
+            try:
+                StudentRegistrationRequestDB.__table__.create(bind=engine)
+                print("✅ student_registration_requests table created!")
+            except Exception as e:
+                print(f"❌ Error creating student_registration_requests table: {e}")
+        else:
+            print("✅ student_registration_requests table exists")
+        
+        # Migrate calendar_events table - add end_date and related_leave_request_id columns
+        if 'calendar_events' in tables:
+            check_and_add_column(engine, 'calendar_events', 'end_date', 'DATE', nullable=True)
+            check_and_add_column(engine, 'calendar_events', 'related_leave_request_id', 'INTEGER', nullable=True)
+            print("✅ calendar_events table schema updated for leave support")
         
         print("✅ Database schema migration completed!")
     except Exception as e:
@@ -540,7 +874,6 @@ class CoachCreate(BaseModel):
     email: str
     phone: str
     password: str
-    role: Optional[str] = "coach"  # "coach" or "owner"
     specialization: Optional[str] = None
     experience_years: Optional[int] = None
 
@@ -550,7 +883,6 @@ class Coach(BaseModel):
     email: str
     phone: str
     password: str
-    role: str = "coach"
     specialization: Optional[str] = None
     experience_years: Optional[int] = None
     status: str = "active"
@@ -566,13 +898,19 @@ class CoachLogin(BaseModel):
 
 class ForgotPasswordRequest(BaseModel):
     email: str
-    user_type: str  # "coach" or "student"
+    user_type: str  # "coach", "owner", or "student"
 
 class ResetPasswordRequest(BaseModel):
     email: str
     reset_token: str
     new_password: str
-    user_type: str  # "coach" or "student"
+    user_type: str  # "coach", "owner", or "student"
+
+class ChangePasswordRequest(BaseModel):
+    email: str
+    current_password: str
+    new_password: str
+    user_type: str  # "coach", "owner", or "student"
 
 class CoachUpdate(BaseModel):
     name: Optional[str] = None
@@ -582,8 +920,73 @@ class CoachUpdate(BaseModel):
     specialization: Optional[str] = None
     experience_years: Optional[int] = None
     status: Optional[str] = None
+    profile_photo: Optional[str] = None
+
+# Owner Models
+class OwnerCreate(BaseModel):
+    name: str
+    email: str
+    phone: str
+    password: str
+    specialization: Optional[str] = None
+    experience_years: Optional[int] = None
+
+class Owner(BaseModel):
+    id: int
+    name: str
+    email: str
+    phone: str
+    specialization: Optional[str] = None
+    experience_years: Optional[int] = None
+    status: str = "active"
+    profile_photo: Optional[str] = None
+    fcm_token: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class OwnerLogin(BaseModel):
+    email: str
+    password: str
+
+class OwnerUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    password: Optional[str] = None
+    specialization: Optional[str] = None
+    experience_years: Optional[int] = None
+    profile_photo: Optional[str] = None
+    fcm_token: Optional[str] = None
 
 # Batch Models
+# Session Models
+class SessionCreate(BaseModel):
+    name: str
+    start_date: str
+    end_date: str
+    status: Optional[str] = "active"
+
+class SessionUpdate(BaseModel):
+    name: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    status: Optional[str] = None
+
+class Session(BaseModel):
+    id: int
+    name: str
+    start_date: str
+    end_date: str
+    status: str
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+        # Allow population by field name or alias
+        populate_by_name = True
+
 class BatchCreate(BaseModel):
     batch_name: str
     capacity: int
@@ -593,8 +996,17 @@ class BatchCreate(BaseModel):
     period: str
     location: Optional[str] = None
     created_by: str
-    assigned_coach_id: Optional[int] = None
-    assigned_coach_name: Optional[str] = None
+    assigned_coach_id: Optional[int] = None  # Deprecated: kept for backward compatibility
+    assigned_coach_name: Optional[str] = None  # Deprecated: kept for backward compatibility
+    assigned_coach_ids: Optional[List[int]] = None  # New: supports multiple coaches
+    session_id: Optional[int] = None
+
+class CoachInfo(BaseModel):
+    id: int
+    name: str
+    
+    class Config:
+        from_attributes = True
 
 class Batch(BaseModel):
     id: int
@@ -606,8 +1018,11 @@ class Batch(BaseModel):
     period: str
     location: Optional[str] = None
     created_by: str
-    assigned_coach_id: Optional[int] = None
-    assigned_coach_name: Optional[str] = None
+    assigned_coach_id: Optional[int] = None  # Deprecated: kept for backward compatibility
+    assigned_coach_name: Optional[str] = None  # Deprecated: kept for backward compatibility
+    assigned_coach_ids: Optional[List[int]] = None  # New: list of coach IDs
+    assigned_coaches: Optional[List[CoachInfo]] = None  # New: list of coach info objects
+    session_id: Optional[int] = None
     
     class Config:
         from_attributes = True
@@ -620,8 +1035,10 @@ class BatchUpdate(BaseModel):
     timing: Optional[str] = None
     period: Optional[str] = None
     location: Optional[str] = None
-    assigned_coach_id: Optional[int] = None
-    assigned_coach_name: Optional[str] = None
+    assigned_coach_id: Optional[int] = None  # Deprecated: kept for backward compatibility
+    assigned_coach_name: Optional[str] = None  # Deprecated: kept for backward compatibility
+    assigned_coach_ids: Optional[List[int]] = None  # New: supports multiple coaches
+    session_id: Optional[int] = None
 
 # Student Models
 class StudentCreate(BaseModel):
@@ -635,6 +1052,7 @@ class StudentCreate(BaseModel):
     date_of_birth: Optional[str] = None  # Required for profile completion
     address: Optional[str] = None  # Required for profile completion
     t_shirt_size: Optional[str] = None  # Required for profile completion
+    blood_group: Optional[str] = None
 
 class Student(BaseModel):
     id: int
@@ -649,6 +1067,7 @@ class Student(BaseModel):
     address: Optional[str] = None
     status: str = "active"
     t_shirt_size: Optional[str] = None
+    blood_group: Optional[str] = None
     profile_photo: Optional[str] = None
     fcm_token: Optional[str] = None
 
@@ -669,6 +1088,7 @@ class StudentUpdate(BaseModel):
     date_of_birth: Optional[str] = None
     address: Optional[str] = None
     t_shirt_size: Optional[str] = None
+    blood_group: Optional[str] = None
     status: Optional[str] = None
     profile_photo: Optional[str] = None
 
@@ -922,18 +1342,20 @@ class Tournament(BaseModel):
 
 # Video Resource Models
 class VideoResourceCreate(BaseModel):
-    title: str
-    url: str
-    description: Optional[str] = None
-    category: Optional[str] = None
+    student_id: int
+    title: Optional[str] = None
+    remarks: Optional[str] = None
 
 class VideoResource(BaseModel):
     id: int
-    title: str
+    student_id: int
+    student_name: Optional[str] = None
+    title: Optional[str] = None
     url: str
-    description: Optional[str] = None
-    category: Optional[str] = None
-    
+    remarks: Optional[str] = None
+    uploaded_by: Optional[int] = None
+    created_at: Optional[datetime] = None
+
     class Config:
         from_attributes = True
 
@@ -963,6 +1385,101 @@ class Invitation(BaseModel):
 class InvitationUpdate(BaseModel):
     status: str  # approved, rejected
 
+# Coach Invitation Models
+class CoachInvitationCreate(BaseModel):
+    owner_id: int
+    owner_name: str
+    coach_name: Optional[str] = None  # Optional coach name
+    coach_phone: Optional[str] = None  # At least one of phone or email required
+    coach_email: Optional[str] = None  # At least one of phone or email required
+    experience_years: Optional[int] = None  # Optional experience years
+
+class CoachInvitation(BaseModel):
+    id: int
+    owner_id: int
+    owner_name: str
+    coach_name: Optional[str]
+    coach_phone: Optional[str]
+    coach_email: Optional[str]
+    experience_years: Optional[int]
+    invite_token: str
+    invite_link: Optional[str] = None
+    status: str
+    created_at: str
+    
+    class Config:
+        from_attributes = True
+
+class CoachInvitationUpdate(BaseModel):
+    status: str  # approved, rejected
+
+# Leave Request Models
+class LeaveRequestCreate(BaseModel):
+    coach_id: int
+    coach_name: str
+    start_date: str  # YYYY-MM-DD format
+    end_date: str  # YYYY-MM-DD format
+    leave_type: str  # "sick", "personal", "emergency", "other"
+    reason: str
+
+class LeaveRequest(BaseModel):
+    id: int
+    coach_id: int
+    coach_name: str
+    start_date: str
+    end_date: str
+    leave_type: str
+    reason: str
+    status: str  # "pending", "approved", "rejected"
+    submitted_at: str
+    reviewed_by: Optional[int] = None
+    reviewed_at: Optional[str] = None
+    review_notes: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class LeaveRequestUpdate(BaseModel):
+    status: str  # "approved" or "rejected"
+    review_notes: Optional[str] = None
+
+# Student Registration Request Models
+class StudentRegistrationRequestCreate(BaseModel):
+    name: str
+    email: str
+    phone: str
+    password: str
+    guardian_name: Optional[str] = None
+    guardian_phone: Optional[str] = None
+    date_of_birth: Optional[str] = None
+    address: Optional[str] = None
+    t_shirt_size: Optional[str] = None
+    blood_group: Optional[str] = None
+
+class StudentRegistrationRequest(BaseModel):
+    id: int
+    name: str
+    email: str
+    phone: str
+    status: str  # "pending", "approved", "rejected"
+    submitted_at: str
+    reviewed_by: Optional[int] = None
+    reviewed_at: Optional[str] = None
+    review_notes: Optional[str] = None
+    guardian_name: Optional[str] = None
+    guardian_phone: Optional[str] = None
+    date_of_birth: Optional[str] = None
+    address: Optional[str] = None
+    t_shirt_size: Optional[str] = None
+    blood_group: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+class StudentRegistrationRequestUpdate(BaseModel):
+    status: str  # "approved" or "rejected"
+    review_notes: Optional[str] = None
+
 # Other Models
 class BatchStudentAssign(BaseModel):
     batch_id: int
@@ -977,6 +1494,7 @@ class AnnouncementCreate(BaseModel):
     target_audience: str = "all"
     priority: str = "normal"
     created_by: int
+    creator_type: str = "coach"  # "coach" or "owner"
     scheduled_at: Optional[str] = None
 
 class Announcement(BaseModel):
@@ -986,6 +1504,7 @@ class Announcement(BaseModel):
     target_audience: str
     priority: str
     created_by: int
+    creator_type: str = "coach"  # "coach" or "owner"
     created_at: str
     scheduled_at: Optional[str] = None
     is_sent: bool
@@ -1032,16 +1551,22 @@ class CalendarEventCreate(BaseModel):
     title: str
     event_type: str
     date: str  # Format: "YYYY-MM-DD"
+    end_date: Optional[str] = None  # Format: "YYYY-MM-DD" (for date ranges)
     description: Optional[str] = None
     created_by: int
+    creator_type: str = "coach"  # "coach" or "owner"
+    related_leave_request_id: Optional[int] = None  # Link to leave request if this is a leave event
 
 class CalendarEvent(BaseModel):
     id: int
     title: str
     event_type: str
     date: str
+    end_date: Optional[str] = None
     description: Optional[str] = None
     created_by: int
+    creator_type: str = "coach"  # "coach" or "owner"
+    related_leave_request_id: Optional[int] = None
     created_at: str
 
     class Config:
@@ -1051,6 +1576,7 @@ class CalendarEventUpdate(BaseModel):
     title: Optional[str] = None
     event_type: Optional[str] = None
     date: Optional[str] = None
+    end_date: Optional[str] = None
     description: Optional[str] = None
 
 # ==================== FastAPI App ====================
@@ -1088,15 +1614,38 @@ def read_root():
 
 @app.post("/coaches/", response_model=Coach)
 def create_coach(coach: CoachCreate):
+    """Create a new coach account - saves to coaches table only"""
     db = SessionLocal()
     try:
+        # Check if email already exists in owners table (shouldn't happen, but safety check)
+        existing_owner = db.query(OwnerDB).filter(OwnerDB.email == coach.email).first()
+        if existing_owner:
+            raise HTTPException(status_code=400, detail="Email already registered as an owner. Coaches and owners must have unique emails.")
+        
         # Hash password before storing
         coach_dict = coach.model_dump()
         coach_dict['password'] = hash_password(coach_dict['password'])
+        
+        # Explicitly create CoachDB instance (saves to coaches table)
         db_coach = CoachDB(**coach_dict)
+        
+        # Verify it's a CoachDB instance before adding
+        if not isinstance(db_coach, CoachDB):
+            raise HTTPException(status_code=500, detail="Internal error: Invalid coach instance")
+        
+        # Verify table name
+        if db_coach.__tablename__ != "coaches":
+            raise HTTPException(status_code=500, detail="Internal error: Coach not mapped to coaches table")
+        
         db.add(db_coach)
         db.commit()
         db.refresh(db_coach)
+        
+        # Verify it was saved to coaches table by querying it back
+        verify_coach = db.query(CoachDB).filter(CoachDB.id == db_coach.id).first()
+        if not verify_coach:
+            raise HTTPException(status_code=500, detail="Error: Coach was not saved to coaches table")
+        
         return db_coach
     except IntegrityError as e:
         db.rollback()
@@ -1114,6 +1663,7 @@ def create_coach(coach: CoachCreate):
 def get_coaches():
     db = SessionLocal()
     try:
+        # Get all coaches (owners are in separate table)
         coaches = db.query(CoachDB).all()
         return coaches
     finally:
@@ -1163,6 +1713,7 @@ def delete_coach(coach_id: int):
 
 @app.post("/coaches/login")
 def login_coach(login_data: CoachLogin):
+    """Login endpoint for coaches only - owners should use /owners/login"""
     db = SessionLocal()
     try:
         coach = db.query(CoachDB).filter(
@@ -1225,8 +1776,10 @@ def forgot_password(request: ForgotPasswordRequest):
     db = SessionLocal()
     try:
         # Find user by email and type
-        if request.user_type == "coach" or request.user_type == "owner":
+        if request.user_type == "coach":
             user = db.query(CoachDB).filter(CoachDB.email == request.email).first()
+        elif request.user_type == "owner":
+            user = db.query(OwnerDB).filter(OwnerDB.email == request.email).first()
         else:
             user = db.query(StudentDB).filter(StudentDB.email == request.email).first()
         
@@ -1288,8 +1841,10 @@ def reset_password(request: ResetPasswordRequest):
             }
         
         # Find user
-        if request.user_type == "coach" or request.user_type == "owner":
+        if request.user_type == "coach":
             user = db.query(CoachDB).filter(CoachDB.email == request.email).first()
+        elif request.user_type == "owner":
+            user = db.query(OwnerDB).filter(OwnerDB.email == request.email).first()
         else:
             user = db.query(StudentDB).filter(StudentDB.email == request.email).first()
         
@@ -1313,17 +1868,355 @@ def reset_password(request: ResetPasswordRequest):
     finally:
         db.close()
 
+@app.post("/auth/change-password")
+def change_password(request: ChangePasswordRequest):
+    """Change password for authenticated users - requires current password verification"""
+    db = SessionLocal()
+    try:
+        # Find user by email and type
+        if request.user_type == "coach":
+            user = db.query(CoachDB).filter(CoachDB.email == request.email).first()
+        elif request.user_type == "owner":
+            user = db.query(OwnerDB).filter(OwnerDB.email == request.email).first()
+        else:
+            user = db.query(StudentDB).filter(StudentDB.email == request.email).first()
+        
+        if not user:
+            return {
+                "success": False,
+                "message": "User not found"
+            }
+        
+        # Verify current password
+        password_valid = False
+        if user.password.startswith('$2b$') or user.password.startswith('$2a$'):
+            # Password is hashed, verify it
+            password_valid = verify_password(request.current_password, user.password)
+        else:
+            # Plain text password (legacy), check directly
+            password_valid = (user.password == request.current_password)
+        
+        if not password_valid:
+            return {
+                "success": False,
+                "message": "Current password is incorrect"
+            }
+        
+        # Check if new password is different from current password
+        if request.current_password == request.new_password:
+            return {
+                "success": False,
+                "message": "New password must be different from current password"
+            }
+        
+        # Validate new password length (bcrypt limit is 72 bytes)
+        new_password_bytes = request.new_password.encode('utf-8')
+        if len(new_password_bytes) > 72:
+            return {
+                "success": False,
+                "message": "Password cannot be longer than 72 characters"
+            }
+        
+        # Update password
+        user.password = hash_password(request.new_password)
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": "Password changed successfully"
+        }
+    except Exception as e:
+        db.rollback()
+        return {
+            "success": False,
+            "message": f"Failed to change password: {str(e)}"
+        }
+    finally:
+        db.close()
+
+# ==================== Owner Routes ====================
+
+@app.post("/owners/", response_model=Owner)
+def create_owner(owner: OwnerCreate):
+    """Create a new owner account - saves to owners table only"""
+    db = SessionLocal()
+    try:
+        # Check if owner with this email already exists in owners table
+        existing_owner = db.query(OwnerDB).filter(OwnerDB.email == owner.email).first()
+        
+        if existing_owner:
+            raise HTTPException(status_code=400, detail="Owner with this email already exists")
+        
+        # Also check if email exists in coaches table (shouldn't happen, but safety check)
+        existing_coach = db.query(CoachDB).filter(CoachDB.email == owner.email).first()
+        if existing_coach:
+            raise HTTPException(status_code=400, detail="Email already registered as a coach. Owners and coaches must have unique emails.")
+        
+        # Hash password before storing
+        owner_dict = owner.model_dump(exclude_none=True)  # Exclude None values to avoid SQLAlchemy issues
+        owner_dict['password'] = hash_password(owner_dict['password'])
+        owner_dict['status'] = "active"  # Default status
+        
+        # Explicitly create OwnerDB instance (saves to owners table)
+        db_owner = OwnerDB(**owner_dict)
+        
+        # Verify it's an OwnerDB instance before adding
+        if not isinstance(db_owner, OwnerDB):
+            raise HTTPException(status_code=500, detail="Internal error: Invalid owner instance")
+        
+        # Verify table name
+        if db_owner.__tablename__ != "owners":
+            raise HTTPException(status_code=500, detail="Internal error: Owner not mapped to owners table")
+        
+        db.add(db_owner)
+        db.commit()
+        db.refresh(db_owner)
+        
+        # Verify it was saved to owners table by querying it back
+        verify_owner = db.query(OwnerDB).filter(OwnerDB.id == db_owner.id).first()
+        if not verify_owner:
+            raise HTTPException(status_code=500, detail="Error: Owner was not saved to owners table")
+        
+        return db_owner
+    except IntegrityError as e:
+        db.rollback()
+        error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
+        if 'email' in error_msg.lower() or 'unique' in error_msg.lower():
+            raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=400, detail=f"Database constraint violation: {error_msg}")
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        # Log the full error for debugging
+        error_trace = traceback.format_exc()
+        print(f"Error creating owner: {error_trace}")  # Log to console for debugging
+        raise HTTPException(status_code=500, detail=f"Error creating owner: {str(e)}")
+    finally:
+        db.close()
+
+@app.get("/owners/", response_model=List[Owner])
+def get_owners():
+    """Get all owners"""
+    db = SessionLocal()
+    try:
+        owners = db.query(OwnerDB).all()
+        return owners
+    finally:
+        db.close()
+
+@app.get("/owners/{owner_id}", response_model=Owner)
+def get_owner(owner_id: int):
+    """Get a specific owner by ID"""
+    db = SessionLocal()
+    try:
+        owner = db.query(OwnerDB).filter(OwnerDB.id == owner_id).first()
+        if not owner:
+            raise HTTPException(status_code=404, detail="Owner not found")
+        return owner
+    finally:
+        db.close()
+
+@app.put("/owners/{owner_id}", response_model=Owner)
+def update_owner(owner_id: int, owner_update: OwnerUpdate):
+    """Update owner profile"""
+    db = SessionLocal()
+    try:
+        owner = db.query(OwnerDB).filter(OwnerDB.id == owner_id).first()
+        
+        if not owner:
+            raise HTTPException(status_code=404, detail="Owner not found")
+        
+        # Update only provided fields
+        update_data = owner_update.model_dump(exclude_unset=True)
+        
+        # Hash password if provided
+        if 'password' in update_data:
+            update_data['password'] = hash_password(update_data['password'])
+        
+        for key, value in update_data.items():
+            setattr(owner, key, value)
+        
+        db.commit()
+        db.refresh(owner)
+        return owner
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error updating owner: {str(e)}")
+    finally:
+        db.close()
+
+@app.delete("/owners/{owner_id}")
+def delete_owner(owner_id: int):
+    """Delete owner account"""
+    db = SessionLocal()
+    try:
+        owner = db.query(OwnerDB).filter(OwnerDB.id == owner_id).first()
+        
+        if not owner:
+            raise HTTPException(status_code=404, detail="Owner not found")
+        
+        db.delete(owner)
+        db.commit()
+        return {"message": "Owner deleted successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error deleting owner: {str(e)}")
+    finally:
+        db.close()
+
+@app.post("/owners/login")
+def login_owner(login_data: OwnerLogin):
+    """Owner login endpoint"""
+    db = SessionLocal()
+    try:
+        owner = db.query(OwnerDB).filter(OwnerDB.email == login_data.email).first()
+        
+        if owner:
+            # Verify password
+            password_valid = False
+            if owner.password.startswith('$2b$') or owner.password.startswith('$2a$'):
+                password_valid = verify_password(login_data.password, owner.password)
+            else:
+                # Plain text password (legacy), check directly and upgrade to hash
+                password_valid = (owner.password == login_data.password)
+                if password_valid:
+                    owner.password = hash_password(login_data.password)
+                    db.commit()
+            
+            if not password_valid:
+                return {
+                    "success": False,
+                    "message": "Invalid email or password"
+                }
+            
+            if owner.status == "inactive":
+                return {
+                    "success": False,
+                    "message": "Your account has been deactivated."
+                }
+            
+            return {
+                "success": True,
+                "message": "Login successful",
+                "owner": {
+                    "id": owner.id,
+                    "name": owner.name,
+                    "email": owner.email,
+                    "phone": owner.phone,
+                    "specialization": owner.specialization,
+                    "experience_years": owner.experience_years,
+                    "status": owner.status,
+                    "profile_photo": owner.profile_photo
+                }
+            }
+        else:
+            return {
+                "success": False,
+                "message": "Invalid email or password"
+            }
+    finally:
+        db.close()
+
 # ==================== Batch Routes ====================
+
+def _sync_batch_coaches(db, batch_id: int, coach_ids: Optional[List[int]]):
+    """Helper function to sync batch-coach relationships in junction table"""
+    if coach_ids is None:
+        return  # No change requested
+    
+    # Get existing assignments
+    existing_assignments = db.query(BatchCoachDB).filter(
+        BatchCoachDB.batch_id == batch_id
+    ).all()
+    existing_coach_ids = {bc.coach_id for bc in existing_assignments}
+    new_coach_ids = set(coach_ids)
+    
+    # Remove coaches that are no longer assigned
+    for assignment in existing_assignments:
+        if assignment.coach_id not in new_coach_ids:
+            db.delete(assignment)
+    
+    # Add new coach assignments
+    for coach_id in new_coach_ids:
+        if coach_id not in existing_coach_ids:
+            # Verify coach exists
+            coach = db.query(CoachDB).filter(CoachDB.id == coach_id).first()
+            if coach:
+                db_assignment = BatchCoachDB(
+                    batch_id=batch_id,
+                    coach_id=coach_id
+                )
+                db.add(db_assignment)
+    
+    db.commit()
+
+def _get_batch_coaches(db, batch_id: int) -> List[CoachInfo]:
+    """Helper function to get coaches assigned to a batch"""
+    try:
+        assignments = db.query(BatchCoachDB).filter(
+            BatchCoachDB.batch_id == batch_id
+        ).all()
+        coach_ids = [bc.coach_id for bc in assignments]
+        
+        if not coach_ids:
+            return []
+        
+        coaches = db.query(CoachDB).filter(CoachDB.id.in_(coach_ids)).all()
+        return [CoachInfo(id=c.id, name=c.name) for c in coaches]
+    except Exception:
+        # If table doesn't exist yet, return empty list
+        return []
 
 @app.post("/batches/", response_model=Batch)
 def create_batch(batch: BatchCreate):
     db = SessionLocal()
     try:
-        db_batch = BatchDB(**batch.model_dump())
+        batch_data = batch.model_dump()
+        coach_ids = batch_data.pop('assigned_coach_ids', None)
+        
+        # Handle backward compatibility: if assigned_coach_id is provided, add it to list
+        if coach_ids is None and batch_data.get('assigned_coach_id'):
+            coach_ids = [batch_data['assigned_coach_id']]
+        
+        # Remove assigned_coach_id from batch_data (we'll use junction table)
+        batch_data.pop('assigned_coach_id', None)
+        batch_data.pop('assigned_coach_name', None)
+        
+        db_batch = BatchDB(**batch_data)
         db.add(db_batch)
         db.commit()
         db.refresh(db_batch)
-        return db_batch
+        
+        # Sync coach assignments
+        if coach_ids:
+            _sync_batch_coaches(db, db_batch.id, coach_ids)
+        
+        # Get coaches for response
+        coaches = _get_batch_coaches(db, db_batch.id)
+        coach_ids_list = [c.id for c in coaches]
+        
+        # Build response
+        batch_response = Batch(
+            id=db_batch.id,
+            batch_name=db_batch.batch_name,
+            capacity=db_batch.capacity,
+            fees=db_batch.fees,
+            start_date=db_batch.start_date,
+            timing=db_batch.timing,
+            period=db_batch.period,
+            location=db_batch.location,
+            created_by=db_batch.created_by,
+            assigned_coach_id=coach_ids_list[0] if coach_ids_list else None,  # Backward compatibility
+            assigned_coach_name=coaches[0].name if coaches else None,  # Backward compatibility
+            assigned_coach_ids=coach_ids_list,
+            assigned_coaches=coaches,
+            session_id=db_batch.session_id
+        )
+        
+        return batch_response
     finally:
         db.close()
 
@@ -1331,8 +2224,73 @@ def create_batch(batch: BatchCreate):
 def get_batches():
     db = SessionLocal()
     try:
-        batches = db.query(BatchDB).all()
-        return batches
+        # Try normal query first
+        try:
+            batches_db = db.query(BatchDB).all()
+            batches = []
+            for batch_db in batches_db:
+                # Get coaches from junction table
+                coaches = _get_batch_coaches(db, batch_db.id)
+                coach_ids_list = [c.id for c in coaches]
+                
+                batch = Batch(
+                    id=batch_db.id,
+                    batch_name=batch_db.batch_name,
+                    capacity=batch_db.capacity,
+                    fees=batch_db.fees,
+                    start_date=batch_db.start_date,
+                    timing=batch_db.timing,
+                    period=batch_db.period,
+                    location=batch_db.location,
+                    created_by=batch_db.created_by,
+                    assigned_coach_id=coach_ids_list[0] if coach_ids_list else batch_db.assigned_coach_id,  # Backward compatibility
+                    assigned_coach_name=coaches[0].name if coaches else batch_db.assigned_coach_name,  # Backward compatibility
+                    assigned_coach_ids=coach_ids_list,
+                    assigned_coaches=coaches,
+                    session_id=batch_db.session_id
+                )
+                batches.append(batch)
+            return batches
+        except Exception as e:
+            # If error is about missing session_id column, rollback and use raw SQL
+            if "session_id" in str(e) or "UndefinedColumn" in str(e):
+                # Rollback the failed transaction
+                db.rollback()
+                from sqlalchemy import text
+                result = db.execute(text("""
+                    SELECT id, batch_name, capacity, fees, start_date, timing, period, 
+                           location, created_by, assigned_coach_id, assigned_coach_name
+                    FROM batches
+                """))
+                batches = []
+                for row in result:
+                    batch_id = row[0]
+                    # Try to get coaches from junction table
+                    coaches = _get_batch_coaches(db, batch_id)
+                    coach_ids_list = [c.id for c in coaches]
+                    
+                    # Create Batch response model directly (not BatchDB)
+                    batch = Batch(
+                        id=batch_id,
+                        batch_name=row[1],
+                        capacity=row[2],
+                        fees=row[3],
+                        start_date=row[4],
+                        timing=row[5],
+                        period=row[6],
+                        location=row[7],
+                        created_by=row[8],
+                        assigned_coach_id=coach_ids_list[0] if coach_ids_list else row[9],  # Backward compatibility
+                        assigned_coach_name=coaches[0].name if coaches else row[10],  # Backward compatibility
+                        assigned_coach_ids=coach_ids_list,
+                        assigned_coaches=coaches,
+                        session_id=None,  # Default to None if column doesn't exist
+                    )
+                    batches.append(batch)
+                return batches
+            else:
+                # Re-raise if it's a different error
+                raise
     finally:
         db.close()
 
@@ -1340,8 +2298,106 @@ def get_batches():
 def get_coach_batches(coach_id: int):
     db = SessionLocal()
     try:
-        batches = db.query(BatchDB).filter(BatchDB.assigned_coach_id == coach_id).all()
-        return batches
+        try:
+            # Query via junction table
+            batch_coaches = db.query(BatchCoachDB).filter(
+                BatchCoachDB.coach_id == coach_id
+            ).all()
+            batch_ids = [bc.batch_id for bc in batch_coaches]
+            
+            if not batch_ids:
+                return []
+            
+            batches_db = db.query(BatchDB).filter(BatchDB.id.in_(batch_ids)).all()
+            batches = []
+            for batch_db in batches_db:
+                # Get all coaches for this batch
+                coaches = _get_batch_coaches(db, batch_db.id)
+                coach_ids_list = [c.id for c in coaches]
+                
+                batch = Batch(
+                    id=batch_db.id,
+                    batch_name=batch_db.batch_name,
+                    capacity=batch_db.capacity,
+                    fees=batch_db.fees,
+                    start_date=batch_db.start_date,
+                    timing=batch_db.timing,
+                    period=batch_db.period,
+                    location=batch_db.location,
+                    created_by=batch_db.created_by,
+                    assigned_coach_id=coach_ids_list[0] if coach_ids_list else batch_db.assigned_coach_id,  # Backward compatibility
+                    assigned_coach_name=coaches[0].name if coaches else batch_db.assigned_coach_name,  # Backward compatibility
+                    assigned_coach_ids=coach_ids_list,
+                    assigned_coaches=coaches,
+                    session_id=batch_db.session_id
+                )
+                batches.append(batch)
+            return batches
+        except Exception as e:
+            # If error is about missing batch_coaches table, fall back to old method
+            if "batch_coaches" in str(e) or "UndefinedTable" in str(e):
+                db.rollback()
+                # Fall back to old method using assigned_coach_id
+                try:
+                    batches_db = db.query(BatchDB).filter(BatchDB.assigned_coach_id == coach_id).all()
+                    batches = []
+                    for batch_db in batches_db:
+                        coaches = _get_batch_coaches(db, batch_db.id)
+                        coach_ids_list = [c.id for c in coaches]
+                        
+                        batch = Batch(
+                            id=batch_db.id,
+                            batch_name=batch_db.batch_name,
+                            capacity=batch_db.capacity,
+                            fees=batch_db.fees,
+                            start_date=batch_db.start_date,
+                            timing=batch_db.timing,
+                            period=batch_db.period,
+                            location=batch_db.location,
+                            created_by=batch_db.created_by,
+                            assigned_coach_id=coach_ids_list[0] if coach_ids_list else batch_db.assigned_coach_id,
+                            assigned_coach_name=coaches[0].name if coaches else batch_db.assigned_coach_name,
+                            assigned_coach_ids=coach_ids_list,
+                            assigned_coaches=coaches,
+                            session_id=batch_db.session_id
+                        )
+                        batches.append(batch)
+                    return batches
+                except Exception:
+                    # If that also fails, use raw SQL
+                    from sqlalchemy import text
+                    result = db.execute(text("""
+                        SELECT id, batch_name, capacity, fees, start_date, timing, period, 
+                               location, created_by, assigned_coach_id, assigned_coach_name
+                        FROM batches
+                        WHERE assigned_coach_id = :coach_id
+                    """), {"coach_id": coach_id})
+                    batches = []
+                    for row in result:
+                        batch_id = row[0]
+                        coaches = _get_batch_coaches(db, batch_id)
+                        coach_ids_list = [c.id for c in coaches]
+                        
+                        batch = Batch(
+                            id=batch_id,
+                            batch_name=row[1],
+                            capacity=row[2],
+                            fees=row[3],
+                            start_date=row[4],
+                            timing=row[5],
+                            period=row[6],
+                            location=row[7],
+                            created_by=row[8],
+                            assigned_coach_id=coach_ids_list[0] if coach_ids_list else row[9],
+                            assigned_coach_name=coaches[0].name if coaches else row[10],
+                            assigned_coach_ids=coach_ids_list,
+                            assigned_coaches=coaches,
+                            session_id=None,
+                        )
+                        batches.append(batch)
+                    return batches
+            else:
+                raise
     finally:
         db.close()
 
@@ -1349,17 +2405,147 @@ def get_coach_batches(coach_id: int):
 def update_batch(batch_id: int, batch_update: BatchUpdate):
     db = SessionLocal()
     try:
-        batch = db.query(BatchDB).filter(BatchDB.id == batch_id).first()
-        if not batch:
-            raise HTTPException(status_code=404, detail="Batch not found")
+        # Try normal query first
+        try:
+            batch = db.query(BatchDB).filter(BatchDB.id == batch_id).first()
+            if not batch:
+                raise HTTPException(status_code=404, detail="Batch not found")
+            session_id_value = batch.session_id
+        except Exception as e:
+            # If error is about missing session_id column, use raw SQL
+            if "session_id" in str(e) or "UndefinedColumn" in str(e):
+                db.rollback()
+                from sqlalchemy import text
+                result = db.execute(text("""
+                    SELECT id, batch_name, capacity, fees, start_date, timing, period, 
+                           location, created_by, assigned_coach_id, assigned_coach_name
+                    FROM batches
+                    WHERE id = :batch_id
+                """), {"batch_id": batch_id})
+                row = result.first()
+                if not row:
+                    raise HTTPException(status_code=404, detail="Batch not found")
+                
+                # Create a minimal batch-like object for field updates
+                # We'll use raw SQL for updates too
+                batch = None
+                session_id_value = None
+            else:
+                raise
         
         update_data = batch_update.model_dump(exclude_unset=True)
-        for key, value in update_data.items():
-            setattr(batch, key, value)
+        coach_ids = update_data.pop('assigned_coach_ids', None)
         
-        db.commit()
-        db.refresh(batch)
-        return batch
+        # Handle backward compatibility: if assigned_coach_id is provided, convert to list
+        if coach_ids is None and 'assigned_coach_id' in update_data:
+            assigned_coach_id = update_data.pop('assigned_coach_id')
+            if assigned_coach_id is not None:
+                coach_ids = [assigned_coach_id]
+            else:
+                coach_ids = []  # Explicitly clear coaches
+        
+        # Remove deprecated fields
+        update_data.pop('assigned_coach_id', None)
+        update_data.pop('assigned_coach_name', None)
+        
+        # Handle session_id separately if it's in update_data
+        session_id_update = update_data.pop('session_id', None)
+        
+        # Update batch fields
+        if batch is not None:
+            # Normal ORM update
+            for key, value in update_data.items():
+                setattr(batch, key, value)
+            if session_id_update is not None:
+                batch.session_id = session_id_update
+            
+            db.commit()
+            db.refresh(batch)
+            session_id_value = batch.session_id
+        else:
+            # Raw SQL update (when session_id column doesn't exist)
+            if update_data or session_id_update is not None:
+                from sqlalchemy import text
+                set_clauses = []
+                params = {"batch_id": batch_id}
+                
+                for key, value in update_data.items():
+                    set_clauses.append(f"{key} = :{key}")
+                    params[key] = value
+                
+                if set_clauses:
+                    sql = f"""
+                        UPDATE batches
+                        SET {', '.join(set_clauses)}
+                        WHERE id = :batch_id
+                    """
+                    db.execute(text(sql), params)
+                    db.commit()
+        
+        # Sync coach assignments if provided
+        if coach_ids is not None:
+            _sync_batch_coaches(db, batch_id, coach_ids)
+        
+        # Get coaches for response
+        coaches = _get_batch_coaches(db, batch_id)
+        coach_ids_list = [c.id for c in coaches]
+        
+        # Get updated batch data for response
+        if batch is not None:
+            batch_data = {
+                'id': batch.id,
+                'batch_name': batch.batch_name,
+                'capacity': batch.capacity,
+                'fees': batch.fees,
+                'start_date': batch.start_date,
+                'timing': batch.timing,
+                'period': batch.period,
+                'location': batch.location,
+                'created_by': batch.created_by,
+                'session_id': session_id_value
+            }
+        else:
+            # Re-query for response
+            from sqlalchemy import text
+            result = db.execute(text("""
+                SELECT id, batch_name, capacity, fees, start_date, timing, period, 
+                       location, created_by, assigned_coach_id, assigned_coach_name
+                FROM batches
+                WHERE id = :batch_id
+            """), {"batch_id": batch_id})
+            row = result.first()
+            batch_data = {
+                'id': row[0],
+                'batch_name': row[1],
+                'capacity': row[2],
+                'fees': row[3],
+                'start_date': row[4],
+                'timing': row[5],
+                'period': row[6],
+                'location': row[7],
+                'created_by': row[8],
+                'session_id': None
+            }
+        
+        # Build response
+        batch_response = Batch(
+            id=batch_data['id'],
+            batch_name=batch_data['batch_name'],
+            capacity=batch_data['capacity'],
+            fees=batch_data['fees'],
+            start_date=batch_data['start_date'],
+            timing=batch_data['timing'],
+            period=batch_data['period'],
+            location=batch_data['location'],
+            created_by=batch_data['created_by'],
+            assigned_coach_id=coach_ids_list[0] if coach_ids_list else None,  # Backward compatibility
+            assigned_coach_name=coaches[0].name if coaches else None,  # Backward compatibility
+            assigned_coach_ids=coach_ids_list,
+            assigned_coaches=coaches,
+            session_id=batch_data['session_id']
+        )
+        
+        return batch_response
     finally:
         db.close()
 
@@ -1395,33 +2581,6 @@ def get_available_students_for_batch(batch_id: int):
         available_students = [s for s in all_students if s.id not in assigned_student_ids]
         
         return available_students
-    finally:
-        db.close()
-
-@app.get("/batches/{batch_id}/students")
-def get_batch_students(batch_id: int):
-    """Get all students assigned to this batch"""
-    db = SessionLocal()
-    try:
-        batch_students = db.query(BatchStudentDB).filter(
-            BatchStudentDB.batch_id == batch_id,
-            BatchStudentDB.status == "approved"
-        ).all()
-        
-        students = []
-        for bs in batch_students:
-            student = db.query(StudentDB).filter(StudentDB.id == bs.student_id).first()
-            if student:
-                students.append({
-                    "id": student.id,
-                    "name": student.name,
-                    "email": student.email,
-                    "phone": student.phone,
-                    "guardian_name": student.guardian_name,
-                    "guardian_phone": student.guardian_phone
-                })
-        
-        return students
     finally:
         db.close()
 
@@ -1709,8 +2868,42 @@ def get_student_batches(student_id: int):
             BatchStudentDB.status == "approved"
         ).all()
         batch_ids = [a.batch_id for a in assignments]
-        batches = db.query(BatchDB).filter(BatchDB.id.in_(batch_ids)).all()
-        return batches
+        if not batch_ids:
+            return []
+        try:
+            batches = db.query(BatchDB).filter(BatchDB.id.in_(batch_ids)).all()
+            return batches
+        except Exception as e:
+            # If error is about missing session_id column, rollback and use raw SQL
+            if "session_id" in str(e) or "UndefinedColumn" in str(e):
+                db.rollback()
+                from sqlalchemy import text
+                result = db.execute(text("""
+                    SELECT id, batch_name, capacity, fees, start_date, timing, period, 
+                           location, created_by, assigned_coach_id, assigned_coach_name
+                    FROM batches
+                    WHERE id = ANY(:batch_ids)
+                """), {"batch_ids": batch_ids})
+                batches = []
+                for row in result:
+                    batch = Batch(
+                        id=row[0],
+                        batch_name=row[1],
+                        capacity=row[2],
+                        fees=row[3],
+                        start_date=row[4],
+                        timing=row[5],
+                        period=row[6],
+                        location=row[7],
+                        created_by=row[8],
+                        assigned_coach_id=row[9],
+                        assigned_coach_name=row[10],
+                        session_id=None,
+                    )
+                    batches.append(batch)
+                return batches
+            else:
+                raise
     finally:
         db.close()
 
@@ -1921,7 +3114,26 @@ def enrich_fee_with_payments(fee: FeeDB, db) -> dict:
     
     # Get student and batch names
     student = db.query(StudentDB).filter(StudentDB.id == fee.student_id).first()
-    batch = db.query(BatchDB).filter(BatchDB.id == fee.batch_id).first()
+    # Try to get batch, handle missing session_id column gracefully
+    batch = None
+    try:
+        batch = db.query(BatchDB).filter(BatchDB.id == fee.batch_id).first()
+    except Exception as e:
+        if "session_id" in str(e) or "UndefinedColumn" in str(e):
+            db.rollback()
+            from sqlalchemy import text
+            result = db.execute(text("""
+                SELECT id, batch_name, capacity, fees, start_date, timing, period, 
+                       location, created_by, assigned_coach_id, assigned_coach_name
+                FROM batches
+                WHERE id = :batch_id
+            """), {"batch_id": fee.batch_id}).first()
+            if result:
+                # Create a minimal Batch object for batch_name
+                batch = type('Batch', (), {
+                    'batch_name': result[1],
+                    'id': result[0]
+                })()
     payee_student = None
     payee_name = None
     if fee.payee_student_id:
@@ -2167,13 +3379,167 @@ def delete_fee_payment(fee_id: int, payment_id: int):
     finally:
         db.close()
 
-@app.get("/batches/{batch_id}/students", response_model=List[Student])
-def get_batch_students(batch_id: int):
-    """Get all students enrolled in a batch"""
+# ==================== Session Routes ====================
+
+@app.post("/sessions/", response_model=Session)
+def create_session(session: SessionCreate):
+    """Create a new session/season"""
     db = SessionLocal()
     try:
-        # Get student IDs from batch_students table
-        batch_students = db.query(BatchStudentDB).filter(BatchStudentDB.batch_id == batch_id).all()
+        db_session = SessionDB(**session.model_dump())
+        db.add(db_session)
+        db.commit()
+        db.refresh(db_session)
+        # Convert to response format
+        return Session(
+            id=db_session.id,
+            name=db_session.name,
+            start_date=db_session.start_date,
+            end_date=db_session.end_date,
+            status=db_session.status,
+            created_at=db_session.created_at.isoformat() if db_session.created_at else None,
+            updated_at=db_session.updated_at.isoformat() if db_session.updated_at else None,
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        db.close()
+
+@app.get("/sessions/", response_model=List[Session])
+def get_sessions(status: Optional[str] = None):
+    """Get all sessions, optionally filtered by status"""
+    db = SessionLocal()
+    try:
+        query = db.query(SessionDB)
+        if status:
+            query = query.filter(SessionDB.status == status)
+        sessions = query.order_by(SessionDB.start_date.desc()).all()
+        return [
+            Session(
+                id=s.id,
+                name=s.name,
+                start_date=s.start_date,
+                end_date=s.end_date,
+                status=s.status,
+                created_at=s.created_at.isoformat() if s.created_at else None,
+                updated_at=s.updated_at.isoformat() if s.updated_at else None,
+            )
+            for s in sessions
+        ]
+    finally:
+        db.close()
+
+@app.get("/sessions/{session_id}", response_model=Session)
+def get_session(session_id: int):
+    """Get a specific session by ID"""
+    db = SessionLocal()
+    try:
+        session = db.query(SessionDB).filter(SessionDB.id == session_id).first()
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        return Session(
+            id=session.id,
+            name=session.name,
+            start_date=session.start_date,
+            end_date=session.end_date,
+            status=session.status,
+            created_at=session.created_at.isoformat() if session.created_at else None,
+            updated_at=session.updated_at.isoformat() if session.updated_at else None,
+        )
+    finally:
+        db.close()
+
+@app.put("/sessions/{session_id}", response_model=Session)
+def update_session(session_id: int, session_update: SessionUpdate):
+    """Update a session"""
+    db = SessionLocal()
+    try:
+        session = db.query(SessionDB).filter(SessionDB.id == session_id).first()
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        update_data = session_update.model_dump(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(session, key, value)
+        
+        # Update updated_at timestamp
+        session.updated_at = datetime.now()
+        
+        db.commit()
+        db.refresh(session)
+        return Session(
+            id=session.id,
+            name=session.name,
+            start_date=session.start_date,
+            end_date=session.end_date,
+            status=session.status,
+            created_at=session.created_at.isoformat() if session.created_at else None,
+            updated_at=session.updated_at.isoformat() if session.updated_at else None,
+        )
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        db.close()
+
+@app.delete("/sessions/{session_id}")
+def delete_session(session_id: int):
+    """Delete a session (only if no batches are assigned)"""
+    db = SessionLocal()
+    try:
+        session = db.query(SessionDB).filter(SessionDB.id == session_id).first()
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        # Check if any batches are assigned to this session
+        batches_count = db.query(BatchDB).filter(BatchDB.session_id == session_id).count()
+        if batches_count > 0:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Cannot delete session. {batches_count} batch(es) are assigned to this session."
+            )
+        
+        db.delete(session)
+        db.commit()
+        return {"message": "Session deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        db.close()
+
+@app.get("/sessions/{session_id}/batches", response_model=List[Batch])
+def get_session_batches(session_id: int):
+    """Get all batches assigned to a session"""
+    db = SessionLocal()
+    try:
+        try:
+            batches = db.query(BatchDB).filter(BatchDB.session_id == session_id).all()
+            return batches
+        except Exception as e:
+            # If error is about missing session_id column, return empty list
+            # (can't filter by session_id if column doesn't exist)
+            if "session_id" in str(e) or "UndefinedColumn" in str(e):
+                db.rollback()
+                return []  # No batches can be assigned if session_id column doesn't exist
+            else:
+                raise
+    finally:
+        db.close()
+
+@app.get("/batches/{batch_id}/students", response_model=List[Student])
+def get_batch_students(batch_id: int):
+    """Get all approved students enrolled in a batch"""
+    db = SessionLocal()
+    try:
+        # Get student IDs from batch_students table (only approved students)
+        batch_students = db.query(BatchStudentDB).filter(
+            BatchStudentDB.batch_id == batch_id,
+            BatchStudentDB.status == "approved"
+        ).all()
         student_ids = [bs.student_id for bs in batch_students]
         
         if not student_ids:
@@ -2251,13 +3617,29 @@ def get_student_performance_grouped(student_id: int):
             if key not in grouped:
                 # Get student and batch info
                 student = db.query(StudentDB).filter(StudentDB.id == record.student_id).first()
-                batch = db.query(BatchDB).filter(BatchDB.id == record.batch_id).first()
+                # Try to get batch, handle missing session_id column gracefully
+                batch = None
+                batch_name = "Unknown"
+                try:
+                    batch = db.query(BatchDB).filter(BatchDB.id == record.batch_id).first()
+                    batch_name = batch.batch_name if batch else "Unknown"
+                except Exception as e:
+                    if "session_id" in str(e) or "UndefinedColumn" in str(e):
+                        db.rollback()
+                        from sqlalchemy import text
+                        result = db.execute(text("""
+                            SELECT batch_name
+                            FROM batches
+                            WHERE id = :batch_id
+                        """), {"batch_id": record.batch_id}).first()
+                        if result:
+                            batch_name = result[0]
                 
                 grouped[key] = {
                     "id": record.id,
                     "date": record.date,
                     "batch_id": record.batch_id,
-                    "batch_name": batch.batch_name if batch else "Unknown",
+                    "batch_name": batch_name,
                     "student_id": record.student_id,
                     "student_name": student.name if student else "Unknown",
                     "recorded_by": record.recorded_by,
@@ -2288,13 +3670,29 @@ def get_all_performance_grouped():
             if key not in grouped:
                 # Get student and batch info
                 student = db.query(StudentDB).filter(StudentDB.id == record.student_id).first()
-                batch = db.query(BatchDB).filter(BatchDB.id == record.batch_id).first()
+                # Try to get batch, handle missing session_id column gracefully
+                batch = None
+                batch_name = "Unknown"
+                try:
+                    batch = db.query(BatchDB).filter(BatchDB.id == record.batch_id).first()
+                    batch_name = batch.batch_name if batch else "Unknown"
+                except Exception as e:
+                    if "session_id" in str(e) or "UndefinedColumn" in str(e):
+                        db.rollback()
+                        from sqlalchemy import text
+                        result = db.execute(text("""
+                            SELECT batch_name
+                            FROM batches
+                            WHERE id = :batch_id
+                        """), {"batch_id": record.batch_id}).first()
+                        if result:
+                            batch_name = result[0]
                 
                 grouped[key] = {
                     "id": record.id,
                     "date": record.date,
                     "batch_id": record.batch_id,
-                    "batch_name": batch.batch_name if batch else "Unknown",
+                    "batch_name": batch_name,
                     "student_id": record.student_id,
                     "student_name": student.name if student else "Unknown",
                     "recorded_by": record.recorded_by,
@@ -2327,13 +3725,29 @@ def get_coach_performance_grouped(coach_name: str):
             if key not in grouped:
                 # Get student and batch info
                 student = db.query(StudentDB).filter(StudentDB.id == record.student_id).first()
-                batch = db.query(BatchDB).filter(BatchDB.id == record.batch_id).first()
+                # Try to get batch, handle missing session_id column gracefully
+                batch = None
+                batch_name = "Unknown"
+                try:
+                    batch = db.query(BatchDB).filter(BatchDB.id == record.batch_id).first()
+                    batch_name = batch.batch_name if batch else "Unknown"
+                except Exception as e:
+                    if "session_id" in str(e) or "UndefinedColumn" in str(e):
+                        db.rollback()
+                        from sqlalchemy import text
+                        result = db.execute(text("""
+                            SELECT batch_name
+                            FROM batches
+                            WHERE id = :batch_id
+                        """), {"batch_id": record.batch_id}).first()
+                        if result:
+                            batch_name = result[0]
                 
                 grouped[key] = {
                     "id": record.id,
                     "date": record.date,
                     "batch_id": record.batch_id,
-                    "batch_name": batch.batch_name if batch else "Unknown",
+                    "batch_name": batch_name,
                     "student_id": record.student_id,
                     "student_name": student.name if student else "Unknown",
                     "recorded_by": record.recorded_by,
@@ -2990,50 +4404,367 @@ def delete_tournament(tournament_id: int):
 
 # ==================== Video Resource Routes ====================
 
-@app.post("/videos/", response_model=VideoResource)
-def create_video(video: VideoResourceCreate):
+@app.post("/video-resources/upload")
+async def upload_video(
+    student_id: int = Form(...),
+    title: Optional[str] = Form(None),
+    remarks: Optional[str] = Form(None),
+    uploaded_by: Optional[int] = Form(None),
+    video: UploadFile = File(...)
+):
+    """Upload a video file for a specific student"""
     db = SessionLocal()
     try:
-        db_video = VideoResourceDB(**video.dict())
+        # Validate file type
+        allowed_extensions = ["mp4", "webm", "mov", "avi", "mkv", "m4v"]
+        file_extension = video.filename.split(".")[-1].lower() if video.filename else ""
+
+        if file_extension not in allowed_extensions:
+            raise HTTPException(
+                status_code=400,
+                detail=f"File type not allowed. Allowed types: {', '.join(allowed_extensions)}"
+            )
+
+        # Verify student exists
+        student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found")
+
+        # Generate unique filename
+        unique_filename = f"video_{uuid.uuid4()}.{file_extension}"
+        file_path = UPLOAD_DIR / unique_filename
+
+        # Save file
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(video.file, buffer)
+
+        # Create database record
+        db_video = VideoResourceDB(
+            student_id=student_id,
+            title=title or video.filename,
+            url=f"/uploads/{unique_filename}",
+            remarks=remarks,
+            uploaded_by=uploaded_by
+        )
         db.add(db_video)
         db.commit()
         db.refresh(db_video)
-        return db_video
+
+        # Return with student name
+        return {
+            "id": db_video.id,
+            "student_id": db_video.student_id,
+            "student_name": student.name,
+            "title": db_video.title,
+            "url": db_video.url,
+            "remarks": db_video.remarks,
+            "uploaded_by": db_video.uploaded_by,
+            "created_at": db_video.created_at
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
 
-@app.get("/videos/", response_model=List[VideoResource])
-def get_videos():
+@app.get("/video-resources/")
+def get_video_resources(student_id: Optional[int] = None):
+    """Get all video resources, optionally filtered by student_id"""
     db = SessionLocal()
     try:
-        videos = db.query(VideoResourceDB).all()
-        return videos
+        query = db.query(VideoResourceDB)
+
+        if student_id is not None:
+            query = query.filter(VideoResourceDB.student_id == student_id)
+
+        videos = query.order_by(VideoResourceDB.created_at.desc()).all()
+
+        # Enrich with student names
+        result = []
+        for video in videos:
+            student = db.query(StudentDB).filter(StudentDB.id == video.student_id).first()
+            result.append({
+                "id": video.id,
+                "student_id": video.student_id,
+                "student_name": student.name if student else None,
+                "title": video.title,
+                "url": video.url,
+                "remarks": video.remarks,
+                "uploaded_by": video.uploaded_by,
+                "created_at": video.created_at
+            })
+
+        return result
     finally:
         db.close()
 
-@app.get("/videos/category/{category}")
-def get_videos_by_category(category: str):
-    db = SessionLocal()
-    try:
-        videos = db.query(VideoResourceDB).filter(VideoResourceDB.category == category).all()
-        return videos
-    finally:
-        db.close()
-
-@app.delete("/videos/{video_id}")
-def delete_video(video_id: int):
+@app.get("/video-resources/{video_id}")
+def get_video_resource_by_id(video_id: int):
+    """Get a specific video resource by ID"""
     db = SessionLocal()
     try:
         video = db.query(VideoResourceDB).filter(VideoResourceDB.id == video_id).first()
         if not video:
             raise HTTPException(status_code=404, detail="Video not found")
+
+        student = db.query(StudentDB).filter(StudentDB.id == video.student_id).first()
+
+        return {
+            "id": video.id,
+            "student_id": video.student_id,
+            "student_name": student.name if student else None,
+            "title": video.title,
+            "url": video.url,
+            "remarks": video.remarks,
+            "uploaded_by": video.uploaded_by,
+            "created_at": video.created_at
+        }
+    finally:
+        db.close()
+
+@app.delete("/video-resources/{video_id}")
+def delete_video_resource(video_id: int):
+    """Delete a video resource and its file"""
+    db = SessionLocal()
+    try:
+        video = db.query(VideoResourceDB).filter(VideoResourceDB.id == video_id).first()
+        if not video:
+            raise HTTPException(status_code=404, detail="Video not found")
+
+        # Try to delete the file
+        if video.url:
+            filename = video.url.split("/")[-1]
+            file_path = UPLOAD_DIR / filename
+            if file_path.exists():
+                file_path.unlink()
+
         db.delete(video)
         db.commit()
-        return {"message": "Video deleted"}
+        return {"message": "Video deleted successfully"}
     finally:
         db.close()
 
 # ==================== Invitation Routes ====================
+
+# ==================== Coach Invitation Routes ====================
+
+@app.post("/coach-invitations/", response_model=CoachInvitation)
+def create_coach_invitation(invitation: CoachInvitationCreate):
+    """Create a coach invitation - at least phone or email must be provided"""
+    # Validate that at least phone or email is provided
+    phone = (invitation.coach_phone or '').strip()
+    email = (invitation.coach_email or '').strip()
+    if not phone and not email:
+        raise HTTPException(
+            status_code=400,
+            detail="At least phone number or email address must be provided"
+        )
+    
+    db = SessionLocal()
+    try:
+        # Verify owner exists
+        owner = db.query(OwnerDB).filter(OwnerDB.id == invitation.owner_id).first()
+        if not owner:
+            raise HTTPException(status_code=404, detail="Owner not found")
+        
+        # Generate unique invite token
+        invite_token = secrets.token_urlsafe(32)
+        
+        # Create invitation record
+        invitation_dict = invitation.model_dump()
+        invitation_dict['invite_token'] = invite_token
+        invitation_dict['created_at'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        db_invitation = CoachInvitationDB(**invitation_dict)
+        db.add(db_invitation)
+        db.commit()
+        db.refresh(db_invitation)
+        
+        # Generate invite link (using a configurable base URL or default)
+        base_url = os.getenv("INVITE_BASE_URL", "https://academy.app")
+        invite_link = f"{base_url}/invite/coach/{invite_token}"
+        
+        # Convert to response model with invite link
+        invitation_response = CoachInvitation(
+            id=db_invitation.id,
+            owner_id=db_invitation.owner_id,
+            owner_name=db_invitation.owner_name,
+            coach_name=db_invitation.coach_name,
+            coach_phone=db_invitation.coach_phone,
+            coach_email=db_invitation.coach_email,
+            experience_years=db_invitation.experience_years,
+            invite_token=db_invitation.invite_token,
+            invite_link=invite_link,
+            status=db_invitation.status,
+            created_at=db_invitation.created_at
+        )
+        
+        return invitation_response
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error creating coach invitation: {str(e)}")
+    finally:
+        db.close()
+
+@app.get("/coach-invitations/", response_model=List[CoachInvitation])
+def get_all_coach_invitations(owner_id: Optional[int] = None):
+    """Get all coach invitations, optionally filtered by owner_id"""
+    db = SessionLocal()
+    try:
+        query = db.query(CoachInvitationDB)
+        if owner_id:
+            query = query.filter(CoachInvitationDB.owner_id == owner_id)
+        invitations = query.order_by(CoachInvitationDB.created_at.desc()).all()
+        
+        # Add invite links to responses
+        base_url = os.getenv("INVITE_BASE_URL", "https://academy.app")
+        result = []
+        for inv in invitations:
+            invite_link = f"{base_url}/invite/coach/{inv.invite_token}"
+            result.append(CoachInvitation(
+                id=inv.id,
+                owner_id=inv.owner_id,
+                owner_name=inv.owner_name,
+                coach_name=inv.coach_name,
+                coach_phone=inv.coach_phone,
+                coach_email=inv.coach_email,
+                experience_years=inv.experience_years,
+                invite_token=inv.invite_token,
+                invite_link=invite_link,
+                status=inv.status,
+                created_at=inv.created_at
+            ))
+        return result
+    finally:
+        db.close()
+
+@app.get("/coach-invitations/{coach_email}")
+def get_coach_invitations_by_email(coach_email: str):
+    """Get coach invitations by email address"""
+    db = SessionLocal()
+    try:
+        invitations = db.query(CoachInvitationDB).filter(
+            CoachInvitationDB.coach_email == coach_email
+        ).all()
+        
+        # Add invite links to responses
+        base_url = os.getenv("INVITE_BASE_URL", "https://academy.app")
+        result = []
+        for inv in invitations:
+            invite_link = f"{base_url}/invite/coach/{inv.invite_token}"
+            result.append(CoachInvitation(
+                id=inv.id,
+                owner_id=inv.owner_id,
+                owner_name=inv.owner_name,
+                coach_name=inv.coach_name,
+                coach_phone=inv.coach_phone,
+                coach_email=inv.coach_email,
+                experience_years=inv.experience_years,
+                invite_token=inv.invite_token,
+                invite_link=invite_link,
+                status=inv.status,
+                created_at=inv.created_at
+            ))
+        return result
+    finally:
+        db.close()
+
+@app.get("/coach-invitations/token/{invite_token}")
+def get_coach_invitation_by_token(invite_token: str):
+    """Get coach invitation by invite token"""
+    db = SessionLocal()
+    try:
+        invitation = db.query(CoachInvitationDB).filter(
+            CoachInvitationDB.invite_token == invite_token
+        ).first()
+        
+        if not invitation:
+            raise HTTPException(status_code=404, detail="Invitation not found")
+        
+        base_url = os.getenv("INVITE_BASE_URL", "https://academy.app")
+        invite_link = f"{base_url}/invite/coach/{invitation.invite_token}"
+        
+        return CoachInvitation(
+            id=invitation.id,
+            owner_id=invitation.owner_id,
+            owner_name=invitation.owner_name,
+            coach_name=invitation.coach_name,
+            coach_phone=invitation.coach_phone,
+            coach_email=invitation.coach_email,
+            experience_years=invitation.experience_years,
+            invite_token=invitation.invite_token,
+            invite_link=invite_link,
+            status=invitation.status,
+            created_at=invitation.created_at
+        )
+    finally:
+        db.close()
+
+@app.put("/coach-invitations/{invitation_id}")
+def update_coach_invitation(invitation_id: int, invitation_update: CoachInvitationUpdate):
+    """Update coach invitation status"""
+    db = SessionLocal()
+    try:
+        invitation = db.query(CoachInvitationDB).filter(CoachInvitationDB.id == invitation_id).first()
+        if not invitation:
+            raise HTTPException(status_code=404, detail="Invitation not found")
+        
+        invitation.status = invitation_update.status
+        
+        # If approved, automatically create coach account
+        if invitation_update.status == "approved":
+            # Check if coach already exists
+            existing_coach = None
+            if invitation.coach_email:
+                existing_coach = db.query(CoachDB).filter(CoachDB.email == invitation.coach_email).first()
+            elif invitation.coach_phone:
+                existing_coach = db.query(CoachDB).filter(CoachDB.phone == invitation.coach_phone).first()
+            
+            if not existing_coach:
+                # Create coach account with default password (coach will change it)
+                default_password = hash_password("Welcome123!")  # Default password
+                new_coach = CoachDB(
+                    name=invitation.coach_name or "Coach",
+                    email=invitation.coach_email or f"coach{invitation.id}@academy.com",
+                    phone=invitation.coach_phone or "",
+                    password=default_password,
+                    specialization=None,
+                    experience_years=invitation.experience_years,
+                    status="active"
+                )
+                db.add(new_coach)
+        
+        db.commit()
+        db.refresh(invitation)
+        
+        base_url = os.getenv("INVITE_BASE_URL", "https://academy.app")
+        invite_link = f"{base_url}/invite/coach/{invitation.invite_token}"
+        
+        return CoachInvitation(
+            id=invitation.id,
+            owner_id=invitation.owner_id,
+            owner_name=invitation.owner_name,
+            coach_name=invitation.coach_name,
+            coach_phone=invitation.coach_phone,
+            coach_email=invitation.coach_email,
+            experience_years=invitation.experience_years,
+            invite_token=invitation.invite_token,
+            invite_link=invite_link,
+            status=invitation.status,
+            created_at=invitation.created_at
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error updating invitation: {str(e)}")
+    finally:
+        db.close()
 
 @app.post("/invitations/", response_model=Invitation)
 def create_invitation(invitation: InvitationCreate):
@@ -3153,6 +4884,7 @@ def get_analytics_dashboard():
         total_students = db.query(StudentDB).count()
         active_students = db.query(StudentDB).filter(StudentDB.status == "active").count()
         total_batches = db.query(BatchDB).count()
+        # Count coaches (owners are in separate table)
         total_coaches = db.query(CoachDB).count()
         active_coaches = db.query(CoachDB).filter(CoachDB.status == "active").count()
         
@@ -3247,16 +4979,59 @@ def get_coach_analytics(coach_id: int):
 
 # ==================== Announcement Endpoints ====================
 
+def _db_announcement_to_pydantic(db_announcement: AnnouncementDB) -> Announcement:
+    """Convert database announcement to Pydantic model with proper datetime serialization"""
+    return Announcement(
+        id=db_announcement.id,
+        title=db_announcement.title,
+        message=db_announcement.message,
+        target_audience=db_announcement.target_audience,
+        priority=db_announcement.priority,
+        created_by=db_announcement.created_by,
+        creator_type=db_announcement.creator_type,
+        created_at=db_announcement.created_at.isoformat() if hasattr(db_announcement.created_at, 'isoformat') else str(db_announcement.created_at),
+        scheduled_at=db_announcement.scheduled_at.isoformat() if db_announcement.scheduled_at and hasattr(db_announcement.scheduled_at, 'isoformat') else (str(db_announcement.scheduled_at) if db_announcement.scheduled_at else None),
+        is_sent=db_announcement.is_sent
+    )
+
 @app.post("/api/announcements/", response_model=Announcement)
 def create_announcement(announcement: AnnouncementCreate):
     """Create a new announcement"""
     db = SessionLocal()
     try:
-        db_announcement = AnnouncementDB(**announcement.dict())
+        # Validate that the creator (coach/owner) exists
+        if announcement.creator_type == "owner":
+            creator = db.query(OwnerDB).filter(OwnerDB.id == announcement.created_by).first()
+            if not creator:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Invalid created_by user ID. Owner with ID {announcement.created_by} does not exist."
+                )
+        else:  # coach
+            creator = db.query(CoachDB).filter(CoachDB.id == announcement.created_by).first()
+            if not creator:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Invalid created_by user ID. Coach with ID {announcement.created_by} does not exist."
+                )
+        
+        # Convert scheduled_at string to datetime if provided
+        announcement_data = announcement.model_dump()
+        if announcement_data.get('scheduled_at'):
+            try:
+                # Parse ISO format datetime string
+                announcement_data['scheduled_at'] = datetime.fromisoformat(announcement_data['scheduled_at'].replace('Z', '+00:00'))
+            except (ValueError, AttributeError) as e:
+                raise HTTPException(status_code=400, detail=f"Invalid scheduled_at format: {str(e)}")
+        
+        db_announcement = AnnouncementDB(**announcement_data)
         db.add(db_announcement)
         db.commit()
         db.refresh(db_announcement)
-        return db_announcement
+        return _db_announcement_to_pydantic(db_announcement)
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
@@ -3264,15 +5039,23 @@ def create_announcement(announcement: AnnouncementCreate):
         db.close()
 
 @app.get("/api/announcements/", response_model=List[Announcement])
-def get_announcements(target_audience: Optional[str] = None):
-    """Get all announcements, optionally filtered by target audience"""
+def get_announcements(
+    target_audience: Optional[str] = Query(None, description="Filter by target audience"),
+    priority: Optional[str] = Query(None, description="Filter by priority"),
+    is_sent: Optional[bool] = Query(None, description="Filter by sent status")
+):
+    """Get all announcements, optionally filtered by target audience, priority, or is_sent"""
     db = SessionLocal()
     try:
         query = db.query(AnnouncementDB)
         if target_audience:
             query = query.filter(AnnouncementDB.target_audience.in_([target_audience, "all"]))
+        if priority:
+            query = query.filter(AnnouncementDB.priority == priority)
+        if is_sent is not None:
+            query = query.filter(AnnouncementDB.is_sent == is_sent)
         announcements = query.order_by(AnnouncementDB.created_at.desc()).all()
-        return announcements
+        return [_db_announcement_to_pydantic(ann) for ann in announcements]
     finally:
         db.close()
 
@@ -3284,7 +5067,7 @@ def get_announcement(announcement_id: int):
         announcement = db.query(AnnouncementDB).filter(AnnouncementDB.id == announcement_id).first()
         if not announcement:
             raise HTTPException(status_code=404, detail="Announcement not found")
-        return announcement
+        return _db_announcement_to_pydantic(announcement)
     finally:
         db.close()
 
@@ -3297,12 +5080,21 @@ def update_announcement(announcement_id: int, announcement: AnnouncementUpdate):
         if not db_announcement:
             raise HTTPException(status_code=404, detail="Announcement not found")
 
-        for key, value in announcement.dict(exclude_unset=True).items():
+        update_data = announcement.model_dump(exclude_unset=True)
+        # Convert scheduled_at string to datetime if provided
+        if 'scheduled_at' in update_data and update_data['scheduled_at'] is not None:
+            try:
+                # Parse ISO format datetime string
+                update_data['scheduled_at'] = datetime.fromisoformat(update_data['scheduled_at'].replace('Z', '+00:00'))
+            except (ValueError, AttributeError) as e:
+                raise HTTPException(status_code=400, detail=f"Invalid scheduled_at format: {str(e)}")
+        
+        for key, value in update_data.items():
             setattr(db_announcement, key, value)
 
         db.commit()
         db.refresh(db_announcement)
-        return db_announcement
+        return _db_announcement_to_pydantic(db_announcement)
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
@@ -3408,8 +5200,11 @@ def _db_event_to_pydantic(db_event: CalendarEventDB) -> CalendarEvent:
         title=db_event.title,
         event_type=db_event.event_type,
         date=db_event.date.isoformat() if isinstance(db_event.date, date) else str(db_event.date),
+        end_date=db_event.end_date.isoformat() if db_event.end_date and isinstance(db_event.end_date, date) else (str(db_event.end_date) if db_event.end_date else None),
         description=db_event.description,
         created_by=db_event.created_by,
+        creator_type=db_event.creator_type or "coach",
+        related_leave_request_id=db_event.related_leave_request_id,
         created_at=db_event.created_at.isoformat() if hasattr(db_event.created_at, 'isoformat') else str(db_event.created_at),
     )
 
@@ -3419,23 +5214,39 @@ def create_calendar_event(event: CalendarEventCreate):
     db = SessionLocal()
     try:
         # Validate that the creator (coach/owner) exists
-        coach = db.query(CoachDB).filter(CoachDB.id == event.created_by).first()
-        if not coach:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Invalid created_by user ID. User with ID {event.created_by} does not exist in coaches table."
-            )
+        if event.creator_type == "owner":
+            creator = db.query(OwnerDB).filter(OwnerDB.id == event.created_by).first()
+            if not creator:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Invalid created_by user ID. Owner with ID {event.created_by} does not exist."
+                )
+        else:  # coach
+            creator = db.query(CoachDB).filter(CoachDB.id == event.created_by).first()
+            if not creator:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Invalid created_by user ID. Coach with ID {event.created_by} does not exist."
+                )
         
         # Convert date string to date object
         event_date = datetime.strptime(event.date, "%Y-%m-%d").date()
+        
+        # Convert end_date if provided
+        event_end_date = None
+        if event.end_date:
+            event_end_date = datetime.strptime(event.end_date, "%Y-%m-%d").date()
         
         # Create database event with proper date conversion
         db_event = CalendarEventDB(
             title=event.title,
             event_type=event.event_type,
             date=event_date,
+            end_date=event_end_date,
             description=event.description,
             created_by=event.created_by,
+            creator_type=event.creator_type,
+            related_leave_request_id=event.related_leave_request_id,
         )
         db.add(db_event)
         db.commit()
@@ -3454,7 +5265,7 @@ def create_calendar_event(event: CalendarEventCreate):
         if 'foreign key' in error_msg.lower() or 'created_by' in error_msg.lower():
             raise HTTPException(
                 status_code=400, 
-                detail=f"Invalid created_by user ID. User with ID {event.created_by} does not exist in coaches table."
+                detail=f"Invalid created_by user ID. User with ID {event.created_by} does not exist."
             )
         raise HTTPException(status_code=400, detail=f"Database constraint violation: {error_msg}")
     except Exception as e:
@@ -3470,18 +5281,58 @@ def create_calendar_event(event: CalendarEventCreate):
 @app.get("/api/calendar-events/", response_model=List[CalendarEvent])
 def get_calendar_events(start_date: Optional[str] = None, end_date: Optional[str] = None, event_type: Optional[str] = None):
     """Get calendar events, optionally filtered by date range and event type"""
+    from sqlalchemy import or_
     db = SessionLocal()
     try:
         query = db.query(CalendarEventDB)
 
-        if start_date:
-            # Convert string to date object for comparison
+        if start_date and end_date:
+            # Convert strings to date objects for comparison
             start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
-            query = query.filter(CalendarEventDB.date >= start_date_obj)
-        if end_date:
-            # Convert string to date object for comparison
             end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
-            query = query.filter(CalendarEventDB.date <= end_date_obj)
+            # Include events that:
+            # 1. Start within the range, OR
+            # 2. End within the range, OR
+            # 3. Span the entire range (start before and end after)
+            query = query.filter(
+                or_(
+                    # Event starts within range
+                    (CalendarEventDB.date >= start_date_obj) & (CalendarEventDB.date <= end_date_obj),
+                    # Event ends within range (if end_date exists)
+                    (CalendarEventDB.end_date.isnot(None)) & 
+                    (CalendarEventDB.end_date >= start_date_obj) & 
+                    (CalendarEventDB.end_date <= end_date_obj),
+                    # Event spans the range (starts before and ends after)
+                    (CalendarEventDB.date <= start_date_obj) & 
+                    (CalendarEventDB.end_date.isnot(None)) & 
+                    (CalendarEventDB.end_date >= end_date_obj),
+                    # Single-day events that fall within range
+                    (CalendarEventDB.end_date.is_(None)) & 
+                    (CalendarEventDB.date >= start_date_obj) & 
+                    (CalendarEventDB.date <= end_date_obj)
+                )
+            )
+        elif start_date:
+            # Only start_date provided - include events that start on or after this date
+            # or events that end on or after this date
+            start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
+            query = query.filter(
+                or_(
+                    CalendarEventDB.date >= start_date_obj,
+                    (CalendarEventDB.end_date.isnot(None)) & (CalendarEventDB.end_date >= start_date_obj)
+                )
+            )
+        elif end_date:
+            # Only end_date provided - include events that end on or before this date
+            # or events that start on or before this date
+            end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
+            query = query.filter(
+                or_(
+                    CalendarEventDB.date <= end_date_obj,
+                    (CalendarEventDB.end_date.isnot(None)) & (CalendarEventDB.end_date <= end_date_obj)
+                )
+            )
+        
         if event_type:
             query = query.filter(CalendarEventDB.event_type == event_type)
 
@@ -3513,12 +5364,19 @@ def update_calendar_event(event_id: int, event: CalendarEventUpdate):
             raise HTTPException(status_code=404, detail="Calendar event not found")
 
         # Handle date conversion if date is being updated
-        event_dict = event.dict(exclude_unset=True)
+        event_dict = event.model_dump(exclude_unset=True)
         if 'date' in event_dict and isinstance(event_dict['date'], str):
             event_dict['date'] = datetime.strptime(event_dict['date'], "%Y-%m-%d").date()
+        if 'end_date' in event_dict and isinstance(event_dict['end_date'], str):
+            event_dict['end_date'] = datetime.strptime(event_dict['end_date'], "%Y-%m-%d").date()
+        elif 'end_date' in event_dict and event_dict['end_date'] is None:
+            event_dict['end_date'] = None
         
+        # Only update allowed fields (exclude created_by and creator_type as they shouldn't change)
+        allowed_fields = {'title', 'event_type', 'date', 'end_date', 'description'}
         for key, value in event_dict.items():
-            setattr(db_event, key, value)
+            if key in allowed_fields:
+                setattr(db_event, key, value)
 
         db.commit()
         db.refresh(db_event)
@@ -3544,6 +5402,571 @@ def delete_calendar_event(event_id: int):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        db.close()
+
+# ==================== Leave Request Routes ====================
+
+@app.post("/leave-requests/", response_model=LeaveRequest)
+def create_leave_request(request: LeaveRequestCreate):
+    """Create a leave request - coaches can submit leave requests"""
+    db = SessionLocal()
+    try:
+        # Verify coach exists
+        coach = db.query(CoachDB).filter(CoachDB.id == request.coach_id).first()
+        if not coach:
+            raise HTTPException(status_code=404, detail="Coach not found")
+        
+        # Parse dates
+        from datetime import datetime
+        start_date = datetime.strptime(request.start_date, "%Y-%m-%d").date()
+        end_date = datetime.strptime(request.end_date, "%Y-%m-%d").date()
+        
+        if start_date > end_date:
+            raise HTTPException(status_code=400, detail="End date must be after start date")
+        
+        # Create leave request
+        db_request = LeaveRequestDB(
+            coach_id=request.coach_id,
+            coach_name=request.coach_name,
+            start_date=start_date,
+            end_date=end_date,
+            leave_type=request.leave_type,
+            reason=request.reason,
+            status="pending"
+        )
+        db.add(db_request)
+        db.commit()
+        db.refresh(db_request)
+        
+        # Convert to response model
+        return LeaveRequest(
+            id=db_request.id,
+            coach_id=db_request.coach_id,
+            coach_name=db_request.coach_name,
+            start_date=db_request.start_date.strftime("%Y-%m-%d"),
+            end_date=db_request.end_date.strftime("%Y-%m-%d"),
+            leave_type=db_request.leave_type,
+            reason=db_request.reason,
+            status=db_request.status,
+            submitted_at=db_request.submitted_at.isoformat() if db_request.submitted_at else "",
+            reviewed_by=db_request.reviewed_by,
+            reviewed_at=db_request.reviewed_at.isoformat() if db_request.reviewed_at else None,
+            review_notes=db_request.review_notes
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error creating leave request: {str(e)}")
+    finally:
+        db.close()
+
+@app.get("/leave-requests/", response_model=List[LeaveRequest])
+def get_leave_requests(
+    coach_id: Optional[int] = None,
+    status: Optional[str] = None,
+    owner_id: Optional[int] = None
+):
+    """Get leave requests - owners can see all, coaches can see their own"""
+    # #region agent log
+    import json
+    log_data = {
+        "location": "main.py:5319",
+        "message": "get_leave_requests endpoint called",
+        "data": {"coach_id": coach_id, "status": status, "owner_id": owner_id},
+        "timestamp": __import__("time").time() * 1000,
+        "sessionId": "debug-session",
+        "runId": "run1",
+        "hypothesisId": "A"
+    }
+    try:
+        with open(r"c:\Users\morch\Documents\Code\RallyOn\shuttler\.cursor\debug.log", "a") as f:
+            f.write(json.dumps(log_data) + "\n")
+    except: pass
+    # #endregion
+    db = SessionLocal()
+    try:
+        # #region agent log
+        from sqlalchemy import inspect
+        inspector = inspect(db.bind)
+        tables = inspector.get_table_names()
+        table_exists = 'leave_requests' in tables
+        log_data2 = {
+            "location": "main.py:5330",
+            "message": "Checking if leave_requests table exists",
+            "data": {"table_exists": table_exists, "all_tables": tables},
+            "timestamp": __import__("time").time() * 1000,
+            "sessionId": "debug-session",
+            "runId": "run1",
+            "hypothesisId": "A"
+        }
+        try:
+            with open(r"c:\Users\morch\Documents\Code\RallyOn\shuttler\.cursor\debug.log", "a") as f:
+                f.write(json.dumps(log_data2) + "\n")
+        except: pass
+        # #endregion
+        
+        query = db.query(LeaveRequestDB)
+        
+        # Filter by coach_id if provided (for coaches viewing their own requests)
+        if coach_id:
+            query = query.filter(LeaveRequestDB.coach_id == coach_id)
+        
+        # Filter by status if provided
+        if status:
+            query = query.filter(LeaveRequestDB.status == status)
+        
+        # If owner_id is provided, they can see all requests (for approval)
+        # Otherwise, return all requests ordered by submission date
+        requests = query.order_by(LeaveRequestDB.submitted_at.desc()).all()
+        
+        # #region agent log
+        log_data3 = {
+            "location": "main.py:5340",
+            "message": "Query executed, found requests",
+            "data": {"request_count": len(requests), "request_ids": [r.id for r in requests]},
+            "timestamp": __import__("time").time() * 1000,
+            "sessionId": "debug-session",
+            "runId": "run1",
+            "hypothesisId": "B"
+        }
+        try:
+            with open(r"c:\Users\morch\Documents\Code\RallyOn\shuttler\.cursor\debug.log", "a") as f:
+                f.write(json.dumps(log_data3) + "\n")
+        except: pass
+        # #endregion
+        
+        result = []
+        for req in requests:
+            result.append(LeaveRequest(
+                id=req.id,
+                coach_id=req.coach_id,
+                coach_name=req.coach_name,
+                start_date=req.start_date.strftime("%Y-%m-%d"),
+                end_date=req.end_date.strftime("%Y-%m-%d"),
+                leave_type=req.leave_type,
+                reason=req.reason,
+                status=req.status,
+                submitted_at=req.submitted_at.isoformat() if req.submitted_at else "",
+                reviewed_by=req.reviewed_by,
+                reviewed_at=req.reviewed_at.isoformat() if req.reviewed_at else None,
+                review_notes=req.review_notes
+            ))
+        
+        # #region agent log
+        log_data4 = {
+            "location": "main.py:5358",
+            "message": "Returning result",
+            "data": {"result_count": len(result)},
+            "timestamp": __import__("time").time() * 1000,
+            "sessionId": "debug-session",
+            "runId": "run1",
+            "hypothesisId": "B"
+        }
+        try:
+            with open(r"c:\Users\morch\Documents\Code\RallyOn\shuttler\.cursor\debug.log", "a") as f:
+                f.write(json.dumps(log_data4) + "\n")
+        except: pass
+        # #endregion
+        
+        return result
+    except Exception as e:
+        # #region agent log
+        log_data5 = {
+            "location": "main.py:5360",
+            "message": "Error in get_leave_requests",
+            "data": {"error": str(e), "error_type": type(e).__name__},
+            "timestamp": __import__("time").time() * 1000,
+            "sessionId": "debug-session",
+            "runId": "run1",
+            "hypothesisId": "C"
+        }
+        try:
+            with open(r"c:\Users\morch\Documents\Code\RallyOn\shuttler\.cursor\debug.log", "a") as f:
+                f.write(json.dumps(log_data5) + "\n")
+        except: pass
+        # #endregion
+        raise
+    finally:
+        db.close()
+
+@app.get("/leave-requests/{request_id}", response_model=LeaveRequest)
+def get_leave_request(request_id: int):
+    """Get a specific leave request by ID"""
+    db = SessionLocal()
+    try:
+        request = db.query(LeaveRequestDB).filter(LeaveRequestDB.id == request_id).first()
+        if not request:
+            raise HTTPException(status_code=404, detail="Leave request not found")
+        
+        return LeaveRequest(
+            id=request.id,
+            coach_id=request.coach_id,
+            coach_name=request.coach_name,
+            start_date=request.start_date.strftime("%Y-%m-%d"),
+            end_date=request.end_date.strftime("%Y-%m-%d"),
+            leave_type=request.leave_type,
+            reason=request.reason,
+            status=request.status,
+            submitted_at=request.submitted_at.isoformat() if request.submitted_at else "",
+            reviewed_by=request.reviewed_by,
+            reviewed_at=request.reviewed_at.isoformat() if request.reviewed_at else None,
+            review_notes=request.review_notes
+        )
+    finally:
+        db.close()
+
+@app.put("/leave-requests/{request_id}", response_model=LeaveRequest)
+def update_leave_request(request_id: int, update: LeaveRequestUpdate, owner_id: int):
+    """Update leave request status - only owners can approve/reject"""
+    db = SessionLocal()
+    try:
+        # Verify owner exists
+        owner = db.query(OwnerDB).filter(OwnerDB.id == owner_id).first()
+        if not owner:
+            raise HTTPException(status_code=404, detail="Owner not found")
+        
+        # Get leave request
+        db_request = db.query(LeaveRequestDB).filter(LeaveRequestDB.id == request_id).first()
+        if not db_request:
+            raise HTTPException(status_code=404, detail="Leave request not found")
+        
+        # Validate status
+        if update.status not in ["approved", "rejected"]:
+            raise HTTPException(status_code=400, detail="Status must be 'approved' or 'rejected'")
+        
+        # Update request
+        from datetime import datetime, timedelta
+        db_request.status = update.status
+        db_request.reviewed_by = owner_id
+        db_request.reviewed_at = datetime.now()
+        db_request.review_notes = update.review_notes
+        
+        # If approved, create calendar event(s) for the leave period
+        if update.status == "approved":
+            # Check if calendar event already exists for this leave request
+            existing_event = db.query(CalendarEventDB).filter(
+                CalendarEventDB.related_leave_request_id == request_id
+            ).first()
+            
+            if not existing_event:
+                # Create calendar event for the leave period
+                # Use start_date as the main date, end_date for range
+                # Format leave type: 'sick' -> 'Sick', 'personal' -> 'Personal', etc.
+                leave_type_formatted = db_request.leave_type.replace('_', ' ').title()
+                leave_title = f"{db_request.coach_name} - {leave_type_formatted} Leave"
+                leave_description = f"Leave request: {db_request.reason}"
+                
+                calendar_event = CalendarEventDB(
+                    title=leave_title,
+                    event_type="leave",
+                    date=db_request.start_date,
+                    end_date=db_request.end_date,
+                    description=leave_description,
+                    created_by=owner_id,  # Created by owner who approved
+                    creator_type="owner",
+                    related_leave_request_id=request_id
+                )
+                db.add(calendar_event)
+        
+        # If rejected, remove any existing calendar events for this leave request
+        elif update.status == "rejected":
+            existing_events = db.query(CalendarEventDB).filter(
+                CalendarEventDB.related_leave_request_id == request_id
+            ).all()
+            for event in existing_events:
+                db.delete(event)
+        
+        db.commit()
+        db.refresh(db_request)
+        
+        # Convert to response model
+        return LeaveRequest(
+            id=db_request.id,
+            coach_id=db_request.coach_id,
+            coach_name=db_request.coach_name,
+            start_date=db_request.start_date.strftime("%Y-%m-%d"),
+            end_date=db_request.end_date.strftime("%Y-%m-%d"),
+            leave_type=db_request.leave_type,
+            reason=db_request.reason,
+            status=db_request.status,
+            submitted_at=db_request.submitted_at.isoformat() if db_request.submitted_at else "",
+            reviewed_by=db_request.reviewed_by,
+            reviewed_at=db_request.reviewed_at.isoformat() if db_request.reviewed_at else None,
+            review_notes=db_request.review_notes
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error updating leave request: {str(e)}")
+    finally:
+        db.close()
+
+@app.delete("/leave-requests/{request_id}")
+def delete_leave_request(request_id: int, coach_id: int):
+    """Delete a leave request - only the coach who created it can delete (if pending)"""
+    db = SessionLocal()
+    try:
+        db_request = db.query(LeaveRequestDB).filter(LeaveRequestDB.id == request_id).first()
+        if not db_request:
+            raise HTTPException(status_code=404, detail="Leave request not found")
+        
+        # Verify coach owns this request
+        if db_request.coach_id != coach_id:
+            raise HTTPException(status_code=403, detail="You can only delete your own leave requests")
+        
+        # Only allow deletion if status is pending
+        if db_request.status != "pending":
+            raise HTTPException(status_code=400, detail="Can only delete pending leave requests")
+        
+        db.delete(db_request)
+        db.commit()
+        return {"message": "Leave request deleted successfully"}
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error deleting leave request: {str(e)}")
+    finally:
+        db.close()
+
+# ==================== Student Registration Request Routes ====================
+
+@app.post("/students/registration-request", response_model=StudentRegistrationRequest)
+def create_student_registration_request(request: StudentRegistrationRequestCreate):
+    """Create a student registration request - requires owner approval"""
+    db = SessionLocal()
+    try:
+        # Check if email already exists in students table
+        existing_student = db.query(StudentDB).filter(StudentDB.email == request.email).first()
+        if existing_student:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        
+        # Check if email already exists in pending requests
+        existing_request = db.query(StudentRegistrationRequestDB).filter(
+            StudentRegistrationRequestDB.email == request.email
+        ).first()
+        if existing_request:
+            raise HTTPException(status_code=400, detail="Registration request already exists for this email")
+        
+        # Hash password
+        hashed_password = hash_password(request.password)
+        
+        # Create registration request
+        db_request = StudentRegistrationRequestDB(
+            name=request.name,
+            email=request.email,
+            phone=request.phone,
+            password=hashed_password,
+            guardian_name=request.guardian_name,
+            guardian_phone=request.guardian_phone,
+            date_of_birth=request.date_of_birth,
+            address=request.address,
+            t_shirt_size=request.t_shirt_size,
+            status="pending"
+        )
+        db.add(db_request)
+        db.commit()
+        db.refresh(db_request)
+        
+        # Convert to response model
+        return StudentRegistrationRequest(
+            id=db_request.id,
+            name=db_request.name,
+            email=db_request.email,
+            phone=db_request.phone,
+            status=db_request.status,
+            submitted_at=db_request.submitted_at.isoformat() if db_request.submitted_at else "",
+            reviewed_by=db_request.reviewed_by,
+            reviewed_at=db_request.reviewed_at.isoformat() if db_request.reviewed_at else None,
+            review_notes=db_request.review_notes,
+            guardian_name=db_request.guardian_name,
+            guardian_phone=db_request.guardian_phone,
+            date_of_birth=db_request.date_of_birth,
+            address=db_request.address,
+            t_shirt_size=db_request.t_shirt_size
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error creating registration request: {str(e)}")
+    finally:
+        db.close()
+
+@app.get("/student-registration-requests/", response_model=List[StudentRegistrationRequest])
+def get_student_registration_requests(
+    status: Optional[str] = Query(None, description="Filter by status: pending, approved, rejected")
+):
+    """Get all student registration requests - owner only"""
+    db = SessionLocal()
+    try:
+        query = db.query(StudentRegistrationRequestDB)
+        if status:
+            query = query.filter(StudentRegistrationRequestDB.status == status)
+        requests = query.order_by(StudentRegistrationRequestDB.submitted_at.desc()).all()
+        
+        # Convert to response models
+        return [
+            StudentRegistrationRequest(
+                id=req.id,
+                name=req.name,
+                email=req.email,
+                phone=req.phone,
+                status=req.status,
+                submitted_at=req.submitted_at.isoformat() if req.submitted_at else "",
+                reviewed_by=req.reviewed_by,
+                reviewed_at=req.reviewed_at.isoformat() if req.reviewed_at else None,
+                review_notes=req.review_notes,
+                guardian_name=req.guardian_name,
+                guardian_phone=req.guardian_phone,
+                date_of_birth=req.date_of_birth,
+                address=req.address,
+                t_shirt_size=req.t_shirt_size
+            )
+            for req in requests
+        ]
+    finally:
+        db.close()
+
+@app.get("/student-registration-requests/{request_id}", response_model=StudentRegistrationRequest)
+def get_student_registration_request(request_id: int):
+    """Get a specific registration request"""
+    db = SessionLocal()
+    try:
+        request = db.query(StudentRegistrationRequestDB).filter(
+            StudentRegistrationRequestDB.id == request_id
+        ).first()
+        if not request:
+            raise HTTPException(status_code=404, detail="Registration request not found")
+        
+        return StudentRegistrationRequest(
+            id=request.id,
+            name=request.name,
+            email=request.email,
+            phone=request.phone,
+            status=request.status,
+            submitted_at=request.submitted_at.isoformat() if request.submitted_at else "",
+            reviewed_by=request.reviewed_by,
+            reviewed_at=request.reviewed_at.isoformat() if request.reviewed_at else None,
+            review_notes=request.review_notes,
+            guardian_name=request.guardian_name,
+            guardian_phone=request.guardian_phone,
+            date_of_birth=request.date_of_birth,
+            address=request.address,
+            t_shirt_size=request.t_shirt_size
+        )
+    finally:
+        db.close()
+
+@app.put("/student-registration-requests/{request_id}", response_model=StudentRegistrationRequest)
+def update_registration_request_status(
+    request_id: int,
+    update: StudentRegistrationRequestUpdate,
+    owner_id: int = Query(..., description="Owner ID reviewing the request")
+):
+    """Approve or reject a student registration request"""
+    db = SessionLocal()
+    try:
+        request = db.query(StudentRegistrationRequestDB).filter(
+            StudentRegistrationRequestDB.id == request_id
+        ).first()
+        
+        if not request:
+            raise HTTPException(status_code=404, detail="Registration request not found")
+        
+        if request.status != "pending":
+            raise HTTPException(status_code=400, detail="Request has already been reviewed")
+        
+        # Update request status
+        request.status = update.status
+        request.reviewed_by = owner_id
+        request.reviewed_at = datetime.now()
+        request.review_notes = update.review_notes
+        
+        # If approved, create the student account
+        if update.status == "approved":
+            # Check if student already exists (race condition check)
+            existing_student = db.query(StudentDB).filter(
+                StudentDB.email == request.email
+            ).first()
+            
+            if existing_student:
+                raise HTTPException(status_code=400, detail="Student with this email already exists")
+            
+            # Create student account
+            db_student = StudentDB(
+                name=request.name,
+                email=request.email,
+                phone=request.phone,
+                password=request.password,  # Already hashed
+                guardian_name=request.guardian_name,
+                guardian_phone=request.guardian_phone,
+                date_of_birth=request.date_of_birth,
+                address=request.address,
+                t_shirt_size=request.t_shirt_size,
+                added_by="self",
+                status="active"  # Active after approval
+            )
+            db.add(db_student)
+        
+        db.commit()
+        db.refresh(request)
+        
+        # Convert to response model
+        return StudentRegistrationRequest(
+            id=request.id,
+            name=request.name,
+            email=request.email,
+            phone=request.phone,
+            status=request.status,
+            submitted_at=request.submitted_at.isoformat() if request.submitted_at else "",
+            reviewed_by=request.reviewed_by,
+            reviewed_at=request.reviewed_at.isoformat() if request.reviewed_at else None,
+            review_notes=request.review_notes,
+            guardian_name=request.guardian_name,
+            guardian_phone=request.guardian_phone,
+            date_of_birth=request.date_of_birth,
+            address=request.address,
+            t_shirt_size=request.t_shirt_size
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error updating registration request: {str(e)}")
+    finally:
+        db.close()
+
+@app.get("/students/check-registration-status/{email}")
+def check_registration_status(email: str):
+    """Check if a registration request exists for an email"""
+    db = SessionLocal()
+    try:
+        request = db.query(StudentRegistrationRequestDB).filter(
+            StudentRegistrationRequestDB.email == email
+        ).order_by(StudentRegistrationRequestDB.submitted_at.desc()).first()
+        
+        if not request:
+            return {"exists": False}
+        
+        return {
+            "exists": True,
+            "status": request.status,
+            "submitted_at": request.submitted_at.isoformat() if request.submitted_at else None,
+            "reviewed_at": request.reviewed_at.isoformat() if request.reviewed_at else None,
+            "review_notes": request.review_notes
+        }
     finally:
         db.close()
 
@@ -3588,6 +6011,18 @@ async def get_uploaded_image(filename: str):
 
 if __name__ == "__main__":
     import uvicorn
+    
+    # Start schema registry watcher automatically
+    try:
+        from schema_watcher import start_schema_watcher
+        start_schema_watcher()
+    except ImportError:
+        # Schema watcher not available - continue without it
+        pass
+    except Exception as e:
+        # Don't crash if watcher fails
+        print(f"[Schema Watcher] Could not start: {e}")
+    
     print("🚀 Starting Badminton Academy Management System API...")
     print("📖 API Documentation (Local): http://127.0.0.1:8000/docs")
     print("📖 API Documentation (Network): http://192.168.1.7:8000/docs")

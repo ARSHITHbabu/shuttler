@@ -1,23 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shimmer/shimmer.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
+import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/success_snackbar.dart';
+import '../../widgets/common/confirmation_dialog.dart';
 import '../../providers/service_providers.dart';
+import '../../providers/student_provider.dart';
 import '../../models/student.dart';
 import '../../widgets/forms/add_student_dialog.dart';
 import '../../widgets/forms/edit_student_dialog.dart';
 import '../../models/batch.dart';
-import '../../models/fee.dart';
-import '../../core/services/batch_service.dart';
 import '../../core/services/fee_service.dart';
 import '../../core/services/batch_enrollment_service.dart';
 import '../../providers/batch_provider.dart';
 import 'performance_tracking_screen.dart';
 import 'bmi_tracking_screen.dart';
 import 'fees_screen.dart';
+import '../../widgets/dialogs/student_details_dialog.dart';
 
 /// Students List Screen - Shows all students with add button
 class StudentsScreen extends ConsumerStatefulWidget {
@@ -30,14 +33,7 @@ class StudentsScreen extends ConsumerStatefulWidget {
 class _StudentsScreenState extends ConsumerState<StudentsScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _selectedFilter = 'all'; // 'all', 'active', 'inactive'
-  Future<List<Student>>? _studentsFuture;
-  ScaffoldMessengerState? _scaffoldMessenger;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _scaffoldMessenger = ScaffoldMessenger.maybeOf(context);
-  }
+  String _searchQuery = '';
 
   @override
   void dispose() {
@@ -45,22 +41,12 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
     super.dispose();
   }
 
-  /// Safely show a SnackBar using the stored ScaffoldMessenger reference
-  /// This prevents errors when the widget is disposed during async operations
-  void _showSnackBar(SnackBar snackBar) {
-    if (mounted && _scaffoldMessenger != null) {
-      _scaffoldMessenger!.showSnackBar(snackBar);
-    }
-  }
-
-  void _loadStudents() {
-    _studentsFuture = ref.read(studentServiceProvider).getStudents();
-  }
-
   @override
   Widget build(BuildContext context) {
-    // Load students on first build
-    _studentsFuture ??= ref.read(studentServiceProvider).getStudents();
+    // Use provider for student list with search
+    final studentsAsync = _searchQuery.isEmpty
+        ? ref.watch(studentListProvider)
+        : ref.watch(studentSearchProvider(_searchQuery));
     
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -105,7 +91,11 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                       border: InputBorder.none,
                       icon: Icon(Icons.search, color: AppColors.textSecondary),
                     ),
-                    onChanged: (value) => setState(() {}),
+                    onChanged: (value) {
+                      setState(() {
+                        _searchQuery = value;
+                      });
+                    },
                   ),
                 ),
                 const SizedBox(height: AppDimensions.spacingM),
@@ -139,37 +129,17 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
               ],
             ),
           ),
-          // Students List or Empty State - Inside FutureBuilder
+          // Students List or Empty State - Using Provider
           Expanded(
-            child: FutureBuilder<List<Student>>(
-              future: _studentsFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: LoadingSpinner());
-                }
-
-                if (snapshot.hasError) {
-                  return ErrorDisplay(
-                    message: 'Failed to load students',
-                    onRetry: () {
-                      _loadStudents();
-                      setState(() {});
-                    },
-                  );
-                }
-
-                final allStudents = snapshot.data ?? [];
-                
-                // Apply search filter
-                final searchQuery = _searchController.text.toLowerCase();
+            child: studentsAsync.when(
+              loading: () => const ListSkeleton(itemCount: 5),
+              error: (error, stack) => ErrorDisplay(
+                message: 'Failed to load students: ${error.toString()}',
+                onRetry: () => ref.invalidate(studentListProvider),
+              ),
+              data: (allStudents) {
+                // Apply status filter
                 var filteredStudents = allStudents.where((student) {
-                  if (searchQuery.isNotEmpty) {
-                    final matchesSearch = student.name.toLowerCase().contains(searchQuery) ||
-                        student.email.toLowerCase().contains(searchQuery) ||
-                        student.phone.contains(searchQuery);
-                    if (!matchesSearch) return false;
-                  }
-                  // Apply status filter
                   if (_selectedFilter == 'active') {
                     return student.status == 'active';
                   } else if (_selectedFilter == 'inactive') {
@@ -181,62 +151,55 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                 // Sort filtered students alphabetically by name
                 filteredStudents.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
-                // Determine empty message based on filter
-                String emptyMessage;
-                if (_selectedFilter == 'active') {
-                  emptyMessage = 'No active students found';
-                } else if (_selectedFilter == 'inactive') {
-                  emptyMessage = 'No inactive students found';
-                } else {
-                  emptyMessage = 'No students added yet';
-                }
-
                 if (filteredStudents.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.people_outline,
-                          size: 64,
-                          color: AppColors.textSecondary,
-                        ),
-                        const SizedBox(height: AppDimensions.spacingM),
-                        Text(
-                          emptyMessage,
-                          style: const TextStyle(
+                  if (_selectedFilter == 'all' && _searchQuery.isEmpty) {
+                    return EmptyState.noStudents(
+                      onAdd: () => _showAddStudentDialog(context),
+                    );
+                  } else {
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.people_outline,
+                            size: 64,
                             color: AppColors.textSecondary,
-                            fontSize: 16,
                           ),
-                        ),
-                        if (_selectedFilter == 'all') ...[
-                          const SizedBox(height: AppDimensions.spacingL),
-                          ElevatedButton.icon(
-                            onPressed: () => _showAddStudentDialog(context),
-                            icon: const Icon(Icons.add),
-                            label: const Text('Add Student'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.accent,
-                              foregroundColor: Colors.white,
+                          const SizedBox(height: AppDimensions.spacingM),
+                          Text(
+                            _selectedFilter == 'active'
+                                ? 'No active students found'
+                                : _selectedFilter == 'inactive'
+                                    ? 'No inactive students found'
+                                    : 'No students found',
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 16,
                             ),
                           ),
                         ],
-                      ],
-                    ),
-                  );
+                      ),
+                    );
+                  }
                 }
 
                 return RefreshIndicator(
                   onRefresh: () async {
-                    _loadStudents();
-                    setState(() {});
+                    ref.invalidate(studentListProvider);
+                    if (_searchQuery.isNotEmpty) {
+                      ref.invalidate(studentSearchProvider(_searchQuery));
+                    }
+                    return;
                   },
                   child: ListView.builder(
                           padding: const EdgeInsets.all(AppDimensions.paddingL),
                           itemCount: filteredStudents.length,
                           itemBuilder: (context, index) {
                             final student = filteredStudents[index];
-                                  return NeumorphicContainer(
+                                  return InkWell(
+                              onTap: () => _showStudentDetailsDialog(context, student),
+                              child: NeumorphicContainer(
                               key: ValueKey('student_${student.id}'),
                               padding: const EdgeInsets.all(AppDimensions.paddingM),
                               margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
@@ -434,7 +397,10 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                                           onTap: () {
                                             Navigator.of(context).push(
                                               MaterialPageRoute(
-                                                builder: (context) => const FeesScreen(),
+                                                builder: (context) => FeesScreen(
+                                                  selectedStudentId: student.id,
+                                                  selectedStudentName: student.name,
+                                                ),
                                               ),
                                             );
                                           },
@@ -444,7 +410,8 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                                   ),
                                 ],
                               ),
-                            );
+                            ),
+                          );
                           },
                         ),
                       );
@@ -456,16 +423,25 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
     );
   }
 
+  void _showStudentDetailsDialog(BuildContext context, Student student) {
+    StudentDetailsDialog.show(context, student);
+  }
+
   void _showAddStudentDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (context) => AddStudentDialog(
         onSubmit: (studentData) async {
-          final studentService = ref.read(studentServiceProvider);
-          await studentService.createStudent(studentData);
-          if (mounted) {
-            _loadStudents();
-            setState(() {});
+          try {
+            await ref.read(studentListProvider.notifier).createStudent(studentData);
+            if (mounted) {
+              Navigator.of(context).pop();
+              SuccessSnackbar.show(context, 'Student added successfully');
+            }
+          } catch (e) {
+            if (mounted) {
+              SuccessSnackbar.showError(context, 'Failed to add student: ${e.toString()}');
+            }
           }
         },
       ),
@@ -478,12 +454,16 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
       builder: (context) => EditStudentDialog(
         student: student,
         onSubmit: (studentData) async {
-          final studentService = ref.read(studentServiceProvider);
-          await studentService.updateStudent(student.id, studentData);
-          if (mounted) {
-            _loadStudents();
-            setState(() {});
-            Navigator.of(context).pop();
+          try {
+            await ref.read(studentListProvider.notifier).updateStudent(student.id, studentData);
+            if (mounted) {
+              Navigator.of(context).pop();
+              SuccessSnackbar.show(context, 'Student updated successfully');
+            }
+          } catch (e) {
+            if (mounted) {
+              SuccessSnackbar.showError(context, 'Failed to update student: ${e.toString()}');
+            }
           }
         },
       ),
@@ -491,9 +471,6 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
   }
 
   void _showManageBatchesDialog(BuildContext context, Student student) async {
-    // Capture parent context before showing dialog (Fix: Use parent context for ScaffoldMessenger)
-    final parentContext = context;
-    
     try {
       // Use provider to get student batches reactively
       // Use .future to get the Future from the AsyncValue
@@ -557,27 +534,19 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                                   await BatchEnrollmentHelper.removeStudent(ref, batch.id, student.id);
                                   if (mounted && Navigator.of(dialogContext).canPop()) {
                                     Navigator.of(dialogContext).pop();
-                                    // Use safe helper method to avoid widget lifecycle issues
-                                    _showSnackBar(
-                                      const SnackBar(content: Text('Student removed from batch successfully')),
-                                    );
+                                    SuccessSnackbar.show(context, 'Student removed from batch successfully');
                                     // No need to manually refresh - providers handle it automatically
                                   }
                                 } catch (e) {
                                   final errorMessage = e.toString().replaceFirst('Exception: ', '');
-                                  _showSnackBar(
-                                    SnackBar(
-                                      content: Text('Failed to remove from batch: $errorMessage'),
-                                      backgroundColor: AppColors.error,
-                                    ),
-                                  );
+                                  SuccessSnackbar.showError(context, 'Failed to remove from batch: $errorMessage');
                                 }
                               },
                             ),
                           ],
                         ),
                       );
-                    }).toList(),
+                    }),
                     const SizedBox(height: AppDimensions.spacingM),
                     const Divider(color: AppColors.textSecondary),
                     const SizedBox(height: AppDimensions.spacingM),
@@ -639,26 +608,17 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
         ),
       );
     } catch (e) {
-      _showSnackBar(
-        SnackBar(content: Text('Failed to load batches: $e')),
-      );
+      SuccessSnackbar.showError(context, 'Failed to load batches: ${e.toString()}');
     }
   }
 
   Future<void> _showAddBatchDialog(BuildContext context, Student student, List<Batch> existingBatches) async {
-    // Capture parent context before dialog (Fix: Use parent context for ScaffoldMessenger)
-    final parentContext = context;
-    // Capture widget's setState to avoid shadowing by StatefulBuilder
-    final widgetSetState = setState;
-    
     try {
       final batchService = ref.read(batchServiceProvider);
       final allBatches = await batchService.getBatches();
       
       if (allBatches.isEmpty) {
-        _showSnackBar(
-          const SnackBar(content: Text('No batches available. Please create a batch first.')),
-        );
+        SuccessSnackbar.showInfo(context, 'No batches available. Please create a batch first.');
         return;
       }
 
@@ -667,9 +627,7 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
       final availableBatches = allBatches.where((b) => !existingBatchIds.contains(b.id)).toList();
 
       if (availableBatches.isEmpty) {
-        _showSnackBar(
-          const SnackBar(content: Text('Student is already enrolled in all available batches.')),
-        );
+        SuccessSnackbar.showInfo(context, 'Student is already enrolled in all available batches.');
         return;
       }
 
@@ -687,7 +645,7 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                 valueListenable: selectedBatchIdNotifier,
                 builder: (context, selectedBatchId, _) {
                   return DropdownButtonFormField<int>(
-                    value: selectedBatchId,
+                    initialValue: selectedBatchId,
                     decoration: const InputDecoration(
                       labelText: 'Select Batch',
                       labelStyle: TextStyle(color: AppColors.textSecondary),
@@ -721,23 +679,15 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                       ? null
                       : () async {
                           try {
-                            await BatchEnrollmentHelper.enrollStudent(ref, selectedBatchId!, student.id);
+                            await BatchEnrollmentHelper.enrollStudent(ref, selectedBatchId, student.id);
                             if (mounted) {
                               Navigator.of(dialogContext).pop();
-                              // Use safe helper method to avoid widget lifecycle issues
-                              _showSnackBar(
-                                const SnackBar(content: Text('Student added to batch successfully')),
-                              );
+                              SuccessSnackbar.show(context, 'Student added to batch successfully');
                               // Providers automatically update all UI components
                             }
                           } catch (e) {
                             final errorMessage = e.toString().replaceFirst('Exception: ', '');
-                            _showSnackBar(
-                              SnackBar(
-                                content: Text('Failed to add batch: $errorMessage'),
-                                backgroundColor: AppColors.error,
-                              ),
-                            );
+                            SuccessSnackbar.showError(context, 'Failed to add batch: $errorMessage');
                           }
                         },
                   child: const Text('Add Batch'),
@@ -749,29 +699,17 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
       );
     } catch (e) {
       final errorMessage = e.toString().replaceFirst('Exception: ', '');
-      _showSnackBar(
-        SnackBar(
-          content: Text('Failed to load batches: $errorMessage'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      SuccessSnackbar.showError(context, 'Failed to load batches: $errorMessage');
     }
   }
 
   Future<void> _showChangeBatchDialog(BuildContext context, Student student, Batch currentBatch) async {
-    // Capture parent context before dialog (Fix: Use parent context for ScaffoldMessenger)
-    final parentContext = context;
-    // Capture widget's setState to avoid shadowing by StatefulBuilder
-    final widgetSetState = setState;
-    
     try {
       final batchService = ref.read(batchServiceProvider);
       final allBatches = await batchService.getBatches();
       
       if (allBatches.isEmpty) {
-        _showSnackBar(
-          const SnackBar(content: Text('No batches available. Please create a batch first.')),
-        );
+        SuccessSnackbar.showInfo(context, 'No batches available. Please create a batch first.');
         return;
       }
 
@@ -801,7 +739,7 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                       ),
                       const SizedBox(height: AppDimensions.spacingM),
                       DropdownButtonFormField<int>(
-                        value: selectedBatchId,
+                        initialValue: selectedBatchId,
                         decoration: const InputDecoration(
                           labelText: 'Select New Batch',
                           labelStyle: TextStyle(color: AppColors.textSecondary),
@@ -841,25 +779,17 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                             await BatchEnrollmentHelper.transferStudent(
                               ref,
                               currentBatch.id,
-                              selectedBatchId!,
+                              selectedBatchId,
                               student.id,
                             );
                             if (mounted) {
                               Navigator.of(dialogContext).pop();
-                              // Use safe helper method to avoid widget lifecycle issues
-                              _showSnackBar(
-                                const SnackBar(content: Text('Batch changed successfully')),
-                              );
+                              SuccessSnackbar.show(context, 'Batch changed successfully');
                               // Providers automatically update all UI components
                             }
                           } catch (e) {
                             final errorMessage = e.toString().replaceFirst('Exception: ', '');
-                            _showSnackBar(
-                              SnackBar(
-                                content: Text('Failed to change batch: $errorMessage'),
-                                backgroundColor: AppColors.error,
-                              ),
-                            );
+                            SuccessSnackbar.showError(context, 'Failed to change batch: $errorMessage');
                           }
                         },
                   child: const Text('Change'),
@@ -871,75 +801,41 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
       );
     } catch (e) {
       final errorMessage = e.toString().replaceFirst('Exception: ', '');
-      _showSnackBar(
-        SnackBar(
-          content: Text('Failed to load batches: $errorMessage'),
-          backgroundColor: AppColors.error,
-        ),
-      );
+      SuccessSnackbar.showError(context, 'Failed to load batches: $errorMessage');
     }
   }
 
 
   void _toggleStudentStatus(BuildContext context, Student student) async {
     try {
-      final studentService = ref.read(studentServiceProvider);
       final newStatus = student.status == 'active' ? 'inactive' : 'active';
-      await studentService.updateStudent(student.id, {'status': newStatus});
+      await ref.read(studentListProvider.notifier).updateStudent(student.id, {'status': newStatus});
       if (mounted) {
-        _loadStudents();
-        setState(() {});
-        _showSnackBar(
-          SnackBar(
-            content: Text('Student ${newStatus == 'active' ? 'activated' : 'deactivated'} successfully'),
-          ),
-        );
+        SuccessSnackbar.show(context, 'Student ${newStatus == 'active' ? 'activated' : 'deactivated'} successfully');
       }
     } catch (e) {
-      _showSnackBar(
-        SnackBar(content: Text('Failed to update student status: $e')),
-      );
+      if (mounted) {
+        SuccessSnackbar.showError(context, 'Failed to update student status: ${e.toString()}');
+      }
     }
   }
 
   void _showDeleteConfirmation(BuildContext context, Student student) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.cardBackground,
-        title: const Text('Delete Student', style: TextStyle(color: AppColors.textPrimary)),
-        content: Text(
-          'Are you sure you want to delete ${student.name}? This action cannot be undone.',
-          style: const TextStyle(color: AppColors.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () async {
-              try {
-                final studentService = ref.read(studentServiceProvider);
-                await studentService.deleteStudent(student.id);
-                if (mounted) {
-                  Navigator.of(context).pop();
-                  _loadStudents();
-                  setState(() {});
-                  _showSnackBar(
-                    const SnackBar(content: Text('Student deleted successfully')),
-                  );
-                }
-              } catch (e) {
-                _showSnackBar(
-                  SnackBar(content: Text('Failed to delete student: $e')),
-                );
-              }
-            },
-            child: const Text('Delete', style: TextStyle(color: AppColors.error)),
-          ),
-        ],
-      ),
+    ConfirmationDialog.showDelete(
+      context,
+      student.name,
+      onConfirm: () async {
+        try {
+          await ref.read(studentListProvider.notifier).deleteStudent(student.id);
+          if (mounted) {
+            SuccessSnackbar.show(context, 'Student deleted successfully');
+          }
+        } catch (e) {
+          if (mounted) {
+            SuccessSnackbar.showError(context, 'Failed to delete student: ${e.toString()}');
+          }
+        }
+      },
     );
   }
 }
@@ -1122,9 +1018,23 @@ class _StudentBatchAndFeeStatus extends ConsumerWidget {
               ],
             );
           },
-          loading: () => const SizedBox(
+          loading: () => SizedBox(
             height: 20,
-            child: Center(child: LoadingSpinner()),
+            child: Center(
+              child: Shimmer.fromColors(
+                baseColor: AppColors.cardBackground,
+                highlightColor: AppColors.surfaceLight,
+                period: const Duration(milliseconds: 1200),
+                child: Container(
+                  width: 60,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: AppColors.cardBackground,
+                    borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                  ),
+                ),
+              ),
+            ),
           ),
           error: (error, stack) => const SizedBox.shrink(),
         );

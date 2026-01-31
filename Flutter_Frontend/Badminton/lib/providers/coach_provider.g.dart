@@ -6,7 +6,7 @@ part of 'coach_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$coachBatchesHash() => r'9f953ff151920903cae2405939780530f4b9a0ea';
+String _$coachByIdHash() => r'81cb73456fd9603af3e470e8fac9f62cbcf9347c';
 
 /// Copied from Dart SDK
 class _SystemHash {
@@ -28,6 +28,134 @@ class _SystemHash {
     return 0x1fffffff & (hash + ((0x00003fff & hash) << 15));
   }
 }
+
+/// Provider for coach by ID
+///
+/// Copied from [coachById].
+@ProviderFor(coachById)
+const coachByIdProvider = CoachByIdFamily();
+
+/// Provider for coach by ID
+///
+/// Copied from [coachById].
+class CoachByIdFamily extends Family<AsyncValue<Coach>> {
+  /// Provider for coach by ID
+  ///
+  /// Copied from [coachById].
+  const CoachByIdFamily();
+
+  /// Provider for coach by ID
+  ///
+  /// Copied from [coachById].
+  CoachByIdProvider call(int id) {
+    return CoachByIdProvider(id);
+  }
+
+  @override
+  CoachByIdProvider getProviderOverride(covariant CoachByIdProvider provider) {
+    return call(provider.id);
+  }
+
+  static const Iterable<ProviderOrFamily>? _dependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get dependencies => _dependencies;
+
+  static const Iterable<ProviderOrFamily>? _allTransitiveDependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get allTransitiveDependencies =>
+      _allTransitiveDependencies;
+
+  @override
+  String? get name => r'coachByIdProvider';
+}
+
+/// Provider for coach by ID
+///
+/// Copied from [coachById].
+class CoachByIdProvider extends AutoDisposeFutureProvider<Coach> {
+  /// Provider for coach by ID
+  ///
+  /// Copied from [coachById].
+  CoachByIdProvider(int id)
+    : this._internal(
+        (ref) => coachById(ref as CoachByIdRef, id),
+        from: coachByIdProvider,
+        name: r'coachByIdProvider',
+        debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+            ? null
+            : _$coachByIdHash,
+        dependencies: CoachByIdFamily._dependencies,
+        allTransitiveDependencies: CoachByIdFamily._allTransitiveDependencies,
+        id: id,
+      );
+
+  CoachByIdProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.id,
+  }) : super.internal();
+
+  final int id;
+
+  @override
+  Override overrideWith(
+    FutureOr<Coach> Function(CoachByIdRef provider) create,
+  ) {
+    return ProviderOverride(
+      origin: this,
+      override: CoachByIdProvider._internal(
+        (ref) => create(ref as CoachByIdRef),
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        id: id,
+      ),
+    );
+  }
+
+  @override
+  AutoDisposeFutureProviderElement<Coach> createElement() {
+    return _CoachByIdProviderElement(this);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is CoachByIdProvider && other.id == id;
+  }
+
+  @override
+  int get hashCode {
+    var hash = _SystemHash.combine(0, runtimeType.hashCode);
+    hash = _SystemHash.combine(hash, id.hashCode);
+
+    return _SystemHash.finish(hash);
+  }
+}
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+mixin CoachByIdRef on AutoDisposeFutureProviderRef<Coach> {
+  /// The parameter `id` of this provider.
+  int get id;
+}
+
+class _CoachByIdProviderElement extends AutoDisposeFutureProviderElement<Coach>
+    with CoachByIdRef {
+  _CoachByIdProviderElement(super.provider);
+
+  @override
+  int get id => (origin as CoachByIdProvider).id;
+}
+
+String _$coachBatchesHash() => r'9f953ff151920903cae2405939780530f4b9a0ea';
 
 /// Provider for coach's assigned batches
 ///
@@ -159,7 +287,7 @@ class _CoachBatchesProviderElement
   int get coachId => (origin as CoachBatchesProvider).coachId;
 }
 
-String _$coachStatsHash() => r'41b7ca2b69022a523ef440f1ead19288df48c333';
+String _$coachStatsHash() => r'4496319a37032664852d75c5b25fb23b143a7ac0';
 
 /// Provider for coach statistics
 ///
@@ -291,28 +419,32 @@ class _CoachStatsProviderElement
 }
 
 String _$coachTodaySessionsHash() =>
-    r'41bd7668bb1d3d3291385760fc9a4dc6ebbe093c';
+    r'e5e7263f77b8cfacfcfd19800dca39ef063e7dee';
 
 /// Provider for coach's today sessions
-/// Since schedules don't have coach_id directly, we get schedules through batches
+/// Works directly with batches (like owner dashboard) instead of requiring Schedule records
+/// Converts batches to Schedule objects for display compatibility
 ///
 /// Copied from [coachTodaySessions].
 @ProviderFor(coachTodaySessions)
 const coachTodaySessionsProvider = CoachTodaySessionsFamily();
 
 /// Provider for coach's today sessions
-/// Since schedules don't have coach_id directly, we get schedules through batches
+/// Works directly with batches (like owner dashboard) instead of requiring Schedule records
+/// Converts batches to Schedule objects for display compatibility
 ///
 /// Copied from [coachTodaySessions].
 class CoachTodaySessionsFamily extends Family<AsyncValue<List<Schedule>>> {
   /// Provider for coach's today sessions
-  /// Since schedules don't have coach_id directly, we get schedules through batches
+  /// Works directly with batches (like owner dashboard) instead of requiring Schedule records
+  /// Converts batches to Schedule objects for display compatibility
   ///
   /// Copied from [coachTodaySessions].
   const CoachTodaySessionsFamily();
 
   /// Provider for coach's today sessions
-  /// Since schedules don't have coach_id directly, we get schedules through batches
+  /// Works directly with batches (like owner dashboard) instead of requiring Schedule records
+  /// Converts batches to Schedule objects for display compatibility
   ///
   /// Copied from [coachTodaySessions].
   CoachTodaySessionsProvider call(int coachId) {
@@ -342,13 +474,15 @@ class CoachTodaySessionsFamily extends Family<AsyncValue<List<Schedule>>> {
 }
 
 /// Provider for coach's today sessions
-/// Since schedules don't have coach_id directly, we get schedules through batches
+/// Works directly with batches (like owner dashboard) instead of requiring Schedule records
+/// Converts batches to Schedule objects for display compatibility
 ///
 /// Copied from [coachTodaySessions].
 class CoachTodaySessionsProvider
     extends AutoDisposeFutureProvider<List<Schedule>> {
   /// Provider for coach's today sessions
-  /// Since schedules don't have coach_id directly, we get schedules through batches
+  /// Works directly with batches (like owner dashboard) instead of requiring Schedule records
+  /// Converts batches to Schedule objects for display compatibility
   ///
   /// Copied from [coachTodaySessions].
   CoachTodaySessionsProvider(int coachId)
@@ -452,5 +586,293 @@ final coachAnnouncementsProvider =
 // ignore: unused_element
 typedef CoachAnnouncementsRef =
     AutoDisposeFutureProviderRef<List<Announcement>>;
+String _$coachScheduleHash() => r'3b1d2d47b58bf60361aa77c704bf60b91d7e6841';
+
+/// Provider for coach's all sessions (upcoming and past)
+/// Gets schedules through coach's batches
+///
+/// Copied from [coachSchedule].
+@ProviderFor(coachSchedule)
+const coachScheduleProvider = CoachScheduleFamily();
+
+/// Provider for coach's all sessions (upcoming and past)
+/// Gets schedules through coach's batches
+///
+/// Copied from [coachSchedule].
+class CoachScheduleFamily extends Family<AsyncValue<List<Schedule>>> {
+  /// Provider for coach's all sessions (upcoming and past)
+  /// Gets schedules through coach's batches
+  ///
+  /// Copied from [coachSchedule].
+  const CoachScheduleFamily();
+
+  /// Provider for coach's all sessions (upcoming and past)
+  /// Gets schedules through coach's batches
+  ///
+  /// Copied from [coachSchedule].
+  CoachScheduleProvider call(int coachId) {
+    return CoachScheduleProvider(coachId);
+  }
+
+  @override
+  CoachScheduleProvider getProviderOverride(
+    covariant CoachScheduleProvider provider,
+  ) {
+    return call(provider.coachId);
+  }
+
+  static const Iterable<ProviderOrFamily>? _dependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get dependencies => _dependencies;
+
+  static const Iterable<ProviderOrFamily>? _allTransitiveDependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get allTransitiveDependencies =>
+      _allTransitiveDependencies;
+
+  @override
+  String? get name => r'coachScheduleProvider';
+}
+
+/// Provider for coach's all sessions (upcoming and past)
+/// Gets schedules through coach's batches
+///
+/// Copied from [coachSchedule].
+class CoachScheduleProvider extends AutoDisposeFutureProvider<List<Schedule>> {
+  /// Provider for coach's all sessions (upcoming and past)
+  /// Gets schedules through coach's batches
+  ///
+  /// Copied from [coachSchedule].
+  CoachScheduleProvider(int coachId)
+    : this._internal(
+        (ref) => coachSchedule(ref as CoachScheduleRef, coachId),
+        from: coachScheduleProvider,
+        name: r'coachScheduleProvider',
+        debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+            ? null
+            : _$coachScheduleHash,
+        dependencies: CoachScheduleFamily._dependencies,
+        allTransitiveDependencies:
+            CoachScheduleFamily._allTransitiveDependencies,
+        coachId: coachId,
+      );
+
+  CoachScheduleProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.coachId,
+  }) : super.internal();
+
+  final int coachId;
+
+  @override
+  Override overrideWith(
+    FutureOr<List<Schedule>> Function(CoachScheduleRef provider) create,
+  ) {
+    return ProviderOverride(
+      origin: this,
+      override: CoachScheduleProvider._internal(
+        (ref) => create(ref as CoachScheduleRef),
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        coachId: coachId,
+      ),
+    );
+  }
+
+  @override
+  AutoDisposeFutureProviderElement<List<Schedule>> createElement() {
+    return _CoachScheduleProviderElement(this);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is CoachScheduleProvider && other.coachId == coachId;
+  }
+
+  @override
+  int get hashCode {
+    var hash = _SystemHash.combine(0, runtimeType.hashCode);
+    hash = _SystemHash.combine(hash, coachId.hashCode);
+
+    return _SystemHash.finish(hash);
+  }
+}
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+mixin CoachScheduleRef on AutoDisposeFutureProviderRef<List<Schedule>> {
+  /// The parameter `coachId` of this provider.
+  int get coachId;
+}
+
+class _CoachScheduleProviderElement
+    extends AutoDisposeFutureProviderElement<List<Schedule>>
+    with CoachScheduleRef {
+  _CoachScheduleProviderElement(super.provider);
+
+  @override
+  int get coachId => (origin as CoachScheduleProvider).coachId;
+}
+
+String _$coachStudentsHash() => r'556966ad5021ec0814c5501985122ecaa785b63a';
+
+/// Provider for coach's students (students in all batches assigned to coach)
+///
+/// Copied from [coachStudents].
+@ProviderFor(coachStudents)
+const coachStudentsProvider = CoachStudentsFamily();
+
+/// Provider for coach's students (students in all batches assigned to coach)
+///
+/// Copied from [coachStudents].
+class CoachStudentsFamily extends Family<AsyncValue<List<Student>>> {
+  /// Provider for coach's students (students in all batches assigned to coach)
+  ///
+  /// Copied from [coachStudents].
+  const CoachStudentsFamily();
+
+  /// Provider for coach's students (students in all batches assigned to coach)
+  ///
+  /// Copied from [coachStudents].
+  CoachStudentsProvider call(int coachId) {
+    return CoachStudentsProvider(coachId);
+  }
+
+  @override
+  CoachStudentsProvider getProviderOverride(
+    covariant CoachStudentsProvider provider,
+  ) {
+    return call(provider.coachId);
+  }
+
+  static const Iterable<ProviderOrFamily>? _dependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get dependencies => _dependencies;
+
+  static const Iterable<ProviderOrFamily>? _allTransitiveDependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get allTransitiveDependencies =>
+      _allTransitiveDependencies;
+
+  @override
+  String? get name => r'coachStudentsProvider';
+}
+
+/// Provider for coach's students (students in all batches assigned to coach)
+///
+/// Copied from [coachStudents].
+class CoachStudentsProvider extends AutoDisposeFutureProvider<List<Student>> {
+  /// Provider for coach's students (students in all batches assigned to coach)
+  ///
+  /// Copied from [coachStudents].
+  CoachStudentsProvider(int coachId)
+    : this._internal(
+        (ref) => coachStudents(ref as CoachStudentsRef, coachId),
+        from: coachStudentsProvider,
+        name: r'coachStudentsProvider',
+        debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+            ? null
+            : _$coachStudentsHash,
+        dependencies: CoachStudentsFamily._dependencies,
+        allTransitiveDependencies:
+            CoachStudentsFamily._allTransitiveDependencies,
+        coachId: coachId,
+      );
+
+  CoachStudentsProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.coachId,
+  }) : super.internal();
+
+  final int coachId;
+
+  @override
+  Override overrideWith(
+    FutureOr<List<Student>> Function(CoachStudentsRef provider) create,
+  ) {
+    return ProviderOverride(
+      origin: this,
+      override: CoachStudentsProvider._internal(
+        (ref) => create(ref as CoachStudentsRef),
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        coachId: coachId,
+      ),
+    );
+  }
+
+  @override
+  AutoDisposeFutureProviderElement<List<Student>> createElement() {
+    return _CoachStudentsProviderElement(this);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is CoachStudentsProvider && other.coachId == coachId;
+  }
+
+  @override
+  int get hashCode {
+    var hash = _SystemHash.combine(0, runtimeType.hashCode);
+    hash = _SystemHash.combine(hash, coachId.hashCode);
+
+    return _SystemHash.finish(hash);
+  }
+}
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+mixin CoachStudentsRef on AutoDisposeFutureProviderRef<List<Student>> {
+  /// The parameter `coachId` of this provider.
+  int get coachId;
+}
+
+class _CoachStudentsProviderElement
+    extends AutoDisposeFutureProviderElement<List<Student>>
+    with CoachStudentsRef {
+  _CoachStudentsProviderElement(super.provider);
+
+  @override
+  int get coachId => (origin as CoachStudentsProvider).coachId;
+}
+
+String _$coachListHash() => r'5451a14ed89475defccca77a2a7065a15583b4e7';
+
+/// Provider for coach list state
+///
+/// Copied from [CoachList].
+@ProviderFor(CoachList)
+final coachListProvider =
+    AutoDisposeAsyncNotifierProvider<CoachList, List<Coach>>.internal(
+      CoachList.new,
+      name: r'coachListProvider',
+      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+          ? null
+          : _$coachListHash,
+      dependencies: null,
+      allTransitiveDependencies: null,
+    );
+
+typedef _$CoachList = AutoDisposeAsyncNotifier<List<Coach>>;
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package

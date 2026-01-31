@@ -4,10 +4,7 @@ import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/custom_text_field.dart';
-import '../../widgets/common/loading_spinner.dart';
-import '../../providers/service_providers.dart';
 import '../../models/fee.dart';
-import '../../models/student.dart';
 import 'package:intl/intl.dart';
 
 /// Dialog for adding a payment to an existing fee
@@ -86,7 +83,7 @@ class _AddPaymentDialogState extends ConsumerState<AddPaymentDialog> {
     final paymentAmount = double.parse(_amountController.text.trim());
     if (paymentAmount > widget.fee.pendingAmount) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Payment amount (₹${paymentAmount.toStringAsFixed(2)}) exceeds pending amount (₹${widget.fee.pendingAmount.toStringAsFixed(2)})')),
+        SnackBar(content: Text('Payment amount (\$${paymentAmount.toStringAsFixed(2)}) exceeds pending amount (\$${widget.fee.pendingAmount.toStringAsFixed(2)})')),
       );
       return;
     }
@@ -115,19 +112,15 @@ class _AddPaymentDialogState extends ConsumerState<AddPaymentDialog> {
         await widget.onSubmit!(paymentData);
       }
 
+      // Only close dialog if onSubmit succeeds (doesn't throw)
       if (mounted) {
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Payment recorded successfully')),
-        );
+        // Note: Success message is handled by the onSubmit callback
       }
     } catch (e) {
       setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to record payment: $e')),
-        );
-      }
+      // Don't close dialog on error - let user see the error and retry
+      // Error message is handled by the onSubmit callback
     }
   }
 
@@ -172,7 +165,7 @@ class _AddPaymentDialogState extends ConsumerState<AddPaymentDialog> {
                       ),
                       const SizedBox(height: AppDimensions.spacingS),
                       Text(
-                        'Total: ₹${widget.fee.amount.toStringAsFixed(2)} | Paid: ₹${widget.fee.totalPaid.toStringAsFixed(2)} | Pending: ₹${widget.fee.pendingAmount.toStringAsFixed(2)}',
+                        'Total: \$${widget.fee.amount.toStringAsFixed(2)} | Paid: \$${widget.fee.totalPaid.toStringAsFixed(2)} | Pending: \$${widget.fee.pendingAmount.toStringAsFixed(2)}',
                         style: const TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 12,
@@ -185,7 +178,7 @@ class _AddPaymentDialogState extends ConsumerState<AddPaymentDialog> {
                 // Payment Amount
                 CustomTextField(
                   controller: _amountController,
-                  label: 'Payment Amount (₹)',
+                  label: 'Payment Amount (\$)',
                   hint: 'Enter payment amount',
                   keyboardType: TextInputType.numberWithOptions(decimal: true),
                   validator: (value) {
@@ -197,7 +190,7 @@ class _AddPaymentDialogState extends ConsumerState<AddPaymentDialog> {
                       return 'Please enter a valid amount';
                     }
                     if (amount > widget.fee.pendingAmount) {
-                      return 'Amount exceeds pending amount (₹${widget.fee.pendingAmount.toStringAsFixed(2)})';
+                      return 'Amount exceeds pending amount (\$${widget.fee.pendingAmount.toStringAsFixed(2)})';
                     }
                     return null;
                   },
@@ -352,7 +345,7 @@ class _PaymentMethodChip extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppColors.accent.withOpacity(0.2)
+              ? AppColors.accent.withValues(alpha: 0.2)
               : AppColors.cardBackground,
           borderRadius: BorderRadius.circular(AppDimensions.radiusS),
           border: Border.all(

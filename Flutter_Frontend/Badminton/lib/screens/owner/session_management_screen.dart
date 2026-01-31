@@ -3,14 +3,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/custom_text_field.dart';
+import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/success_snackbar.dart';
+import '../../widgets/common/confirmation_dialog.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/batch_provider.dart';
+import '../../providers/coach_provider.dart';
 import '../../models/schedule.dart';
 import '../../models/batch.dart';
-import '../../models/coach.dart';
 import 'package:intl/intl.dart';
 
 /// Session Management Screen - Manage practice/tournament/camp sessions
@@ -39,55 +42,19 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
   TimeOfDay? _endTime;
   int? _selectedBatchId;
   int? _selectedCoachId;
-  List<Batch> _batches = [];
-  List<Coach> _coaches = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadBatchesAndCoaches();
-  }
-
-  @override
-  void dispose() {
-    _titleController.dispose();
-    _descriptionController.dispose();
-    _locationController.dispose();
-    _capacityController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadBatchesAndCoaches() async {
-    try {
-      final batchService = ref.read(batchServiceProvider);
-      final coachService = ref.read(coachServiceProvider);
-      final batches = await batchService.getBatches();
-      final coaches = await coachService.getCoaches();
-      setState(() {
-        _batches = batches;
-        _coaches = coaches;
-      });
-    } catch (e) {
-      // Silently fail
-    }
-  }
-
-  Future<List<Schedule>> _loadSessions() async {
+  Future<List<Schedule>> _loadSessionsForBatches(List<Batch> batches) async {
     try {
       final scheduleService = ref.read(scheduleServiceProvider);
       List<Schedule> allSessions = [];
       
-      // Since backend doesn't have GET /schedules/, we need to fetch schedules for each batch
-      // or use date-based fetching. Let's fetch for all batches we have loaded.
-      if (_batches.isNotEmpty) {
-        for (final batch in _batches) {
-          try {
-            final batchSessions = await scheduleService.getSchedules(batchId: batch.id);
-            allSessions.addAll(batchSessions);
-          } catch (e) {
-            // Silently fail for individual batch
-            continue;
-          }
+      // Fetch schedules for each batch
+      for (final batch in batches) {
+        try {
+          final batchSessions = await scheduleService.getSchedules(batchId: batch.id);
+          allSessions.addAll(batchSessions);
+        } catch (e) {
+          // Silently fail for individual batch
+          continue;
         }
       }
       
@@ -109,6 +76,22 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
       return [];
     }
   }
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _locationController.dispose();
+    _capacityController.dispose();
+    super.dispose();
+  }
+
+
 
   void _editSession(Schedule session) {
     setState(() {
@@ -148,17 +131,13 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
 
   Future<void> _saveSession() async {
     if (_titleController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter session title')),
-      );
+      SuccessSnackbar.showError(context, 'Please enter session title');
       return;
     }
 
     // Make batch_id required (backend requires it)
     if (_selectedBatchId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a batch')),
-      );
+      SuccessSnackbar.showError(context, 'Please select a batch');
       return;
     }
 
@@ -198,11 +177,9 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_editingSession != null
-              ? 'Session updated successfully'
-              : 'Session created successfully')),
-        );
+        SuccessSnackbar.show(context, _editingSession != null
+            ? 'Session updated successfully'
+            : 'Session created successfully');
         setState(() {
           _showAddForm = false;
           _titleController.clear();
@@ -216,14 +193,13 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
           _selectedBatchId = null;
           _selectedCoachId = null;
           _editingSession = null;
+          _isLoading = false;
         });
       }
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to ${_editingSession != null ? 'update' : 'create'} session: $e')),
-        );
+        SuccessSnackbar.showError(context, 'Failed to ${_editingSession != null ? 'update' : 'create'} session: ${e.toString()}');
       }
     }
   }
@@ -293,63 +269,85 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
 
           // Sessions List
           Expanded(
-            child: FutureBuilder<List<Schedule>>(
-              future: _loadSessions(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting || _isLoading) {
-                  return const Center(child: LoadingSpinner());
-                }
+            child: Consumer(
+              builder: (context, ref, child) {
+                final batchesAsync = ref.watch(batchListProvider);
+                
+                return batchesAsync.when(
+                  loading: () => const ListSkeleton(itemCount: 5),
+                  error: (error, stack) => Padding(
+                    padding: const EdgeInsets.all(AppDimensions.paddingL),
+                    child: ErrorDisplay(
+                      message: 'Failed to load batches: ${error.toString()}',
+                      onRetry: () => ref.invalidate(batchListProvider),
+                    ),
+                  ),
+                  data: (batches) {
+                    // Load sessions for all batches
+                    return FutureBuilder<List<Schedule>>(
+                      future: _loadSessionsForBatches(batches),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting || _isLoading) {
+                          return const ListSkeleton(itemCount: 5);
+                        }
 
-                if (snapshot.hasError) {
-                  return ErrorDisplay(
-                    message: 'Failed to load sessions',
-                    onRetry: () => setState(() {}),
-                  );
-                }
+                        if (snapshot.hasError) {
+                          return ErrorDisplay(
+                            message: 'Failed to load sessions: ${snapshot.error.toString()}',
+                            onRetry: () => setState(() {}),
+                          );
+                        }
 
                 final allSessions = snapshot.data ?? [];
-                final now = DateTime.now();
                 final sessions = _selectedTab == 'upcoming'
-                    ? allSessions.where((s) => !s.isPast).toList()
-                    : allSessions.where((s) => s.isPast).toList();
+                            ? allSessions.where((s) => !s.isPast).toList()
+                            : allSessions.where((s) => s.isPast).toList();
 
-                if (sessions.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(
-                          Icons.event_outlined,
-                          size: 64,
-                          color: AppColors.textSecondary,
-                        ),
-                        const SizedBox(height: AppDimensions.spacingM),
-                        Text(
-                          _selectedTab == 'upcoming'
-                              ? 'No upcoming sessions'
-                              : 'No past sessions',
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 16,
+                        if (sessions.isEmpty) {
+                          return Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(AppDimensions.paddingL),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(
+                                    Icons.event_outlined,
+                                    size: 64,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                  const SizedBox(height: AppDimensions.spacingM),
+                                  Text(
+                                    _selectedTab == 'upcoming'
+                                        ? 'No upcoming sessions'
+                                        : 'No past sessions',
+                                    style: const TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+
+                        return RefreshIndicator(
+                          onRefresh: () async {
+                            ref.invalidate(batchListProvider);
+                            setState(() {});
+                          },
+                          child: ListView.builder(
+                            padding: const EdgeInsets.all(AppDimensions.paddingL),
+                            itemCount: sessions.length,
+                            itemBuilder: (context, index) {
+                              final session = sessions[index];
+                              return _buildSessionCard(session);
+                            },
                           ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                return RefreshIndicator(
-                  onRefresh: () async {
-                    setState(() {});
+                        );
+                      },
+                    );
                   },
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(AppDimensions.paddingL),
-                    itemCount: sessions.length,
-                    itemBuilder: (context, index) {
-                      final session = sessions[index];
-                      return _buildSessionCard(session);
-                    },
-                  ),
                 );
               },
             ),
@@ -630,56 +628,88 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
               const SizedBox(height: AppDimensions.spacingM),
 
               // Batch Selector (Required)
-              NeumorphicContainer(
-                padding: const EdgeInsets.all(AppDimensions.paddingM),
-                child: DropdownButtonFormField<int>(
-                  initialValue: _selectedBatchId,
-                  decoration: const InputDecoration(
-                    labelText: 'Batch *',
-                    labelStyle: TextStyle(color: AppColors.textSecondary),
-                    border: InputBorder.none,
-                  ),
-                  dropdownColor: AppColors.cardBackground,
-                  style: const TextStyle(color: AppColors.textPrimary),
-                  items: _batches.map((batch) {
-                    return DropdownMenuItem<int>(
-                      value: batch.id,
-                      child: Text(batch.name),
-                    );
-                  }).toList(),
-                  onChanged: (value) => setState(() => _selectedBatchId = value),
-                  validator: (value) => value == null ? 'Batch is required' : null,
-                ),
+              Consumer(
+                builder: (context, ref, child) {
+                  final batchesAsync = ref.watch(batchListProvider);
+                  
+                  return batchesAsync.when(
+                    loading: () => const NeumorphicContainer(
+                      padding: EdgeInsets.all(AppDimensions.paddingM),
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                    error: (error, stack) => NeumorphicContainer(
+                      padding: const EdgeInsets.all(AppDimensions.paddingM),
+                      child: Text('Error loading batches: ${error.toString()}'),
+                    ),
+                    data: (batches) => NeumorphicContainer(
+                      padding: const EdgeInsets.all(AppDimensions.paddingM),
+                      child: DropdownButtonFormField<int>(
+                        initialValue: _selectedBatchId,
+                        decoration: const InputDecoration(
+                          labelText: 'Batch *',
+                          labelStyle: TextStyle(color: AppColors.textSecondary),
+                          border: InputBorder.none,
+                        ),
+                        dropdownColor: AppColors.cardBackground,
+                        style: const TextStyle(color: AppColors.textPrimary),
+                        items: batches.map((batch) {
+                          return DropdownMenuItem<int>(
+                            value: batch.id,
+                            child: Text(batch.name),
+                          );
+                        }).toList(),
+                        onChanged: (value) => setState(() => _selectedBatchId = value),
+                        validator: (value) => value == null ? 'Batch is required' : null,
+                      ),
+                    ),
+                  );
+                },
               ),
 
               const SizedBox(height: AppDimensions.spacingM),
 
               // Coach Selector
-              NeumorphicContainer(
-                padding: const EdgeInsets.all(AppDimensions.paddingM),
-                child: DropdownButtonFormField<int>(
-                  initialValue: _selectedCoachId,
-                  decoration: const InputDecoration(
-                    labelText: 'Coach (Optional)',
-                    labelStyle: TextStyle(color: AppColors.textSecondary),
-                    border: InputBorder.none,
-                  ),
-                  dropdownColor: AppColors.cardBackground,
-                  style: const TextStyle(color: AppColors.textPrimary),
-                  items: [
-                    const DropdownMenuItem<int>(
-                      value: null,
-                      child: Text('None'),
+              Consumer(
+                builder: (context, ref, child) {
+                  final coachesAsync = ref.watch(coachListProvider);
+                  
+                  return coachesAsync.when(
+                    loading: () => const NeumorphicContainer(
+                      padding: EdgeInsets.all(AppDimensions.paddingM),
+                      child: Center(child: CircularProgressIndicator()),
                     ),
-                    ..._coaches.map((coach) {
-                      return DropdownMenuItem<int>(
-                        value: coach.id,
-                        child: Text(coach.name),
-                      );
-                    }),
-                  ],
-                  onChanged: (value) => setState(() => _selectedCoachId = value),
-                ),
+                    error: (error, stack) => NeumorphicContainer(
+                      padding: const EdgeInsets.all(AppDimensions.paddingM),
+                      child: Text('Error loading coaches: ${error.toString()}'),
+                    ),
+                    data: (coaches) => NeumorphicContainer(
+                      padding: const EdgeInsets.all(AppDimensions.paddingM),
+                      child: DropdownButtonFormField<int>(
+                        initialValue: _selectedCoachId,
+                        decoration: const InputDecoration(
+                          labelText: 'Coach (Optional)',
+                          labelStyle: TextStyle(color: AppColors.textSecondary),
+                          border: InputBorder.none,
+                        ),
+                        dropdownColor: AppColors.cardBackground,
+                        style: const TextStyle(color: AppColors.textPrimary),
+                        items: [
+                          const DropdownMenuItem<int>(
+                            value: null,
+                            child: Text('None'),
+                          ),
+                          ...coaches.map((coach) {
+                            return DropdownMenuItem<int>(
+                              value: coach.id,
+                              child: Text(coach.name),
+                            );
+                          }),
+                        ],
+                        onChanged: (value) => setState(() => _selectedCoachId = value),
+                      ),
+                    ),
+                  );
+                },
               ),
 
               const SizedBox(height: AppDimensions.spacingM),
@@ -733,7 +763,11 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
                     padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingM),
                   ),
                   child: _isLoading
-                      ? const LoadingSpinner()
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
                       : Text(
                           _editingSession != null ? 'Update Session' : 'Create Session',
                           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
@@ -782,39 +816,21 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
               PopupMenuItem(
                 child: const Text('Delete', style: TextStyle(color: AppColors.error)),
                 onTap: () async {
-                  final confirm = await showDialog<bool>(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      backgroundColor: AppColors.cardBackground,
-                      title: const Text('Delete Session', style: TextStyle(color: AppColors.textPrimary)),
-                      content: const Text('Are you sure you want to delete this session?', style: TextStyle(color: AppColors.textSecondary)),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: const Text('Cancel'),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          child: const Text('Delete', style: TextStyle(color: AppColors.error)),
-                        ),
-                      ],
-                    ),
+                  final confirmed = await ConfirmationDialog.showDelete(
+                    context,
+                    'Session',
                   );
-                  if (confirm == true && mounted) {
+                  if (confirmed == true && mounted) {
                     try {
                       final scheduleService = ref.read(scheduleServiceProvider);
                       await scheduleService.deleteSchedule(session.id);
                       if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Session deleted successfully')),
-                        );
+                        SuccessSnackbar.show(context, 'Session deleted successfully');
                         setState(() => _selectedSession = null);
                       }
                     } catch (e) {
                       if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Failed to delete session: $e')),
-                        );
+                        SuccessSnackbar.showError(context, 'Failed to delete session: ${e.toString()}');
                       }
                     }
                   }

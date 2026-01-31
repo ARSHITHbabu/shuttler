@@ -4,10 +4,14 @@ import 'package:fl_chart/fl_chart.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
+import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/success_snackbar.dart';
+import '../../widgets/common/confirmation_dialog.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../providers/service_providers.dart';
+import '../../providers/bmi_provider.dart';
+import '../../providers/student_provider.dart';
 import '../../models/bmi_record.dart';
 import '../../models/student.dart';
 import 'package:intl/intl.dart';
@@ -39,6 +43,13 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
   String? _healthStatus;
   int? _editingBMIRecordId; // Track if we're editing an existing record
   bool _isInitializing = false;
+  
+  // Search functionality
+  final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
+  String _searchQuery = '';
+  bool _showDropdown = false;
+  String _selectedFilter = 'all'; // 'all', 'active', 'inactive'
 
   @override
   void initState() {
@@ -47,6 +58,13 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
     if (widget.initialStudent != null) {
       _initializeWithStudent(widget.initialStudent!);
     }
+    
+    // Setup focus listener
+    _searchFocusNode.addListener(() {
+      if (_searchFocusNode.hasFocus) {
+        setState(() => _showDropdown = true);
+      }
+    });
   }
 
   Future<void> _initializeWithStudent(Student student) async {
@@ -58,6 +76,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
       setState(() {
         _selectedStudentId = student.id;
         _selectedStudent = student;
+        _searchController.text = student.name;
       });
       
       // Load BMI history
@@ -69,9 +88,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
       if (!mounted) return;
       setState(() => _isInitializing = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to initialize: $e')),
-        );
+        SuccessSnackbar.showError(context, 'Failed to initialize: ${e.toString()}');
       }
     }
   }
@@ -80,7 +97,37 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
   void dispose() {
     _heightController.dispose();
     _weightController.dispose();
+    _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
+  }
+  
+  void _clearSearch() {
+    setState(() {
+      _searchQuery = '';
+      _searchController.clear();
+    });
+  }
+  
+  void _selectStudent(Student student) {
+    setState(() {
+      _selectedStudentId = student.id;
+      _selectedStudent = student;
+      _searchController.text = student.name;
+      _showDropdown = false;
+      _searchFocusNode.unfocus();
+    });
+    _loadBMIHistory();
+  }
+  
+  void _clearSelection() {
+    setState(() {
+      _selectedStudentId = null;
+      _selectedStudent = null;
+      _searchController.clear();
+      _searchQuery = '';
+      _bmiHistory = [];
+    });
   }
 
   void _calculateBMI() {
@@ -134,18 +181,14 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
       if (!mounted) return;
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load BMI history: $e')),
-        );
+        SuccessSnackbar.showError(context, 'Failed to load BMI history: ${e.toString()}');
       }
     }
   }
 
   Future<void> _saveBMIRecord() async {
     if (_selectedStudentId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a student')),
-      );
+      SuccessSnackbar.showError(context, 'Please select a student');
       return;
     }
 
@@ -153,9 +196,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
     final weightText = _weightController.text.trim();
 
     if (heightText.isEmpty || weightText.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter height and weight')),
-      );
+      SuccessSnackbar.showError(context, 'Please enter height and weight');
       return;
     }
 
@@ -164,9 +205,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
       final weight = double.parse(weightText);
 
       if (height <= 0 || weight <= 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Height and weight must be greater than 0')),
-        );
+        SuccessSnackbar.showError(context, 'Height and weight must be greater than 0');
         return;
       }
 
@@ -186,11 +225,9 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_editingBMIRecordId != null
-              ? 'BMI record updated successfully'
-              : 'BMI record saved successfully')),
-        );
+        SuccessSnackbar.show(context, _editingBMIRecordId != null
+            ? 'BMI record updated successfully'
+            : 'BMI record saved successfully');
         setState(() {
           _showAddForm = false;
           _heightController.clear();
@@ -205,9 +242,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save BMI record: $e')),
-        );
+        SuccessSnackbar.showError(context, 'Failed to save BMI record: ${e.toString()}');
       }
     }
   }
@@ -238,7 +273,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
             ),
           ),
         ),
-        body: const Center(child: LoadingSpinner()),
+        body: const Center(child: ListSkeleton(itemCount: 3)),
       );
     }
 
@@ -264,9 +299,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
             icon: const Icon(Icons.add, color: AppColors.accent),
             onPressed: () {
               if (_selectedStudentId == null) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please select a student first')),
-                );
+                SuccessSnackbar.showError(context, 'Please select a student first');
                 return;
               }
               setState(() => _showAddForm = true);
@@ -274,22 +307,49 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(AppDimensions.paddingL),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Student Selector
-              _buildStudentSelector(),
+      body: GestureDetector(
+        onTap: () {
+          // Close dropdown when tapping outside
+          if (_showDropdown) {
+            setState(() {
+              _showDropdown = false;
+              _searchFocusNode.unfocus();
+            });
+          }
+        },
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(AppDimensions.paddingL),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Student Selector
+                GestureDetector(
+                  onTap: () {}, // Prevent closing when tapping on the selector
+                  child: _buildStudentSelector(),
+                ),
 
-              if (_selectedStudentId != null) ...[
-                const SizedBox(height: AppDimensions.spacingL),
+                if (_selectedStudentId != null) ...[
+                  const SizedBox(height: AppDimensions.spacingL),
 
-                // BMI Trend Chart
-                if (_bmiHistory.length >= 2) ...[
+                  // BMI Trend Chart
+                  if (_bmiHistory.length >= 2) ...[
+                    const Text(
+                      'BMI Trend Chart',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: AppDimensions.spacingM),
+                    _buildBMITrendChart(),
+                    const SizedBox(height: AppDimensions.spacingL),
+                  ],
+
+                  // BMI History
                   const Text(
-                    'BMI Trend Chart',
+                    'BMI History',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
@@ -297,47 +357,34 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
                     ),
                   ),
                   const SizedBox(height: AppDimensions.spacingM),
-                  _buildBMITrendChart(),
-                  const SizedBox(height: AppDimensions.spacingL),
-                ],
 
-                // BMI History
-                const Text(
-                  'BMI History',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: AppDimensions.spacingM),
-
-                if (_isLoading)
-                  const Center(child: LoadingSpinner())
-                else if (_bmiHistory.isEmpty)
-                  Center(
-                    child: Column(
-                      children: [
-                        const Icon(
-                          Icons.monitor_weight_outlined,
-                          size: 64,
-                          color: AppColors.textSecondary,
-                        ),
-                        const SizedBox(height: AppDimensions.spacingM),
-                        const Text(
-                          'No BMI records yet',
-                          style: TextStyle(
+                  if (_isLoading)
+                    const Center(child: ListSkeleton(itemCount: 3))
+                  else if (_bmiHistory.isEmpty)
+                    Center(
+                      child: Column(
+                        children: [
+                          const Icon(
+                            Icons.monitor_weight_outlined,
+                            size: 64,
                             color: AppColors.textSecondary,
-                            fontSize: 16,
                           ),
-                        ),
-                      ],
-                    ),
-                  )
-                else
-                  ..._bmiHistory.map((record) => _buildBMICard(record)),
+                          const SizedBox(height: AppDimensions.spacingM),
+                          const Text(
+                            'No BMI records yet',
+                            style: TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    ..._bmiHistory.map((record) => _buildBMICard(record)),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -345,55 +392,234 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
   }
 
   Widget _buildStudentSelector() {
-    return FutureBuilder<List<Student>>(
-      future: ref.read(studentServiceProvider).getStudents(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const LoadingSpinner();
-        }
-
-        if (snapshot.hasError) {
-          return ErrorDisplay(
-            message: 'Failed to load students',
-            onRetry: () => setState(() {}),
-          );
-        }
-
-        final students = snapshot.data ?? [];
-        if (students.isEmpty) {
-          return const Text(
-            'No students available',
-            style: TextStyle(color: AppColors.textSecondary),
-          );
-        }
-
-        return NeumorphicContainer(
-          padding: const EdgeInsets.all(AppDimensions.paddingM),
-          child: DropdownButtonFormField<int>(
-            initialValue: _selectedStudentId,
-            decoration: const InputDecoration(
-              labelText: 'Select Student',
-              labelStyle: TextStyle(color: AppColors.textSecondary),
-              border: InputBorder.none,
-            ),
-            dropdownColor: AppColors.cardBackground,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Search Field
+        NeumorphicContainer(
+          padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
+          child: TextField(
+            controller: _searchController,
+            focusNode: _searchFocusNode,
             style: const TextStyle(color: AppColors.textPrimary),
-            items: students.map((student) {
-              return DropdownMenuItem<int>(
-                value: student.id,
-                child: Text(student.name),
-              );
-            }).toList(),
+            decoration: InputDecoration(
+              hintText: _selectedStudent != null 
+                  ? _selectedStudent!.name 
+                  : 'Search students...',
+              hintStyle: const TextStyle(color: AppColors.textSecondary),
+              border: InputBorder.none,
+              icon: const Icon(Icons.search, color: AppColors.textSecondary),
+              suffixIcon: _searchQuery.isNotEmpty || _selectedStudent != null
+                  ? IconButton(
+                      icon: const Icon(Icons.close, size: 20, color: AppColors.textSecondary),
+                      onPressed: () {
+                        if (_selectedStudent != null) {
+                          _clearSelection();
+                        } else {
+                          _clearSearch();
+                        }
+                      },
+                    )
+                  : null,
+            ),
+            onTap: () {
+              setState(() => _showDropdown = true);
+            },
             onChanged: (value) {
               setState(() {
-                _selectedStudentId = value;
-                _selectedStudent = students.firstWhere((s) => s.id == value);
+                _searchQuery = value;
+                _showDropdown = true;
               });
-              _loadBMIHistory();
             },
           ),
-        );
-      },
+        ),
+        
+        // Filter Chips
+        if (_showDropdown) ...[
+          const SizedBox(height: AppDimensions.spacingM),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _FilterChip(
+                  label: 'All',
+                  isSelected: _selectedFilter == 'all',
+                  onTap: () => setState(() => _selectedFilter = 'all'),
+                ),
+                const SizedBox(width: AppDimensions.spacingS),
+                _FilterChip(
+                  label: 'Active',
+                  isSelected: _selectedFilter == 'active',
+                  onTap: () => setState(() => _selectedFilter = 'active'),
+                  color: AppColors.success,
+                ),
+                const SizedBox(width: AppDimensions.spacingS),
+                _FilterChip(
+                  label: 'Inactive',
+                  isSelected: _selectedFilter == 'inactive',
+                  onTap: () => setState(() => _selectedFilter = 'inactive'),
+                  color: AppColors.error,
+                ),
+              ],
+            ),
+          ),
+        ],
+        
+        // Dropdown List
+        if (_showDropdown) ...[
+          const SizedBox(height: AppDimensions.spacingM),
+          _buildDropdownList(),
+        ],
+      ],
+    );
+  }
+  
+  Widget _buildDropdownList() {
+    final studentsAsync = _searchQuery.isEmpty
+        ? ref.watch(studentListProvider)
+        : ref.watch(studentSearchProvider(_searchQuery));
+    
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 300),
+      decoration: BoxDecoration(
+        color: AppColors.cardBackground,
+        borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: studentsAsync.when(
+        loading: () => const Padding(
+          padding: EdgeInsets.all(AppDimensions.paddingM),
+          child: Center(child: ListSkeleton(itemCount: 3)),
+        ),
+        error: (error, stack) => Padding(
+          padding: const EdgeInsets.all(AppDimensions.paddingM),
+          child: ErrorDisplay(
+            message: 'Failed to load students',
+            onRetry: () => ref.invalidate(studentListProvider),
+          ),
+        ),
+        data: (allStudents) {
+          // Apply status filter
+          var filteredStudents = allStudents.where((student) {
+            if (_selectedFilter == 'active') {
+              return student.status == 'active';
+            } else if (_selectedFilter == 'inactive') {
+              return student.status == 'inactive';
+            }
+            return true;
+          }).toList();
+
+          // Sort filtered students alphabetically by name
+          filteredStudents.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+          if (filteredStudents.isEmpty) {
+            return Padding(
+              padding: const EdgeInsets.all(AppDimensions.paddingL),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.people_outline,
+                      size: 48,
+                      color: AppColors.textSecondary,
+                    ),
+                    const SizedBox(height: AppDimensions.spacingM),
+                    Text(
+                      _selectedFilter == 'active'
+                          ? 'No active students found'
+                          : _selectedFilter == 'inactive'
+                              ? 'No inactive students found'
+                              : 'No students found',
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
+
+          return ListView.builder(
+            shrinkWrap: true,
+            padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
+            itemCount: filteredStudents.length,
+            itemBuilder: (context, index) {
+              final student = filteredStudents[index];
+              return _buildStudentListItem(student);
+            },
+          );
+        },
+      ),
+    );
+  }
+  
+  Widget _buildStudentListItem(Student student) {
+    return InkWell(
+      onTap: () => _selectStudent(student),
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppDimensions.paddingM,
+          vertical: AppDimensions.spacingM,
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    student.name,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  if (student.email.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      student.email,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimensions.spacingM,
+                vertical: AppDimensions.spacingS,
+              ),
+              decoration: BoxDecoration(
+                color: student.status == 'active'
+                    ? AppColors.success
+                    : AppColors.error,
+                borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+              ),
+              child: Text(
+                student.status.toUpperCase(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -540,7 +766,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
                     padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingM),
                   ),
                   child: _isLoading
-                      ? const LoadingSpinner()
+                      ? const ListSkeleton(itemCount: 3)
                       : Text(
                           _editingBMIRecordId != null ? 'Update BMI Record' : 'Save BMI Record',
                           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
@@ -566,45 +792,35 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
   }
 
   Future<void> _deleteBMIRecord(BMIRecord record) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.cardBackground,
-        title: const Text('Delete BMI Record', style: TextStyle(color: AppColors.textPrimary)),
-        content: const Text('Are you sure you want to delete this BMI record?', style: TextStyle(color: AppColors.textSecondary)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: AppColors.error)),
-          ),
-        ],
-      ),
+    final widgetRef = ref;
+    final isMounted = mounted;
+    
+    ConfirmationDialog.showDelete(
+      context,
+      'BMI Record',
+      onConfirm: () async {
+        setState(() => _isLoading = true);
+        try {
+          final bmiService = widgetRef.read(bmiServiceProvider);
+          await bmiService.deleteBMIRecord(record.id);
+          // Invalidate related providers
+          if (_selectedStudentId != null) {
+            widgetRef.invalidate(bmiByStudentProvider(_selectedStudentId!));
+            widgetRef.invalidate(latestBmiProvider(_selectedStudentId!));
+            widgetRef.invalidate(bmiTrendProvider(_selectedStudentId!));
+          }
+          if (isMounted && mounted) {
+            SuccessSnackbar.show(context, 'BMI record deleted successfully');
+            _loadBMIHistory();
+          }
+        } catch (e) {
+          setState(() => _isLoading = false);
+          if (isMounted && mounted) {
+            SuccessSnackbar.showError(context, 'Failed to delete BMI record: ${e.toString()}');
+          }
+        }
+      },
     );
-
-    if (confirm == true && mounted) {
-      setState(() => _isLoading = true);
-      try {
-        final bmiService = ref.read(bmiServiceProvider);
-        await bmiService.deleteBMIRecord(record.id);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('BMI record deleted successfully')),
-          );
-          _loadBMIHistory();
-        }
-      } catch (e) {
-        setState(() => _isLoading = false);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to delete BMI record: $e')),
-          );
-        }
-      }
-    }
   }
 
   Widget _buildBMICard(BMIRecord record) {
@@ -955,6 +1171,50 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _FilterChip extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final Color? color;
+
+  const _FilterChip({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+    this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppDimensions.spacingM,
+          vertical: AppDimensions.spacingS,
+        ),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? (color ?? AppColors.accent).withOpacity(0.2)
+              : AppColors.cardBackground,
+          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+          border: Border.all(
+            color: isSelected ? (color ?? AppColors.accent) : Colors.transparent,
+            width: 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? (color ?? AppColors.accent) : AppColors.textSecondary,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
+      ),
     );
   }
 }

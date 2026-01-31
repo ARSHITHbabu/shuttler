@@ -4,8 +4,14 @@ import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
-import '../../providers/service_providers.dart';
+import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/error_widget.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/student_provider.dart';
+import 'student_attendance_screen.dart';
+import 'student_performance_screen.dart';
+import 'student_bmi_screen.dart';
+import 'student_fees_screen.dart';
 
 /// Student Home Screen - Dashboard overview
 /// READ-ONLY view of student's personal statistics and upcoming sessions
@@ -17,156 +23,89 @@ class StudentHomeScreen extends ConsumerStatefulWidget {
 }
 
 class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
-  bool _isLoading = true;
-  String _studentName = '';
-  Map<String, dynamic> _stats = {};
-  List<Map<String, dynamic>> _upcomingSessions = [];
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadData();
-  }
-
-  Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    try {
-      final storageService = ref.read(storageServiceProvider);
-      final apiService = ref.read(apiServiceProvider);
-      final userId = storageService.getUserId();
-
-      if (userId == null) {
-        throw Exception('User not logged in');
-      }
-
-      // Load student details
-      final studentResponse = await apiService.get('/api/students/$userId');
-      if (studentResponse.statusCode == 200) {
-        final studentData = studentResponse.data;
-        _studentName = studentData['name'] ?? 'Student';
-      }
-
-      // Load student stats
-      try {
-        final statsResponse = await apiService.get('/api/students/$userId/stats');
-        if (statsResponse.statusCode == 200) {
-          _stats = Map<String, dynamic>.from(statsResponse.data);
-        }
-      } catch (e) {
-        // Stats endpoint may not exist yet, use defaults
-        _stats = {
-          'attendance_rate': 0.0,
-          'performance_score': 0.0,
-          'bmi_status': 'N/A',
-          'fee_status': 'N/A',
-          'pending_fees': 0.0,
-        };
-      }
-
-      // Load upcoming sessions
-      try {
-        final sessionsResponse = await apiService.get('/api/students/$userId/upcoming-sessions');
-        if (sessionsResponse.statusCode == 200) {
-          _upcomingSessions = List<Map<String, dynamic>>.from(sessionsResponse.data);
-        }
-      } catch (e) {
-        // Sessions endpoint may not exist yet
-        _upcomingSessions = [];
-      }
-
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _error = e.toString().replaceAll('Exception: ', '');
-        });
-      }
-    }
-  }
+  // Removed manual state management - using providers instead
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    if (_isLoading) {
-      return const Center(child: LoadingSpinner());
-    }
-
-    if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.error_outline,
-              size: 48,
-              color: isDark ? AppColors.error : AppColorsLight.error,
-            ),
-            const SizedBox(height: AppDimensions.spacingM),
-            Text(
-              _error!,
-              style: TextStyle(
-                color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: AppDimensions.spacingL),
-            ElevatedButton(
-              onPressed: _loadData,
-              child: const Text('Retry'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return RefreshIndicator(
-      onRefresh: _loadData,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            _buildHeader(isDark),
-
-            // Stats Grid
-            _buildStatsGrid(isDark),
-
-            const SizedBox(height: AppDimensions.spacingL),
-
-            // Today's Insights
-            _buildTodaysInsights(isDark),
-
-            const SizedBox(height: AppDimensions.spacingL),
-
-            // Upcoming Sessions
-            _buildUpcomingSessions(isDark),
-
-            const SizedBox(height: AppDimensions.spacingL),
-
-            // Quick Actions
-            _buildQuickActions(isDark),
-
-            const SizedBox(height: 100), // Space for bottom nav
-          ],
+    // Get user ID from auth provider
+    final authStateAsync = ref.watch(authProvider);
+    
+    return authStateAsync.when(
+      loading: () => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: const Center(child: DashboardSkeleton()),
+      ),
+      error: (error, stack) => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: ErrorDisplay(
+          message: 'Failed to load user data: ${error.toString()}',
+          onRetry: () => ref.invalidate(authProvider),
         ),
       ),
+      data: (authState) {
+        if (authState is! Authenticated) {
+          return Scaffold(
+            backgroundColor: Colors.transparent,
+            body: ErrorDisplay(
+              message: 'Please log in to view dashboard',
+              onRetry: () => ref.invalidate(authProvider),
+            ),
+          );
+        }
+
+        final userId = authState.userId;
+        final dashboardAsync = ref.watch(studentDashboardProvider(userId));
+
+        return RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(studentDashboardProvider(userId));
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: dashboardAsync.when(
+              loading: () => const DashboardSkeleton(),
+              error: (error, stack) => ErrorDisplay(
+                message: 'Failed to load dashboard: ${error.toString()}',
+                onRetry: () => ref.invalidate(studentDashboardProvider(userId)),
+              ),
+              data: (dashboardData) => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  _buildHeader(isDark, dashboardData.studentName),
+
+                  // Stats Grid
+                  _buildStatsGrid(
+                    context,
+                    isDark,
+                    dashboardData.attendanceRate,
+                    dashboardData.performanceScore,
+                  ),
+
+                  const SizedBox(height: AppDimensions.spacingL),
+
+                  // Upcoming Sessions
+                  _buildUpcomingSessions(isDark, dashboardData.upcomingSessions),
+
+                  const SizedBox(height: AppDimensions.spacingL),
+
+                  // Quick Actions
+                  _buildQuickActions(context, isDark),
+
+                  const SizedBox(height: 100), // Space for bottom nav
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildHeader(bool isDark) {
+  Widget _buildHeader(bool isDark, String studentName) {
     return Padding(
       padding: const EdgeInsets.all(AppDimensions.paddingL),
       child: Column(
@@ -181,7 +120,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            _studentName,
+            studentName,
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w600,
@@ -201,11 +140,12 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
     );
   }
 
-  Widget _buildStatsGrid(bool isDark) {
-    final attendanceRate = (_stats['attendance_rate'] ?? 0.0).toDouble();
-    final performanceScore = (_stats['performance_score'] ?? 0.0).toDouble();
-    final bmiStatus = _stats['bmi_status']?.toString() ?? 'N/A';
-    final feeStatus = _stats['fee_status']?.toString() ?? 'N/A';
+  Widget _buildStatsGrid(
+    BuildContext context,
+    bool isDark,
+    double attendanceRate,
+    double performanceScore,
+  ) {
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
@@ -215,7 +155,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
         physics: const NeverScrollableScrollPhysics(),
         crossAxisSpacing: AppDimensions.spacingM,
         mainAxisSpacing: AppDimensions.spacingM,
-        childAspectRatio: 1.1,
+        childAspectRatio: 0.85,
         children: [
           _StatCard(
             icon: Icons.check_circle_outline,
@@ -223,123 +163,42 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
             label: 'Attendance Rate',
             isDark: isDark,
             valueColor: _getAttendanceColor(attendanceRate, isDark),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => _buildScreenWithBackground(
+                    context,
+                    const StudentAttendanceScreen(),
+                  ),
+                ),
+              );
+            },
           ),
           _StatCard(
             icon: Icons.trending_up,
             value: performanceScore > 0 ? '${performanceScore.toStringAsFixed(1)}/5' : 'N/A',
             label: 'Performance',
             isDark: isDark,
-          ),
-          _StatCard(
-            icon: Icons.monitor_weight_outlined,
-            value: bmiStatus,
-            label: 'BMI Status',
-            isDark: isDark,
-            valueColor: _getBmiStatusColor(bmiStatus, isDark),
-          ),
-          _StatCard(
-            icon: Icons.account_balance_wallet_outlined,
-            value: feeStatus,
-            label: 'Fee Status',
-            isDark: isDark,
-            valueColor: _getFeeStatusColor(feeStatus, isDark),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => _buildScreenWithBackground(
+                    context,
+                    const StudentPerformanceScreen(),
+                  ),
+                ),
+              );
+            },
           ),
         ],
       ),
     );
   }
 
-  Widget _buildTodaysInsights(bool isDark) {
-    final attendanceRate = (_stats['attendance_rate'] ?? 0.0).toDouble();
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Your Progress',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-            ),
-          ),
-          const SizedBox(height: AppDimensions.spacingM),
-          NeumorphicContainer(
-            padding: const EdgeInsets.all(AppDimensions.paddingM),
-            child: Column(
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: isDark ? AppColors.background : AppColorsLight.background,
-                        borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-                        boxShadow: NeumorphicStyles.getInsetShadow(),
-                      ),
-                      child: Icon(
-                        Icons.trending_up,
-                        size: 20,
-                        color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
-                      ),
-                    ),
-                    const SizedBox(width: AppDimensions.spacingM),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Overall Attendance',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-                            ),
-                          ),
-                          Text(
-                            '${attendanceRate.toStringAsFixed(0)}%',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w600,
-                              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppDimensions.spacingM),
-                Container(
-                  width: double.infinity,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: isDark ? AppColors.background : AppColorsLight.background,
-                    borderRadius: BorderRadius.circular(4),
-                    boxShadow: NeumorphicStyles.getSmallInsetShadow(),
-                  ),
-                  child: FractionallySizedBox(
-                    alignment: Alignment.centerLeft,
-                    widthFactor: (attendanceRate / 100).clamp(0.0, 1.0),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: _getAttendanceColor(attendanceRate, isDark),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildUpcomingSessions(bool isDark) {
+  Widget _buildUpcomingSessions(bool isDark, List<Map<String, dynamic>> upcomingSessions) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
       child: Column(
@@ -356,7 +215,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
           const SizedBox(height: AppDimensions.spacingM),
           NeumorphicContainer(
             padding: const EdgeInsets.all(AppDimensions.paddingM),
-            child: _upcomingSessions.isEmpty
+            child: upcomingSessions.isEmpty
                 ? Padding(
                     padding: const EdgeInsets.all(AppDimensions.spacingM),
                     child: Center(
@@ -380,9 +239,9 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                     ),
                   )
                 : Column(
-                    children: _upcomingSessions.asMap().entries.map((entry) {
+                    children: upcomingSessions.asMap().entries.map((entry) {
                       final session = entry.value;
-                      final isLast = entry.key == _upcomingSessions.length - 1;
+                      final isLast = entry.key == upcomingSessions.length - 1;
                       return Column(
                         children: [
                           _UpcomingSessionItem(
@@ -406,7 +265,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
     );
   }
 
-  Widget _buildQuickActions(bool isDark) {
+  Widget _buildQuickActions(BuildContext context, bool isDark) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
       child: Column(
@@ -425,24 +284,60 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
             children: [
               Expanded(
                 child: _QuickActionButton(
-                  icon: Icons.check_circle_outline,
-                  label: 'View Attendance',
+                  icon: Icons.person_outline,
+                  label: 'Contact Owner',
+                  isDark: isDark,
+                  onTap: () => _showContactDialog(context, isDark, 'Owner'),
+                ),
+              ),
+              const SizedBox(width: AppDimensions.spacingM),
+              Expanded(
+                child: _QuickActionButton(
+                  icon: Icons.sports_tennis_outlined,
+                  label: 'Contact Coach',
+                  isDark: isDark,
+                  onTap: () => _showContactDialog(context, isDark, 'Coach'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppDimensions.spacingM),
+          Row(
+            children: [
+              Expanded(
+                child: _QuickActionButton(
+                  icon: Icons.monitor_weight_outlined,
+                  label: 'BMI',
                   isDark: isDark,
                   onTap: () {
-                    // Navigate to attendance tab (index 1)
-                    // This will be handled by parent dashboard
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => _buildScreenWithBackground(
+                          context,
+                          const StudentBMIScreen(),
+                        ),
+                      ),
+                    );
                   },
                 ),
               ),
               const SizedBox(width: AppDimensions.spacingM),
               Expanded(
                 child: _QuickActionButton(
-                  icon: Icons.trending_up,
-                  label: 'View Performance',
+                  icon: Icons.account_balance_wallet_outlined,
+                  label: 'Fees',
                   isDark: isDark,
                   onTap: () {
-                    // Navigate to performance tab (index 2)
-                    // This will be handled by parent dashboard
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => _buildScreenWithBackground(
+                          context,
+                          const StudentFeesScreen(),
+                        ),
+                      ),
+                    );
                   },
                 ),
               ),
@@ -452,6 +347,57 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
       ),
     );
   }
+
+  Widget _buildScreenWithBackground(BuildContext context, Widget screen) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    // Wrap the screen in a Scaffold with gradient background
+    // The screen's Scaffold has transparent background, so the gradient will show through
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: isDark ? AppColors.backgroundGradient : AppColorsLight.backgroundGradient,
+        ),
+        child: screen,
+      ),
+    );
+  }
+
+  void _showContactDialog(BuildContext context, bool isDark, String contactType) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: isDark ? AppColors.cardBackground : AppColorsLight.cardBackground,
+        title: Text(
+          'Contact $contactType',
+          style: TextStyle(
+            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+          ),
+        ),
+        content: Text(
+          'Contact information will be available here.\n\nYou can reach out through:\n• Phone\n• Email\n• In-person at the academy',
+          style: TextStyle(
+            color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(
+              'Close',
+              style: TextStyle(
+                color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Removed _calculateStats - now handled by studentDashboardProvider
 
   String _getFormattedDate() {
     final now = DateTime.now();
@@ -470,35 +416,6 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
       return isDark ? AppColors.error : AppColorsLight.error;
     }
   }
-
-  Color _getBmiStatusColor(String status, bool isDark) {
-    switch (status.toLowerCase()) {
-      case 'normal':
-      case 'healthy':
-        return isDark ? AppColors.success : AppColorsLight.success;
-      case 'underweight':
-      case 'overweight':
-        return Colors.orange;
-      case 'obese':
-        return isDark ? AppColors.error : AppColorsLight.error;
-      default:
-        return isDark ? AppColors.textPrimary : AppColorsLight.textPrimary;
-    }
-  }
-
-  Color _getFeeStatusColor(String status, bool isDark) {
-    switch (status.toLowerCase()) {
-      case 'paid':
-      case 'clear':
-        return isDark ? AppColors.success : AppColorsLight.success;
-      case 'pending':
-        return Colors.orange;
-      case 'overdue':
-        return isDark ? AppColors.error : AppColorsLight.error;
-      default:
-        return isDark ? AppColors.textPrimary : AppColorsLight.textPrimary;
-    }
-  }
 }
 
 class _StatCard extends StatelessWidget {
@@ -507,6 +424,7 @@ class _StatCard extends StatelessWidget {
   final String label;
   final bool isDark;
   final Color? valueColor;
+  final VoidCallback? onTap;
 
   const _StatCard({
     required this.icon,
@@ -514,13 +432,17 @@ class _StatCard extends StatelessWidget {
     required this.label,
     required this.isDark,
     this.valueColor,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return NeumorphicContainer(
-      padding: const EdgeInsets.all(AppDimensions.paddingM),
-      child: Column(
+    return GestureDetector(
+      onTap: onTap,
+      child: NeumorphicContainer(
+        padding: const EdgeInsets.all(AppDimensions.paddingM),
+        child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
@@ -537,24 +459,33 @@ class _StatCard extends StatelessWidget {
               color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
             ),
           ),
-          const SizedBox(height: AppDimensions.spacingM),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w600,
-              color: valueColor ?? (isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
+          const SizedBox(height: AppDimensions.spacingS),
+          Flexible(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w600,
+                color: valueColor ?? (isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
+                height: 1.2,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Text(
             label,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 13,
               color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+              height: 1.2,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
+      ),
       ),
     );
   }

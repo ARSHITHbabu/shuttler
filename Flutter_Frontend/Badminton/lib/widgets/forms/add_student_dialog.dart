@@ -29,7 +29,7 @@ class _AddStudentDialogState extends ConsumerState<AddStudentDialog> {
   final _emailController = TextEditingController();
   final _guardianNameController = TextEditingController();
   final _guardianPhoneController = TextEditingController();
-  final bool _isLoading = false;
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -155,9 +155,11 @@ class _AddStudentDialogState extends ConsumerState<AddStudentDialog> {
           'Send Invite Link',
           style: TextStyle(color: AppColors.textPrimary),
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 300),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
             if (hasPhone && hasEmail) ...[
               _InviteOption(
                 icon: Icons.chat,
@@ -167,7 +169,7 @@ class _AddStudentDialogState extends ConsumerState<AddStudentDialog> {
               const SizedBox(height: AppDimensions.spacingS),
               _InviteOption(
                 icon: Icons.message,
-                label: 'Send via Text Message',
+                label: 'Send via Messages',
                 onTap: () => _sendViaSMS(phone, inviteLink),
               ),
               const SizedBox(height: AppDimensions.spacingS),
@@ -191,7 +193,7 @@ class _AddStudentDialogState extends ConsumerState<AddStudentDialog> {
               const SizedBox(height: AppDimensions.spacingS),
               _InviteOption(
                 icon: Icons.message,
-                label: 'Send via Text Message',
+                label: 'Send via Messages',
                 onTap: () => _sendViaSMS(phone, inviteLink),
               ),
               const SizedBox(height: AppDimensions.spacingS),
@@ -214,6 +216,7 @@ class _AddStudentDialogState extends ConsumerState<AddStudentDialog> {
               ),
             ],
           ],
+          ),
         ),
         actions: [
           TextButton(
@@ -289,9 +292,14 @@ class _AddStudentDialogState extends ConsumerState<AddStudentDialog> {
   Widget build(BuildContext context) {
     return Dialog(
       backgroundColor: Colors.transparent,
-      child: NeumorphicContainer(
-        padding: const EdgeInsets.all(AppDimensions.paddingL),
-        child: SingleChildScrollView(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.9,
+          maxHeight: MediaQuery.of(context).size.height * 0.9,
+        ),
+        child: NeumorphicContainer(
+          padding: const EdgeInsets.all(AppDimensions.paddingL),
+          child: SingleChildScrollView(
           child: Form(
             key: _formKey,
             child: Column(
@@ -377,14 +385,18 @@ class _AddStudentDialogState extends ConsumerState<AddStudentDialog> {
                   keyboardType: TextInputType.phone,
                 ),
                 const SizedBox(height: AppDimensions.spacingL),
-                NeumorphicButton(
-                  text: _isLoading ? 'Sending...' : 'Send Invite Link',
-                  onPressed: _isLoading ? null : _handleSendInvite,
-                  isAccent: true,
+                SizedBox(
+                  width: double.infinity,
+                  child: NeumorphicButton(
+                    text: _isLoading ? 'Sending...' : 'Send Invite Link',
+                    onPressed: _isLoading ? null : _handleSendInvite,
+                    isAccent: true,
+                  ),
                 ),
               ],
             ),
           ),
+        ),
         ),
       ),
     );
@@ -433,16 +445,24 @@ class _InviteOption extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: NeumorphicContainer(
-        padding: const EdgeInsets.all(AppDimensions.paddingM),
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppDimensions.paddingM,
+          vertical: AppDimensions.paddingS,
+        ),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: AppColors.accent, size: 24),
-            const SizedBox(width: AppDimensions.spacingM),
-            Text(
-              label,
-              style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 16,
+            Icon(icon, color: AppColors.accent, size: 20),
+            const SizedBox(width: AppDimensions.spacingS),
+            Flexible(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 14,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],

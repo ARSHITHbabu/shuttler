@@ -5,7 +5,6 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../models/student.dart';
-import '../../providers/service_providers.dart';
 import '../../models/batch.dart';
 import '../../core/services/batch_enrollment_service.dart';
 

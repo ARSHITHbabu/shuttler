@@ -28,6 +28,16 @@ Future<List<CoachAttendance>> coachAttendance(
   return attendanceService.getCoachAttendance(date: date);
 }
 
+/// Provider for coach attendance by coach ID
+@riverpod
+Future<List<CoachAttendance>> coachAttendanceByCoachId(
+  CoachAttendanceByCoachIdRef ref,
+  int coachId,
+) async {
+  final attendanceService = ref.watch(attendanceServiceProvider);
+  return attendanceService.getCoachAttendanceByCoachId(coachId);
+}
+
 /// Provider for students in a batch (for attendance marking)
 @riverpod
 Future<List<Student>> batchStudentsForAttendance(
@@ -52,5 +62,50 @@ Future<List<Coach>> coachesForAttendance(CoachesForAttendanceRef ref) async {
     return [];
   } catch (e) {
     throw Exception('Failed to fetch coaches: ${apiService.getErrorMessage(e)}');
+  }
+}
+
+/// Provider for attendance records by student
+@riverpod
+Future<List<Attendance>> attendanceByStudent(
+  AttendanceByStudentRef ref,
+  int studentId, {
+  DateTime? startDate,
+  DateTime? endDate,
+  int? month,
+  int? year,
+}) async {
+  final apiService = ref.watch(apiServiceProvider);
+  
+  // Build query parameters
+  final queryParams = <String, dynamic>{
+    'student_id': studentId,
+  };
+  
+  // Handle month/year filter
+  if (month != null && year != null) {
+    final start = DateTime(year, month, 1);
+    final end = DateTime(year, month + 1, 0); // Last day of month
+    queryParams['start_date'] = start.toIso8601String().split('T')[0];
+    queryParams['end_date'] = end.toIso8601String().split('T')[0];
+  } else if (startDate != null && endDate != null) {
+    queryParams['start_date'] = startDate.toIso8601String().split('T')[0];
+    queryParams['end_date'] = endDate.toIso8601String().split('T')[0];
+  }
+  
+  try {
+    final response = await apiService.get(
+      ApiEndpoints.attendance,
+      queryParameters: queryParams,
+    );
+    
+    if (response.data is List) {
+      return (response.data as List)
+          .map((json) => Attendance.fromJson(json as Map<String, dynamic>))
+          .toList();
+    }
+    return [];
+  } catch (e) {
+    throw Exception('Failed to fetch attendance: ${apiService.getErrorMessage(e)}');
   }
 }

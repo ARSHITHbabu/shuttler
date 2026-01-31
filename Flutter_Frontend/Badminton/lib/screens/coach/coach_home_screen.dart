@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
+import '../../core/utils/theme_colors.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
+import '../../widgets/common/skeleton_screen.dart';
 import '../../providers/coach_provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/batch_provider.dart';
 import '../../models/schedule.dart';
+import '../../widgets/forms/add_student_dialog.dart';
+import 'coach_schedule_screen.dart';
+import 'coach_students_screen.dart';
+import 'coach_attendance_view_screen.dart';
 
 /// Coach Home Screen - Dashboard overview
 /// Shows coach's assigned batches, today's sessions, and quick stats
@@ -27,10 +32,10 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
     return authState.when(
       data: (authValue) {
         if (authValue is! Authenticated) {
-          return const Center(
+          return Center(
             child: Text(
               'Please login',
-              style: TextStyle(color: AppColors.error),
+              style: TextStyle(color: context.errorColor),
             ),
           );
         }
@@ -38,11 +43,11 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
         final coachId = authValue.userId;
         return _buildContent(coachId, authValue.userName);
       },
-      loading: () => const Center(child: LoadingSpinner()),
+      loading: () => const Center(child: DashboardSkeleton()),
       error: (error, stack) => Center(
         child: Text(
           'Error: ${error.toString()}',
-          style: const TextStyle(color: AppColors.error),
+          style: TextStyle(color: context.errorColor),
         ),
       ),
     );
@@ -69,28 +74,28 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Welcome back,',
                     style: TextStyle(
                       fontSize: 14,
-                      color: AppColors.textSecondary,
+                      color: context.textSecondaryColor,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     coachName,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+                      color: context.textPrimaryColor,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     _getFormattedDate(),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
-                      color: AppColors.textSecondary,
+                      color: context.textSecondaryColor,
                     ),
                   ),
                 ],
@@ -107,38 +112,38 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
                   physics: const NeverScrollableScrollPhysics(),
                   crossAxisSpacing: AppDimensions.spacingM,
                   mainAxisSpacing: AppDimensions.spacingM,
-                  childAspectRatio: 1.1,
+                  childAspectRatio: 0.85,
                   children: [
-                    _StatCard(
-                      icon: Icons.groups,
-                      value: stats.assignedBatches.toString(),
-                      label: 'Assigned Batches',
-                      onTap: null,
-                    ),
                     _StatCard(
                       icon: Icons.people_outline,
                       value: stats.totalStudents.toString(),
                       label: 'Total Students',
-                      onTap: null,
-                    ),
-                    _StatCard(
-                      icon: Icons.calendar_today_outlined,
-                      value: stats.sessionsToday.toString(),
-                      label: 'Sessions Today',
-                      onTap: null,
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => const CoachStudentsScreen(),
+                          ),
+                        );
+                      },
                     ),
                     _StatCard(
                       icon: Icons.trending_up,
                       value: '${stats.attendanceRate.toStringAsFixed(0)}%',
                       label: 'Attendance Rate',
-                      onTap: null,
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => const CoachAttendanceViewScreen(),
+                          ),
+                        );
+                      },
                     ),
                   ],
                 ),
               ),
               loading: () => const Padding(
                 padding: EdgeInsets.all(AppDimensions.paddingL),
-                child: Center(child: LoadingSpinner()),
+                child: GridSkeleton(itemCount: 2, crossAxisCount: 2),
               ),
               error: (error, stack) => Padding(
                 padding: const EdgeInsets.all(AppDimensions.paddingL),
@@ -154,154 +159,58 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
             // Today's Sessions
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    "Today's Sessions",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+              child: NeumorphicContainer(
+                padding: const EdgeInsets.all(AppDimensions.paddingM),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Today's Sessions",
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: context.textSecondaryColor,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: AppDimensions.spacingM),
-                  todaySessionsAsync.when(
-                    data: (sessions) {
-                      if (sessions.isEmpty) {
-                        return NeumorphicContainer(
-                          padding: const EdgeInsets.all(AppDimensions.paddingL),
-                          child: const Center(
+                    const SizedBox(height: AppDimensions.spacingM),
+                    todaySessionsAsync.when(
+                      data: (sessions) {
+                        if (sessions.isEmpty) {
+                          return Padding(
+                            padding: const EdgeInsets.all(AppDimensions.spacingM),
                             child: Text(
                               'No sessions scheduled for today',
                               style: TextStyle(
-                                fontSize: 14,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ),
-                        );
-                      }
-
-                      return Column(
-                        children: sessions.map((session) {
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
-                            child: NeumorphicContainer(
-                              padding: const EdgeInsets.all(AppDimensions.paddingM),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 60,
-                                    height: 60,
-                                    decoration: BoxDecoration(
-                                      color: AppColors.background,
-                                      borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-                                      boxShadow: NeumorphicStyles.getInsetShadow(),
-                                    ),
-                                    child: Column(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Text(
-                                          session.startTime?.split(':')[0] ?? '--',
-                                          style: const TextStyle(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.w600,
-                                            color: AppColors.textPrimary,
-                                          ),
-                                        ),
-                                        Text(
-                                          session.startTime?.split(':')[1] ?? '--',
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            color: AppColors.textSecondary,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: AppDimensions.spacingM),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          session.batchName ?? session.title,
-                                          style: const TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w600,
-                                            color: AppColors.textPrimary,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          '${session.startTime ?? '--'} - ${session.endTime ?? '--'}',
-                                          style: const TextStyle(
-                                            fontSize: 12,
-                                            color: AppColors.textSecondary,
-                                          ),
-                                        ),
-                                        if (session.location != null) ...[
-                                          const SizedBox(height: 4),
-                                          Row(
-                                            children: [
-                                              const Icon(
-                                                Icons.location_on_outlined,
-                                                size: 12,
-                                                color: AppColors.textSecondary,
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                session.location!,
-                                                style: const TextStyle(
-                                                  fontSize: 12,
-                                                  color: AppColors.textSecondary,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: AppDimensions.spacingM,
-                                      vertical: AppDimensions.spacingS,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: _getSessionStatusColor(session),
-                                      borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                                    ),
-                                    child: Text(
-                                      _getSessionStatus(session).toUpperCase(),
-                                      style: const TextStyle(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.white,
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                                fontSize: 12,
+                                color: context.textSecondaryColor,
                               ),
                             ),
                           );
-                        }).toList(),
-                      );
-                    },
-                    loading: () => const NeumorphicContainer(
-                      padding: EdgeInsets.all(AppDimensions.paddingL),
-                      child: Center(child: LoadingSpinner()),
+                        }
+
+                        return Column(
+                          children: sessions.asMap().entries.map((entry) {
+                            final session = entry.value;
+                            final isLast = entry.key == sessions.length - 1;
+                            return Column(
+                              children: [
+                                _TodaySessionItem(
+                                  name: session.batchName ?? session.title,
+                                  time: session.startTime != null && session.endTime != null
+                                      ? '${session.startTime} - ${session.endTime}'
+                                      : session.startTime ?? '--',
+                                  batchId: session.batchId,
+                                ),
+                                if (!isLast) const SizedBox(height: AppDimensions.spacingS),
+                              ],
+                            );
+                          }).toList(),
+                        );
+                      },
+                      loading: () => const ListSkeleton(itemCount: 3),
+                      error: (error, stack) => const SizedBox.shrink(),
                     ),
-                    error: (error, stack) => NeumorphicContainer(
-                      padding: const EdgeInsets.all(AppDimensions.paddingL),
-                      child: ErrorDisplay(
-                        message: 'Failed to load sessions',
-                        onRetry: () => ref.invalidate(coachTodaySessionsProvider(coachId)),
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
 
@@ -313,12 +222,12 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Quick Actions',
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+                      color: context.textPrimaryColor,
                     ),
                   ),
                   const SizedBox(height: AppDimensions.spacingM),
@@ -326,12 +235,9 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
                     children: [
                       Expanded(
                         child: _QuickActionButton(
-                          icon: Icons.check_circle_outline,
-                          label: 'Mark Attendance',
-                          onTap: () {
-                            // Switch to attendance tab - handled by parent dashboard
-                            // This would need to be passed via callback or state management
-                          },
+                          icon: Icons.add,
+                          label: 'Add Student',
+                          onTap: () => _showAddStudentDialog(context),
                         ),
                       ),
                       const SizedBox(width: AppDimensions.spacingM),
@@ -340,7 +246,11 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
                           icon: Icons.calendar_today_outlined,
                           label: 'View Schedule',
                           onTap: () {
-                            // Navigate to schedule screen - will be in More menu
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => const CoachScheduleScreen(),
+                              ),
+                            );
                           },
                         ),
                       ),
@@ -365,13 +275,20 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
     return '${weekdays[now.weekday - 1]}, ${months[now.month - 1]} ${now.day}, ${now.year}';
   }
 
-  Color _getSessionStatusColor(Schedule session) {
+  void _showAddStudentDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => const AddStudentDialog(),
+    );
+  }
+
+  Color _getSessionStatusColor(Schedule session, BuildContext context) {
     final now = DateTime.now();
     final sessionDate = DateTime(session.date.year, session.date.month, session.date.day);
     final today = DateTime(now.year, now.month, now.day);
 
     if (sessionDate.isBefore(today)) {
-      return AppColors.textSecondary; // Completed
+      return context.textSecondaryColor; // Completed
     } else if (sessionDate.isAtSameMomentAs(today)) {
       // Check if session time has passed
       if (session.startTime != null) {
@@ -382,13 +299,13 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
           final sessionDateTime = DateTime(now.year, now.month, now.day, sessionHour, sessionMinute);
           
           if (now.isAfter(sessionDateTime)) {
-            return AppColors.success; // Ongoing
+            return context.successColor; // Ongoing
           }
         }
       }
-      return AppColors.accent; // Upcoming
+      return context.accentColor; // Upcoming
     } else {
-      return AppColors.accent; // Upcoming
+      return context.accentColor; // Upcoming
     }
   }
 
@@ -419,6 +336,147 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
   }
 }
 
+class _TodaySessionItem extends ConsumerWidget {
+  final String name;
+  final String time;
+  final int? batchId;
+
+  const _TodaySessionItem({
+    required this.name,
+    required this.time,
+    this.batchId,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (batchId == null) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: context.textPrimaryColor,
+                ),
+              ),
+              Text(
+                time,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: context.textSecondaryColor,
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
+    final batchStudentsAsync = ref.watch(batchStudentsProvider(batchId!));
+    
+    return batchStudentsAsync.when(
+      data: (students) {
+        final studentCount = students.length;
+        
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  name,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: context.textPrimaryColor,
+                  ),
+                ),
+                Text(
+                  time,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: context.textSecondaryColor,
+                  ),
+                ),
+              ],
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimensions.spacingM,
+                vertical: AppDimensions.spacingS,
+              ),
+              decoration: BoxDecoration(
+                color: context.backgroundColor,
+                borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                boxShadow: NeumorphicStyles.getSmallInsetShadow(),
+              ),
+              child: Text(
+                '$studentCount ${studentCount == 1 ? 'student' : 'students'}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: context.iconPrimaryColor,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+      loading: () => Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: context.textPrimaryColor,
+                ),
+              ),
+              Text(
+                time,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: context.textSecondaryColor,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      error: (_, __) => Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                name,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: context.textPrimaryColor,
+                ),
+              ),
+              Text(
+                time,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: context.textSecondaryColor,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _StatCard extends StatelessWidget {
   final IconData icon;
   final String value;
@@ -438,6 +496,7 @@ class _StatCard extends StatelessWidget {
       padding: const EdgeInsets.all(AppDimensions.paddingM),
       onTap: onTap,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -447,40 +506,48 @@ class _StatCard extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: AppColors.background,
+                  color: context.backgroundColor,
                   borderRadius: BorderRadius.circular(AppDimensions.radiusM),
                   boxShadow: NeumorphicStyles.getInsetShadow(),
                 ),
                 child: Icon(
                   icon,
                   size: 20,
-                  color: AppColors.iconPrimary,
+                  color: context.iconPrimaryColor,
                 ),
               ),
               if (onTap != null)
-                const Icon(
+                Icon(
                   Icons.chevron_right,
                   size: 16,
-                  color: AppColors.textTertiary,
+                  color: context.textTertiaryColor,
                 ),
             ],
           ),
-          const SizedBox(height: AppDimensions.spacingM),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
+          const SizedBox(height: AppDimensions.spacingS),
+          Flexible(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w600,
+                color: context.textPrimaryColor,
+                height: 1.2,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Text(
             label,
-            style: const TextStyle(
-              fontSize: 14,
-              color: AppColors.textSecondary,
+            style: TextStyle(
+              fontSize: 13,
+              color: context.textSecondaryColor,
+              height: 1.2,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -517,14 +584,14 @@ class _QuickActionButton extends StatelessWidget {
             Icon(
               icon,
               size: 24,
-              color: AppColors.iconPrimary,
+              color: context.iconPrimaryColor,
             ),
             const SizedBox(height: AppDimensions.spacingS),
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
-                color: AppColors.textPrimary,
+                color: context.textPrimaryColor,
               ),
               textAlign: TextAlign.center,
             ),

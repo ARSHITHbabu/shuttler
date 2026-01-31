@@ -83,9 +83,11 @@ class AuthService {
   }) async {
     try {
       // Determine endpoint based on user type
-      // Owner uses coach login endpoint (owner is admin coach)
+      // Each user type has its own login endpoint
       String endpoint;
-      if (userType == 'coach' || userType == 'owner') {
+      if (userType == 'owner') {
+        endpoint = ApiEndpoints.ownerLogin;  // /owners/login
+      } else if (userType == 'coach') {
         endpoint = '/coaches/login';
       } else {
         endpoint = '/students/login';
@@ -107,10 +109,15 @@ class AuthService {
           throw Exception(data['message'] ?? 'Login failed');
         }
 
-        // Extract user data from nested object
-        final userData = userType == 'student' 
-            ? data['student'] 
-            : data['coach'];
+        // Extract user data from nested object based on user type
+        Map<String, dynamic>? userData;
+        if (userType == 'student') {
+          userData = data['student'];
+        } else if (userType == 'owner') {
+          userData = data['owner'];
+        } else {
+          userData = data['coach'];
+        }
 
         if (userData == null) {
           throw Exception('Invalid response format');
@@ -128,9 +135,75 @@ class AuthService {
         await _storageService.saveRememberMe(rememberMe);
 
         // Return user data with profile completeness for students
-        final result = {'user': userData};
-        if (userType == 'student' && data.containsKey('profile_complete')) {
-          result['profile_complete'] = data['profile_complete'];
+        final Map<String, dynamic> result = {'user': userData};
+        if (userType == 'student') {
+          // Check profile completeness from backend response or student data
+          bool profileComplete = false;
+          
+          // First check if backend explicitly returns profile_complete (at top level)
+          if (data.containsKey('profile_complete')) {
+            final profileCompleteValue = data['profile_complete'];
+            // Handle both boolean and string representations
+            profileComplete = profileCompleteValue == true || 
+                            profileCompleteValue == 'true' ||
+                            profileCompleteValue == 1;
+          }
+          
+          // If not found in response, check required profile fields from student data
+          if (!profileComplete) {
+            // Required fields: guardian_name, guardian_phone, date_of_birth, address, t_shirt_size
+            final guardianName = userData['guardian_name'];
+            final guardianPhone = userData['guardian_phone'];
+            final dateOfBirth = userData['date_of_birth'];
+            final address = userData['address'];
+            final tShirtSize = userData['t_shirt_size'];
+            
+            profileComplete = guardianName != null &&
+                guardianName.toString().trim().isNotEmpty &&
+                guardianPhone != null &&
+                guardianPhone.toString().trim().isNotEmpty &&
+                dateOfBirth != null &&
+                dateOfBirth.toString().trim().isNotEmpty &&
+                address != null &&
+                address.toString().trim().isNotEmpty &&
+                tShirtSize != null &&
+                tShirtSize.toString().trim().isNotEmpty;
+          }
+          
+          // If still not complete, try fetching student profile directly as fallback
+          if (!profileComplete && userData['id'] != null) {
+            try {
+              final studentId = userData['id'] as int;
+              final studentResponse = await _apiService.get(
+                ApiEndpoints.studentById(studentId),
+              );
+              
+              if (studentResponse.statusCode == 200) {
+                final studentProfile = studentResponse.data;
+                final guardianName = studentProfile['guardian_name'];
+                final guardianPhone = studentProfile['guardian_phone'];
+                final dateOfBirth = studentProfile['date_of_birth'];
+                final address = studentProfile['address'];
+                final tShirtSize = studentProfile['t_shirt_size'];
+                
+                profileComplete = guardianName != null &&
+                    guardianName.toString().trim().isNotEmpty &&
+                    guardianPhone != null &&
+                    guardianPhone.toString().trim().isNotEmpty &&
+                    dateOfBirth != null &&
+                    dateOfBirth.toString().trim().isNotEmpty &&
+                    address != null &&
+                    address.toString().trim().isNotEmpty &&
+                    tShirtSize != null &&
+                    tShirtSize.toString().trim().isNotEmpty;
+              }
+            } catch (e) {
+              // If fetch fails, use the value we already determined
+              // This prevents blocking login if profile endpoint is unavailable
+            }
+          }
+          
+          result['profile_complete'] = profileComplete;
         }
         return result;
       } else {
@@ -154,11 +227,14 @@ class AuthService {
   }) async {
     try {
       // Determine endpoint based on user type
+      // Each user type has its own separate endpoint and table
       String endpoint;
-      if (userType == 'coach' || userType == 'owner') {
-        endpoint = ApiEndpoints.coaches;
+      if (userType == 'owner') {
+        endpoint = ApiEndpoints.owners;  // /owners/
+      } else if (userType == 'coach') {
+        endpoint = ApiEndpoints.coaches;  // /coaches/
       } else {
-        endpoint = ApiEndpoints.students;
+        endpoint = ApiEndpoints.students;  // /students/
       }
 
       // Prepare data based on user type
@@ -169,12 +245,7 @@ class AuthService {
         'password': password,
       };
 
-      // Add role field for coaches/owners
-      if (userType == 'coach' || userType == 'owner') {
-        requestData['role'] = userType;  // Set role to "owner" or "coach"
-      }
-
-      // Add any additional data
+      // Add any additional data (specialization, experience_years, etc.)
       if (additionalData != null) {
         requestData.addAll(additionalData);
       }
@@ -189,7 +260,7 @@ class AuthService {
 
         // Registration returns user data directly (not nested like login)
         // But handle both cases just in case
-        final userData = data['coach'] ?? data['student'] ?? data;
+        final userData = data['owner'] ?? data['coach'] ?? data['student'] ?? data;
 
         if (userData['id'] == null) {
           throw Exception('Invalid response format');
@@ -273,7 +344,9 @@ class AuthService {
 
       // Make a simple API call to verify token
       String endpoint;
-      if (userType == 'coach') {
+      if (userType == 'owner') {
+        endpoint = ApiEndpoints.ownerById(userId);
+      } else if (userType == 'coach') {
         endpoint = ApiEndpoints.coachById(userId);
       } else {
         endpoint = ApiEndpoints.studentById(userId);
@@ -297,7 +370,9 @@ class AuthService {
       }
 
       String endpoint;
-      if (userType == 'coach') {
+      if (userType == 'owner') {
+        endpoint = ApiEndpoints.ownerById(userId);
+      } else if (userType == 'coach') {
         endpoint = ApiEndpoints.coachById(userId);
       } else {
         endpoint = ApiEndpoints.studentById(userId);
@@ -336,7 +411,9 @@ class AuthService {
 
       // Update token on backend
       String endpoint;
-      if (userType == 'coach') {
+      if (userType == 'owner') {
+        endpoint = ApiEndpoints.ownerById(userId);
+      } else if (userType == 'coach') {
         endpoint = ApiEndpoints.coachById(userId);
       } else {
         endpoint = ApiEndpoints.studentById(userId);

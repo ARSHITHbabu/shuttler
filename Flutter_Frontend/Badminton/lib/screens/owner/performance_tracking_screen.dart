@@ -5,9 +5,12 @@ import 'package:fl_chart/fl_chart.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/error_widget.dart';
+import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/success_snackbar.dart';
+import '../../widgets/common/confirmation_dialog.dart';
 import '../../providers/service_providers.dart';
+import '../../providers/performance_provider.dart';
 import '../../providers/batch_provider.dart';
 import '../../models/performance.dart';
 import '../../models/student.dart';
@@ -74,11 +77,7 @@ class _PerformanceTrackingScreenState
       if (!mounted) return;
       if (studentBatches.isEmpty) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Student is not enrolled in any batches'),
-            ),
-          );
+          SuccessSnackbar.showError(context, 'Student is not enrolled in any batches');
         }
         if (mounted) {
           setState(() => _isInitializing = false);
@@ -106,9 +105,7 @@ class _PerformanceTrackingScreenState
       if (!mounted) return;
       setState(() => _isInitializing = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to initialize: $e')),
-        );
+        SuccessSnackbar.showError(context, 'Failed to initialize: ${e.toString()}');
       }
     }
   }
@@ -164,9 +161,7 @@ class _PerformanceTrackingScreenState
       if (!mounted) return;
       setState(() => _loadingStudents = false);
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to load students: $e')));
+        SuccessSnackbar.showError(context, 'Failed to load students: ${e.toString()}');
       }
     }
   }
@@ -190,64 +185,41 @@ class _PerformanceTrackingScreenState
       if (!mounted) return;
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load performance history: $e')),
-        );
+        SuccessSnackbar.showError(context, 'Failed to load performance history: ${e.toString()}');
       }
     }
   }
 
   Future<void> _deletePerformance(Performance performance) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppColors.cardBackground,
-        title: const Text(
-          'Delete Performance Record',
-          style: TextStyle(color: AppColors.textPrimary),
-        ),
-        content: const Text(
-          'Are you sure you want to delete this performance record?',
-          style: TextStyle(color: AppColors.textSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text(
-              'Delete',
-              style: TextStyle(color: AppColors.error),
-            ),
-          ),
-        ],
-      ),
+    final widgetRef = ref;
+    final isMounted = mounted;
+    
+    ConfirmationDialog.showDelete(
+      context,
+      'Performance Record',
+      onConfirm: () async {
+        setState(() => _isLoading = true);
+        try {
+          final performanceService = widgetRef.read(performanceServiceProvider);
+          await performanceService.deletePerformance(performance.id);
+          // Invalidate related providers
+          if (_selectedStudentId != null) {
+            widgetRef.invalidate(performanceByStudentProvider(_selectedStudentId!));
+            widgetRef.invalidate(averagePerformanceProvider(_selectedStudentId!));
+            widgetRef.invalidate(latestPerformanceProvider(_selectedStudentId!));
+          }
+          if (isMounted && mounted) {
+            SuccessSnackbar.show(context, 'Performance record deleted successfully');
+            _loadPerformanceHistory();
+          }
+        } catch (e) {
+          setState(() => _isLoading = false);
+          if (isMounted && mounted) {
+            SuccessSnackbar.showError(context, 'Failed to delete performance: ${e.toString()}');
+          }
+        }
+      },
     );
-
-    if (confirm == true && mounted) {
-      setState(() => _isLoading = true);
-      try {
-        final performanceService = ref.read(performanceServiceProvider);
-        await performanceService.deletePerformance(performance.id);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Performance record deleted successfully'),
-            ),
-          );
-          _loadPerformanceHistory();
-        }
-      } catch (e) {
-        setState(() => _isLoading = false);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to delete performance: $e')),
-          );
-        }
-      }
-    }
   }
 
   void _openAddForm() async {
@@ -311,13 +283,7 @@ class _PerformanceTrackingScreenState
     }
 
     if (!hasAnyRating) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Please rate at least one skill for at least one student',
-          ),
-        ),
-      );
+      SuccessSnackbar.showError(context, 'Please rate at least one skill for at least one student');
       return;
     }
 
@@ -378,19 +344,9 @@ class _PerformanceTrackingScreenState
         });
 
         if (failCount == 0) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Performance records saved successfully for $successCount student(s)',
-              ),
-            ),
-          );
+          SuccessSnackbar.show(context, 'Performance records saved successfully for $successCount student(s)');
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Saved $successCount record(s), $failCount failed'),
-            ),
-          );
+          SuccessSnackbar.showError(context, 'Saved $successCount record(s), $failCount failed');
         }
 
         // Reload history if a student was selected
@@ -401,9 +357,7 @@ class _PerformanceTrackingScreenState
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save performance: $e')),
-        );
+        SuccessSnackbar.showError(context, 'Failed to save performance: ${e.toString()}');
       }
     }
   }
@@ -434,7 +388,7 @@ class _PerformanceTrackingScreenState
             ),
           ),
         ),
-        body: const Center(child: LoadingSpinner()),
+        body: const Center(child: ListSkeleton(itemCount: 5)),
       );
     }
 
@@ -506,27 +460,9 @@ class _PerformanceTrackingScreenState
                   const SizedBox(height: AppDimensions.spacingM),
 
                   if (_isLoading)
-                    const Center(child: LoadingSpinner())
+                    const Center(child: ListSkeleton(itemCount: 3))
                   else if (_performanceHistory.isEmpty)
-                    Center(
-                      child: Column(
-                        children: [
-                          const Icon(
-                            Icons.assessment_outlined,
-                            size: 64,
-                            color: AppColors.textSecondary,
-                          ),
-                          const SizedBox(height: AppDimensions.spacingM),
-                          const Text(
-                            'No performance records yet',
-                            style: TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
+                    EmptyState.noPerformance()
                   else
                     ..._performanceHistory.map(
                       (performance) => _buildPerformanceCard(performance),
@@ -545,7 +481,7 @@ class _PerformanceTrackingScreenState
       future: ref.read(batchServiceProvider).getBatches(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const LoadingSpinner();
+          return const ListSkeleton(itemCount: 3);
         }
 
         if (snapshot.hasError) {
@@ -597,7 +533,7 @@ class _PerformanceTrackingScreenState
       future: ref.read(batchServiceProvider).getBatches(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const LoadingSpinner();
+          return const ListSkeleton(itemCount: 3);
         }
 
         if (snapshot.hasError) {
@@ -666,16 +602,14 @@ class _PerformanceTrackingScreenState
     } catch (e) {
       setState(() => _loadingStudents = false);
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to load students: $e')));
+        SuccessSnackbar.showError(context, 'Failed to load students: ${e.toString()}');
       }
     }
   }
 
   Widget _buildStudentSelector() {
     if (_loadingStudents) {
-      return const Center(child: LoadingSpinner());
+      return const Center(child: ListSkeleton(itemCount: 3));
     }
 
     if (_batchStudents.isEmpty) {
@@ -819,7 +753,7 @@ class _PerformanceTrackingScreenState
                   ),
                 ),
                 child: _isLoading
-                    ? const LoadingSpinner()
+                    ? const ListSkeleton(itemCount: 3)
                     : const Text(
                         'Save Performance',
                         style: TextStyle(
