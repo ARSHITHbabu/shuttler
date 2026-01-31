@@ -170,16 +170,30 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       return _buildReportConfig();
     }
 
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.background,
         elevation: 0,
-        automaticallyImplyLeading: false,
-        title: const Text(
+        leading: IconButton(
+          icon: Icon(
+            Icons.arrow_back,
+            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+          ),
+          onPressed: () {
+            // Check if we can pop, otherwise navigate to home
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            }
+          },
+        ),
+        title: Text(
           'Reports',
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
             fontSize: 20,
             fontWeight: FontWeight.w600,
           ),
