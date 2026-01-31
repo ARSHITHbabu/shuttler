@@ -247,11 +247,11 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
     
     return authStateAsync.when(
       loading: () => Scaffold(
-        backgroundColor: Colors.transparent,
+        backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
         body: const Center(child: ProfileSkeleton()),
       ),
       error: (error, stack) => Scaffold(
-        backgroundColor: Colors.transparent,
+        backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
         body: ErrorDisplay(
           message: 'Failed to load user data: ${error.toString()}',
           onRetry: () => ref.invalidate(authProvider),
@@ -260,7 +260,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
       data: (authState) {
         if (authState is! Authenticated) {
           return Scaffold(
-            backgroundColor: Colors.transparent,
+            backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
             body: ErrorDisplay(
               message: 'Please log in to view profile',
               onRetry: () => ref.invalidate(authProvider),
@@ -272,7 +272,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
         final studentAsync = ref.watch(studentByIdProvider(userId));
 
         return Scaffold(
-          backgroundColor: Colors.transparent,
+          backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
           body: RefreshIndicator(
             onRefresh: () async {
               ref.invalidate(studentByIdProvider(userId));
@@ -281,7 +281,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
               slivers: [
                 // App Bar
                 SliverAppBar(
-                  backgroundColor: Colors.transparent,
+                  backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
                   elevation: 0,
                   pinned: true,
                   leading: widget.onBack != null
@@ -374,6 +374,11 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                                   isDark,
                                 ),
                                 _buildInfoRow('Age', student.age?.toString() ?? 'Not set', isDark),
+                                _buildInfoRow(
+                                  'Blood Group',
+                                  student.bloodGroup ?? 'Not set',
+                                  isDark,
+                                ),
                               ],
                             ),
 

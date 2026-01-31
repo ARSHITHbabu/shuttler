@@ -14,6 +14,7 @@ class StudentRegistrationRequest {
   final String? dateOfBirth;
   final String? address;
   final String? tShirtSize;
+  final String? bloodGroup;
 
   StudentRegistrationRequest({
     required this.id,
@@ -30,6 +31,7 @@ class StudentRegistrationRequest {
     this.dateOfBirth,
     this.address,
     this.tShirtSize,
+    this.bloodGroup,
   });
 
   bool get isPending => status == 'pending';
@@ -55,6 +57,7 @@ class StudentRegistrationRequest {
       dateOfBirth: json['date_of_birth'] as String?,
       address: json['address'] as String?,
       tShirtSize: json['t_shirt_size'] as String?,
+      bloodGroup: json['blood_group'] as String?,
     );
   }
 
@@ -75,6 +78,7 @@ class StudentRegistrationRequest {
       'date_of_birth': dateOfBirth,
       'address': address,
       't_shirt_size': tShirtSize,
+      'blood_group': bloodGroup,
     };
   }
 }

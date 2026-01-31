@@ -12,6 +12,7 @@ class Student {
   final String? medicalConditions;
   final String status;
   final String? tShirtSize;
+  final String? bloodGroup;
   final String? profilePhoto;
   final String? fcmToken;
 
@@ -28,6 +29,7 @@ class Student {
     this.medicalConditions,
     required this.status,
     this.tShirtSize,
+    this.bloodGroup,
     this.profilePhoto,
     this.fcmToken,
   });
@@ -47,6 +49,7 @@ class Student {
       medicalConditions: json['medical_conditions'] as String?,
       status: json['status'] as String? ?? 'active',
       tShirtSize: json['t_shirt_size'] as String?,
+      bloodGroup: json['blood_group'] as String?,
       profilePhoto: json['profile_photo'] as String?,
       fcmToken: json['fcm_token'] as String?,
     );
@@ -67,6 +70,7 @@ class Student {
       'medical_conditions': medicalConditions,
       'status': status,
       't_shirt_size': tShirtSize,
+      'blood_group': bloodGroup,
       'profile_photo': profilePhoto,
       'fcm_token': fcmToken,
     };
@@ -86,6 +90,7 @@ class Student {
     String? medicalConditions,
     String? status,
     String? tShirtSize,
+    String? bloodGroup,
     String? profilePhoto,
     String? fcmToken,
   }) {
@@ -102,6 +107,7 @@ class Student {
       medicalConditions: medicalConditions ?? this.medicalConditions,
       status: status ?? this.status,
       tShirtSize: tShirtSize ?? this.tShirtSize,
+      bloodGroup: bloodGroup ?? this.bloodGroup,
       profilePhoto: profilePhoto ?? this.profilePhoto,
       fcmToken: fcmToken ?? this.fcmToken,
     );
@@ -112,7 +118,7 @@ class Student {
     return 'Student(id: $id, name: $name, email: $email, phone: $phone, '
         'age: $age, guardianName: $guardianName, guardianPhone: $guardianPhone, '
         'address: $address, dateOfBirth: $dateOfBirth, medicalConditions: $medicalConditions, '
-        'status: $status, tShirtSize: $tShirtSize, profilePhoto: $profilePhoto, fcmToken: $fcmToken)';
+        'status: $status, tShirtSize: $tShirtSize, bloodGroup: $bloodGroup, profilePhoto: $profilePhoto, fcmToken: $fcmToken)';
   }
 
   @override
@@ -132,6 +138,7 @@ class Student {
         other.medicalConditions == medicalConditions &&
         other.status == status &&
         other.tShirtSize == tShirtSize &&
+        other.bloodGroup == bloodGroup &&
         other.profilePhoto == profilePhoto &&
         other.fcmToken == fcmToken;
   }
@@ -151,6 +158,7 @@ class Student {
       medicalConditions,
       status,
       tShirtSize,
+      bloodGroup,
       profilePhoto,
       fcmToken,
     );

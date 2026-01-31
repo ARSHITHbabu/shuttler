@@ -239,6 +239,60 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
               ),
             ),
           ],
+
+          // Personal Information Section (including blood group)
+          if (widget.student.dateOfBirth != null || widget.student.address != null || widget.student.bloodGroup != null || widget.student.tShirtSize != null) ...[
+            const SizedBox(height: AppDimensions.spacingL),
+            const Text(
+              'Personal Information',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: AppDimensions.spacingM),
+            NeumorphicContainer(
+              padding: const EdgeInsets.all(AppDimensions.paddingM),
+              child: Column(
+                children: [
+                  if (widget.student.dateOfBirth != null)
+                    _buildInfoRow(
+                      Icons.calendar_today_outlined,
+                      'Date of Birth',
+                      widget.student.dateOfBirth!,
+                    ),
+                  if (widget.student.address != null) ...[
+                    if (widget.student.dateOfBirth != null)
+                      const Divider(color: AppColors.textSecondary, height: 24),
+                    _buildInfoRow(
+                      Icons.location_on_outlined,
+                      'Address',
+                      widget.student.address!,
+                    ),
+                  ],
+                  if (widget.student.tShirtSize != null) ...[
+                    if (widget.student.dateOfBirth != null || widget.student.address != null)
+                      const Divider(color: AppColors.textSecondary, height: 24),
+                    _buildInfoRow(
+                      Icons.checkroom_outlined,
+                      'T-Shirt Size',
+                      widget.student.tShirtSize!,
+                    ),
+                  ],
+                  if (widget.student.bloodGroup != null) ...[
+                    if (widget.student.dateOfBirth != null || widget.student.address != null || widget.student.tShirtSize != null)
+                      const Divider(color: AppColors.textSecondary, height: 24),
+                    _buildInfoRow(
+                      Icons.bloodtype_outlined,
+                      'Blood Group',
+                      widget.student.bloodGroup!,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

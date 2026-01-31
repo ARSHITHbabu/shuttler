@@ -34,6 +34,7 @@ class _ProfileCompletionScreenState
   bool _isLoading = false;
   DateTime? _selectedDate;
   String? _selectedTShirtSize;
+  String? _selectedBloodGroup;
   String? _profilePhotoUrl;
 
   final List<String> _tShirtSizes = [
@@ -44,6 +45,18 @@ class _ProfileCompletionScreenState
     'XL',
     'XXL',
     'XXXL',
+  ];
+
+  final List<String> _bloodGroups = [
+    'A+',
+    'A-',
+    'B+',
+    'B-',
+    'AB+',
+    'AB-',
+    'O+',
+    'O-',
+    'Unknown',
   ];
 
   @override
@@ -131,6 +144,7 @@ class _ProfileCompletionScreenState
         'date_of_birth': _dateOfBirthController.text.trim(),
         'address': _addressController.text.trim(),
         't_shirt_size': _selectedTShirtSize,
+        'blood_group': _selectedBloodGroup,
         if (_profilePhotoUrl != null) 'profile_photo': _profilePhotoUrl,
       };
 
@@ -326,6 +340,61 @@ class _ProfileCompletionScreenState
                     }
                     return null;
                   },
+                ),
+                const SizedBox(height: AppDimensions.spacingL),
+
+                // Blood Group Dropdown
+                DropdownButtonFormField<String>(
+                  initialValue: _selectedBloodGroup,
+                  decoration: InputDecoration(
+                    labelText: 'Blood Group',
+                    hintText: 'Select your blood group',
+                    prefixIcon: const Icon(
+                      Icons.bloodtype_outlined,
+                      color: AppColors.textSecondary,
+                    ),
+                    filled: true,
+                    fillColor: AppColors.cardBackground,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                      borderSide: const BorderSide(
+                        color: AppColors.accent,
+                        width: 2,
+                      ),
+                    ),
+                    errorBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                      borderSide: const BorderSide(
+                        color: AppColors.error,
+                        width: 1,
+                      ),
+                    ),
+                    labelStyle: const TextStyle(color: AppColors.textSecondary),
+                    hintStyle: const TextStyle(color: AppColors.textHint),
+                  ),
+                  dropdownColor: AppColors.cardBackground,
+                  style: const TextStyle(color: AppColors.textPrimary),
+                  items: _bloodGroups.map((String group) {
+                    return DropdownMenuItem<String>(
+                      value: group,
+                      child: Text(group),
+                    );
+                  }).toList(),
+                  onChanged: _isLoading
+                      ? null
+                      : (String? newValue) {
+                          setState(() {
+                            _selectedBloodGroup = newValue;
+                          });
+                        },
                 ),
                 const SizedBox(height: AppDimensions.spacingXl),
 
