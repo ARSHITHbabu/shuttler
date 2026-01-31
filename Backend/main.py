@@ -417,6 +417,11 @@ class StudentRegistrationRequestDB(Base):
     date_of_birth = Column(String, nullable=True)
     address = Column(Text, nullable=True)
     t_shirt_size = Column(String, nullable=True)
+    blood_group = Column(String, nullable=True)
+    
+    # Invitation tracking
+    invitation_id = Column(Integer, ForeignKey("invitations.id"), nullable=True)
+    invited_by_coach_id = Column(Integer, ForeignKey("coaches.id"), nullable=True)
 
 # ==================== Database Migration Functions ====================
 
@@ -602,6 +607,14 @@ def migrate_database_schema(engine):
                         print(f"✅ Dropped foreign key constraint {fk_name} from calendar_events.created_by")
             except Exception as alter_error:
                 print(f"⚠️  Warning: Could not alter calendar_events.created_by constraint: {alter_error}")
+
+        # Migrate student_registration_requests table
+        if 'student_registration_requests' in tables:
+            check_and_add_column(engine, 'student_registration_requests', 't_shirt_size', 'VARCHAR', nullable=True)
+            check_and_add_column(engine, 'student_registration_requests', 'blood_group', 'VARCHAR', nullable=True)
+            check_and_add_column(engine, 'student_registration_requests', 'invitation_id', 'INTEGER', nullable=True)
+            check_and_add_column(engine, 'student_registration_requests', 'invited_by_coach_id', 'INTEGER', nullable=True)
+
         
         # Migrate fees table - add payee_student_id column
         if 'fees' in tables:
@@ -1458,6 +1471,7 @@ class StudentRegistrationRequestCreate(BaseModel):
     address: Optional[str] = None
     t_shirt_size: Optional[str] = None
     blood_group: Optional[str] = None
+    invite_token: Optional[str] = None  # To link with invitation
 
 class StudentRegistrationRequest(BaseModel):
     id: int
@@ -1475,6 +1489,11 @@ class StudentRegistrationRequest(BaseModel):
     address: Optional[str] = None
     t_shirt_size: Optional[str] = None
     blood_group: Optional[str] = None
+    
+    # Invitation info
+    invitation_id: Optional[int] = None
+    invited_by_coach_id: Optional[int] = None
+    invited_by_coach_name: Optional[str] = None  # Computed field for convenience
     
     class Config:
         from_attributes = True
@@ -4835,6 +4854,37 @@ def create_invitation(invitation: InvitationCreate):
     finally:
         db.close()
 
+
+@app.get("/invitations/pending", response_model=List[Invitation])
+def get_pending_invitations():
+    """Get all pending invitations (waiting for student registration) - owner only"""
+    db = SessionLocal()
+    try:
+        invitations = db.query(InvitationDB).filter(
+            InvitationDB.status == "pending"
+        ).order_by(InvitationDB.created_at.desc()).all()
+        
+        # Add invite links
+        base_url = os.getenv("INVITE_BASE_URL", "https://academy.app")
+        result = []
+        for inv in invitations:
+            invite_link = f"{base_url}/invite/{inv.invite_token}"
+            result.append(Invitation(
+                id=inv.id,
+                coach_id=inv.coach_id,
+                coach_name=inv.coach_name,
+                student_phone=inv.student_phone,
+                student_email=inv.student_email,
+                batch_id=inv.batch_id,
+                invite_token=inv.invite_token,
+                invite_link=invite_link,
+                status=inv.status,
+                created_at=inv.created_at
+            ))
+        return result
+    finally:
+        db.close()
+
 @app.get("/invitations/student/{student_email}")
 def get_student_invitations(student_email: str):
     db = SessionLocal()
@@ -5778,6 +5828,18 @@ def create_student_registration_request(request: StudentRegistrationRequestCreat
         # Hash password
         hashed_password = hash_password(request.password)
         
+        # Check for invite token and link
+        invitation_id = None
+        invited_by_coach_id = None
+        
+        if request.invite_token:
+            invitation = db.query(InvitationDB).filter(
+                InvitationDB.invite_token == request.invite_token
+            ).first()
+            if invitation:
+                invitation_id = invitation.id
+                invited_by_coach_id = invitation.coach_id
+        
         # Create registration request
         db_request = StudentRegistrationRequestDB(
             name=request.name,
@@ -5789,11 +5851,21 @@ def create_student_registration_request(request: StudentRegistrationRequestCreat
             date_of_birth=request.date_of_birth,
             address=request.address,
             t_shirt_size=request.t_shirt_size,
+            blood_group=request.blood_group,
+            invitation_id=invitation_id,
+            invited_by_coach_id=invited_by_coach_id,
             status="pending"
         )
         db.add(db_request)
         db.commit()
         db.refresh(db_request)
+        
+        # Get coach name if invited
+        invited_by_coach_name = None
+        if invited_by_coach_id:
+            coach = db.query(CoachDB).filter(CoachDB.id == invited_by_coach_id).first()
+            if coach:
+                invited_by_coach_name = coach.name
         
         # Convert to response model
         return StudentRegistrationRequest(
@@ -5810,7 +5882,11 @@ def create_student_registration_request(request: StudentRegistrationRequestCreat
             guardian_phone=db_request.guardian_phone,
             date_of_birth=db_request.date_of_birth,
             address=db_request.address,
-            t_shirt_size=db_request.t_shirt_size
+            t_shirt_size=db_request.t_shirt_size,
+            blood_group=db_request.blood_group,
+            invitation_id=db_request.invitation_id,
+            invited_by_coach_id=db_request.invited_by_coach_id,
+            invited_by_coach_name=invited_by_coach_name
         )
     except HTTPException:
         db.rollback()
@@ -5833,6 +5909,13 @@ def get_student_registration_requests(
             query = query.filter(StudentRegistrationRequestDB.status == status)
         requests = query.order_by(StudentRegistrationRequestDB.submitted_at.desc()).all()
         
+        # Pre-fetch coaches if needed
+        coach_map = {}
+        coach_ids = {req.invited_by_coach_id for req in requests if req.invited_by_coach_id}
+        if coach_ids:
+            coaches = db.query(CoachDB).filter(CoachDB.id.in_(coach_ids)).all()
+            coach_map = {c.id: c.name for c in coaches}
+        
         # Convert to response models
         return [
             StudentRegistrationRequest(
@@ -5849,7 +5932,11 @@ def get_student_registration_requests(
                 guardian_phone=req.guardian_phone,
                 date_of_birth=req.date_of_birth,
                 address=req.address,
-                t_shirt_size=req.t_shirt_size
+                t_shirt_size=req.t_shirt_size,
+                blood_group=req.blood_group,
+                invitation_id=req.invitation_id,
+                invited_by_coach_id=req.invited_by_coach_id,
+                invited_by_coach_name=coach_map.get(req.invited_by_coach_id)
             )
             for req in requests
         ]

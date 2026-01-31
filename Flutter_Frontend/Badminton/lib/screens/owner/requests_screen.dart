@@ -14,6 +14,7 @@ import '../../providers/leave_request_provider.dart';
 import '../../providers/student_registration_request_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/service_providers.dart';
+import '../../providers/pending_invitations_provider.dart';
 import '../../models/leave_request.dart';
 import '../../models/student_registration_request.dart';
 import '../../widgets/common/custom_text_field.dart';
@@ -643,57 +644,207 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
   }
 
   Widget _buildRegistrationRequestsTab(bool isDark, String? statusFilter) {
+    // Only show pending invites if filter allows
+    final showPendingInvites = statusFilter == null || statusFilter == 'all' || statusFilter == 'pending';
+    
     final registrationRequestsAsync = ref.watch(
       studentRegistrationRequestManagerProvider(status: statusFilter),
     );
+    
+    final pendingInvitationsAsync = showPendingInvites
+        ? ref.watch(pendingInvitationsProvider)
+        : const AsyncValue<List<Map<String, dynamic>>>.data([]);
 
     return Column(
       children: [
         // Filters
         _buildFilters(isDark),
 
-        // Registration Requests List
+        // Requests List
         Expanded(
           child: RefreshIndicator(
             onRefresh: () async {
-              ref.invalidate(
-                studentRegistrationRequestManagerProvider(status: statusFilter),
-              );
+              ref.invalidate(studentRegistrationRequestManagerProvider(status: statusFilter));
+              if (showPendingInvites) {
+                ref.invalidate(pendingInvitationsProvider);
+              }
             },
             child: registrationRequestsAsync.when(
               loading: () => const ListSkeleton(itemCount: 5),
               error: (error, stack) => ErrorDisplay(
-                message: 'Failed to load registration requests: ${error.toString()}',
-                onRetry: () => ref.invalidate(
-                  studentRegistrationRequestManagerProvider(status: statusFilter),
-                ),
+                message: 'Failed to load requests: ${error.toString()}',
+                onRetry: () {
+                   ref.invalidate(studentRegistrationRequestManagerProvider(status: statusFilter));
+                   ref.invalidate(pendingInvitationsProvider);
+                },
               ),
               data: (requests) {
-                if (requests.isEmpty) {
-                  return _buildEmptyRegistrationState(isDark);
-                }
-
-                // Sort: pending first, then by submission date
-                final sortedRequests = List<StudentRegistrationRequest>.from(requests)
-                  ..sort((a, b) {
-                    if (a.isPending && !b.isPending) return -1;
-                    if (!a.isPending && b.isPending) return 1;
-                    return b.submittedAt.compareTo(a.submittedAt);
-                  });
-
-                return ListView.builder(
-                  padding: const EdgeInsets.all(AppDimensions.paddingL),
-                  itemCount: sortedRequests.length,
-                  itemBuilder: (context, index) {
-                    final request = sortedRequests[index];
-                    return _buildRegistrationRequestCard(request, isDark);
-                  },
+                return pendingInvitationsAsync.when(
+                  loading: () => const ListSkeleton(itemCount: 2),
+                  error: (_, __) => _buildRequestsList(requests, [], isDark), // Fallback to just requests on invite error
+                  data: (invitations) => _buildRequestsList(requests, invitations, isDark),
                 );
               },
             ),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildRequestsList(
+    List<StudentRegistrationRequest> requests, 
+    List<Map<String, dynamic>> invitations, 
+    bool isDark
+  ) {
+    if (requests.isEmpty && invitations.isEmpty) {
+      return _buildEmptyRegistrationState(isDark);
+    }
+    
+    // Sort requests
+    final sortedRequests = List<StudentRegistrationRequest>.from(requests)
+      ..sort((a, b) {
+        if (a.isPending && !b.isPending) return -1;
+        if (!a.isPending && b.isPending) return 1;
+        return b.submittedAt.compareTo(a.submittedAt);
+      });
+
+    return ListView(
+      padding: const EdgeInsets.all(AppDimensions.paddingL),
+      children: [
+        if (invitations.isNotEmpty) ...[
+          _buildSectionHeader('PENDING INVITES (WAITING FOR REGISTRATION)', isDark),
+          ...invitations.map((inv) => _buildPendingInvitationCard(inv, isDark)),
+          const SizedBox(height: AppDimensions.spacingL),
+        ],
+        
+        if (sortedRequests.isNotEmpty) ...[
+          if (invitations.isNotEmpty) 
+            _buildSectionHeader('REGISTRATION REQUESTS', isDark),
+          ...sortedRequests.map((req) => _buildRegistrationRequestCard(req, isDark)),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildSectionHeader(String title, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.only(
+        left: AppDimensions.spacingS,
+        bottom: AppDimensions.spacingM,
+      ),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+          letterSpacing: 1.2,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPendingInvitationCard(Map<String, dynamic> invitation, bool isDark) {
+    final statusColor = AppColors.warning;
+    final statusBgColor = statusColor.withValues(alpha: 0.1);
+    final coachName = invitation['coach_name'] ?? 'Unknown Coach';
+    final studentEmail = invitation['student_email'] ?? 'No Email';
+    final studentPhone = invitation['student_phone'] ?? 'No Phone';
+    final dateStr = invitation['created_at'] as String?;
+    final date = dateStr != null ? DateTime.tryParse(dateStr) : null;
+
+    return NeumorphicContainer(
+      padding: const EdgeInsets.all(AppDimensions.paddingM),
+      margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      studentEmail != 'No Email' ? studentEmail : studentPhone,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Invited by $coachName',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppColors.accent,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppDimensions.spacingM,
+                  vertical: AppDimensions.spacingS,
+                ),
+                decoration: BoxDecoration(
+                  color: statusBgColor,
+                  borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                ),
+                child: Text(
+                  'WAITING',
+                  style: TextStyle(
+                    color: statusColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppDimensions.spacingM),
+          _buildDetailRow(Icons.email_outlined, studentEmail, isDark),
+          _buildDetailRow(Icons.phone_outlined, studentPhone, isDark),
+          if (date != null)
+             _buildDetailRow(
+               Icons.calendar_today_outlined, 
+               'Invited: ${DateFormat('MMM dd, yyyy').format(date)}', 
+               isDark
+             ),
+          
+          const SizedBox(height: AppDimensions.spacingM),
+          Container(
+            padding: const EdgeInsets.all(AppDimensions.paddingS),
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.background : AppColorsLight.background,
+              borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+              border: Border.all(
+                color: isDark ? AppColors.border : AppColorsLight.border,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, size: 16, color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Student hasn\'t created an account yet.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontStyle: FontStyle.italic,
+                      color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          )
+        ],
+      ),
     );
   }
 
@@ -806,6 +957,17 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
                         color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                       ),
                     ),
+                    if (request.invitedByCoachName != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Invited by ${request.invitedByCoachName}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.accent,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
