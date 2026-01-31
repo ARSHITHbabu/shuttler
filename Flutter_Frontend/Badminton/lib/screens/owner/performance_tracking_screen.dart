@@ -22,11 +22,8 @@ import 'package:intl/intl.dart';
 /// New flow: Select Batch -> Select Student -> View History OR Add Performance (table format)
 class PerformanceTrackingScreen extends ConsumerStatefulWidget {
   final Student? initialStudent;
-  
-  const PerformanceTrackingScreen({
-    super.key,
-    this.initialStudent,
-  });
+
+  const PerformanceTrackingScreen({super.key, this.initialStudent});
 
   @override
   ConsumerState<PerformanceTrackingScreen> createState() =>
@@ -73,12 +70,17 @@ class _PerformanceTrackingScreenState
     setState(() => _isInitializing = true);
     try {
       // Get student's batches
-      final studentBatches = await ref.read(studentBatchesProvider(student.id).future);
+      final studentBatches = await ref.read(
+        studentBatchesProvider(student.id).future,
+      );
 
       if (!mounted) return;
       if (studentBatches.isEmpty) {
         if (mounted) {
-          SuccessSnackbar.showError(context, 'Student is not enrolled in any batches');
+          SuccessSnackbar.showError(
+            context,
+            'Student is not enrolled in any batches',
+          );
         }
         if (mounted) {
           setState(() => _isInitializing = false);
@@ -96,17 +98,20 @@ class _PerformanceTrackingScreenState
 
       // Load batch students
       await _loadBatchStudents(keepStudentSelection: true);
-      
+
       // Load performance history
       await _loadPerformanceHistory();
-      
+
       if (!mounted) return;
       setState(() => _isInitializing = false);
     } catch (e) {
       if (!mounted) return;
       setState(() => _isInitializing = false);
       if (mounted) {
-        SuccessSnackbar.showError(context, 'Failed to initialize: ${e.toString()}');
+        SuccessSnackbar.showError(
+          context,
+          'Failed to initialize: ${e.toString()}',
+        );
       }
     }
   }
@@ -150,7 +155,9 @@ class _PerformanceTrackingScreenState
         } else {
           // Verify the selected student is still in this batch
           if (_selectedStudentId != null) {
-            final studentExists = students.any((s) => s.id == _selectedStudentId);
+            final studentExists = students.any(
+              (s) => s.id == _selectedStudentId,
+            );
             if (!studentExists) {
               _selectedStudentId = null;
               _performanceHistory = [];
@@ -162,7 +169,10 @@ class _PerformanceTrackingScreenState
       if (!mounted) return;
       setState(() => _loadingStudents = false);
       if (mounted) {
-        SuccessSnackbar.showError(context, 'Failed to load students: ${e.toString()}');
+        SuccessSnackbar.showError(
+          context,
+          'Failed to load students: ${e.toString()}',
+        );
       }
     }
   }
@@ -186,7 +196,10 @@ class _PerformanceTrackingScreenState
       if (!mounted) return;
       setState(() => _isLoading = false);
       if (mounted) {
-        SuccessSnackbar.showError(context, 'Failed to load performance history: ${e.toString()}');
+        SuccessSnackbar.showError(
+          context,
+          'Failed to load performance history: ${e.toString()}',
+        );
       }
     }
   }
@@ -194,7 +207,7 @@ class _PerformanceTrackingScreenState
   Future<void> _deletePerformance(Performance performance) async {
     final widgetRef = ref;
     final isMounted = mounted;
-    
+
     ConfirmationDialog.showDelete(
       context,
       'Performance Record',
@@ -205,18 +218,30 @@ class _PerformanceTrackingScreenState
           await performanceService.deletePerformance(performance.id);
           // Invalidate related providers
           if (_selectedStudentId != null) {
-            widgetRef.invalidate(performanceByStudentProvider(_selectedStudentId!));
-            widgetRef.invalidate(averagePerformanceProvider(_selectedStudentId!));
-            widgetRef.invalidate(latestPerformanceProvider(_selectedStudentId!));
+            widgetRef.invalidate(
+              performanceByStudentProvider(_selectedStudentId!),
+            );
+            widgetRef.invalidate(
+              averagePerformanceProvider(_selectedStudentId!),
+            );
+            widgetRef.invalidate(
+              latestPerformanceProvider(_selectedStudentId!),
+            );
           }
           if (isMounted && mounted) {
-            SuccessSnackbar.show(context, 'Performance record deleted successfully');
+            SuccessSnackbar.show(
+              context,
+              'Performance record deleted successfully',
+            );
             _loadPerformanceHistory();
           }
         } catch (e) {
           setState(() => _isLoading = false);
           if (isMounted && mounted) {
-            SuccessSnackbar.showError(context, 'Failed to delete performance: ${e.toString()}');
+            SuccessSnackbar.showError(
+              context,
+              'Failed to delete performance: ${e.toString()}',
+            );
           }
         }
       },
@@ -284,7 +309,10 @@ class _PerformanceTrackingScreenState
     }
 
     if (!hasAnyRating) {
-      SuccessSnackbar.showError(context, 'Please rate at least one skill for at least one student');
+      SuccessSnackbar.showError(
+        context,
+        'Please rate at least one skill for at least one student',
+      );
       return;
     }
 
@@ -345,9 +373,15 @@ class _PerformanceTrackingScreenState
         });
 
         if (failCount == 0) {
-          SuccessSnackbar.show(context, 'Performance records saved successfully for $successCount student(s)');
+          SuccessSnackbar.show(
+            context,
+            'Performance records saved successfully for $successCount student(s)',
+          );
         } else {
-          SuccessSnackbar.showError(context, 'Saved $successCount record(s), $failCount failed');
+          SuccessSnackbar.showError(
+            context,
+            'Saved $successCount record(s), $failCount failed',
+          );
         }
 
         // Reload history if a student was selected
@@ -358,7 +392,10 @@ class _PerformanceTrackingScreenState
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        SuccessSnackbar.showError(context, 'Failed to save performance: ${e.toString()}');
+        SuccessSnackbar.showError(
+          context,
+          'Failed to save performance: ${e.toString()}',
+        );
       }
     }
   }
@@ -395,7 +432,7 @@ class _PerformanceTrackingScreenState
 
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    
+
     void handleReload() {
       if (_selectedBatchId != null && _selectedStudentId != null) {
         ref.invalidate(performanceByStudentProvider(_selectedStudentId!));
@@ -407,7 +444,9 @@ class _PerformanceTrackingScreenState
     }
 
     return Scaffold(
-      backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+      backgroundColor: isDark
+          ? AppColors.background
+          : AppColorsLight.background,
       appBar: MoreScreenAppBar(
         title: 'Performance Tracking',
         onReload: handleReload,
@@ -430,25 +469,39 @@ class _PerformanceTrackingScreenState
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           child: Padding(
-          padding: const EdgeInsets.all(AppDimensions.paddingL),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Batch Selector
-              _buildBatchSelector(),
+            padding: const EdgeInsets.all(AppDimensions.paddingL),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Batch Selector
+                _buildBatchSelector(),
 
-              if (_selectedBatchId != null) ...[
-                const SizedBox(height: AppDimensions.spacingL),
-                // Student Selector
-                _buildStudentSelector(),
-
-                if (_selectedStudentId != null) ...[
+                if (_selectedBatchId != null) ...[
                   const SizedBox(height: AppDimensions.spacingL),
+                  // Student Selector
+                  _buildStudentSelector(),
 
-                  // Progress Chart
-                  if (_performanceHistory.length >= 2) ...[
+                  if (_selectedStudentId != null) ...[
+                    const SizedBox(height: AppDimensions.spacingL),
+
+                    // Progress Chart
+                    if (_performanceHistory.length >= 2) ...[
+                      const Text(
+                        'Progress Chart',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: AppDimensions.spacingM),
+                      _buildProgressChart(),
+                      const SizedBox(height: AppDimensions.spacingL),
+                    ],
+
+                    // Performance History
                     const Text(
-                      'Progress Chart',
+                      'Performance History',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
@@ -456,32 +509,19 @@ class _PerformanceTrackingScreenState
                       ),
                     ),
                     const SizedBox(height: AppDimensions.spacingM),
-                    _buildProgressChart(),
-                    const SizedBox(height: AppDimensions.spacingL),
+
+                    if (_isLoading)
+                      const Center(child: ListSkeleton(itemCount: 3))
+                    else if (_performanceHistory.isEmpty)
+                      EmptyState.noPerformance()
+                    else
+                      ..._performanceHistory.map(
+                        (performance) => _buildPerformanceCard(performance),
+                      ),
                   ],
-
-                  // Performance History
-                  const Text(
-                    'Performance History',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: AppDimensions.spacingM),
-
-                  if (_isLoading)
-                    const Center(child: ListSkeleton(itemCount: 3))
-                  else if (_performanceHistory.isEmpty)
-                    EmptyState.noPerformance()
-                  else
-                    ..._performanceHistory.map(
-                      (performance) => _buildPerformanceCard(performance),
-                    ),
                 ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -614,7 +654,10 @@ class _PerformanceTrackingScreenState
     } catch (e) {
       setState(() => _loadingStudents = false);
       if (mounted) {
-        SuccessSnackbar.showError(context, 'Failed to load students: ${e.toString()}');
+        SuccessSnackbar.showError(
+          context,
+          'Failed to load students: ${e.toString()}',
+        );
       }
     }
   }
@@ -747,7 +790,7 @@ class _PerformanceTrackingScreenState
               color: AppColors.cardBackground,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha:0.1),
+                  color: Colors.black.withValues(alpha: 0.1),
                   blurRadius: 10,
                   offset: const Offset(0, -2),
                 ),
@@ -802,7 +845,7 @@ class _PerformanceTrackingScreenState
       constraints: BoxConstraints(minWidth: minTableWidth),
       child: Table(
         border: TableBorder.all(
-          color: AppColors.textSecondary.withValues(alpha:0.2),
+          color: AppColors.textSecondary.withValues(alpha: 0.2),
           width: 1,
         ),
         columnWidths: {
@@ -816,7 +859,9 @@ class _PerformanceTrackingScreenState
         children: [
           // Header row
           TableRow(
-            decoration: BoxDecoration(color: AppColors.accent.withValues(alpha:0.1)),
+            decoration: BoxDecoration(
+              color: AppColors.accent.withValues(alpha: 0.1),
+            ),
             children: [
               _buildTableHeaderCell('Student'),
               ..._skills.map(
@@ -916,13 +961,13 @@ class _PerformanceTrackingScreenState
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(4),
             borderSide: BorderSide(
-              color: AppColors.textSecondary.withValues(alpha:0.3),
+              color: AppColors.textSecondary.withValues(alpha: 0.3),
             ),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(4),
             borderSide: BorderSide(
-              color: AppColors.textSecondary.withValues(alpha:0.3),
+              color: AppColors.textSecondary.withValues(alpha: 0.3),
             ),
           ),
           focusedBorder: OutlineInputBorder(
@@ -980,13 +1025,13 @@ class _PerformanceTrackingScreenState
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(4),
             borderSide: BorderSide(
-              color: AppColors.textSecondary.withValues(alpha:0.3),
+              color: AppColors.textSecondary.withValues(alpha: 0.3),
             ),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(4),
             borderSide: BorderSide(
-              color: AppColors.textSecondary.withValues(alpha:0.3),
+              color: AppColors.textSecondary.withValues(alpha: 0.3),
             ),
           ),
           focusedBorder: OutlineInputBorder(
@@ -997,7 +1042,9 @@ class _PerformanceTrackingScreenState
           filled: true,
           fillColor: AppColors.cardBackground,
           hintText: 'Add comments...',
-          hintStyle: TextStyle(color: AppColors.textSecondary.withValues(alpha:0.5)),
+          hintStyle: TextStyle(
+            color: AppColors.textSecondary.withValues(alpha: 0.5),
+          ),
         ),
         onChanged: (value) {
           setState(() {
@@ -1044,7 +1091,7 @@ class _PerformanceTrackingScreenState
                       vertical: AppDimensions.spacingS,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.accent.withValues(alpha:0.2),
+                      color: AppColors.accent.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(
                         AppDimensions.radiusS,
                       ),
@@ -1205,7 +1252,7 @@ class _PerformanceTrackingScreenState
                   horizontalInterval: 1,
                   getDrawingHorizontalLine: (value) {
                     return FlLine(
-                      color: AppColors.textSecondary.withValues(alpha:0.1),
+                      color: AppColors.textSecondary.withValues(alpha: 0.1),
                       strokeWidth: 1,
                     );
                   },
@@ -1261,7 +1308,7 @@ class _PerformanceTrackingScreenState
                 borderData: FlBorderData(
                   show: true,
                   border: Border.all(
-                    color: AppColors.textSecondary.withValues(alpha:0.2),
+                    color: AppColors.textSecondary.withValues(alpha: 0.2),
                     width: 1,
                   ),
                 ),
@@ -1289,7 +1336,7 @@ class _PerformanceTrackingScreenState
                     ),
                     belowBarData: BarAreaData(
                       show: true,
-                      color: AppColors.accent.withValues(alpha:0.1),
+                      color: AppColors.accent.withValues(alpha: 0.1),
                     ),
                   ),
                 ],
