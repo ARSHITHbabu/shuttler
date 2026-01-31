@@ -89,6 +89,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   }
 
   Widget _buildNotificationsScreen(Authenticated authState) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     // Build filter parameters
     String? typeFilter;
     if (_selectedFilter != 'all') {
@@ -109,11 +112,20 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       isRead: isReadFilter,
     ));
 
+    void handleReload() {
+      ref.invalidate(notificationManagerProvider(
+        userId: authState.userId,
+        userType: authState.userType,
+        type: typeFilter,
+        isRead: isReadFilter,
+      ));
+    }
+
     return Scaffold(
       backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
       appBar: MoreScreenAppBar(
         title: 'Notifications',
-        onReload: _handleReload,
+        onReload: handleReload,
         isDark: isDark,
         additionalActions: [
           IconButton(
@@ -128,7 +140,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          _handleReload();
+          handleReload();
           await Future.delayed(const Duration(milliseconds: 300));
         },
         child: Column(
@@ -169,7 +181,6 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 },
               ),
             ),
-          ),
         ],
         ),
       ),

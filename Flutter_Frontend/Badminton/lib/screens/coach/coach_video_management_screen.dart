@@ -263,14 +263,21 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
 
         final coachId = authValue.userId;
         final batchesAsync = ref.watch(coachBatchesProvider(coachId));
+        final theme = Theme.of(context);
+        final isDark = theme.brightness == Brightness.dark;
+
+        void handleReload() {
+          ref.invalidate(coachBatchesProvider(coachId));
+          _loadVideos();
+        }
 
         return Scaffold(
-          appBar: AppBar(
-            title: const Text('Video Management'),
-            backgroundColor: AppColors.background,
-            elevation: 0,
+          appBar: MoreScreenAppBar(
+            title: 'Video Management',
+            isDark: isDark,
+            onReload: handleReload,
           ),
-          backgroundColor: AppColors.background,
+          backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
           floatingActionButton: _selectedStudentId != null && !_showUploadForm
               ? FloatingActionButton(
                   onPressed: () => setState(() => _showUploadForm = true),
@@ -278,9 +285,15 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
                   child: const Icon(Icons.add, color: Colors.white),
                 )
               : null,
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.all(AppDimensions.paddingL),
-            child: Column(
+          body: RefreshIndicator(
+            onRefresh: () async {
+              handleReload();
+              await Future.delayed(const Duration(milliseconds: 300));
+            },
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(AppDimensions.paddingL),
+              child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Batch Selector
@@ -389,6 +402,7 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
                 ],
               ],
             ),
+          ),
           ),
         );
       },

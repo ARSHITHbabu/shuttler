@@ -71,7 +71,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
           )
         : const AsyncValue<List<Request>>.data([]);
 
-    void _handleReload() {
+    void handleReload() {
       ref.invalidate(requestListProvider);
     }
 
@@ -79,7 +79,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
       backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
       appBar: MoreScreenAppBar(
         title: 'Leave Requests',
-        onReload: _handleReload,
+        onReload: handleReload,
         isDark: isDark,
         additionalActions: [
           // Plus button to add request
@@ -103,7 +103,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          _handleReload();
+          handleReload();
           await Future.delayed(const Duration(milliseconds: 300));
         },
         child: SingleChildScrollView(

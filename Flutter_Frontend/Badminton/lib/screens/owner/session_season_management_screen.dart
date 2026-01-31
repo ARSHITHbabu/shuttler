@@ -155,7 +155,7 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     
-    void _handleReload() {
+    void handleReload() {
       final statusFilter = _selectedTab == 'active' ? 'active' : 'archived';
       ref.invalidate(sessionListProvider(status: statusFilter));
       ref.invalidate(sessionManagerProvider(status: statusFilter));
@@ -165,7 +165,7 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
       backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
       appBar: MoreScreenAppBar(
         title: 'Session Management',
-        onReload: _handleReload,
+        onReload: handleReload,
         isDark: isDark,
         additionalActions: [
           IconButton(
@@ -364,6 +364,11 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
     final statusFilter = _selectedTab == 'active' ? 'active' : 'archived';
     final sessionsAsync = ref.watch(sessionListProvider(status: statusFilter));
 
+    void handleReload() {
+      ref.invalidate(sessionListProvider(status: statusFilter));
+      ref.invalidate(sessionManagerProvider(status: statusFilter));
+    }
+
     return Column(
       children: [
         // Tabs
@@ -397,7 +402,7 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
         Expanded(
           child: RefreshIndicator(
             onRefresh: () async {
-              _handleReload();
+              handleReload();
               await Future.delayed(const Duration(milliseconds: 300));
             },
             child: sessionsAsync.when(

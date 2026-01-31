@@ -31,7 +31,7 @@ class _StudentAnnouncementsScreenState extends ConsumerState<StudentAnnouncement
     // Get announcements for students using provider
     final announcementsAsync = ref.watch(announcementListProvider(targetAudience: 'students'));
 
-    void _handleReload() {
+    void handleReload() {
       ref.invalidate(announcementListProvider(targetAudience: 'students'));
     }
 
@@ -39,13 +39,13 @@ class _StudentAnnouncementsScreenState extends ConsumerState<StudentAnnouncement
       backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
       appBar: MoreScreenAppBar(
         title: 'Announcements',
-        onReload: _handleReload,
+        onReload: handleReload,
         isDark: isDark,
         onBack: widget.onBack,
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          _handleReload();
+          handleReload();
           await Future.delayed(const Duration(milliseconds: 300));
         },
         child: Column(

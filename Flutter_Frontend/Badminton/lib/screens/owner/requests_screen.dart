@@ -47,7 +47,7 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
     // Get pending count for badge
     final pendingCountAsync = ref.watch(pendingRequestsCountProvider);
 
-    void _handleReload() {
+    void handleReload() {
       ref.invalidate(requestListProvider);
       ref.invalidate(pendingRequestsCountProvider);
     }
@@ -58,12 +58,12 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
           : AppColorsLight.background,
       appBar: MoreScreenAppBar(
         title: 'Requests',
-        onReload: _handleReload,
+        onReload: handleReload,
         isDark: isDark,
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          _handleReload();
+          handleReload();
           await Future.delayed(const Duration(milliseconds: 300));
         },
         child: Column(

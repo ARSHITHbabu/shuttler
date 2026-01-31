@@ -41,7 +41,7 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     
-    void _handleReload() {
+    void handleReload() {
       final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
       final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
       ref.invalidate(calendarEventsProvider(
@@ -54,12 +54,12 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
       backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
       appBar: MoreScreenAppBar(
         title: 'Calendar',
-        onReload: _handleReload,
+        onReload: handleReload,
         isDark: isDark,
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          _handleReload();
+          handleReload();
           await Future.delayed(const Duration(milliseconds: 300));
         },
         child: _buildCalendarBody(),
@@ -281,7 +281,6 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
           );
           },
         ),
-      ),
     );
   }
 

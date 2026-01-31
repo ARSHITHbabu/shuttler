@@ -179,6 +179,8 @@ class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
   }
 
   Widget _buildScaffold(int userId) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final scheduleAsync = ref.watch(studentSchedulesProvider(userId));
     final batchesAsync = ref.watch(studentBatchesProvider(userId));
     final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
@@ -188,17 +190,23 @@ class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
       endDate: lastDay,
     ));
 
+    void handleReload() {
+      ref.invalidate(studentSchedulesProvider(userId));
+      ref.invalidate(studentBatchesProvider(userId));
+      ref.invalidate(calendarEventsProvider(startDate: firstDay, endDate: lastDay));
+    }
+
     return Scaffold(
       backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
       appBar: MoreScreenAppBar(
         title: 'My Schedule',
-        onReload: _handleReload,
+        onReload: handleReload,
         isDark: isDark,
         onBack: widget.onBack,
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          _handleReload();
+          handleReload();
           await Future.delayed(const Duration(milliseconds: 300));
         },
         child: scheduleAsync.when(
