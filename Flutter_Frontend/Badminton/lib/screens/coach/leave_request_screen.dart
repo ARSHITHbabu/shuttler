@@ -434,7 +434,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
               color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
             ),
           ),
-          if (request.isPending) ...[
+            if (request.isPending) ...[
             const SizedBox(height: AppDimensions.spacingM),
             Align(
               alignment: Alignment.centerRight,
@@ -450,9 +450,111 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
               ),
             ),
           ],
+          if (request.isApproved) ...[
+            const SizedBox(height: AppDimensions.spacingM),
+            if (request.hasPendingModification)
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.access_time, size: 14, color: AppColors.warning),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Modification Pending',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.warning,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Modified: ${DateFormat('dd MMM').format(request.modificationStartDate!)} - ${DateFormat('dd MMM').format(request.modificationEndDate!)}',
+                      style: TextStyle(fontSize: 12, color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
+                    ),
+                  ],
+                ),
+              )
+            else
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () => _showModificationDialog(request),
+                  icon: Icon(Icons.edit, size: 16),
+                  label: Text(
+                    'Modify',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.accent,
+                  ),
+                ),
+              ),
+          ],
         ],
       ),
     );
+  }
+
+  void _showModificationDialog(LeaveRequest request) {
+    showDialog(
+      context: context,
+      builder: (context) => _ModificationDialog(
+        currentStartDate: request.startDate,
+        currentEndDate: request.endDate,
+        onSubmit: (start, end, reason) => _submitModification(request.id, start, end, reason),
+      ),
+    );
+  }
+
+  Future<void> _submitModification(int requestId, DateTime start, DateTime end, String reason) async {
+    try {
+      final authState = await ref.read(authProvider.future);
+        if (authState is! Authenticated || authState.userType != 'coach') {
+          return;
+        }
+
+      final manager = ref.read(
+        leaveRequestManagerProvider(
+          coachId: authState.userId,
+          status: null,
+        ).notifier,
+      );
+
+      // We need to access the service directly or add a method to the provider
+      // For now, I'll assume we can use the service from the provider or just use the service provider directly
+      // Since leaveRequestManagerProvider might not expose submitModification easily without updating it
+      // Let's use the service provider directly for this specific action
+      
+      final service = ref.read(leaveRequestServiceProvider);
+      await service.submitLeaveModification(
+        requestId: requestId,
+        startDate: start,
+        endDate: end,
+        reason: reason,
+      );
+      
+      // Refresh list
+      ref.invalidate(coachLeaveRequestsProvider(authState.userId));
+
+      if (mounted) {
+        SuccessSnackbar.show(context, 'Modification request submitted');
+      }
+    } catch (e) {
+      if (mounted) {
+        SuccessSnackbar.showError(context, 'Failed to submit modification: ${e.toString()}');
+      }
+    }
   }
 
   Widget _buildAddForm(bool isDark) {
@@ -674,6 +776,130 @@ class _LeaveTypeButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ModificationDialog extends StatefulWidget {
+  final DateTime currentStartDate;
+  final DateTime currentEndDate;
+  final Function(DateTime, DateTime, String) onSubmit;
+
+  const _ModificationDialog({
+    required this.currentStartDate,
+    required this.currentEndDate,
+    required this.onSubmit,
+  });
+
+  @override
+  State<_ModificationDialog> createState() => _ModificationDialogState();
+}
+
+class _ModificationDialogState extends State<_ModificationDialog> {
+  late DateTime _startDate;
+  late DateTime _endDate;
+  final _reasonController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _startDate = widget.currentStartDate;
+    _endDate = widget.currentEndDate;
+  }
+
+  @override
+  void dispose() {
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Modify Leave Request'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Select new dates (max 7 days)',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              title: const Text('Start Date'),
+              subtitle: Text(DateFormat('dd MMM, yyyy').format(_startDate)),
+              onTap: () async {
+                final date = await showDatePicker(
+                  context: context,
+                  initialDate: _startDate,
+                  firstDate: DateTime.now(),
+                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                );
+                if (date != null) {
+                  setState(() {
+                    _startDate = date;
+                    if (_endDate.isBefore(_startDate)) {
+                      _endDate = _startDate;
+                    }
+                  });
+                }
+              },
+            ),
+            ListTile(
+              title: const Text('End Date'),
+              subtitle: Text(DateFormat('dd MMM, yyyy').format(_endDate)),
+              onTap: () async {
+                final date = await showDatePicker(
+                  context: context,
+                  initialDate: _endDate,
+                  firstDate: _startDate,
+                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                );
+                if (date != null) {
+                  setState(() => _endDate = date);
+                }
+              },
+            ),
+            const SizedBox(height: 16),
+            CustomTextField(
+              controller: _reasonController,
+              label: 'Reason for Modification',
+              hint: 'Why are you changing the dates?',
+              maxLines: 3,
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            if (_reasonController.text.trim().isEmpty) {
+              SuccessSnackbar.showError(context, 'Please enter a reason');
+              return;
+            }
+             if (_startDate.isAfter(_endDate)) {
+              SuccessSnackbar.showError(context, 'End date must be after start date');
+              return;
+            }
+            final days = _endDate.difference(_startDate).inDays + 1;
+            if (days > 7) {
+              SuccessSnackbar.showError(context, 'Leave duration cannot exceed 7 days');
+              return;
+            }
+
+            widget.onSubmit(_startDate, _endDate, _reasonController.text.trim());
+            Navigator.pop(context);
+          },
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent),
+          child: const Text('Submit', style: TextStyle(color: Colors.white)),
+        ),
+      ],
     );
   }
 }

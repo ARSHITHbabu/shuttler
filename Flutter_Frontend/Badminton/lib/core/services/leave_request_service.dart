@@ -214,4 +214,50 @@ class LeaveRequestService {
           'Failed to delete leave request: ${_apiService.getErrorMessage(e)}');
     }
   }
+
+  /// Submit a modification to an approved leave request
+  Future<LeaveRequest> submitLeaveModification({
+    required int requestId,
+    required DateTime startDate,
+    required DateTime endDate,
+    required String reason,
+  }) async {
+    try {
+      final response = await _apiService.post(
+        '${ApiEndpoints.leaveRequests}/$requestId/modify',
+        data: {
+          'start_date': startDate.toIso8601String().split('T')[0],
+          'end_date': endDate.toIso8601String().split('T')[0],
+          'reason': reason,
+        },
+      );
+      return LeaveRequest.fromJson(response.data as Map<String, dynamic>);
+    } catch (e) {
+      throw Exception(
+          'Failed to submit leave modification: ${_apiService.getErrorMessage(e)}');
+    }
+  }
+
+  /// Review a leave modification request
+  Future<LeaveRequest> reviewModificationRequest({
+    required int requestId,
+    required int ownerId,
+    required String action, // "approve", "reject_modification", "reject_all"
+    String? reviewNotes,
+  }) async {
+    try {
+      final response = await _apiService.put(
+        '${ApiEndpoints.leaveRequests}/$requestId/review-modification',
+        data: {
+          'action': action,
+          'owner_id': ownerId,
+          'review_notes': reviewNotes,
+        },
+      );
+      return LeaveRequest.fromJson(response.data as Map<String, dynamic>);
+    } catch (e) {
+      throw Exception(
+          'Failed to review modification: ${_apiService.getErrorMessage(e)}');
+    }
+  }
 }
