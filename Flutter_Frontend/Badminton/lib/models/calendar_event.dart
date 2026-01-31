@@ -4,10 +4,13 @@ import 'package:flutter/material.dart';
 class CalendarEvent {
   final int id;
   final String title;
-  final String eventType; // 'holiday', 'tournament', 'event'
+  final String eventType; // 'holiday', 'tournament', 'event', 'leave'
   final DateTime date;
+  final DateTime? endDate; // For date ranges (e.g., multi-day leave)
   final String? description;
   final int? createdBy;
+  final String creatorType; // 'coach' or 'owner'
+  final int? relatedLeaveRequestId; // Link to leave request if this is a leave event
   final DateTime createdAt;
 
   CalendarEvent({
@@ -15,8 +18,11 @@ class CalendarEvent {
     required this.title,
     required this.eventType,
     required this.date,
+    this.endDate,
     this.description,
     this.createdBy,
+    this.creatorType = 'coach',
+    this.relatedLeaveRequestId,
     required this.createdAt,
   });
 
@@ -27,8 +33,13 @@ class CalendarEvent {
       title: json['title'] as String,
       eventType: json['event_type'] as String,
       date: DateTime.parse(json['date'] as String),
+      endDate: json['end_date'] != null
+          ? DateTime.parse(json['end_date'] as String)
+          : null,
       description: json['description'] as String?,
       createdBy: json['created_by'] as int?,
+      creatorType: json['creator_type'] as String? ?? 'coach',
+      relatedLeaveRequestId: json['related_leave_request_id'] as int?,
       createdAt: DateTime.parse(json['created_at'] as String),
     );
   }
@@ -39,8 +50,11 @@ class CalendarEvent {
       'title': title,
       'event_type': eventType,
       'date': date.toIso8601String().split('T')[0], // YYYY-MM-DD format
+      'end_date': endDate?.toIso8601String().split('T')[0],
       'description': description,
       'created_by': createdBy,
+      'creator_type': creatorType,
+      'related_leave_request_id': relatedLeaveRequestId,
     };
   }
 
@@ -50,8 +64,11 @@ class CalendarEvent {
     String? title,
     String? eventType,
     DateTime? date,
+    DateTime? endDate,
     String? description,
     int? createdBy,
+    String? creatorType,
+    int? relatedLeaveRequestId,
     DateTime? createdAt,
   }) {
     return CalendarEvent(
@@ -59,18 +76,23 @@ class CalendarEvent {
       title: title ?? this.title,
       eventType: eventType ?? this.eventType,
       date: date ?? this.date,
+      endDate: endDate ?? this.endDate,
       description: description ?? this.description,
       createdBy: createdBy ?? this.createdBy,
+      creatorType: creatorType ?? this.creatorType,
+      relatedLeaveRequestId: relatedLeaveRequestId ?? this.relatedLeaveRequestId,
       createdAt: createdAt ?? this.createdAt,
     );
   }
 
   /// Get event color based on type
-  /// Holidays are red, all other events (tournament, event) are jade green
+  /// Holidays are red, leave events are orange/amber, all other events (tournament, event) are jade green
   Color get eventColor {
     switch (eventType.toLowerCase()) {
       case 'holiday':
         return Colors.red;
+      case 'leave':
+        return const Color(0xFFFF9800); // Orange/Amber
       case 'tournament':
         return const Color(0xFF00A86B); // Jade green
       case 'event':
@@ -83,11 +105,19 @@ class CalendarEvent {
   /// Check if this is a holiday event
   bool get isHoliday => eventType.toLowerCase() == 'holiday';
 
+  /// Check if this is a leave event
+  bool get isLeave => eventType.toLowerCase() == 'leave';
+
+  /// Check if this event spans multiple days
+  bool get isMultiDay => endDate != null && endDate!.difference(date).inDays > 0;
+
   /// Get event icon based on type
   IconData get eventIcon {
     switch (eventType.toLowerCase()) {
       case 'holiday':
         return Icons.beach_access;
+      case 'leave':
+        return Icons.airplane_ticket;
       case 'tournament':
         return Icons.emoji_events;
       case 'event':

@@ -362,16 +362,18 @@ class NotificationDB(Base):
 
 
 class CalendarEventDB(Base):
-    """Calendar events: holidays, tournaments, in-house events"""
+    """Calendar events: holidays, tournaments, in-house events, leave"""
     __tablename__ = "calendar_events"
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(255), nullable=False)
-    event_type = Column(String(50), nullable=False)  # "holiday", "tournament", "event"
+    event_type = Column(String(50), nullable=False)  # "holiday", "tournament", "event", "leave"
     date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=True)  # For date ranges (e.g., multi-day leave)
     description = Column(Text, nullable=True)
     created_by = Column(Integer, nullable=True)  # Can be coach or owner ID
     creator_type = Column(String(20), default="coach")  # "coach" or "owner"
+    related_leave_request_id = Column(Integer, nullable=True)  # Link to leave_requests table if this is a leave event
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Note: Relationships are handled via creator_type field - use creator_type to determine if created_by refers to coach or owner
@@ -813,6 +815,12 @@ def migrate_database_schema(engine):
                 print(f"❌ Error creating leave_requests table: {e}")
         else:
             print("✅ leave_requests table exists")
+        
+        # Migrate calendar_events table - add end_date and related_leave_request_id columns
+        if 'calendar_events' in tables:
+            check_and_add_column(engine, 'calendar_events', 'end_date', 'DATE', nullable=True)
+            check_and_add_column(engine, 'calendar_events', 'related_leave_request_id', 'INTEGER', nullable=True)
+            print("✅ calendar_events table schema updated for leave support")
         
         print("✅ Database schema migration completed!")
     except Exception as e:
@@ -1471,18 +1479,22 @@ class CalendarEventCreate(BaseModel):
     title: str
     event_type: str
     date: str  # Format: "YYYY-MM-DD"
+    end_date: Optional[str] = None  # Format: "YYYY-MM-DD" (for date ranges)
     description: Optional[str] = None
     created_by: int
     creator_type: str = "coach"  # "coach" or "owner"
+    related_leave_request_id: Optional[int] = None  # Link to leave request if this is a leave event
 
 class CalendarEvent(BaseModel):
     id: int
     title: str
     event_type: str
     date: str
+    end_date: Optional[str] = None
     description: Optional[str] = None
     created_by: int
     creator_type: str = "coach"  # "coach" or "owner"
+    related_leave_request_id: Optional[int] = None
     created_at: str
 
     class Config:
@@ -1492,6 +1504,7 @@ class CalendarEventUpdate(BaseModel):
     title: Optional[str] = None
     event_type: Optional[str] = None
     date: Optional[str] = None
+    end_date: Optional[str] = None
     description: Optional[str] = None
 
 # ==================== FastAPI App ====================
@@ -5115,8 +5128,11 @@ def _db_event_to_pydantic(db_event: CalendarEventDB) -> CalendarEvent:
         title=db_event.title,
         event_type=db_event.event_type,
         date=db_event.date.isoformat() if isinstance(db_event.date, date) else str(db_event.date),
+        end_date=db_event.end_date.isoformat() if db_event.end_date and isinstance(db_event.end_date, date) else (str(db_event.end_date) if db_event.end_date else None),
         description=db_event.description,
         created_by=db_event.created_by,
+        creator_type=db_event.creator_type or "coach",
+        related_leave_request_id=db_event.related_leave_request_id,
         created_at=db_event.created_at.isoformat() if hasattr(db_event.created_at, 'isoformat') else str(db_event.created_at),
     )
 
@@ -5144,14 +5160,21 @@ def create_calendar_event(event: CalendarEventCreate):
         # Convert date string to date object
         event_date = datetime.strptime(event.date, "%Y-%m-%d").date()
         
+        # Convert end_date if provided
+        event_end_date = None
+        if event.end_date:
+            event_end_date = datetime.strptime(event.end_date, "%Y-%m-%d").date()
+        
         # Create database event with proper date conversion
         db_event = CalendarEventDB(
             title=event.title,
             event_type=event.event_type,
             date=event_date,
+            end_date=event_end_date,
             description=event.description,
             created_by=event.created_by,
             creator_type=event.creator_type,
+            related_leave_request_id=event.related_leave_request_id,
         )
         db.add(db_event)
         db.commit()
@@ -5186,18 +5209,58 @@ def create_calendar_event(event: CalendarEventCreate):
 @app.get("/api/calendar-events/", response_model=List[CalendarEvent])
 def get_calendar_events(start_date: Optional[str] = None, end_date: Optional[str] = None, event_type: Optional[str] = None):
     """Get calendar events, optionally filtered by date range and event type"""
+    from sqlalchemy import or_
     db = SessionLocal()
     try:
         query = db.query(CalendarEventDB)
 
-        if start_date:
-            # Convert string to date object for comparison
+        if start_date and end_date:
+            # Convert strings to date objects for comparison
             start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
-            query = query.filter(CalendarEventDB.date >= start_date_obj)
-        if end_date:
-            # Convert string to date object for comparison
             end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
-            query = query.filter(CalendarEventDB.date <= end_date_obj)
+            # Include events that:
+            # 1. Start within the range, OR
+            # 2. End within the range, OR
+            # 3. Span the entire range (start before and end after)
+            query = query.filter(
+                or_(
+                    # Event starts within range
+                    (CalendarEventDB.date >= start_date_obj) & (CalendarEventDB.date <= end_date_obj),
+                    # Event ends within range (if end_date exists)
+                    (CalendarEventDB.end_date.isnot(None)) & 
+                    (CalendarEventDB.end_date >= start_date_obj) & 
+                    (CalendarEventDB.end_date <= end_date_obj),
+                    # Event spans the range (starts before and ends after)
+                    (CalendarEventDB.date <= start_date_obj) & 
+                    (CalendarEventDB.end_date.isnot(None)) & 
+                    (CalendarEventDB.end_date >= end_date_obj),
+                    # Single-day events that fall within range
+                    (CalendarEventDB.end_date.is_(None)) & 
+                    (CalendarEventDB.date >= start_date_obj) & 
+                    (CalendarEventDB.date <= end_date_obj)
+                )
+            )
+        elif start_date:
+            # Only start_date provided - include events that start on or after this date
+            # or events that end on or after this date
+            start_date_obj = datetime.strptime(start_date, "%Y-%m-%d").date()
+            query = query.filter(
+                or_(
+                    CalendarEventDB.date >= start_date_obj,
+                    (CalendarEventDB.end_date.isnot(None)) & (CalendarEventDB.end_date >= start_date_obj)
+                )
+            )
+        elif end_date:
+            # Only end_date provided - include events that end on or before this date
+            # or events that start on or before this date
+            end_date_obj = datetime.strptime(end_date, "%Y-%m-%d").date()
+            query = query.filter(
+                or_(
+                    CalendarEventDB.date <= end_date_obj,
+                    (CalendarEventDB.end_date.isnot(None)) & (CalendarEventDB.end_date <= end_date_obj)
+                )
+            )
+        
         if event_type:
             query = query.filter(CalendarEventDB.event_type == event_type)
 
@@ -5232,9 +5295,13 @@ def update_calendar_event(event_id: int, event: CalendarEventUpdate):
         event_dict = event.model_dump(exclude_unset=True)
         if 'date' in event_dict and isinstance(event_dict['date'], str):
             event_dict['date'] = datetime.strptime(event_dict['date'], "%Y-%m-%d").date()
+        if 'end_date' in event_dict and isinstance(event_dict['end_date'], str):
+            event_dict['end_date'] = datetime.strptime(event_dict['end_date'], "%Y-%m-%d").date()
+        elif 'end_date' in event_dict and event_dict['end_date'] is None:
+            event_dict['end_date'] = None
         
         # Only update allowed fields (exclude created_by and creator_type as they shouldn't change)
-        allowed_fields = {'title', 'event_type', 'date', 'description'}
+        allowed_fields = {'title', 'event_type', 'date', 'end_date', 'description'}
         for key, value in event_dict.items():
             if key in allowed_fields:
                 setattr(db_event, key, value)
@@ -5502,11 +5569,46 @@ def update_leave_request(request_id: int, update: LeaveRequestUpdate, owner_id: 
             raise HTTPException(status_code=400, detail="Status must be 'approved' or 'rejected'")
         
         # Update request
-        from datetime import datetime
+        from datetime import datetime, timedelta
         db_request.status = update.status
         db_request.reviewed_by = owner_id
         db_request.reviewed_at = datetime.now()
         db_request.review_notes = update.review_notes
+        
+        # If approved, create calendar event(s) for the leave period
+        if update.status == "approved":
+            # Check if calendar event already exists for this leave request
+            existing_event = db.query(CalendarEventDB).filter(
+                CalendarEventDB.related_leave_request_id == request_id
+            ).first()
+            
+            if not existing_event:
+                # Create calendar event for the leave period
+                # Use start_date as the main date, end_date for range
+                # Format leave type: 'sick' -> 'Sick', 'personal' -> 'Personal', etc.
+                leave_type_formatted = db_request.leave_type.replace('_', ' ').title()
+                leave_title = f"{db_request.coach_name} - {leave_type_formatted} Leave"
+                leave_description = f"Leave request: {db_request.reason}"
+                
+                calendar_event = CalendarEventDB(
+                    title=leave_title,
+                    event_type="leave",
+                    date=db_request.start_date,
+                    end_date=db_request.end_date,
+                    description=leave_description,
+                    created_by=owner_id,  # Created by owner who approved
+                    creator_type="owner",
+                    related_leave_request_id=request_id
+                )
+                db.add(calendar_event)
+        
+        # If rejected, remove any existing calendar events for this leave request
+        elif update.status == "rejected":
+            existing_events = db.query(CalendarEventDB).filter(
+                CalendarEventDB.related_leave_request_id == request_id
+            ).all()
+            for event in existing_events:
+                db.delete(event)
         
         db.commit()
         db.refresh(db_request)
