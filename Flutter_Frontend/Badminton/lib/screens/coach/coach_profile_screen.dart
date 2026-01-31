@@ -48,14 +48,18 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final authState = ref.watch(authProvider);
     
     return authState.when(
       data: (authValue) {
         if (authValue is! Authenticated) {
           return Scaffold(
+            backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
             appBar: AppBar(
               title: const Text('Profile'),
+              backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
             ),
             body: const Center(
               child: Text(
@@ -67,14 +71,22 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
         }
 
         final coachId = authValue.userId;
-        return _buildScaffold(coachId);
+        return _buildScaffold(coachId, isDark);
       },
       loading: () => Scaffold(
-        appBar: AppBar(title: const Text('Profile')),
+        backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+        appBar: AppBar(
+          title: const Text('Profile'),
+          backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+        ),
         body: const Center(child: ProfileSkeleton()),
       ),
       error: (error, stack) => Scaffold(
-        appBar: AppBar(title: const Text('Profile')),
+        backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+        appBar: AppBar(
+          title: const Text('Profile'),
+          backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+        ),
         body: Center(
           child: Text(
             'Error: ${error.toString()}',
@@ -85,14 +97,15 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
     );
   }
 
-  Widget _buildScaffold(int coachId) {
+  Widget _buildScaffold(int coachId, bool isDark) {
     final coachAsync = ref.watch(coachByIdProvider(coachId));
     final coachStatsAsync = ref.watch(coachStatsProvider(coachId));
 
     return Scaffold(
+      backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
       appBar: AppBar(
         title: const Text('Profile'),
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
         elevation: 0,
       ),
       body: RefreshIndicator(

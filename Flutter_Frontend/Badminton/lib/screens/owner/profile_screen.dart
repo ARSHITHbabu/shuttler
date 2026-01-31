@@ -44,7 +44,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final backgroundColor = theme.scaffoldBackgroundColor;
+    final backgroundColor = isDark ? AppColors.background : AppColorsLight.background;
     final textPrimaryColor = theme.colorScheme.onSurface;
     final textSecondaryColor = theme.colorScheme.onSurface.withValues(alpha: 0.6);
     final iconPrimaryColor = isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary;
@@ -56,6 +56,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       data: (authValue) {
         if (authValue is! Authenticated) {
           return Scaffold(
+            backgroundColor: backgroundColor,
             appBar: AppBar(
               backgroundColor: backgroundColor,
               elevation: 0,
@@ -85,6 +86,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         return _buildScaffold(ownerId, backgroundColor, textPrimaryColor, textSecondaryColor, iconPrimaryColor, cardBackground);
       },
       loading: () => Scaffold(
+        backgroundColor: backgroundColor,
         appBar: AppBar(
           backgroundColor: backgroundColor,
           elevation: 0,
@@ -104,6 +106,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         body: const Center(child: ProfileSkeleton()),
       ),
       error: (error, stack) => Scaffold(
+        backgroundColor: backgroundColor,
         appBar: AppBar(
           backgroundColor: backgroundColor,
           elevation: 0,
