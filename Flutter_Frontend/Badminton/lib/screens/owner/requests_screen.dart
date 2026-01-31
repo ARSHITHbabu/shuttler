@@ -437,9 +437,248 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
               ],
             ),
           ],
+
+          // Modification Request Section
+          if (request.hasPendingModification) ...[
+            const SizedBox(height: AppDimensions.spacingM),
+            Container(
+              padding: const EdgeInsets.all(AppDimensions.paddingM),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.edit_calendar, color: AppColors.warning, size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                        "Modification Request", 
+                        style: TextStyle(
+                          color: AppColors.warning, 
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppDimensions.spacingM),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Original Dates",
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${DateFormat('dd MMM').format(request.startDate)} - ${DateFormat('dd MMM').format(request.endDate)}',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                                decoration: TextDecoration.lineThrough,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.arrow_forward, size: 16, color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              "New Dates",
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${DateFormat('dd MMM').format(request.modificationStartDate!)} - ${DateFormat('dd MMM').format(request.modificationEndDate!)}',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppDimensions.spacingM),
+                  Text(
+                    'Modification Reason:',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    request.modificationReason ?? 'No reason provided',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: AppDimensions.spacingM),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      NeumorphicButton(
+                        onPressed: () => _reviewModification(request, 'reject_modification'),
+                        text: 'Reject Mod',
+                        isOutlined: true,
+                        color: AppColors.warning,
+                        textColor: AppColors.warning,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                      const SizedBox(width: 8),
+                      NeumorphicButton(
+                        onPressed: () => _reviewModification(request, 'approve'),
+                        text: 'Approve Mod',
+                        color: AppColors.success,
+                        textColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                    ],
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () => _reviewModification(request, 'reject_all'),
+                      child: Text(
+                        "Reject Entire Leave", 
+                        style: TextStyle(color: AppColors.error, fontSize: 12),
+                      ),
+                    ),
+                  )
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  Future<void> _reviewModification(LeaveRequest request, String action) async {
+    String title;
+    String message;
+    
+    switch (action) {
+      case 'approve':
+        title = 'Approve Modification';
+        message = 'Are you sure you want to approve this modification? The leave dates will be updated.';
+        break;
+      case 'reject_modification':
+        title = 'Reject Modification';
+        message = 'Are you sure you want to reject this modification? The original leave dates will remain active.';
+        break;
+      case 'reject_all':
+        title = 'Reject Everything';
+        message = 'Are you sure you want to reject the ENTIRE leave request? This will cancel the originally approved leave as well.';
+        break;
+      default:
+        return;
+    }
+
+    final confirmed = await ConfirmationDialog.show(
+      context,
+      title,
+      message,
+      confirmText: action == 'approve' ? 'Approve' : 'Reject',
+      icon: action == 'approve' ? Icons.check_circle_outline : Icons.cancel_outlined,
+      isDestructive: action != 'approve',
+    );
+
+    if (confirmed == true && mounted) {
+      await _showModificationNotesDialog(request, action);
+    }
+  }
+
+  Future<void> _showModificationNotesDialog(LeaveRequest request, String action) async {
+    _reviewNotesController.clear();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Theme.of(context).brightness == Brightness.dark
+            ? AppColors.cardBackground
+            : AppColorsLight.cardBackground,
+        title: Text(
+          'Review Notes',
+          style: TextStyle(
+            color: Theme.of(context).brightness == Brightness.dark
+                ? AppColors.textPrimary
+                : AppColorsLight.textPrimary,
+          ),
+        ),
+        content: CustomTextField(
+          controller: _reviewNotesController,
+          label: 'Notes (Optional)',
+          hint: 'Add notes...',
+          maxLines: 3,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: action == 'approve' ? AppColors.success : AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            child: Text('Submit'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true && mounted) {
+      try {
+        final authState = await ref.read(authProvider.future);
+        if (authState is Authenticated && authState.userType == 'owner') {
+          // Use service directly as in coach screen
+          final service = ref.read(leaveRequestServiceProvider);
+          
+          await service.reviewModificationRequest(
+            requestId: request.id,
+            ownerId: authState.userId,
+            action: action,
+            reviewNotes: _reviewNotesController.text.trim().isEmpty 
+                ? null 
+                : _reviewNotesController.text.trim(),
+          );
+
+          // Refresh
+          ref.invalidate(leaveRequestManagerProvider(coachId: null, status: _selectedFilter == 'all' ? null : _selectedFilter));
+
+          if (mounted) {
+            SuccessSnackbar.show(context, 'Processed modification request');
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          SuccessSnackbar.showError(context, 'Failed to process: ${e.toString()}');
+        }
+      }
+    }
   }
 
   Color _getStatusColor(String status, bool isDark) {
