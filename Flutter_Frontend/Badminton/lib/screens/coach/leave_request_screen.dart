@@ -7,6 +7,11 @@ import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
+import '../../widgets/common/error_widget.dart';
+import '../../widgets/common/skeleton_screen.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/leave_request_provider.dart';
+import '../../models/leave_request.dart';
 
 /// Leave Request Screen - Submit and view leave requests
 class LeaveRequestScreen extends ConsumerStatefulWidget {
@@ -23,9 +28,6 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
   DateTime _selectedEndDate = DateTime.now();
   String _selectedLeaveType = 'sick'; // 'sick', 'personal', 'emergency', 'other'
   bool _isLoading = false;
-
-  // Mock data - In a real app, this would come from a provider/service
-  final List<Map<String, dynamic>> _leaveRequests = [];
 
   @override
   void dispose() {
@@ -44,24 +46,32 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
       return;
     }
 
+    final authState = await ref.read(authProvider.future);
+    if (authState is! Authenticated || authState.userType != 'coach') {
+      SuccessSnackbar.showError(context, 'You must be logged in as a coach');
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
-      // TODO: Implement actual API call to submit leave request
-      await Future.delayed(const Duration(milliseconds: 500)); // Simulate API call
+      final manager = ref.read(
+        leaveRequestManagerProvider(
+          coachId: authState.userId,
+          status: null,
+        ).notifier,
+      );
 
-      final newRequest = {
-        'id': DateTime.now().millisecondsSinceEpoch,
-        'startDate': _selectedStartDate,
-        'endDate': _selectedEndDate,
-        'type': _selectedLeaveType,
-        'reason': _reasonController.text.trim(),
-        'status': 'pending',
-        'submittedDate': DateTime.now(),
-      };
+      await manager.createLeaveRequest(
+        coachId: authState.userId,
+        coachName: authState.userName,
+        startDate: _selectedStartDate,
+        endDate: _selectedEndDate,
+        leaveType: _selectedLeaveType,
+        reason: _reasonController.text.trim(),
+      );
 
       setState(() {
-        _leaveRequests.insert(0, newRequest);
         _showAddForm = false;
         _reasonController.clear();
         _selectedStartDate = DateTime.now();
@@ -91,12 +101,23 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
 
     if (confirmed == true && mounted) {
       try {
-        // TODO: Implement actual API call to cancel leave request
-        await Future.delayed(const Duration(milliseconds: 300));
+        final authState = await ref.read(authProvider.future);
+        if (authState is! Authenticated || authState.userType != 'coach') {
+          SuccessSnackbar.showError(context, 'You must be logged in as a coach');
+          return;
+        }
 
-        setState(() {
-          _leaveRequests.removeWhere((req) => req['id'] == requestId);
-        });
+        final manager = ref.read(
+          leaveRequestManagerProvider(
+            coachId: authState.userId,
+            status: null,
+          ).notifier,
+        );
+
+        await manager.deleteLeaveRequest(
+          requestId: requestId,
+          coachId: authState.userId,
+        );
 
         if (mounted) {
           SuccessSnackbar.show(context, 'Leave request cancelled');
@@ -154,10 +175,81 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final authStateAsync = ref.watch(authProvider);
 
-    if (_showAddForm) {
-      return _buildAddForm(isDark);
-    }
+    return authStateAsync.when(
+      data: (authState) {
+        if (authState is! Authenticated || authState.userType != 'coach') {
+          return Scaffold(
+            backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+            body: const Center(
+              child: Text('Please log in as a coach to view leave requests'),
+            ),
+          );
+        }
+
+        if (_showAddForm) {
+          return _buildAddForm(isDark);
+        }
+
+        return _buildLeaveRequestsList(authState, isDark);
+      },
+      loading: () => Scaffold(
+        backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+        appBar: AppBar(
+          backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(
+              Icons.arrow_back,
+              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+            ),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          title: Text(
+            'Leave Requests',
+            style: TextStyle(
+              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        body: const Center(child: ListSkeleton(itemCount: 5)),
+      ),
+      error: (error, stack) => Scaffold(
+        backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+        appBar: AppBar(
+          backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(
+              Icons.arrow_back,
+              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+            ),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          title: Text(
+            'Leave Requests',
+            style: TextStyle(
+              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        body: ErrorDisplay(
+          message: 'Failed to load user data: ${error.toString()}',
+          onRetry: () => ref.invalidate(authProvider),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLeaveRequestsList(Authenticated authState, bool isDark) {
+    final leaveRequestsAsync = ref.watch(
+      coachLeaveRequestsProvider(authState.userId),
+    );
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
@@ -189,22 +281,40 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
           ),
         ],
       ),
-      body: _leaveRequests.isEmpty
-          ? _buildEmptyState(isDark)
-          : RefreshIndicator(
-              onRefresh: () async {
-                // TODO: Refresh leave requests from API
-                await Future.delayed(const Duration(milliseconds: 300));
+      body: RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(coachLeaveRequestsProvider(authState.userId));
+        },
+        child: leaveRequestsAsync.when(
+          loading: () => const ListSkeleton(itemCount: 5),
+          error: (error, stack) => ErrorDisplay(
+            message: 'Failed to load leave requests: ${error.toString()}',
+            onRetry: () => ref.invalidate(coachLeaveRequestsProvider(authState.userId)),
+          ),
+          data: (requests) {
+            if (requests.isEmpty) {
+              return _buildEmptyState(isDark);
+            }
+
+            // Sort: pending first, then by submission date
+            final sortedRequests = List<LeaveRequest>.from(requests)
+              ..sort((a, b) {
+                if (a.isPending && !b.isPending) return -1;
+                if (!a.isPending && b.isPending) return 1;
+                return b.submittedAt.compareTo(a.submittedAt);
+              });
+
+            return ListView.builder(
+              padding: const EdgeInsets.all(AppDimensions.paddingL),
+              itemCount: sortedRequests.length,
+              itemBuilder: (context, index) {
+                final request = sortedRequests[index];
+                return _buildLeaveRequestCard(request, isDark);
               },
-              child: ListView.builder(
-                padding: const EdgeInsets.all(AppDimensions.paddingL),
-                itemCount: _leaveRequests.length,
-                itemBuilder: (context, index) {
-                  final request = _leaveRequests[index];
-                  return _buildLeaveRequestCard(request, isDark);
-                },
-              ),
-            ),
+            );
+          },
+        ),
+      ),
     );
   }
 
@@ -257,12 +367,12 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
     );
   }
 
-  Widget _buildLeaveRequestCard(Map<String, dynamic> request, bool isDark) {
-    final startDate = request['startDate'] as DateTime;
-    final endDate = request['endDate'] as DateTime;
-    final status = request['status'] as String;
-    final type = request['type'] as String;
-    final reason = request['reason'] as String;
+  Widget _buildLeaveRequestCard(LeaveRequest request, bool isDark) {
+    final startDate = request.startDate;
+    final endDate = request.endDate;
+    final status = request.status;
+    final type = request.leaveType;
+    final reason = request.reason;
 
     return NeumorphicContainer(
       padding: const EdgeInsets.all(AppDimensions.paddingM),
@@ -324,12 +434,12 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
               color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
             ),
           ),
-          if (status == 'pending') ...[
+          if (request.isPending) ...[
             const SizedBox(height: AppDimensions.spacingM),
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
-                onPressed: () => _cancelLeaveRequest(request['id'] as int),
+                onPressed: () => _cancelLeaveRequest(request.id),
                 child: Text(
                   'Cancel Request',
                   style: TextStyle(
