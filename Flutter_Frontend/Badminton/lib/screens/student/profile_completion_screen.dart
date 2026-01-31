@@ -34,16 +34,20 @@ class _ProfileCompletionScreenState
   bool _isLoading = false;
   DateTime? _selectedDate;
   String? _selectedTShirtSize;
+  String? _selectedBloodGroup;
   String? _profilePhotoUrl;
 
-  final List<String> _tShirtSizes = [
-    'XS',
-    'S',
-    'M',
-    'L',
-    'XL',
-    'XXL',
-    'XXXL',
+  final List<String> _tShirtSizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL'];
+
+  final List<String> _bloodGroups = [
+    'A+',
+    'A-',
+    'B+',
+    'B-',
+    'AB+',
+    'AB-',
+    'O+',
+    'O-',
   ];
 
   @override
@@ -54,6 +58,28 @@ class _ProfileCompletionScreenState
     _addressController.dispose();
     _tShirtSizeController.dispose();
     super.dispose();
+  }
+
+  Future<Map<String, dynamic>> _checkStudentStatus() async {
+    try {
+      final authState = ref.read(authProvider);
+      int? studentId;
+      
+      authState.whenData((authValue) {
+        if (authValue is Authenticated && authValue.userType == 'student') {
+          studentId = authValue.userId;
+        }
+      });
+
+      if (studentId != null) {
+        final studentService = ref.read(studentServiceProvider);
+        final student = await studentService.getStudentById(studentId!);
+        return {'status': student.status};
+      }
+      return {'status': 'active'};
+    } catch (e) {
+      return {'status': 'active'};
+    }
   }
 
   Future<void> _selectDate(BuildContext context) async {
@@ -94,32 +120,37 @@ class _ProfileCompletionScreenState
       return;
     }
 
+    if (_selectedBloodGroup == null) {
+      SuccessSnackbar.showError(context, 'Please select your blood group');
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
       // Get user ID from auth provider (preferred) or storage (fallback)
       int? userId;
-      
+
       // Try to get from auth provider first
       final authStateAsync = ref.read(authProvider);
       final authState = authStateAsync.value;
-      
+
       if (authState is Authenticated) {
         userId = authState.userId;
       }
-      
+
       // Fallback: try to get from storage if auth provider doesn't have it
       if (userId == null) {
         final storageService = ref.read(storageServiceProvider);
-        
+
         // Ensure storage is initialized
         if (!storageService.isInitialized) {
           await storageService.init();
         }
-        
+
         userId = storageService.getUserId();
       }
-      
+
       if (userId == null) {
         throw Exception('User not logged in. Please try logging in again.');
       }
@@ -131,6 +162,7 @@ class _ProfileCompletionScreenState
         'date_of_birth': _dateOfBirthController.text.trim(),
         'address': _addressController.text.trim(),
         't_shirt_size': _selectedTShirtSize,
+        'blood_group': _selectedBloodGroup,
         if (_profilePhotoUrl != null) 'profile_photo': _profilePhotoUrl,
       };
 
@@ -144,13 +176,16 @@ class _ProfileCompletionScreenState
 
       if (mounted) {
         SuccessSnackbar.show(context, 'Profile completed successfully!');
-        
+
         // Navigate to student dashboard
         context.go('/student-dashboard');
       }
     } catch (e) {
       if (mounted) {
-        SuccessSnackbar.showError(context, e.toString().replaceAll('Exception: ', ''));
+        SuccessSnackbar.showError(
+          context,
+          e.toString().replaceAll('Exception: ', ''),
+        );
       }
     } finally {
       if (mounted) {
@@ -181,7 +216,61 @@ class _ProfileCompletionScreenState
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const SizedBox(height: AppDimensions.spacingM),
-                
+
+                // Pending Approval Message (if status is pending)
+                FutureBuilder<Map<String, dynamic>>(
+                  future: _checkStudentStatus(),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasData && snapshot.data!['status'] == 'pending') {
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
+                        padding: const EdgeInsets.all(AppDimensions.paddingM),
+                        decoration: BoxDecoration(
+                          color: AppColors.warning.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                          border: Border.all(
+                            color: AppColors.warning.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.pending_outlined,
+                              color: AppColors.warning,
+                              size: 24,
+                            ),
+                            const SizedBox(width: AppDimensions.spacingM),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Account Pending Approval',
+                                    style: const TextStyle(
+                                      color: AppColors.warning,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Your registration is pending owner approval. You can complete your profile now, but you\'ll need approval to access the dashboard.',
+                                    style: const TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
+
                 // Info message
                 Container(
                   padding: const EdgeInsets.all(AppDimensions.paddingM),
@@ -209,7 +298,7 @@ class _ProfileCompletionScreenState
                     ],
                   ),
                 ),
-                
+
                 const SizedBox(height: AppDimensions.spacingXl),
 
                 // Guardian Name Field
@@ -281,22 +370,30 @@ class _ProfileCompletionScreenState
                     filled: true,
                     fillColor: AppColors.cardBackground,
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                      borderRadius: BorderRadius.circular(
+                        AppDimensions.radiusM,
+                      ),
                       borderSide: BorderSide.none,
                     ),
                     enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                      borderRadius: BorderRadius.circular(
+                        AppDimensions.radiusM,
+                      ),
                       borderSide: BorderSide.none,
                     ),
                     focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                      borderRadius: BorderRadius.circular(
+                        AppDimensions.radiusM,
+                      ),
                       borderSide: const BorderSide(
                         color: AppColors.accent,
                         width: 2,
                       ),
                     ),
                     errorBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                      borderRadius: BorderRadius.circular(
+                        AppDimensions.radiusM,
+                      ),
                       borderSide: const BorderSide(
                         color: AppColors.error,
                         width: 1,
@@ -323,6 +420,75 @@ class _ProfileCompletionScreenState
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please select a T-shirt size';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: AppDimensions.spacingL),
+
+                // Blood Group Dropdown
+                DropdownButtonFormField<String>(
+                  value: _selectedBloodGroup,
+                  decoration: InputDecoration(
+                    labelText: 'Blood Group *',
+                    hintText: 'Select your blood group',
+                    prefixIcon: const Icon(
+                      Icons.bloodtype_outlined,
+                      color: AppColors.textSecondary,
+                    ),
+                    filled: true,
+                    fillColor: AppColors.cardBackground,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(
+                        AppDimensions.radiusM,
+                      ),
+                      borderSide: BorderSide.none,
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(
+                        AppDimensions.radiusM,
+                      ),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(
+                        AppDimensions.radiusM,
+                      ),
+                      borderSide: const BorderSide(
+                        color: AppColors.accent,
+                        width: 2,
+                      ),
+                    ),
+                    errorBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(
+                        AppDimensions.radiusM,
+                      ),
+                      borderSide: const BorderSide(
+                        color: AppColors.error,
+                        width: 1,
+                      ),
+                    ),
+                    labelStyle: const TextStyle(color: AppColors.textSecondary),
+                    hintStyle: const TextStyle(color: AppColors.textHint),
+                  ),
+                  dropdownColor: AppColors.cardBackground,
+                  style: const TextStyle(color: AppColors.textPrimary),
+                  items: _bloodGroups.map((String group) {
+                    return DropdownMenuItem<String>(
+                      value: group,
+                      child: Text(group),
+                    );
+                  }).toList(),
+                  onChanged: _isLoading
+                      ? null
+                      : (String? newValue) {
+                          setState(() {
+                            _selectedBloodGroup = newValue;
+                          });
+                        },
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please select your blood group';
                     }
                     return null;
                   },

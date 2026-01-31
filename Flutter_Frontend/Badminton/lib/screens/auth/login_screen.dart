@@ -54,12 +54,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           );
 
       if (mounted) {
-        // Check profile completeness for students
+        // Check profile completeness and status for students
         if (widget.userType == 'student') {
           final profileComplete = result['profile_complete'] ?? false;
+          final user = result['user'];
+          final studentStatus = user?['status'] as String? ?? 'active';
+          
+          // First check if profile is complete
           if (!profileComplete) {
             // Redirect to profile completion page
             context.go('/student-profile-complete');
+            return;
+          }
+          
+          // Then check if account is pending approval
+          if (studentStatus == 'pending') {
+            // Redirect to pending approval screen
+            context.go('/student-pending');
             return;
           }
         }
@@ -135,7 +146,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () => context.pop(),
+          onPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/');
+            }
+          },
         ),
       ),
       body: SafeArea(

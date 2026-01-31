@@ -287,7 +287,7 @@ class _CoachBatchesProviderElement
   int get coachId => (origin as CoachBatchesProvider).coachId;
 }
 
-String _$coachStatsHash() => r'28db8df8c874d42c576f60010122c7fdc1b92c5f';
+String _$coachStatsHash() => r'4496319a37032664852d75c5b25fb23b143a7ac0';
 
 /// Provider for coach statistics
 ///
@@ -419,28 +419,32 @@ class _CoachStatsProviderElement
 }
 
 String _$coachTodaySessionsHash() =>
-    r'41bd7668bb1d3d3291385760fc9a4dc6ebbe093c';
+    r'e5e7263f77b8cfacfcfd19800dca39ef063e7dee';
 
 /// Provider for coach's today sessions
-/// Since schedules don't have coach_id directly, we get schedules through batches
+/// Works directly with batches (like owner dashboard) instead of requiring Schedule records
+/// Converts batches to Schedule objects for display compatibility
 ///
 /// Copied from [coachTodaySessions].
 @ProviderFor(coachTodaySessions)
 const coachTodaySessionsProvider = CoachTodaySessionsFamily();
 
 /// Provider for coach's today sessions
-/// Since schedules don't have coach_id directly, we get schedules through batches
+/// Works directly with batches (like owner dashboard) instead of requiring Schedule records
+/// Converts batches to Schedule objects for display compatibility
 ///
 /// Copied from [coachTodaySessions].
 class CoachTodaySessionsFamily extends Family<AsyncValue<List<Schedule>>> {
   /// Provider for coach's today sessions
-  /// Since schedules don't have coach_id directly, we get schedules through batches
+  /// Works directly with batches (like owner dashboard) instead of requiring Schedule records
+  /// Converts batches to Schedule objects for display compatibility
   ///
   /// Copied from [coachTodaySessions].
   const CoachTodaySessionsFamily();
 
   /// Provider for coach's today sessions
-  /// Since schedules don't have coach_id directly, we get schedules through batches
+  /// Works directly with batches (like owner dashboard) instead of requiring Schedule records
+  /// Converts batches to Schedule objects for display compatibility
   ///
   /// Copied from [coachTodaySessions].
   CoachTodaySessionsProvider call(int coachId) {
@@ -470,13 +474,15 @@ class CoachTodaySessionsFamily extends Family<AsyncValue<List<Schedule>>> {
 }
 
 /// Provider for coach's today sessions
-/// Since schedules don't have coach_id directly, we get schedules through batches
+/// Works directly with batches (like owner dashboard) instead of requiring Schedule records
+/// Converts batches to Schedule objects for display compatibility
 ///
 /// Copied from [coachTodaySessions].
 class CoachTodaySessionsProvider
     extends AutoDisposeFutureProvider<List<Schedule>> {
   /// Provider for coach's today sessions
-  /// Since schedules don't have coach_id directly, we get schedules through batches
+  /// Works directly with batches (like owner dashboard) instead of requiring Schedule records
+  /// Converts batches to Schedule objects for display compatibility
   ///
   /// Copied from [coachTodaySessions].
   CoachTodaySessionsProvider(int coachId)

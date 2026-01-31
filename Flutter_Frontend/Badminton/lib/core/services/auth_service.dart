@@ -57,7 +57,7 @@ class AuthService {
           return 'An error occurred. Please try again.';
       }
     }
-    
+
     // Handle string exceptions
     final errorString = error.toString();
     if (errorString.contains('Exception: ')) {
@@ -69,7 +69,7 @@ class AuthService {
     if (errorString.contains('Network')) {
       return 'Network error. Please check your internet connection.';
     }
-    
+
     return 'An unexpected error occurred. Please try again.';
   }
 
@@ -86,7 +86,7 @@ class AuthService {
       // Each user type has its own login endpoint
       String endpoint;
       if (userType == 'owner') {
-        endpoint = ApiEndpoints.ownerLogin;  // /owners/login
+        endpoint = ApiEndpoints.ownerLogin; // /owners/login
       } else if (userType == 'coach') {
         endpoint = '/coaches/login';
       } else {
@@ -95,10 +95,7 @@ class AuthService {
 
       final response = await _apiService.post(
         endpoint,
-        data: {
-          'email': email,
-          'password': password,
-        },
+        data: {'email': email, 'password': password},
       );
 
       if (response.statusCode == 200) {
@@ -139,16 +136,17 @@ class AuthService {
         if (userType == 'student') {
           // Check profile completeness from backend response or student data
           bool profileComplete = false;
-          
+
           // First check if backend explicitly returns profile_complete (at top level)
           if (data.containsKey('profile_complete')) {
             final profileCompleteValue = data['profile_complete'];
             // Handle both boolean and string representations
-            profileComplete = profileCompleteValue == true || 
-                            profileCompleteValue == 'true' ||
-                            profileCompleteValue == 1;
+            profileComplete =
+                profileCompleteValue == true ||
+                profileCompleteValue == 'true' ||
+                profileCompleteValue == 1;
           }
-          
+
           // If not found in response, check required profile fields from student data
           if (!profileComplete) {
             // Required fields: guardian_name, guardian_phone, date_of_birth, address, t_shirt_size
@@ -157,8 +155,9 @@ class AuthService {
             final dateOfBirth = userData['date_of_birth'];
             final address = userData['address'];
             final tShirtSize = userData['t_shirt_size'];
-            
-            profileComplete = guardianName != null &&
+
+            profileComplete =
+                guardianName != null &&
                 guardianName.toString().trim().isNotEmpty &&
                 guardianPhone != null &&
                 guardianPhone.toString().trim().isNotEmpty &&
@@ -169,7 +168,7 @@ class AuthService {
                 tShirtSize != null &&
                 tShirtSize.toString().trim().isNotEmpty;
           }
-          
+
           // If still not complete, try fetching student profile directly as fallback
           if (!profileComplete && userData['id'] != null) {
             try {
@@ -177,7 +176,7 @@ class AuthService {
               final studentResponse = await _apiService.get(
                 ApiEndpoints.studentById(studentId),
               );
-              
+
               if (studentResponse.statusCode == 200) {
                 final studentProfile = studentResponse.data;
                 final guardianName = studentProfile['guardian_name'];
@@ -185,8 +184,9 @@ class AuthService {
                 final dateOfBirth = studentProfile['date_of_birth'];
                 final address = studentProfile['address'];
                 final tShirtSize = studentProfile['t_shirt_size'];
-                
-                profileComplete = guardianName != null &&
+
+                profileComplete =
+                    guardianName != null &&
                     guardianName.toString().trim().isNotEmpty &&
                     guardianPhone != null &&
                     guardianPhone.toString().trim().isNotEmpty &&
@@ -202,7 +202,7 @@ class AuthService {
               // This prevents blocking login if profile endpoint is unavailable
             }
           }
-          
+
           result['profile_complete'] = profileComplete;
         }
         return result;
@@ -217,6 +217,7 @@ class AuthService {
   }
 
   /// Register a new user
+  /// Note: Does NOT auto-login - user must wait for approval if not invited by owner
   Future<Map<String, dynamic>> register({
     required String name,
     required String email,
@@ -224,17 +225,18 @@ class AuthService {
     required String password,
     required String userType,
     Map<String, dynamic>? additionalData,
+    String? invitationToken,
   }) async {
     try {
       // Determine endpoint based on user type
       // Each user type has its own separate endpoint and table
       String endpoint;
       if (userType == 'owner') {
-        endpoint = ApiEndpoints.owners;  // /owners/
+        endpoint = ApiEndpoints.owners; // /owners/
       } else if (userType == 'coach') {
-        endpoint = ApiEndpoints.coaches;  // /coaches/
+        endpoint = ApiEndpoints.coaches; // /coaches/
       } else {
-        endpoint = ApiEndpoints.students;  // /students/
+        endpoint = ApiEndpoints.students; // /students/
       }
 
       // Prepare data based on user type
@@ -245,39 +247,39 @@ class AuthService {
         'password': password,
       };
 
+      // Add invitation token if provided
+      if (invitationToken != null && invitationToken.isNotEmpty) {
+        requestData['invitation_token'] = invitationToken;
+      }
+
       // Add any additional data (specialization, experience_years, etc.)
       if (additionalData != null) {
         requestData.addAll(additionalData);
       }
 
-      final response = await _apiService.post(
-        endpoint,
-        data: requestData,
-      );
+      final response = await _apiService.post(endpoint, data: requestData);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = response.data;
 
         // Registration returns user data directly (not nested like login)
         // But handle both cases just in case
-        final userData = data['owner'] ?? data['coach'] ?? data['student'] ?? data;
+        final userData =
+            data['owner'] ?? data['coach'] ?? data['student'] ?? data;
 
         if (userData['id'] == null) {
           throw Exception('Invalid response format');
         }
 
-        // Auto-login after successful registration
-        final sessionToken = 'session-${userData['id']}';
-        await _storageService.saveAuthToken(sessionToken);
-        await _storageService.saveUserId(userData['id']);
-        await _storageService.saveUserType(userType);
-        await _storageService.saveUserEmail(email);
-        await _storageService.saveUserName(userData['name']);
-        await _storageService.saveRememberMe(false);
+        // Don't auto-login - user needs to wait for approval or login manually if invited by owner
+        // Only save minimal data if needed, but don't set as logged in
+        // The account status will determine if they can login
 
         return {'user': userData};
       } else {
-        throw Exception('Registration failed with status: ${response.statusCode}');
+        throw Exception(
+          'Registration failed with status: ${response.statusCode}',
+        );
       }
     } on DioException catch (e) {
       throw Exception(getUserFriendlyErrorMessage(e));
@@ -419,10 +421,7 @@ class AuthService {
         endpoint = ApiEndpoints.studentById(userId);
       }
 
-      await _apiService.put(
-        endpoint,
-        data: {'fcm_token': fcmToken},
-      );
+      await _apiService.put(endpoint, data: {'fcm_token': fcmToken});
     } catch (e) {
       print('Failed to update FCM token: $e');
     }

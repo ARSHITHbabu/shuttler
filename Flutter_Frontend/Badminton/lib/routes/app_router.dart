@@ -5,6 +5,7 @@ import '../screens/auth/login_screen.dart';
 import '../screens/auth/signup_screen.dart';
 import '../screens/auth/forgot_password_screen.dart';
 import '../screens/student/profile_completion_screen.dart';
+import '../screens/student/pending_approval_screen.dart';
 import '../screens/student/student_dashboard.dart';
 import '../screens/owner/academy_setup_screen.dart';
 import '../screens/owner/owner_dashboard.dart';
@@ -35,13 +36,39 @@ class AppRouter {
           },
         ),
 
-        // Signup route
+        // Signup route - supports invitation token via query params
         GoRoute(
           path: '/signup',
           name: 'signup',
           builder: (context, state) {
-            final userType = state.extra as String? ?? 'student';
-            return SignupScreen(userType: userType);
+            final userType =
+                state.extra as String? ??
+                (state.uri.queryParameters['userType'] ?? 'student');
+            final invitationToken = state.uri.queryParameters['token'];
+            return SignupScreen(
+              userType: userType,
+              invitationToken: invitationToken,
+            );
+          },
+        ),
+
+        // Invite route handler - redirects to signup with token
+        GoRoute(
+          path: '/invite/:token',
+          name: 'invite-student',
+          builder: (context, state) {
+            final token = state.pathParameters['token']!;
+            return SignupScreen(userType: 'student', invitationToken: token);
+          },
+        ),
+
+        // Coach invite route handler
+        GoRoute(
+          path: '/invite/coach/:token',
+          name: 'invite-coach',
+          builder: (context, state) {
+            final token = state.pathParameters['token']!;
+            return SignupScreen(userType: 'coach', invitationToken: token);
           },
         ),
 
@@ -74,6 +101,13 @@ class AppRouter {
           path: '/student-profile-complete',
           name: 'student-profile-complete',
           builder: (context, state) => const ProfileCompletionScreen(),
+        ),
+
+        // Student Pending Approval route
+        GoRoute(
+          path: '/student-pending',
+          name: 'student-pending',
+          builder: (context, state) => const PendingApprovalScreen(),
         ),
 
         // Student Dashboard route
@@ -114,15 +148,15 @@ class AppRouter {
               Text(
                 'Page Not Found',
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      color: const Color(0xFFe8e8e8),
-                    ),
+                  color: const Color(0xFFe8e8e8),
+                ),
               ),
               const SizedBox(height: 8),
               Text(
                 state.error?.toString() ?? 'Unknown error',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: const Color(0xFF888888),
-                    ),
+                  color: const Color(0xFF888888),
+                ),
               ),
               const SizedBox(height: 24),
               ElevatedButton(
@@ -172,31 +206,27 @@ class PlaceholderDashboard extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              icon,
-              size: 80,
-              color: const Color(0xFF4a9eff),
-            ),
+            Icon(icon, size: 80, color: const Color(0xFF4a9eff)),
             const SizedBox(height: 24),
             Text(
               'Welcome to $role Dashboard',
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    color: const Color(0xFFe8e8e8),
-                  ),
+                color: const Color(0xFFe8e8e8),
+              ),
             ),
             const SizedBox(height: 16),
             Text(
               'Phase 2: Authentication Complete!',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: const Color(0xFF4caf50),
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(color: const Color(0xFF4caf50)),
             ),
             const SizedBox(height: 8),
             Text(
               'Dashboard features coming in Phase 3',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF888888),
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: const Color(0xFF888888)),
             ),
             const SizedBox(height: 48),
             ElevatedButton.icon(
@@ -206,7 +236,10 @@ class PlaceholderDashboard extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF4a9eff),
                 foregroundColor: const Color(0xFFe8e8e8),
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 32,
+                  vertical: 16,
+                ),
               ),
             ),
           ],

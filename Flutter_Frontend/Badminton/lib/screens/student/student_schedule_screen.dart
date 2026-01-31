@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:table_calendar/table_calendar.dart';
+import 'package:intl/intl.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
-import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/student_provider.dart';
 import '../../providers/batch_provider.dart';
+import '../../providers/calendar_provider.dart';
 import '../../models/schedule.dart';
 import '../../models/batch.dart';
+import '../../core/utils/canadian_holidays.dart';
 
 /// Student Schedule Screen - READ-ONLY view of session schedules
 /// Students can view their batch schedules and upcoming sessions
@@ -25,10 +28,23 @@ class StudentScheduleScreen extends ConsumerStatefulWidget {
 
 class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
   int? _selectedBatchId;
-  DateTime _selectedDate = DateTime.now();
+  DateTime _focusedDay = DateTime.now();
+  DateTime _selectedDay = DateTime.now();
+  CalendarFormat _calendarFormat = CalendarFormat.month;
 
-  // Calendar view mode
-  bool _showCalendarView = true;
+  Map<DateTime, List<Schedule>> _groupSessionsByDate(List<Schedule> sessions) {
+    final Map<DateTime, List<Schedule>> grouped = {};
+    for (var session in sessions) {
+      final date = DateTime(session.date.year, session.date.month, session.date.day);
+      grouped.putIfAbsent(date, () => []).add(session);
+    }
+    return grouped;
+  }
+
+  List<Schedule> _getSessionsForDay(DateTime day, Map<DateTime, List<Schedule>> groupedSessions) {
+    final dateKey = DateTime(day.year, day.month, day.day);
+    return groupedSessions[dateKey] ?? [];
+  }
 
   List<Schedule> _filterSchedules(List<Schedule> schedules) {
     if (_selectedBatchId == null) {
@@ -37,434 +53,604 @@ class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
     return schedules.where((s) => s.batchId == _selectedBatchId).toList();
   }
 
-  List<Schedule> _getSchedulesForDay(List<Schedule> schedules, DateTime date) {
-    // For now, return all schedules for the selected date
-    // In a real implementation, you'd filter by day of week from batch schedule
-    return schedules.where((schedule) {
-      return schedule.date.year == date.year &&
-             schedule.date.month == date.month &&
-             schedule.date.day == date.day;
-    }).toList();
-  }
-
+  /// Get day name from weekday number
   String _getDayName(int weekday) {
     const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     return days[weekday - 1];
   }
 
+  /// Check if a batch operates on a specific day of the week
+  bool _batchOperatesOnDay(String period, int weekday) {
+    // Map weekday number to day abbreviations
+    // DateTime weekday: 1=Monday, 2=Tuesday, ..., 7=Sunday
+    final dayMap = {
+      1: ['mon', 'monday'],
+      2: ['tue', 'tuesday'],
+      3: ['wed', 'wednesday'],
+      4: ['thu', 'thursday'],
+      5: ['fri', 'friday'],
+      6: ['sat', 'saturday'],
+      7: ['sun', 'sunday'],
+    };
+
+    final dayAbbreviations = dayMap[weekday] ?? [];
+    final periodLower = period.toLowerCase();
+
+    // Check if the period contains "daily" or the specific day
+    if (periodLower.contains('daily')) return true;
+
+    for (final abbr in dayAbbreviations) {
+      if (periodLower.contains(abbr)) return true;
+    }
+
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    // Get user ID from auth provider
-    final authStateAsync = ref.watch(authProvider);
+    final authState = ref.watch(authProvider);
     
-    return authStateAsync.when(
-      loading: () => Scaffold(
-        backgroundColor: Colors.transparent,
-        body: const Center(child: ListSkeleton(itemCount: 5)),
-      ),
-      error: (error, stack) => Scaffold(
-        backgroundColor: Colors.transparent,
-        body: ErrorDisplay(
-          message: 'Failed to load user data: ${error.toString()}',
-          onRetry: () => ref.invalidate(authProvider),
-        ),
-      ),
-      data: (authState) {
-        if (authState is! Authenticated) {
+    return authState.when(
+      data: (authValue) {
+        if (authValue is! Authenticated) {
           return Scaffold(
-            backgroundColor: Colors.transparent,
-            body: ErrorDisplay(
-              message: 'Please log in to view schedule',
-              onRetry: () => ref.invalidate(authProvider),
+            appBar: AppBar(
+              backgroundColor: AppColors.background,
+              elevation: 0,
+              leading: widget.onBack != null
+                  ? IconButton(
+                      icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+                      onPressed: widget.onBack,
+                    )
+                  : null,
+              title: const Text(
+                'My Schedule',
+                style: TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            backgroundColor: AppColors.background,
+            body: const Center(
+              child: Text(
+                'Please login',
+                style: TextStyle(color: AppColors.error),
+              ),
             ),
           );
         }
 
-        final userId = authState.userId;
-        final schedulesAsync = ref.watch(studentSchedulesProvider(userId));
-        final batchesAsync = ref.watch(studentBatchesProvider(userId));
+        final userId = authValue.userId;
+        return _buildScaffold(userId);
+      },
+      loading: () => Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: AppColors.background,
+          elevation: 0,
+          leading: widget.onBack != null
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+                  onPressed: widget.onBack,
+                )
+              : null,
+          title: const Text(
+            'My Schedule',
+            style: TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        body: const Center(child: DashboardSkeleton()),
+      ),
+      error: (error, stack) => Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: AppColors.background,
+          elevation: 0,
+          leading: widget.onBack != null
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+                  onPressed: widget.onBack,
+                )
+              : null,
+          title: const Text(
+            'My Schedule',
+            style: TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        body: Center(
+          child: Text(
+            'Error: ${error.toString()}',
+            style: const TextStyle(color: AppColors.error),
+          ),
+        ),
+      ),
+    );
+  }
 
-        return Scaffold(
-          backgroundColor: Colors.transparent,
-          body: RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(studentSchedulesProvider(userId));
-              ref.invalidate(studentBatchesProvider(userId));
-            },
-            child: CustomScrollView(
-              slivers: [
-                // App Bar
-                SliverAppBar(
-                  backgroundColor: Colors.transparent,
-                  elevation: 0,
-                  pinned: true,
-                  leading: widget.onBack != null
-                      ? IconButton(
-                          icon: Icon(
-                            Icons.arrow_back,
-                            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+  Widget _buildScaffold(int userId) {
+    final scheduleAsync = ref.watch(studentSchedulesProvider(userId));
+    final batchesAsync = ref.watch(studentBatchesProvider(userId));
+    final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
+    final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
+    final eventsAsync = ref.watch(calendarEventsProvider(
+      startDate: firstDay,
+      endDate: lastDay,
+    ));
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        leading: widget.onBack != null
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+                onPressed: widget.onBack,
+              )
+            : null,
+        title: const Text(
+          'My Schedule',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(studentSchedulesProvider(userId));
+          ref.invalidate(studentBatchesProvider(userId));
+          ref.invalidate(calendarEventsProvider(
+            startDate: firstDay,
+            endDate: lastDay,
+          ));
+        },
+        child: scheduleAsync.when(
+          loading: () => const Center(child: ListSkeleton(itemCount: 5)),
+          error: (error, stack) => ErrorDisplay(
+            message: 'Failed to load schedule',
+            onRetry: () => ref.invalidate(studentSchedulesProvider(userId)),
+          ),
+          data: (sessions) {
+            final filteredSessions = _filterSchedules(sessions);
+            final groupedSessions = _groupSessionsByDate(filteredSessions);
+            final canadianHolidays = CanadianHolidays.getHolidaysForYear(_focusedDay.year);
+            
+            return SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                children: [
+                  // Batch Filter
+                  batchesAsync.when(
+                    data: (batches) {
+                      if (batches.isNotEmpty) {
+                        return Padding(
+                          padding: const EdgeInsets.only(
+                            top: AppDimensions.paddingM,
+                            left: AppDimensions.paddingL,
+                            right: AppDimensions.paddingL,
+                            bottom: AppDimensions.paddingM,
                           ),
-                          onPressed: widget.onBack,
-                        )
-                      : null,
-                  title: Text(
-                    'My Schedule',
-                    style: TextStyle(
-                      color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                      fontWeight: FontWeight.w600,
-                    ),
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                _FilterChip(
+                                  label: 'All Batches',
+                                  isSelected: _selectedBatchId == null,
+                                  onTap: () => setState(() => _selectedBatchId = null),
+                                ),
+                                ...batches.map((batch) {
+                                  return Padding(
+                                    padding: const EdgeInsets.only(left: AppDimensions.spacingS),
+                                    child: _FilterChip(
+                                      label: batch.name,
+                                      isSelected: _selectedBatchId == batch.id,
+                                      onTap: () => setState(() => _selectedBatchId = batch.id),
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ),
+                          ),
+                        );
+                      }
+                      return const SizedBox.shrink();
+                    },
+                    loading: () => const SizedBox.shrink(),
+                    error: (_, __) => const SizedBox.shrink(),
                   ),
-                  centerTitle: true,
-                  actions: [
-                    IconButton(
-                      icon: Icon(
-                        _showCalendarView ? Icons.view_list : Icons.calendar_month,
-                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                      ),
-                      onPressed: () {
+
+                  // Calendar
+                  NeumorphicContainer(
+                    margin: const EdgeInsets.all(AppDimensions.paddingL),
+                    padding: const EdgeInsets.all(AppDimensions.paddingM),
+                    child: TableCalendar<Schedule>(
+                      firstDay: DateTime.utc(2020, 1, 1),
+                      lastDay: DateTime.utc(2030, 12, 31),
+                      focusedDay: _focusedDay,
+                      selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+                      calendarFormat: _calendarFormat,
+                      availableCalendarFormats: const {
+                        CalendarFormat.month: 'Month',
+                        CalendarFormat.twoWeeks: '2 Weeks',
+                        CalendarFormat.week: 'Week',
+                      },
+                      onFormatChanged: (format) {
                         setState(() {
-                          _showCalendarView = !_showCalendarView;
+                          _calendarFormat = format;
                         });
                       },
+                      onDaySelected: (selectedDay, focusedDay) {
+                        setState(() {
+                          _selectedDay = selectedDay;
+                          _focusedDay = focusedDay;
+                        });
+                      },
+                      onPageChanged: (focusedDay) {
+                        setState(() {
+                          _focusedDay = focusedDay;
+                        });
+                      },
+                      eventLoader: (day) => _getSessionsForDay(day, groupedSessions),
+                      headerStyle: HeaderStyle(
+                        formatButtonVisible: true,
+                        titleCentered: true,
+                        formatButtonShowsNext: false,
+                        formatButtonDecoration: BoxDecoration(
+                          color: AppColors.cardBackground,
+                          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                        ),
+                        formatButtonTextStyle: const TextStyle(color: AppColors.textPrimary),
+                        leftChevronIcon: const Icon(Icons.chevron_left, color: AppColors.textPrimary),
+                        rightChevronIcon: const Icon(Icons.chevron_right, color: AppColors.textPrimary),
+                        titleTextStyle: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      daysOfWeekStyle: const DaysOfWeekStyle(
+                        weekdayStyle: TextStyle(color: AppColors.textSecondary),
+                        weekendStyle: TextStyle(color: AppColors.textSecondary),
+                      ),
+                      calendarStyle: CalendarStyle(
+                        outsideDaysVisible: false,
+                        weekendTextStyle: const TextStyle(color: AppColors.textSecondary),
+                        defaultTextStyle: const TextStyle(color: AppColors.textPrimary),
+                        selectedDecoration: BoxDecoration(
+                          color: AppColors.accent,
+                          shape: BoxShape.circle,
+                        ),
+                        todayDecoration: BoxDecoration(
+                          color: AppColors.accent.withValues(alpha: 0.3),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      calendarBuilders: CalendarBuilders(
+                        defaultBuilder: (context, date, focusedDay) {
+                          final dateKey = DateTime(date.year, date.month, date.day);
+                          final isHoliday = canadianHolidays.containsKey(dateKey);
+                          final isSelected = isSameDay(_selectedDay, date);
+                          final isToday = isSameDay(DateTime.now(), date);
+                          
+                          if (isHoliday && !isSelected && !isToday) {
+                            return Center(
+                              child: Text(
+                                '${date.day}',
+                                style: const TextStyle(
+                                  color: Colors.red,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            );
+                          }
+                          return null;
+                        },
+                        selectedBuilder: (context, date, focusedDay) {
+                          final dateKey = DateTime(date.year, date.month, date.day);
+                          final isHoliday = canadianHolidays.containsKey(dateKey);
+                          
+                          return Container(
+                            margin: const EdgeInsets.all(4.0),
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: isHoliday ? Colors.red : AppColors.accent,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Text(
+                              '${date.day}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          );
+                        },
+                        todayBuilder: (context, date, focusedDay) {
+                          final dateKey = DateTime(date.year, date.month, date.day);
+                          final isHoliday = canadianHolidays.containsKey(dateKey);
+                          final isSelected = isSameDay(_selectedDay, date);
+                          
+                          if (isSelected) return null;
+                          
+                          return Container(
+                            margin: const EdgeInsets.all(4.0),
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: isHoliday 
+                                  ? Colors.red.withOpacity(0.5)
+                                  : AppColors.accent.withOpacity(0.3),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Text(
+                              '${date.day}',
+                              style: TextStyle(
+                                color: isHoliday ? Colors.red : AppColors.textPrimary,
+                                fontWeight: isHoliday ? FontWeight.bold : FontWeight.normal,
+                              ),
+                            ),
+                          );
+                        },
+                        markerBuilder: (context, date, events) {
+                          if (events.isEmpty) return null;
+                          
+                          return Positioned(
+                            bottom: 1,
+                            child: Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: AppColors.accent,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                  
+                  // Selected Day Events
+                  if (_getSessionsForDay(_selectedDay, groupedSessions).isNotEmpty ||
+                      (canadianHolidays.containsKey(DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day)) &&
+                       eventsAsync.valueOrNull != null)) ...[
+                    NeumorphicContainer(
+                      margin: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+                      padding: const EdgeInsets.all(AppDimensions.paddingM),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            DateFormat('EEEE, MMMM d, yyyy').format(_selectedDay),
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: AppDimensions.spacingM),
+                          // Sessions
+                          ..._getSessionsForDay(_selectedDay, groupedSessions).map((session) => 
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: AppDimensions.spacingS),
+                              child: _SessionCard(session: session),
+                            ),
+                          ),
+                          // Holidays
+                          if (canadianHolidays.containsKey(DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day))) ...[
+                            if (_getSessionsForDay(_selectedDay, groupedSessions).isNotEmpty)
+                              const SizedBox(height: AppDimensions.spacingS),
+                            Container(
+                              padding: const EdgeInsets.all(AppDimensions.paddingS),
+                              decoration: BoxDecoration(
+                                color: Colors.red.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.event, color: Colors.red, size: 20),
+                                  const SizedBox(width: AppDimensions.spacingS),
+                                  Expanded(
+                                    child: Text(
+                                      canadianHolidays[DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day)]!,
+                                      style: const TextStyle(
+                                        color: Colors.red,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                          // Calendar Events
+                          if (eventsAsync.valueOrNull != null) ...[
+                            ...eventsAsync.valueOrNull!.where((event) => 
+                              isSameDay(event.date, _selectedDay)
+                            ).map((event) => Padding(
+                              padding: const EdgeInsets.only(top: AppDimensions.spacingS),
+                              child: Container(
+                                padding: const EdgeInsets.all(AppDimensions.paddingS),
+                                decoration: BoxDecoration(
+                                  color: event.eventType == 'holiday' 
+                                      ? Colors.red.withOpacity(0.1)
+                                      : event.eventType == 'tournament'
+                                          ? Colors.blue.withOpacity(0.1)
+                                          : Colors.green.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      event.eventIcon,
+                                      color: event.eventType == 'holiday' 
+                                          ? Colors.red
+                                          : event.eventType == 'tournament'
+                                              ? Colors.blue
+                                              : Colors.green,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: AppDimensions.spacingS),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            event.title,
+                                            style: TextStyle(
+                                              color: event.eventType == 'holiday' 
+                                                  ? Colors.red
+                                                  : event.eventType == 'tournament'
+                                                      ? Colors.blue
+                                                      : Colors.green,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          if (event.description != null && event.description!.isNotEmpty) ...[
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              event.description!,
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                color: AppColors.textSecondary,
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )),
+                          ],
+                        ],
+                      ),
                     ),
                   ],
-                ),
+                  
+                  // Batch Operating Days Info - filtered by selected day and batch filter
+                  batchesAsync.when(
+                    data: (batches) {
+                      if (batches.isEmpty) return const SizedBox.shrink();
 
-                // Content
-                SliverToBoxAdapter(
-                  child: schedulesAsync.when(
-                    loading: () => const SizedBox(
-                      height: 400,
-                      child: ListSkeleton(itemCount: 5),
-                    ),
-                    error: (error, stack) => ErrorDisplay(
-                      message: 'Failed to load schedule: ${error.toString()}',
-                      onRetry: () => ref.invalidate(studentSchedulesProvider(userId)),
-                    ),
-                    data: (schedules) {
-                      final filteredSchedules = _filterSchedules(schedules);
-                      
-                      return batchesAsync.when(
-                        data: (batches) => Column(
-                          children: [
-                            // Batch Filter
-                            if (batches.isNotEmpty) ...[
-                              _buildBatchFilter(isDark, batches),
+                      // First filter by selected batch (if any)
+                      List<Batch> batchesToShow = batches;
+                      if (_selectedBatchId != null) {
+                        batchesToShow = batches.where(
+                          (batch) => batch.id == _selectedBatchId
+                        ).toList();
+                      }
+
+                      // Then filter batches that operate on the selected day
+                      final filteredBatches = batchesToShow.where(
+                        (batch) => _batchOperatesOnDay(batch.period, _selectedDay.weekday)
+                      ).toList();
+
+                      if (filteredBatches.isEmpty) {
+                        return NeumorphicContainer(
+                          margin: const EdgeInsets.all(AppDimensions.paddingL),
+                          padding: const EdgeInsets.all(AppDimensions.paddingM),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Batches on ${_getDayName(_selectedDay.weekday)}',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
                               const SizedBox(height: AppDimensions.spacingM),
+                              const Text(
+                                'No batches scheduled for this day',
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 14,
+                                ),
+                              ),
                             ],
+                          ),
+                        );
+                      }
 
-                            // Calendar or List View
-                            if (_showCalendarView)
-                              _buildCalendarView(isDark, filteredSchedules)
-                            else
-                              _buildListView(isDark, filteredSchedules),
-                          ],
-                        ),
-                        loading: () => const SizedBox(
-                          height: 200,
-                          child: ListSkeleton(itemCount: 3),
-                        ),
-                        error: (error, stack) => Column(
+                      return NeumorphicContainer(
+                        margin: const EdgeInsets.all(AppDimensions.paddingL),
+                        padding: const EdgeInsets.all(AppDimensions.paddingM),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (filteredSchedules.isEmpty)
-                              EmptyState.noEvents()
-                            else
-                              _showCalendarView
-                                  ? _buildCalendarView(isDark, filteredSchedules)
-                                  : _buildListView(isDark, filteredSchedules),
+                            Text(
+                              'Batches on ${_getDayName(_selectedDay.weekday)}',
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: AppDimensions.spacingM),
+                            ...filteredBatches.map((batch) => Padding(
+                              padding: const EdgeInsets.only(bottom: AppDimensions.spacingS),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      batch.name,
+                                      style: const TextStyle(
+                                        color: AppColors.textPrimary,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    batch.period,
+                                    style: const TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )),
                           ],
                         ),
                       );
                     },
+                    loading: () => const SizedBox.shrink(),
+                    error: (_, __) => const SizedBox.shrink(),
                   ),
-                ),
-
-                // Bottom spacing
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: 100),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildBatchFilter(bool isDark, List<Batch> batches) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            _FilterChip(
-              label: 'All Batches',
-              isSelected: _selectedBatchId == null,
-              isDark: isDark,
-              onTap: () => setState(() => _selectedBatchId = null),
-            ),
-            ...batches.map((batch) {
-              return Padding(
-                padding: const EdgeInsets.only(left: AppDimensions.spacingS),
-                child: _FilterChip(
-                  label: batch.name,
-                  isSelected: _selectedBatchId == batch.id,
-                  isDark: isDark,
-                  onTap: () => setState(() => _selectedBatchId = batch.id),
-                ),
-              );
-            }),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCalendarView(bool isDark, List<Schedule> schedules) {
-    return Column(
-      children: [
-        // Week Navigation
-        _buildWeekNavigation(isDark),
-
-        const SizedBox(height: AppDimensions.spacingM),
-
-        // Week Days
-        _buildWeekDays(isDark, schedules),
-
-        const SizedBox(height: AppDimensions.spacingL),
-
-        // Selected Day Sessions
-        _buildSelectedDaySessions(isDark, schedules),
-      ],
-    );
-  }
-
-  Widget _buildWeekNavigation(bool isDark) {
-    final startOfWeek = _selectedDate.subtract(Duration(days: _selectedDate.weekday - 1));
-    final endOfWeek = startOfWeek.add(const Duration(days: 6));
-
-    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
-      child: NeumorphicContainer(
-        padding: const EdgeInsets.all(AppDimensions.paddingM),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            IconButton(
-              icon: Icon(
-                Icons.chevron_left,
-                color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
-              ),
-              onPressed: () {
-                setState(() {
-                  _selectedDate = _selectedDate.subtract(const Duration(days: 7));
-                });
-              },
-            ),
-            Column(
-              children: [
-                Text(
-                  '${months[startOfWeek.month - 1]} ${startOfWeek.day} - ${months[endOfWeek.month - 1]} ${endOfWeek.day}',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                  ),
-                ),
-                Text(
-                  startOfWeek.year.toString(),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-            IconButton(
-              icon: Icon(
-                Icons.chevron_right,
-                color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
-              ),
-              onPressed: () {
-                setState(() {
-                  _selectedDate = _selectedDate.add(const Duration(days: 7));
-                });
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildWeekDays(bool isDark, List<Schedule> schedules) {
-    final startOfWeek = _selectedDate.subtract(Duration(days: _selectedDate.weekday - 1));
-    final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: List.generate(7, (index) {
-          final date = startOfWeek.add(Duration(days: index));
-          final isSelected = date.day == _selectedDate.day &&
-              date.month == _selectedDate.month &&
-              date.year == _selectedDate.year;
-          final isToday = date.day == DateTime.now().day &&
-              date.month == DateTime.now().month &&
-              date.year == DateTime.now().year;
-          final hasSession = _getSchedulesForDay(schedules, date).isNotEmpty;
-
-          return GestureDetector(
-            onTap: () {
-              setState(() {
-                _selectedDate = date;
-              });
-            },
-            child: Container(
-              width: 44,
-              padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? (isDark ? AppColors.accent : AppColorsLight.accent)
-                    : isToday
-                        ? (isDark ? AppColors.accent : AppColorsLight.accent).withValues(alpha: 0.2)
-                        : null,
-                borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-              ),
-              child: Column(
-                children: [
-                  Text(
-                    days[index],
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: isSelected
-                          ? Colors.white
-                          : (isDark ? AppColors.textSecondary : AppColorsLight.textSecondary),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    date.day.toString(),
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: isSelected
-                          ? Colors.white
-                          : (isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  if (hasSession)
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? Colors.white
-                            : (isDark ? AppColors.success : AppColorsLight.success),
-                        shape: BoxShape.circle,
-                      ),
-                    )
-                  else
-                    const SizedBox(height: 6),
                 ],
               ),
-            ),
-          );
-        }),
+            );
+          },
+        ),
       ),
     );
   }
 
-  Widget _buildSelectedDaySessions(bool isDark, List<Schedule> schedules) {
-    final sessions = _getSchedulesForDay(schedules, _selectedDate);
-    final dayName = _getDayName(_selectedDate.weekday);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '$dayName Sessions',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-            ),
-          ),
-          const SizedBox(height: AppDimensions.spacingM),
-
-          if (sessions.isEmpty)
-            EmptyState.noEvents()
-          else
-            ...sessions.map((session) => Padding(
-                  padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
-                  child: _ScheduleCard(
-                    schedule: session,
-                    isDark: isDark,
-                  ),
-                )),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildListView(bool isDark, List<Schedule> schedules) {
-    if (schedules.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(AppDimensions.paddingL),
-        child: EmptyState.noEvents(),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Weekly Schedule',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-            ),
-          ),
-          const SizedBox(height: AppDimensions.spacingM),
-
-          ...schedules.map((schedule) => Padding(
-                padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
-                child: _ScheduleCard(
-                  schedule: schedule,
-                  isDark: isDark,
-                  showDays: true,
-                ),
-              )),
-        ],
-      ),
-    );
-  }
 }
 
 class _FilterChip extends StatelessWidget {
   final String label;
   final bool isSelected;
-  final bool isDark;
   final VoidCallback onTap;
 
   const _FilterChip({
     required this.label,
     required this.isSelected,
-    required this.isDark,
     required this.onTap,
   });
 
@@ -478,20 +664,15 @@ class _FilterChip extends StatelessWidget {
           vertical: AppDimensions.spacingS,
         ),
         decoration: BoxDecoration(
-          color: isSelected
-              ? (isDark ? AppColors.accent : AppColorsLight.accent)
-              : (isDark ? AppColors.cardBackground : AppColorsLight.cardBackground),
-          borderRadius: BorderRadius.circular(AppDimensions.radiusL),
-          boxShadow: isSelected ? null : NeumorphicStyles.getElevatedShadow(),
+          color: isSelected ? AppColors.accent : AppColors.cardBackground,
+          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
         ),
         child: Text(
           label,
           style: TextStyle(
             fontSize: 14,
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-            color: isSelected
-                ? Colors.white
-                : (isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
+            color: isSelected ? Colors.white : AppColors.textPrimary,
           ),
         ),
       ),
@@ -499,46 +680,43 @@ class _FilterChip extends StatelessWidget {
   }
 }
 
-class _ScheduleCard extends StatelessWidget {
-  final Schedule schedule;
-  final bool isDark;
-  final bool showDays;
+class _SessionCard extends StatelessWidget {
+  final Schedule session;
 
-  const _ScheduleCard({
-    required this.schedule,
-    required this.isDark,
-    this.showDays = false,
-  });
+  const _SessionCard({required this.session});
 
   @override
   Widget build(BuildContext context) {
-    final batchName = schedule.batchName ?? 'Training Session';
-    final startTime = schedule.startTime ?? '';
-    final endTime = schedule.endTime ?? '';
-    final location = schedule.location ?? '';
-    final activityType = schedule.sessionType;
-    final notes = schedule.description ?? '';
-    final coachName = schedule.coachName ?? '';
+    // Session type color
+    Color typeColor = AppColors.accent;
+    String typeLabel = session.sessionType.toUpperCase();
+    IconData typeIcon = Icons.sports_outlined;
+    
+    if (session.sessionType.toLowerCase() == 'tournament') {
+      typeColor = AppColors.warning;
+      typeIcon = Icons.emoji_events_outlined;
+    } else if (session.sessionType.toLowerCase() == 'camp') {
+      typeColor = AppColors.success;
+      typeIcon = Icons.event_outlined;
+    }
 
     return NeumorphicContainer(
       padding: const EdgeInsets.all(AppDimensions.paddingM),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
           Row(
             children: [
               Container(
-                width: 48,
-                height: 48,
+                padding: const EdgeInsets.all(AppDimensions.spacingS),
                 decoration: BoxDecoration(
-                  color: (isDark ? AppColors.accent : AppColorsLight.accent).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                  color: typeColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(AppDimensions.radiusS),
                 ),
                 child: Icon(
-                  Icons.sports_tennis,
-                  size: 24,
-                  color: isDark ? AppColors.accent : AppColorsLight.accent,
+                  typeIcon,
+                  size: 20,
+                  color: typeColor,
                 ),
               ),
               const SizedBox(width: AppDimensions.spacingM),
@@ -547,139 +725,118 @@ class _ScheduleCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      batchName,
-                      style: TextStyle(
-                        fontSize: 16,
+                      session.title,
+                      style: const TextStyle(
+                        fontSize: 18,
                         fontWeight: FontWeight.w600,
-                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                        color: AppColors.textPrimary,
                       ),
                     ),
-                    Text(
-                      activityType,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                    if (session.batchName != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        session.batchName!,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: AppColors.textSecondary,
+                        ),
                       ),
-                    ),
+                    ],
                   ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppDimensions.spacingS,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: typeColor,
+                  borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                ),
+                child: Text(
+                  typeLabel,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ],
           ),
-
           const SizedBox(height: AppDimensions.spacingM),
-
-          // Details
-          Container(
-            padding: const EdgeInsets.all(AppDimensions.paddingS),
-            decoration: BoxDecoration(
-              color: isDark ? AppColors.background : AppColorsLight.background,
-              borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-              boxShadow: NeumorphicStyles.getSmallInsetShadow(),
-            ),
-            child: Column(
-              children: [
-                if (startTime.isNotEmpty) ...[
-                  _DetailRow(
-                    icon: Icons.access_time,
-                    label: 'Time',
-                    value: endTime.isNotEmpty ? '$startTime - $endTime' : startTime,
-                    isDark: isDark,
+          Row(
+            children: [
+              Icon(
+                Icons.calendar_today_outlined,
+                size: 16,
+                color: AppColors.textSecondary,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                DateFormat('dd MMM, yyyy').format(session.date),
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              if (session.startTime != null) ...[
+                const SizedBox(width: AppDimensions.spacingM),
+                Icon(
+                  Icons.access_time_outlined,
+                  size: 16,
+                  color: AppColors.textSecondary,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '${session.startTime}${session.endTime != null ? ' - ${session.endTime}' : ''}',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
                   ),
-                  const SizedBox(height: AppDimensions.spacingS),
-                ],
-                if (location.isNotEmpty)
-                  _DetailRow(
-                    icon: Icons.location_on,
-                    label: 'Location',
-                    value: location,
-                    isDark: isDark,
-                  ),
-                if (coachName.isNotEmpty) ...[
-                  const SizedBox(height: AppDimensions.spacingS),
-                  _DetailRow(
-                    icon: Icons.person,
-                    label: 'Coach',
-                    value: coachName,
-                    isDark: isDark,
-                  ),
-                ],
+                ),
               ],
-            ),
+            ],
           ),
-
-          if (notes.isNotEmpty) ...[
-            const SizedBox(height: AppDimensions.spacingM),
+          if (session.location != null) ...[
+            const SizedBox(height: AppDimensions.spacingS),
             Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(
-                  Icons.notes,
-                  size: 14,
-                  color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
+                  Icons.location_on_outlined,
+                  size: 16,
+                  color: AppColors.textSecondary,
                 ),
-                const SizedBox(width: AppDimensions.spacingS),
+                const SizedBox(width: 4),
                 Expanded(
                   child: Text(
-                    notes,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontStyle: FontStyle.italic,
-                      color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                    session.location!,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textSecondary,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
             ),
           ],
+          if (session.description != null && session.description!.isNotEmpty) ...[
+            const SizedBox(height: AppDimensions.spacingS),
+            Text(
+              session.description!,
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppColors.textSecondary,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
         ],
       ),
-    );
-  }
-}
-
-class _DetailRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final bool isDark;
-
-  const _DetailRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.isDark,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(
-          icon,
-          size: 14,
-          color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
-        ),
-        const SizedBox(width: AppDimensions.spacingS),
-        Text(
-          '$label: ',
-          style: TextStyle(
-            fontSize: 12,
-            color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-            ),
-            textAlign: TextAlign.right,
-          ),
-        ),
-      ],
     );
   }
 }
