@@ -11,6 +11,7 @@ import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/leave_request_provider.dart';
+import '../../providers/service_providers.dart';
 import '../../models/leave_request.dart';
 
 /// Leave Request Screen - Submit and view leave requests
