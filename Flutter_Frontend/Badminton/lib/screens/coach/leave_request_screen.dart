@@ -656,7 +656,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
   }
 }
 
-class _LeaveRequestCard extends StatelessWidget {
+class _LeaveRequestCard extends ConsumerWidget {
   final Request request;
   final bool isDark;
 
@@ -666,11 +666,12 @@ class _LeaveRequestCard extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     String? startDate;
     String? endDate;
     bool isHalfDay = false;
     int? totalDays;
+    List<DateTime>? originalDates;
 
     if (request.metadata != null) {
       try {
@@ -684,6 +685,14 @@ class _LeaveRequestCard extends StatelessWidget {
         }
         isHalfDay = request.metadata!['is_half_day'] == true;
         totalDays = request.metadata!['total_days'] as int?;
+        
+        // Extract original dates for modification
+        if (request.metadata!['dates'] != null) {
+          final datesList = request.metadata!['dates'] as List<dynamic>?;
+          if (datesList != null) {
+            originalDates = datesList.map((d) => DateTime.parse(d as String)).toList();
+          }
+        }
       } catch (e) {
         // Handle parsing error
       }
@@ -776,7 +785,40 @@ class _LeaveRequestCard extends StatelessWidget {
               ),
             ),
           ],
+          // Edit button for approved requests
+          if (request.isApproved && originalDates != null) ...[
+            const SizedBox(height: AppDimensions.spacingM),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () => _showModifyDialog(context, ref, request, originalDates!, isHalfDay, isDark),
+                icon: const Icon(Icons.edit, size: 18),
+                label: const Text('Modify Leave'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: isDark ? AppColors.accent : AppColorsLight.accent,
+                  side: BorderSide(
+                    color: isDark ? AppColors.accent : AppColorsLight.accent,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+
+  void _showModifyDialog(BuildContext context, WidgetRef ref, Request originalRequest, List<DateTime> originalDates, bool originalIsHalfDay, bool isDark) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => _ModifyLeaveDialog(
+        originalRequest: originalRequest,
+        originalDates: originalDates,
+        originalIsHalfDay: originalIsHalfDay,
+        isDark: isDark,
+        onModified: () {
+          ref.invalidate(requestListProvider);
+        },
       ),
     );
   }
@@ -869,6 +911,480 @@ class _FilterChip extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Dialog for modifying an approved leave request
+class _ModifyLeaveDialog extends ConsumerStatefulWidget {
+  final Request originalRequest;
+  final List<DateTime> originalDates;
+  final bool originalIsHalfDay;
+  final bool isDark;
+  final VoidCallback onModified;
+
+  const _ModifyLeaveDialog({
+    required this.originalRequest,
+    required this.originalDates,
+    required this.originalIsHalfDay,
+    required this.isDark,
+    required this.onModified,
+  });
+
+  @override
+  ConsumerState<_ModifyLeaveDialog> createState() => _ModifyLeaveDialogState();
+}
+
+class _ModifyLeaveDialogState extends ConsumerState<_ModifyLeaveDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _reasonController = TextEditingController();
+  Set<DateTime> _selectedDates = {};
+  bool _isHalfDay = false;
+  DateTime _focusedDay = DateTime.now();
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Pre-fill with original dates
+    _selectedDates = widget.originalDates.toSet();
+    _isHalfDay = widget.originalIsHalfDay;
+  }
+
+  @override
+  void dispose() {
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  String _formatSelectedDates() {
+    if (_selectedDates.isEmpty) return '';
+    
+    final sortedDates = _selectedDates.toList()..sort();
+    if (sortedDates.length == 1) {
+      return DateFormat('MMM dd, yyyy').format(sortedDates[0]);
+    }
+    
+    // Check if dates are consecutive
+    bool isConsecutive = true;
+    for (int i = 1; i < sortedDates.length; i++) {
+      final diff = sortedDates[i].difference(sortedDates[i - 1]).inDays;
+      if (diff != 1) {
+        isConsecutive = false;
+        break;
+      }
+    }
+    
+    if (isConsecutive) {
+      return '${DateFormat('MMM dd').format(sortedDates.first)} - ${DateFormat('MMM dd, yyyy').format(sortedDates.last)}';
+    } else {
+      return '${sortedDates.length} days selected';
+    }
+  }
+
+  Future<void> _showCalendarPicker() async {
+    await showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: widget.isDark ? AppColors.cardBackground : AppColorsLight.cardBackground,
+        child: Container(
+          padding: const EdgeInsets.all(AppDimensions.paddingM),
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: StatefulBuilder(
+            builder: (context, setDialogState) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Modify Leave Dates',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: widget.isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: AppDimensions.spacingM),
+                  TableCalendar<dynamic>(
+                    firstDay: DateTime.now(),
+                    lastDay: DateTime.now().add(const Duration(days: 365)),
+                    focusedDay: _focusedDay,
+                    selectedDayPredicate: (day) {
+                      final dateKey = DateTime(day.year, day.month, day.day);
+                      return _selectedDates.contains(dateKey);
+                    },
+                    calendarFormat: CalendarFormat.month,
+                    startingDayOfWeek: StartingDayOfWeek.sunday,
+                    calendarStyle: CalendarStyle(
+                      outsideDaysVisible: false,
+                      weekendTextStyle: TextStyle(color: widget.isDark ? AppColors.textSecondary : AppColorsLight.textSecondary),
+                      defaultTextStyle: TextStyle(color: widget.isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
+                      selectedDecoration: BoxDecoration(
+                        color: widget.isDark ? AppColors.accent : AppColorsLight.accent,
+                        shape: BoxShape.circle,
+                      ),
+                      todayDecoration: BoxDecoration(
+                        color: (widget.isDark ? AppColors.accent : AppColorsLight.accent).withOpacity(0.3),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    headerStyle: HeaderStyle(
+                      formatButtonVisible: false,
+                      titleCentered: true,
+                      titleTextStyle: TextStyle(
+                        color: widget.isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      leftChevronIcon: Icon(
+                        Icons.chevron_left,
+                        color: widget.isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                      ),
+                      rightChevronIcon: Icon(
+                        Icons.chevron_right,
+                        color: widget.isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                      ),
+                    ),
+                    onDaySelected: (selectedDay, focusedDay) {
+                      setDialogState(() {
+                        final dateKey = DateTime(selectedDay.year, selectedDay.month, selectedDay.day);
+                        if (_selectedDates.contains(dateKey)) {
+                          _selectedDates.remove(dateKey);
+                        } else {
+                          // Check if adding this date would exceed 1 week
+                          if (_selectedDates.length >= 7) {
+                            SuccessSnackbar.showError(context, 'Maximum 7 days allowed');
+                            return;
+                          }
+                          _selectedDates.add(dateKey);
+                        }
+                      });
+                    },
+                    onPageChanged: (focusedDay) {
+                      setDialogState(() {
+                        _focusedDay = focusedDay;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: AppDimensions.spacingM),
+                  if (_selectedDates.isNotEmpty) ...[
+                    Text(
+                      'Selected: ${_formatSelectedDates()}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: widget.isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: AppDimensions.spacingS),
+                  ],
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () {
+                          setDialogState(() {
+                            _selectedDates.clear();
+                          });
+                        },
+                        child: Text(
+                          'Clear',
+                          style: TextStyle(
+                            color: widget.isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: AppDimensions.spacingS),
+                      ElevatedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: widget.isDark ? AppColors.accent : AppColorsLight.accent,
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Done'),
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    setState(() {}); // Refresh UI after dialog closes
+  }
+
+  Future<void> _submitModification() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    if (_selectedDates.isEmpty) {
+      SuccessSnackbar.showError(context, 'Please select at least one date');
+      return;
+    }
+
+    // Validate max 7 days
+    if (_selectedDates.length > 7) {
+      SuccessSnackbar.showError(context, 'Maximum 7 days allowed for leave request');
+      return;
+    }
+
+    // Check if dates have changed
+    final originalDatesSet = widget.originalDates.toSet();
+    final datesChanged = !_selectedDates.containsAll(originalDatesSet) || 
+                        !originalDatesSet.containsAll(_selectedDates) ||
+                        _isHalfDay != widget.originalIsHalfDay;
+
+    if (!datesChanged && _reasonController.text.trim().isEmpty) {
+      SuccessSnackbar.showError(context, 'Please provide a reason for modification or make changes');
+      return;
+    }
+
+    final authState = ref.read(authProvider);
+    int? coachId;
+    String? coachName;
+
+    authState.whenData((authValue) {
+      if (authValue is Authenticated && authValue.userType == 'coach') {
+        coachId = authValue.userId;
+        coachName = authValue.userName;
+      }
+    });
+
+    if (coachId == null) {
+      SuccessSnackbar.showError(context, 'Unable to identify coach');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final sortedDates = _selectedDates.toList()..sort();
+      final startDate = sortedDates.first;
+      final endDate = sortedDates.last;
+      
+      final dateStrings = sortedDates.map((d) => d.toIso8601String().split('T')[0]).toList();
+      
+      // Get original dates for comparison
+      final originalDateStrings = widget.originalDates.map((d) => d.toIso8601String().split('T')[0]).toList();
+      
+      final requestService = ref.read(requestServiceProvider);
+      await requestService.createRequest(
+        requestType: 'coach_leave_modification',
+        requesterType: 'coach',
+        requesterId: coachId!,
+        title: 'Leave Modification Request: ${DateFormat('MMM dd').format(startDate)} - ${DateFormat('MMM dd, yyyy').format(endDate)}${_isHalfDay ? ' (Half Day)' : ''}',
+        description: _reasonController.text.trim().isEmpty 
+            ? 'Modifying leave dates from ${widget.originalDates.length} days to ${sortedDates.length} days'
+            : _reasonController.text.trim(),
+        metadata: {
+          'original_request_id': widget.originalRequest.id,
+          'original_start_date': widget.originalRequest.metadata!['start_date'],
+          'original_end_date': widget.originalRequest.metadata!['end_date'],
+          'original_dates': originalDateStrings,
+          'original_is_half_day': widget.originalIsHalfDay,
+          'original_total_days': widget.originalDates.length,
+          'new_start_date': startDate.toIso8601String(),
+          'new_end_date': endDate.toIso8601String(),
+          'new_dates': dateStrings,
+          'new_is_half_day': _isHalfDay,
+          'new_total_days': sortedDates.length,
+          'coach_name': coachName,
+        },
+      );
+
+      if (mounted) {
+        SuccessSnackbar.show(context, 'Modification request submitted successfully');
+        widget.onModified();
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        SuccessSnackbar.showError(context, 'Failed to submit modification request: ${e.toString()}');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: widget.isDark ? AppColors.cardBackground : AppColorsLight.cardBackground,
+      title: Text(
+        'Modify Leave Request',
+        style: TextStyle(
+          color: widget.isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+        ),
+      ),
+      content: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Original: ${_formatSelectedDates()} (${widget.originalDates.length} days)',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: widget.isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                ),
+              ),
+              const SizedBox(height: AppDimensions.spacingM),
+              
+              // Date Selection
+              Text(
+                'Select New Dates',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: widget.isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              InkWell(
+                onTap: _showCalendarPicker,
+                child: NeumorphicContainer(
+                  padding: const EdgeInsets.all(AppDimensions.paddingM),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.calendar_today,
+                        size: 20,
+                        color: widget.isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                      ),
+                      const SizedBox(width: AppDimensions.spacingM),
+                      Expanded(
+                        child: Text(
+                          _selectedDates.isEmpty
+                              ? 'Tap to select dates'
+                              : _formatSelectedDates(),
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: _selectedDates.isEmpty
+                                ? (widget.isDark ? AppColors.textSecondary : AppColorsLight.textSecondary)
+                                : (widget.isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (_selectedDates.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  '${_selectedDates.length} day${_selectedDates.length > 1 ? 's' : ''} selected',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: widget.isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: AppDimensions.spacingM),
+
+              // Half Day Option
+              Row(
+                children: [
+                  Checkbox(
+                    value: _isHalfDay,
+                    onChanged: (value) {
+                      setState(() {
+                        _isHalfDay = value ?? false;
+                      });
+                    },
+                    activeColor: widget.isDark ? AppColors.accent : AppColorsLight.accent,
+                  ),
+                  Text(
+                    'Half Day',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: widget.isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: AppDimensions.spacingM),
+
+              // Reason
+              Text(
+                'Reason for Modification',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: widget.isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _reasonController,
+                maxLines: 3,
+                style: TextStyle(
+                  color: widget.isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Explain why you need to modify the leave...',
+                  hintStyle: TextStyle(
+                    color: widget.isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                  ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(
+                      color: widget.isDark ? AppColors.border : AppColorsLight.border,
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(
+                      color: widget.isDark ? AppColors.border : AppColorsLight.border,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(
+                      color: widget.isDark ? AppColors.accent : AppColorsLight.accent,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
+          child: Text(
+            'Cancel',
+            style: TextStyle(
+              color: widget.isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+            ),
+          ),
+        ),
+        ElevatedButton(
+          onPressed: _isLoading ? null : _submitModification,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: widget.isDark ? AppColors.accent : AppColorsLight.accent,
+            foregroundColor: Colors.white,
+          ),
+          child: _isLoading
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                )
+              : const Text('Submit Modification'),
+        ),
+      ],
     );
   }
 }
