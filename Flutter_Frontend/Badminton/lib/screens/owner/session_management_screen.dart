@@ -360,6 +360,7 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
           ),
         ],
       ),
+      ),
     );
   }
 
