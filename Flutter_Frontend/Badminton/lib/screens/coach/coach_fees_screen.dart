@@ -5,6 +5,7 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/more_screen_app_bar.dart';
 import '../../models/fee.dart';
 import '../../models/student_with_batch_fee.dart';
 import '../../providers/fee_provider.dart';
@@ -66,15 +67,8 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
         builder: (context, constraints) {
             return RefreshIndicator(
               onRefresh: () async {
-                // Invalidate both providers to refresh data
-                ref.invalidate(studentsWithBatchFeesProvider);
-                String? statusFilter;
-                if (_selectedFilter == 'overdue') {
-                  statusFilter = null;
-                } else if (_selectedFilter != 'all') {
-                  statusFilter = _selectedFilter;
-                }
-                ref.invalidate(feeListProvider(status: statusFilter));
+                _handleReload();
+                await Future.delayed(const Duration(milliseconds: 300));
               },
             child: SingleChildScrollView(
               physics: const ClampingScrollPhysics(),

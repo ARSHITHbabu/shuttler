@@ -11,6 +11,7 @@ import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/success_snackbar.dart';
+import '../../widgets/common/more_screen_app_bar.dart';
 import '../../providers/service_providers.dart';
 
 // Conditional imports for web file download
@@ -170,22 +171,28 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       return _buildReportConfig();
     }
 
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
+    void _handleReload() {
+      // Reports screen doesn't have specific providers to reload
+      // But we can refresh the screen state
+      setState(() {});
+    }
+
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        elevation: 0,
-        automaticallyImplyLeading: false,
-        title: const Text(
-          'Reports',
-          style: TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+      backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+      appBar: MoreScreenAppBar(
+        title: 'Reports',
+        onReload: _handleReload,
+        isDark: isDark,
       ),
-      body: Container(
+      body: RefreshIndicator(
+        onRefresh: () async {
+          _handleReload();
+          await Future.delayed(const Duration(milliseconds: 300));
+        },
+        child: Container(
         decoration: const BoxDecoration(
           gradient: AppColors.backgroundGradient,
         ),

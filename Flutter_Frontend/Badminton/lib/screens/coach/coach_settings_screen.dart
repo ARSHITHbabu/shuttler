@@ -7,6 +7,7 @@ import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
+import '../../widgets/common/more_screen_app_bar.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/theme_provider.dart';
@@ -73,31 +74,26 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
+    void _handleReload() {
+      // Settings screen doesn't need to reload providers, but we can refresh the UI
+      setState(() {});
+    }
+
     return Scaffold(
       backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
-      body: CustomScrollView(
-        slivers: [
-          // App Bar
-          SliverAppBar(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            pinned: true,
-            leading: IconButton(
-              icon: Icon(
-                Icons.arrow_back,
-                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-              ),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            title: Text(
-              'Settings',
-              style: TextStyle(
-                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            centerTitle: true,
-          ),
+      appBar: MoreScreenAppBar(
+        title: 'Settings',
+        onReload: _handleReload,
+        isDark: isDark,
+      ),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          _handleReload();
+          await Future.delayed(const Duration(milliseconds: 300));
+        },
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
 
           // Content
           SliverToBoxAdapter(

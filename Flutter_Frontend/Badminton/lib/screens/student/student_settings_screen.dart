@@ -83,37 +83,27 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
+    void _handleReload() {
+      // Settings screen doesn't need to reload providers, but we can refresh the UI
+      setState(() {});
+    }
+
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: CustomScrollView(
-        slivers: [
-          // App Bar
-          SliverAppBar(
-            backgroundColor: Colors.transparent,
-            elevation: 0,
-            pinned: true,
-            leading: widget.onBack != null
-                ? IconButton(
-                    icon: Icon(
-                      Icons.arrow_back,
-                      color: isDark
-                          ? AppColors.textPrimary
-                          : AppColorsLight.textPrimary,
-                    ),
-                    onPressed: widget.onBack,
-                  )
-                : null,
-            title: Text(
-              'Settings',
-              style: TextStyle(
-                color: isDark
-                    ? AppColors.textPrimary
-                    : AppColorsLight.textPrimary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            centerTitle: true,
-          ),
+      appBar: MoreScreenAppBar(
+        title: 'Settings',
+        onReload: _handleReload,
+        isDark: isDark,
+        onBack: widget.onBack,
+      ),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          _handleReload();
+          await Future.delayed(const Duration(milliseconds: 300));
+        },
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
 
           // Content
           SliverToBoxAdapter(
@@ -303,8 +293,8 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                 ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -629,6 +619,7 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
             ),
           ),
         ],
+        ),
       ),
     );
   }

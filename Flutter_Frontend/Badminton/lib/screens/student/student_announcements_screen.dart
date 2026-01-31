@@ -6,6 +6,7 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/error_widget.dart';
+import '../../widgets/common/more_screen_app_bar.dart';
 import '../../providers/announcement_provider.dart';
 import '../../models/announcement.dart';
 
@@ -25,30 +26,29 @@ class _StudentAnnouncementsScreenState extends ConsumerState<StudentAnnouncement
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     // Get announcements for students using provider
     final announcementsAsync = ref.watch(announcementListProvider(targetAudience: 'students'));
 
+    void _handleReload() {
+      ref.invalidate(announcementListProvider(targetAudience: 'students'));
+    }
+
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        elevation: 0,
-        leading: widget.onBack != null
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-                onPressed: widget.onBack,
-              )
-            : null,
-        title: const Text(
-          'Announcements',
-          style: TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+      backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+      appBar: MoreScreenAppBar(
+        title: 'Announcements',
+        onReload: _handleReload,
+        isDark: isDark,
+        onBack: widget.onBack,
       ),
-      body: Column(
+      body: RefreshIndicator(
+        onRefresh: () async {
+          _handleReload();
+          await Future.delayed(const Duration(milliseconds: 300));
+        },
+        child: Column(
         children: [
           // Filter Chips
           Padding(
@@ -90,11 +90,7 @@ class _StudentAnnouncementsScreenState extends ConsumerState<StudentAnnouncement
 
           // Announcements List
           Expanded(
-            child: RefreshIndicator(
-              onRefresh: () async {
-                ref.invalidate(announcementListProvider(targetAudience: 'students'));
-              },
-              child: announcementsAsync.when(
+            child: announcementsAsync.when(
                 loading: () => const ListSkeleton(itemCount: 5),
                 error: (error, stack) => ErrorDisplay(
                   message: 'Failed to load announcements: ${error.toString()}',

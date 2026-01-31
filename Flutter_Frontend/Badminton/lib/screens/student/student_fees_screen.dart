@@ -6,6 +6,7 @@ import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/error_widget.dart';
+import '../../widgets/common/more_screen_app_bar.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/fee_provider.dart';
 import '../../models/fee.dart';
@@ -108,37 +109,26 @@ class _StudentFeesScreenState extends ConsumerState<StudentFeesScreen> {
         final userId = authState.userId;
         final feesAsync = ref.watch(feeByStudentProvider(userId));
 
+        void _handleReload() {
+          ref.invalidate(feeByStudentProvider(userId));
+        }
+
         return Scaffold(
           backgroundColor: Colors.transparent,
+          appBar: MoreScreenAppBar(
+            title: 'Fee Status',
+            onReload: _handleReload,
+            isDark: isDark,
+            onBack: widget.onBack,
+          ),
           body: RefreshIndicator(
             onRefresh: () async {
-              ref.invalidate(feeByStudentProvider(userId));
+              _handleReload();
+              await Future.delayed(const Duration(milliseconds: 300));
             },
             child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
               slivers: [
-                // App Bar
-                SliverAppBar(
-                  backgroundColor: Colors.transparent,
-                  elevation: 0,
-                  pinned: true,
-                  leading: widget.onBack != null
-                      ? IconButton(
-                          icon: Icon(
-                            Icons.arrow_back,
-                            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                          ),
-                          onPressed: widget.onBack,
-                        )
-                      : null,
-                  title: Text(
-                    'Fee Status',
-                    style: TextStyle(
-                      color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  centerTitle: true,
-                ),
 
                 // Content
                 SliverToBoxAdapter(

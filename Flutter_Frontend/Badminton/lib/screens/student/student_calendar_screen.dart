@@ -6,6 +6,7 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/more_screen_app_bar.dart';
 import '../../providers/calendar_provider.dart';
 import '../../models/calendar_event.dart';
 import '../../core/utils/canadian_holidays.dart';
@@ -46,43 +47,39 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
     final textSecondary = isDark ? AppColors.textSecondary : AppColorsLight.textSecondary;
     final cardBackground = isDark ? AppColors.cardBackground : AppColorsLight.cardBackground;
 
+    void _handleReload() {
+      final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
+      final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
+      ref.invalidate(calendarEventsProvider(
+        startDate: firstDay,
+        endDate: lastDay,
+      ));
+    }
+
     return Scaffold(
       backgroundColor: backgroundColor,
-      appBar: AppBar(
-        backgroundColor: backgroundColor,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: textPrimary),
-          onPressed: widget.onBack ?? () => Navigator.of(context).pop(),
-        ),
-        title: Text(
-          'Calendar',
-          style: TextStyle(
-            color: textPrimary,
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        // No add button - read-only for students
+      appBar: MoreScreenAppBar(
+        title: 'Calendar',
+        onReload: _handleReload,
+        isDark: isDark,
+        onBack: widget.onBack,
       ),
-      body: Builder(
-        builder: (context) {
-          // Get events for the current month using provider
-          final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
-          final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
-          final eventsAsync = ref.watch(calendarEventsProvider(
-            startDate: firstDay,
-            endDate: lastDay,
-          ));
+      body: RefreshIndicator(
+        onRefresh: () async {
+          _handleReload();
+          await Future.delayed(const Duration(milliseconds: 300));
+        },
+        child: Builder(
+          builder: (context) {
+            // Get events for the current month using provider
+            final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
+            final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
+            final eventsAsync = ref.watch(calendarEventsProvider(
+              startDate: firstDay,
+              endDate: lastDay,
+            ));
 
-          return RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(calendarEventsProvider(
-                startDate: firstDay,
-                endDate: lastDay,
-              ));
-            },
-            child: eventsAsync.when(
+            return eventsAsync.when(
               loading: () => const Center(child: ListSkeleton(itemCount: 5)),
               error: (error, stack) => ErrorDisplay(
                 message: 'Failed to load calendar events: ${error.toString()}',
@@ -445,8 +442,8 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
                 ],
               ],
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }

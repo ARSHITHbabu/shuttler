@@ -6,6 +6,7 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/more_screen_app_bar.dart';
 import '../../providers/coach_provider.dart';
 import '../../models/announcement.dart';
 
@@ -22,25 +23,20 @@ class _CoachAnnouncementsScreenState extends ConsumerState<CoachAnnouncementsScr
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final announcementsAsync = ref.watch(coachAnnouncementsProvider);
 
+    void _handleReload() {
+      ref.invalidate(coachAnnouncementsProvider);
+    }
+
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: const Text(
-          'Announcements',
-          style: TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+      backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+      appBar: MoreScreenAppBar(
+        title: 'Announcements',
+        onReload: _handleReload,
+        isDark: isDark,
       ),
       body: Column(
         children: [
@@ -86,7 +82,9 @@ class _CoachAnnouncementsScreenState extends ConsumerState<CoachAnnouncementsScr
           Expanded(
             child: RefreshIndicator(
               onRefresh: () async {
-                ref.invalidate(coachAnnouncementsProvider);
+                _handleReload();
+                // Wait for the provider to refresh
+                await Future.delayed(const Duration(milliseconds: 300));
               },
               child: announcementsAsync.when(
                 loading: () => const ListSkeleton(itemCount: 5),

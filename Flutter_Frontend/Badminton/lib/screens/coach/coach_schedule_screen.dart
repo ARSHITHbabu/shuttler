@@ -7,6 +7,7 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
+import '../../widgets/common/more_screen_app_bar.dart';
 import '../../providers/coach_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/calendar_provider.dart';
@@ -120,28 +121,31 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
       endDate: lastDay,
     ));
 
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
+    void _handleReload() {
+      ref.invalidate(coachScheduleProvider(coachId));
+      ref.invalidate(coachBatchesProvider(coachId));
+      final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
+      final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
+      ref.invalidate(calendarEventsProvider(
+        startDate: firstDay,
+        endDate: lastDay,
+      ));
+    }
+
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        elevation: 0,
-        title: const Text(
-          'Schedule',
-          style: TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+      backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+      appBar: MoreScreenAppBar(
+        title: 'Schedule',
+        onReload: _handleReload,
+        isDark: isDark,
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          ref.invalidate(coachScheduleProvider(coachId));
-          ref.invalidate(coachBatchesProvider(coachId));
-          ref.invalidate(calendarEventsProvider(
-            startDate: firstDay,
-            endDate: lastDay,
-          ));
+          _handleReload();
+          await Future.delayed(const Duration(milliseconds: 300));
         },
         child: scheduleAsync.when(
           loading: () => const Center(child: ListSkeleton(itemCount: 5)),

@@ -10,6 +10,7 @@ import '../../core/constants/dimensions.dart';
 import '../../core/constants/api_endpoints.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/success_snackbar.dart';
+import '../../widgets/common/more_screen_app_bar.dart';
 import '../../widgets/video/video_player_dialog.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/auth_provider.dart';
@@ -316,27 +317,25 @@ class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
                   ? const Center(child: CircularProgressIndicator())
                   : _videos.isEmpty
                       ? _buildEmptyState(isDark)
-                      : RefreshIndicator(
-                          onRefresh: _loadVideos,
-                          child: _filteredVideos.isEmpty && (_selectedYear != null || _selectedMonth != null)
-                              ? _buildNoFilterResults(isDark)
-                              : ListView.builder(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: AppDimensions.paddingL,
+                      : _filteredVideos.isEmpty && (_selectedYear != null || _selectedMonth != null)
+                          ? _buildNoFilterResults(isDark)
+                          : ListView.builder(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppDimensions.paddingL,
+                              ),
+                              itemCount: _filteredVideos.length,
+                              itemBuilder: (context, index) {
+                                return Padding(
+                                  padding: const EdgeInsets.only(
+                                    bottom: AppDimensions.spacingM,
                                   ),
-                                  itemCount: _filteredVideos.length,
-                                  itemBuilder: (context, index) {
-                                    return Padding(
-                                      padding: const EdgeInsets.only(
-                                        bottom: AppDimensions.spacingM,
-                                      ),
-                                      child: _buildVideoCard(_filteredVideos[index], isDark),
-                                    );
-                                  },
-                                ),
-                        ),
+                                  child: _buildVideoCard(_filteredVideos[index], isDark),
+                                );
+                              },
+                            ),
             ),
           ],
+        ),
         ),
       ),
     );
