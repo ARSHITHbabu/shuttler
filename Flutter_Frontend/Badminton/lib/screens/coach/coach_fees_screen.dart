@@ -36,10 +36,6 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
     super.initState();
   }
 
-  void handleReload() {
-    ref.invalidate(studentsWithBatchFeesProvider);
-  }
-
   @override
   Widget build(BuildContext context) {
     // Check if we can pop (i.e., if screen was pushed separately)
@@ -71,7 +67,7 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
         builder: (context, constraints) {
             return RefreshIndicator(
               onRefresh: () async {
-                handleReload();
+                _handleReload();
                 await Future.delayed(const Duration(milliseconds: 300));
               },
             child: SingleChildScrollView(

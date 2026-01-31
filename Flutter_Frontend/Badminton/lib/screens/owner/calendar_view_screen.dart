@@ -251,7 +251,7 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     
-    void handleReload() {
+    void _handleReload() {
       final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
       final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
       ref.invalidate(calendarEventListProvider(
@@ -264,7 +264,7 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
       backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
       appBar: MoreScreenAppBar(
         title: 'Calendar',
-        onReload: handleReload,
+        onReload: _handleReload,
         isDark: isDark,
         additionalActions: [
           IconButton(
@@ -278,7 +278,7 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          handleReload();
+          _handleReload();
           await Future.delayed(const Duration(milliseconds: 300));
         },
         child: Consumer(
@@ -690,6 +690,9 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
             ),
           ),
         ],
+      ),
+          ),
+        ),
       ),
     );
   }

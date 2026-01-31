@@ -245,7 +245,7 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
     final isDark = theme.brightness == Brightness.dark;
     final batchesAsync = ref.watch(batchListProvider);
 
-    void handleReload() {
+    void _handleReload() {
       ref.invalidate(batchListProvider);
       if (_selectedBatchId != null) {
         ref.invalidate(batchStudentsProvider(_selectedBatchId!));
@@ -259,7 +259,7 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
       backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
       appBar: MoreScreenAppBar(
         title: 'Video Management',
-        onReload: handleReload,
+        onReload: _handleReload,
         isDark: isDark,
       ),
       floatingActionButton: _selectedStudentId != null && !_showUploadForm
@@ -271,7 +271,7 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
           : null,
       body: RefreshIndicator(
         onRefresh: () async {
-          handleReload();
+          _handleReload();
           await Future.delayed(const Duration(milliseconds: 300));
         },
         child: SingleChildScrollView(

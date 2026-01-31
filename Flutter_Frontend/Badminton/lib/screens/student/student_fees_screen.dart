@@ -109,7 +109,7 @@ class _StudentFeesScreenState extends ConsumerState<StudentFeesScreen> {
         final userId = authState.userId;
         final feesAsync = ref.watch(feeByStudentProvider(userId));
 
-        void handleReload() {
+        void _handleReload() {
           ref.invalidate(feeByStudentProvider(userId));
         }
 
@@ -117,13 +117,13 @@ class _StudentFeesScreenState extends ConsumerState<StudentFeesScreen> {
           backgroundColor: Colors.transparent,
           appBar: MoreScreenAppBar(
             title: 'Fee Status',
-            onReload: handleReload,
+            onReload: _handleReload,
             isDark: isDark,
             onBack: widget.onBack,
           ),
           body: RefreshIndicator(
             onRefresh: () async {
-              handleReload();
+              _handleReload();
               await Future.delayed(const Duration(milliseconds: 300));
             },
             child: CustomScrollView(

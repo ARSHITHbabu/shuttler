@@ -124,7 +124,7 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     
-    void handleReload() {
+    void _handleReload() {
       ref.invalidate(coachScheduleProvider(coachId));
       ref.invalidate(coachBatchesProvider(coachId));
       final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
@@ -139,12 +139,12 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
       backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
       appBar: MoreScreenAppBar(
         title: 'Schedule',
-        onReload: handleReload,
+        onReload: _handleReload,
         isDark: isDark,
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          handleReload();
+          _handleReload();
           await Future.delayed(const Duration(milliseconds: 300));
         },
         child: scheduleAsync.when(

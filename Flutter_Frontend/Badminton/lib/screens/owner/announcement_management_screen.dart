@@ -167,7 +167,7 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
       return _buildAddForm();
     }
 
-    void handleReload() {
+    void _handleReload() {
       ref.invalidate(announcementManagerProvider);
     }
 
@@ -175,7 +175,7 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
       backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
       appBar: MoreScreenAppBar(
         title: 'Announcements',
-        onReload: handleReload,
+        onReload: _handleReload,
         isDark: isDark,
         additionalActions: [
           IconButton(
@@ -189,7 +189,7 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          handleReload();
+          _handleReload();
           await Future.delayed(const Duration(milliseconds: 300));
         },
         child: Column(
@@ -270,8 +270,8 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
                 },
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

@@ -117,7 +117,7 @@ class _CoachAttendanceViewScreenState extends ConsumerState<CoachAttendanceViewS
     final isDark = theme.brightness == Brightness.dark;
     final attendanceAsync = ref.watch(coachAttendanceByCoachIdProvider(coachId));
 
-    void handleReload() {
+    void _handleReload() {
       ref.invalidate(coachAttendanceByCoachIdProvider(coachId));
     }
 
@@ -125,12 +125,12 @@ class _CoachAttendanceViewScreenState extends ConsumerState<CoachAttendanceViewS
       backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
       appBar: MoreScreenAppBar(
         title: 'Attendance Rate',
-        onReload: handleReload,
+        onReload: _handleReload,
         isDark: isDark,
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          handleReload();
+          _handleReload();
           await Future.delayed(const Duration(milliseconds: 300));
         },
         child: attendanceAsync.when(

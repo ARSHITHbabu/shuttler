@@ -174,7 +174,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     
-    void handleReload() {
+    void _handleReload() {
       // Reports screen doesn't have specific providers to reload
       // But we can refresh the screen state
       setState(() {});
@@ -184,12 +184,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
       appBar: MoreScreenAppBar(
         title: 'Reports',
-        onReload: handleReload,
+        onReload: _handleReload,
         isDark: isDark,
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          handleReload();
+          _handleReload();
           await Future.delayed(const Duration(milliseconds: 300));
         },
         child: Container(

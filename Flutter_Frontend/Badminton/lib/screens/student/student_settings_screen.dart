@@ -83,7 +83,7 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    void handleReload() {
+    void _handleReload() {
       // Settings screen doesn't need to reload providers, but we can refresh the UI
       setState(() {});
     }
@@ -92,13 +92,13 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
       backgroundColor: Colors.transparent,
       appBar: MoreScreenAppBar(
         title: 'Settings',
-        onReload: handleReload,
+        onReload: _handleReload,
         isDark: isDark,
         onBack: widget.onBack,
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          handleReload();
+          _handleReload();
           await Future.delayed(const Duration(milliseconds: 300));
         },
         child: CustomScrollView(

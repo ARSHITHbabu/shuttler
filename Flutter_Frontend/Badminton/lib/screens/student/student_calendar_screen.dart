@@ -47,7 +47,7 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
     final textSecondary = isDark ? AppColors.textSecondary : AppColorsLight.textSecondary;
     final cardBackground = isDark ? AppColors.cardBackground : AppColorsLight.cardBackground;
 
-    void handleReload() {
+    void _handleReload() {
       final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
       final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
       ref.invalidate(calendarEventsProvider(
@@ -60,13 +60,13 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
       backgroundColor: backgroundColor,
       appBar: MoreScreenAppBar(
         title: 'Calendar',
-        onReload: handleReload,
+        onReload: _handleReload,
         isDark: isDark,
         onBack: widget.onBack,
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          handleReload();
+          _handleReload();
           await Future.delayed(const Duration(milliseconds: 300));
         },
         child: Builder(
@@ -442,8 +442,8 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
                 ],
               ],
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
