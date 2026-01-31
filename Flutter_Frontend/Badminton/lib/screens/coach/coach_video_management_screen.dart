@@ -240,6 +240,8 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final authState = ref.watch(authProvider);
 
     return authState.when(
@@ -248,7 +250,7 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
           return Scaffold(
             appBar: AppBar(
               title: const Text('Video Management'),
-              backgroundColor: AppColors.background,
+              backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
               elevation: 0,
             ),
             body: const Center(
@@ -266,10 +268,10 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
         return Scaffold(
           appBar: AppBar(
             title: const Text('Video Management'),
-            backgroundColor: AppColors.background,
+            backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
             elevation: 0,
           ),
-          backgroundColor: AppColors.background,
+          backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
           floatingActionButton: _selectedStudentId != null && !_showUploadForm
               ? FloatingActionButton(
                   onPressed: () => setState(() => _showUploadForm = true),
@@ -297,12 +299,12 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
                   error: (e, _) => Text('Error: $e', style: const TextStyle(color: AppColors.error)),
                   data: (batches) {
                     if (batches.isEmpty) {
-                      return const NeumorphicContainer(
-                        padding: EdgeInsets.all(AppDimensions.paddingM),
+                      return NeumorphicContainer(
+                        padding: const EdgeInsets.all(AppDimensions.paddingM),
                         child: Center(
                           child: Text(
                             'No batches assigned',
-                            style: TextStyle(color: AppColors.textSecondary),
+                            style: TextStyle(color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary),
                           ),
                         ),
                       );
@@ -311,13 +313,13 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
                       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
                       child: DropdownButtonFormField<int>(
                         value: _selectedBatchId,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           border: InputBorder.none,
                           hintText: 'Select a batch',
-                          hintStyle: TextStyle(color: AppColors.textHint),
+                          hintStyle: TextStyle(color: isDark ? AppColors.textHint : AppColorsLight.textHint),
                         ),
-                        dropdownColor: AppColors.cardBackground,
-                        style: const TextStyle(color: AppColors.textPrimary),
+                        dropdownColor: isDark ? AppColors.cardBackground : AppColorsLight.cardBackground,
+                        style: TextStyle(color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
                         items: batches.map((batch) {
                           return DropdownMenuItem<int>(
                             value: batch.id,
@@ -381,10 +383,10 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
 
                 // Upload Form
                 if (_showUploadForm && _selectedStudentId != null) ...[
-                  _buildUploadForm(),
+                  _buildUploadForm(isDark),
                 ] else if (_selectedStudentId != null) ...[
                   // Video List
-                  _buildVideoList(),
+                  _buildVideoList(isDark),
                 ],
               ],
             ),
@@ -394,7 +396,7 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
       loading: () => Scaffold(
         appBar: AppBar(
           title: const Text('Video Management'),
-          backgroundColor: AppColors.background,
+          backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
           elevation: 0,
         ),
         body: const Center(child: CircularProgressIndicator()),
@@ -402,7 +404,7 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
       error: (error, _) => Scaffold(
         appBar: AppBar(
           title: const Text('Video Management'),
-          backgroundColor: AppColors.background,
+          backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
           elevation: 0,
         ),
         body: Center(
@@ -415,7 +417,7 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
     );
   }
 
-  Widget _buildUploadForm() {
+  Widget _buildUploadForm(bool isDark) {
     final selectedStudent = _batchStudents.firstWhere(
       (s) => s.id == _selectedStudentId,
       orElse: () => Student(id: 0, name: 'Unknown', phone: '', email: '', status: 'active'),
@@ -427,12 +429,12 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
+            Text(
               'Upload Videos',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
+                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
               ),
             ),
             IconButton(
@@ -441,7 +443,7 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
                 _selectedVideos.clear();
                 _remarksController.clear();
               }),
-              icon: const Icon(Icons.close, color: AppColors.textSecondary),
+              icon: Icon(Icons.close, color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary),
             ),
           ],
         ),
@@ -452,13 +454,13 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
           padding: const EdgeInsets.all(AppDimensions.paddingM),
           child: Row(
             children: [
-              const Icon(Icons.person_outline, color: AppColors.accent),
+              Icon(Icons.person_outline, color: isDark ? AppColors.accent : AppColorsLight.accent),
               const SizedBox(width: AppDimensions.spacingM),
               Text(
                 'Uploading for: ${selectedStudent.name}',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 16,
-                  color: AppColors.textPrimary,
+                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                 ),
               ),
             ],
@@ -475,7 +477,9 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
               Icon(
                 Icons.video_call_outlined,
                 size: 48,
-                color: _isUploading ? AppColors.textHint : AppColors.accent,
+                color: _isUploading 
+                    ? (isDark ? AppColors.textHint : AppColorsLight.textHint)
+                    : (isDark ? AppColors.accent : AppColorsLight.accent),
               ),
               const SizedBox(height: AppDimensions.spacingS),
               Text(
@@ -484,7 +488,9 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
                     : '${_selectedVideos.length} video(s) selected',
                 style: TextStyle(
                   fontSize: 14,
-                  color: _isUploading ? AppColors.textHint : AppColors.textSecondary,
+                  color: _isUploading 
+                      ? (isDark ? AppColors.textHint : AppColorsLight.textHint)
+                      : (isDark ? AppColors.textSecondary : AppColorsLight.textSecondary),
                 ),
               ),
             ],
@@ -494,12 +500,12 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
 
         // Selected Videos List
         if (_selectedVideos.isNotEmpty) ...[
-          const Text(
+          Text(
             'Selected Videos:',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w500,
-              color: AppColors.textSecondary,
+              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
             ),
           ),
           const SizedBox(height: AppDimensions.spacingS),
@@ -511,14 +517,14 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
                 padding: const EdgeInsets.all(AppDimensions.paddingS),
                 child: Row(
                   children: [
-                    const Icon(Icons.video_file, color: AppColors.accent, size: 20),
+                    Icon(Icons.video_file, color: isDark ? AppColors.accent : AppColorsLight.accent, size: 20),
                     const SizedBox(width: AppDimensions.spacingS),
                     Expanded(
                       child: Text(
                         video.name,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
-                          color: AppColors.textPrimary,
+                          color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -539,12 +545,12 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
         ],
 
         // Remarks Field
-        const Text(
+        Text(
           'Remarks (optional)',
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w500,
-            color: AppColors.textSecondary,
+            color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
           ),
         ),
         const SizedBox(height: AppDimensions.spacingS),
@@ -554,10 +560,10 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
             controller: _remarksController,
             enabled: !_isUploading,
             maxLines: 3,
-            style: const TextStyle(color: AppColors.textPrimary),
-            decoration: const InputDecoration(
+            style: TextStyle(color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
+            decoration: InputDecoration(
               hintText: 'Add notes or remarks for this video...',
-              hintStyle: TextStyle(color: AppColors.textHint),
+              hintStyle: TextStyle(color: isDark ? AppColors.textHint : AppColorsLight.textHint),
               border: InputBorder.none,
             ),
           ),
@@ -568,15 +574,15 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
         if (_isUploading) ...[
           LinearProgressIndicator(
             value: _uploadProgress,
-            backgroundColor: AppColors.cardBackground,
-            valueColor: const AlwaysStoppedAnimation<Color>(AppColors.accent),
+            backgroundColor: isDark ? AppColors.cardBackground : AppColorsLight.cardBackground,
+            valueColor: AlwaysStoppedAnimation<Color>(isDark ? AppColors.accent : AppColorsLight.accent),
           ),
           const SizedBox(height: AppDimensions.spacingS),
           Text(
             'Uploading... ${(_uploadProgress * 100).toInt()}%',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
-              color: AppColors.textSecondary,
+              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
             ),
           ),
           const SizedBox(height: AppDimensions.spacingM),
@@ -590,20 +596,20 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
             padding: const EdgeInsets.all(AppDimensions.paddingM),
             child: Center(
               child: _isUploading
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 20,
                       height: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(AppColors.accent),
+                        valueColor: AlwaysStoppedAnimation<Color>(isDark ? AppColors.accent : AppColorsLight.accent),
                       ),
                     )
-                  : const Text(
+                  : Text(
                       'Upload Videos',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.accent,
+                        color: isDark ? AppColors.accent : AppColorsLight.accent,
                       ),
                     ),
             ),
@@ -613,7 +619,7 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
     );
   }
 
-  Widget _buildVideoList() {
+  Widget _buildVideoList(bool isDark) {
     if (_loadingVideos) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -623,26 +629,26 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
+            Icon(
               Icons.video_library_outlined,
               size: 64,
-              color: AppColors.textHint,
+              color: isDark ? AppColors.textHint : AppColorsLight.textHint,
             ),
             const SizedBox(height: AppDimensions.spacingM),
-            const Text(
+            Text(
               'No videos yet',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary,
+                color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
               ),
             ),
             const SizedBox(height: AppDimensions.spacingS),
-            const Text(
+            Text(
               'Tap + to upload training videos',
               style: TextStyle(
                 fontSize: 14,
-                color: AppColors.textHint,
+                color: isDark ? AppColors.textHint : AppColorsLight.textHint,
               ),
             ),
           ],
@@ -655,10 +661,10 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
       children: [
         Text(
           'Videos (${_videos.length})',
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
+            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
           ),
         ),
         const SizedBox(height: AppDimensions.spacingM),
@@ -666,14 +672,16 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
           final video = _videos[index];
           return Padding(
             padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
-            child: _buildVideoCard(video),
+            child: _buildVideoCard(video, isDark),
           );
         }),
       ],
     );
   }
 
-  Widget _buildVideoCard(VideoResource video) {
+  Widget _buildVideoCard(VideoResource video, bool isDark) {
+    final accentColor = isDark ? AppColors.accent : AppColorsLight.accent;
+    
     return NeumorphicContainer(
       padding: const EdgeInsets.all(AppDimensions.paddingM),
       child: Column(
@@ -685,12 +693,12 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
                 width: 50,
                 height: 50,
                 decoration: BoxDecoration(
-                  color: AppColors.accent.withValues(alpha: 0.1),
+                  color: accentColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(AppDimensions.radiusM),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.play_circle_outline,
-                  color: AppColors.accent,
+                  color: accentColor,
                   size: 30,
                 ),
               ),
@@ -701,10 +709,10 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
                   children: [
                     Text(
                       video.displayTitle,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -712,26 +720,26 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
                     const SizedBox(height: 4),
                     Text(
                       video.formattedDate,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
-                        color: AppColors.textSecondary,
+                        color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                       ),
                     ),
                     if (video.uploadedBy != null && _uploaderNames.containsKey(video.uploadedBy)) ...[
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.person_outline,
                             size: 14,
-                            color: AppColors.textSecondary,
+                            color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                           ),
                           const SizedBox(width: 4),
                           Text(
                             'Uploaded by: ${_uploaderNames[video.uploadedBy]}',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 11,
-                              color: AppColors.textSecondary,
+                              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                             ),
                           ),
                         ],
@@ -751,24 +759,24 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
             Container(
               padding: const EdgeInsets.all(AppDimensions.paddingS),
               decoration: BoxDecoration(
-                color: AppColors.background,
+                color: isDark ? AppColors.background : AppColorsLight.background,
                 borderRadius: BorderRadius.circular(AppDimensions.radiusS),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.notes,
                     size: 16,
-                    color: AppColors.textSecondary,
+                    color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                   ),
                   const SizedBox(width: AppDimensions.spacingS),
                   Expanded(
                     child: Text(
                       video.remarks!,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
-                        color: AppColors.textSecondary,
+                        color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                       ),
                     ),
                   ),

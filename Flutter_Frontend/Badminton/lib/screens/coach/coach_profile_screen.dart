@@ -139,6 +139,9 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
   }
 
   Widget _buildContent(Coach coach, AsyncValue<CoachStats> statsAsync) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.all(AppDimensions.paddingL),
@@ -161,18 +164,18 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
                     const SizedBox(height: AppDimensions.spacingM),
                     Text(
                       coach.name,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       coach.email,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
-                        color: AppColors.textSecondary,
+                        color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                       ),
                     ),
                   ],
@@ -461,12 +464,15 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
     return Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 16,
         fontWeight: FontWeight.w600,
-        color: AppColors.textPrimary,
+        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
       ),
     );
   }
@@ -483,6 +489,9 @@ class _StatRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
       child: Row(
@@ -490,17 +499,17 @@ class _StatRow extends StatelessWidget {
         children: [
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
-              color: AppColors.textSecondary,
+              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
             ),
           ),
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
+              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
             ),
           ),
         ],
