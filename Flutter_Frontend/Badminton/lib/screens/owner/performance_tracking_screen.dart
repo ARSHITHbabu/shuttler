@@ -396,7 +396,7 @@ class _PerformanceTrackingScreenState
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     
-    void _handleReload() {
+    void handleReload() {
       if (_selectedBatchId != null && _selectedStudentId != null) {
         ref.invalidate(performanceHistoryProvider(
           studentId: _selectedStudentId!,
@@ -413,7 +413,7 @@ class _PerformanceTrackingScreenState
       backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
       appBar: MoreScreenAppBar(
         title: 'Performance Tracking',
-        onReload: _handleReload,
+        onReload: handleReload,
         isDark: isDark,
         additionalActions: [
           IconButton(
@@ -427,7 +427,7 @@ class _PerformanceTrackingScreenState
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          _handleReload();
+          handleReload();
           await Future.delayed(const Duration(milliseconds: 300));
         },
         child: SingleChildScrollView(
@@ -657,8 +657,6 @@ class _PerformanceTrackingScreenState
           });
           _loadPerformanceHistory();
         },
-      ),
-        ),
       ),
     );
   }

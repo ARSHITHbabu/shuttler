@@ -218,16 +218,16 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     
-    void _handleReload() {
-      ref.invalidate(allBatchesProvider);
-      ref.invalidate(allCoachesProvider);
+    void handleReload() {
+      ref.invalidate(batchListProvider);
+      ref.invalidate(coachListProvider);
     }
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
       appBar: MoreScreenAppBar(
         title: 'Sessions',
-        onReload: _handleReload,
+        onReload: handleReload,
         isDark: isDark,
         additionalActions: [
           IconButton(
@@ -241,7 +241,7 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          _handleReload();
+          handleReload();
           await Future.delayed(const Duration(milliseconds: 300));
         },
         child: Column(
@@ -450,7 +450,6 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
             ),
           ],
         ],
-        ),
       ),
     );
   }

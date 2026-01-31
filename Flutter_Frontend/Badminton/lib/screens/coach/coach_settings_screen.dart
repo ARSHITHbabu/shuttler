@@ -74,7 +74,7 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    void _handleReload() {
+    void handleReload() {
       // Settings screen doesn't need to reload providers, but we can refresh the UI
       setState(() {});
     }
@@ -83,12 +83,12 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
       backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
       appBar: MoreScreenAppBar(
         title: 'Settings',
-        onReload: _handleReload,
+        onReload: handleReload,
         isDark: isDark,
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          _handleReload();
+          handleReload();
           await Future.delayed(const Duration(milliseconds: 300));
         },
         child: CustomScrollView(
@@ -287,6 +287,7 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

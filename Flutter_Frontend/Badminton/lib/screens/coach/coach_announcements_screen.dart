@@ -27,7 +27,7 @@ class _CoachAnnouncementsScreenState extends ConsumerState<CoachAnnouncementsScr
     final isDark = theme.brightness == Brightness.dark;
     final announcementsAsync = ref.watch(coachAnnouncementsProvider);
 
-    void _handleReload() {
+    void handleReload() {
       ref.invalidate(coachAnnouncementsProvider);
     }
 
@@ -35,7 +35,7 @@ class _CoachAnnouncementsScreenState extends ConsumerState<CoachAnnouncementsScr
       backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
       appBar: MoreScreenAppBar(
         title: 'Announcements',
-        onReload: _handleReload,
+        onReload: handleReload,
         isDark: isDark,
       ),
       body: Column(
@@ -82,7 +82,7 @@ class _CoachAnnouncementsScreenState extends ConsumerState<CoachAnnouncementsScr
           Expanded(
             child: RefreshIndicator(
               onRefresh: () async {
-                _handleReload();
+                handleReload();
                 // Wait for the provider to refresh
                 await Future.delayed(const Duration(milliseconds: 300));
               },

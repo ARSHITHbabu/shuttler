@@ -60,7 +60,7 @@ class _StudentBMIScreenState extends ConsumerState<StudentBMIScreen> {
         final userId = authState.userId;
         final bmiAsync = ref.watch(bmiByStudentProvider(userId));
 
-        void _handleReload() {
+        void handleReload() {
           ref.invalidate(bmiByStudentProvider(userId));
         }
 
@@ -68,13 +68,13 @@ class _StudentBMIScreenState extends ConsumerState<StudentBMIScreen> {
           backgroundColor: Colors.transparent,
           appBar: MoreScreenAppBar(
             title: 'BMI Tracker',
-            onReload: _handleReload,
+            onReload: handleReload,
             isDark: isDark,
             onBack: widget.onBack,
           ),
           body: RefreshIndicator(
             onRefresh: () async {
-              _handleReload();
+              handleReload();
               await Future.delayed(const Duration(milliseconds: 300));
             },
             child: CustomScrollView(
@@ -189,8 +189,8 @@ class _StudentBMIScreenState extends ConsumerState<StudentBMIScreen> {
               ],
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 

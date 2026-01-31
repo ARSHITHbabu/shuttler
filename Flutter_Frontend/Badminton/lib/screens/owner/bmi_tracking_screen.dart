@@ -281,18 +281,18 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     
-    void _handleReload() {
+    void handleReload() {
       if (_selectedStudentId != null) {
-        ref.invalidate(bmiHistoryProvider(_selectedStudentId!));
+        ref.invalidate(bmiByStudentProvider(_selectedStudentId!));
       }
-      ref.invalidate(allStudentsProvider);
+      ref.invalidate(studentListProvider);
     }
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
       appBar: MoreScreenAppBar(
         title: 'BMI Tracking',
-        onReload: _handleReload,
+        onReload: handleReload,
         isDark: isDark,
         additionalActions: [
           IconButton(
@@ -312,7 +312,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          _handleReload();
+          handleReload();
           await Future.delayed(const Duration(milliseconds: 300));
         },
         child: GestureDetector(
@@ -396,6 +396,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
             ),
           ),
         ),
+      ),
       ),
     );
   }
@@ -627,8 +628,6 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
               ),
             ),
           ],
-        ),
-          ),
         ),
       ),
     );
