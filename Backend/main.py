@@ -134,6 +134,12 @@ class OwnerDB(Base):
     profile_photo = Column(String(500), nullable=True)  # Profile photo URL/path
     fcm_token = Column(String(500), nullable=True)  # Firebase Cloud Messaging token for push notifications
     
+    # Academy Details:
+    academy_name = Column(String(255), nullable=True)
+    academy_address = Column(Text, nullable=True)
+    academy_contact = Column(String(50), nullable=True)
+    academy_email = Column(String(100), nullable=True)
+    
     # RELATIONSHIPS (will be defined after the related models are created):
     # Note: Announcements and calendar events now support both coaches and owners via polymorphic relationships
 
@@ -467,6 +473,13 @@ def migrate_database_schema(engine):
         if 'coaches' in tables:
             check_and_add_column(engine, 'coaches', 'profile_photo', 'VARCHAR(500)', nullable=True)
             check_and_add_column(engine, 'coaches', 'fcm_token', 'VARCHAR(500)', nullable=True)
+        
+        # Migrate owners table
+        if 'owners' in tables:
+            check_and_add_column(engine, 'owners', 'academy_name', 'VARCHAR(255)', nullable=True)
+            check_and_add_column(engine, 'owners', 'academy_address', 'TEXT', nullable=True)
+            check_and_add_column(engine, 'owners', 'academy_contact', 'VARCHAR(50)', nullable=True)
+            check_and_add_column(engine, 'owners', 'academy_email', 'VARCHAR(100)', nullable=True)
         
         # Migrate students table
         if 'students' in tables:
@@ -957,6 +970,10 @@ class Owner(BaseModel):
     status: str = "active"
     profile_photo: Optional[str] = None
     fcm_token: Optional[str] = None
+    academy_name: Optional[str] = None
+    academy_address: Optional[str] = None
+    academy_contact: Optional[str] = None
+    academy_email: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -974,6 +991,10 @@ class OwnerUpdate(BaseModel):
     experience_years: Optional[int] = None
     profile_photo: Optional[str] = None
     fcm_token: Optional[str] = None
+    academy_name: Optional[str] = None
+    academy_address: Optional[str] = None
+    academy_contact: Optional[str] = None
+    academy_email: Optional[str] = None
 
 # Batch Models
 # Session Models

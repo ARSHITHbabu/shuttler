@@ -15,6 +15,7 @@ import '../owner/bmi_tracking_screen.dart';
 import '../owner/performance_tracking_screen.dart';
 import 'coach_fees_screen.dart';
 import 'leave_request_screen.dart';
+import '../common/academy_info_screen.dart';
 
 /// Coach More Screen - Navigation hub for additional features
 class CoachMoreScreen extends ConsumerStatefulWidget {
@@ -59,6 +60,20 @@ class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (context) => const CoachAnnouncementsScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.business_outlined,
+              title: 'Academy Details',
+              subtitle: 'View academy and owner information',
+              isDark: isDark,
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const AcademyInfoScreen(),
                   ),
                 );
               },

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../core/utils/contact_utils.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
@@ -400,14 +401,14 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                           Icons.phone, 
                           owner.phone, 
                           isDark,
-                          onTap: () => _launchPhone(owner.phone),
+                          onTap: () => ContactUtils.showContactOptions(context, owner.phone, name: owner.name),
                         ),
                         const SizedBox(height: 12),
                         _buildContactDetailRow(
                           Icons.email, 
                           owner.email, 
                           isDark,
-                          onTap: () => _launchEmail(owner.email),
+                          onTap: () => ContactUtils.launchEmail(owner.email),
                         ),
                       ],
                     );
@@ -445,14 +446,14 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                               Icons.phone, 
                               coach.phone, 
                               isDark,
-                              onTap: () => _launchPhone(coach.phone),
+                              onTap: () => ContactUtils.showContactOptions(context, coach.phone, name: coach.name),
                             ),
                             const SizedBox(height: 8),
                             _buildContactDetailRow(
                               Icons.email, 
                               coach.email, 
                               isDark,
-                              onTap: () => _launchEmail(coach.email),
+                              onTap: () => ContactUtils.launchEmail(coach.email),
                             ),
                           ],
                         );
@@ -480,61 +481,55 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
   }
 
   Widget _buildContactDetailRow(IconData icon, String value, bool isDark, {VoidCallback? onTap}) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              size: 20,
-              color: isDark ? AppColors.accent : AppColorsLight.accent,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                value,
-                style: TextStyle(
-                  fontSize: 15,
-                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                  decoration: onTap != null ? TextDecoration.underline : null,
-                  decorationColor: isDark ? AppColors.accent.withValues(alpha: 0.5) : AppColorsLight.accent.withValues(alpha: 0.5),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 20,
+            color: isDark ? AppColors.accent : AppColorsLight.accent,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: onTap != null
+              ? InkWell(
+                  onTap: onTap,
+                  borderRadius: BorderRadius.circular(4),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+                    child: Text(
+                      value,
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                        decoration: TextDecoration.underline,
+                        decorationColor: (isDark ? AppColors.accent : AppColorsLight.accent).withOpacity(0.5),
+                      ),
+                    ),
+                  ),
+                )
+              : Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                  ),
                 ),
-              ),
+          ),
+          if (onTap != null)
+            Icon(
+              Icons.open_in_new,
+              size: 14,
+              color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
             ),
-            if (onTap != null)
-              Icon(
-                Icons.open_in_new,
-                size: 14,
-                color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
-              ),
-          ],
-        ),
+        ],
       ),
     );
   }
 
-  Future<void> _launchEmail(String email) async {
-    final Uri emailUri = Uri(
-      scheme: 'mailto',
-      path: email,
-    );
-    if (await canLaunchUrl(emailUri)) {
-      await launchUrl(emailUri);
-    }
-  }
+  // Local launch methods removed - using ContactUtils
 
-  Future<void> _launchPhone(String phone) async {
-    final Uri phoneUri = Uri(
-      scheme: 'tel',
-      path: phone,
-    );
-    if (await canLaunchUrl(phoneUri)) {
-      await launchUrl(phoneUri);
-    }
-  }
 
   // Removed _calculateStats - now handled by studentDashboardProvider
 
