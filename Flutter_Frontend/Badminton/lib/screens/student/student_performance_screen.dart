@@ -861,7 +861,7 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                     horizontalInterval: 1,
                     getDrawingHorizontalLine: (value) {
                       return FlLine(
-                        color: textColor.withValues(alpha:0.1),
+                        color: textColor.withOpacity(0.1),
                         strokeWidth: 1,
                       );
                     },
@@ -917,7 +917,7 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                   borderData: FlBorderData(
                     show: true,
                     border: Border.all(
-                      color: textColor.withValues(alpha:0.2),
+                      color: textColor.withOpacity(0.2),
                       width: 1,
                     ),
                   ),
@@ -945,7 +945,7 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                       ),
                       belowBarData: BarAreaData(
                         show: true,
-                        color: accentColor.withValues(alpha:0.1),
+                        color: accentColor.withOpacity(0.1),
                       ),
                     ),
                   ],

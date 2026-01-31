@@ -23,8 +23,7 @@ class LeaveRequestScreen extends ConsumerStatefulWidget {
 class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
   final _formKey = GlobalKey<FormState>();
   final _reasonController = TextEditingController();
-  String _selectedStatusFilter =
-      'all'; // 'all', 'pending', 'approved', 'rejected'
+  String _selectedStatusFilter = 'all'; // 'all', 'pending', 'approved', 'rejected'
   bool _showAddForm = false;
   final Set<DateTime> _selectedDates = {};
   bool _isHalfDay = false;
@@ -57,21 +56,17 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
             requestListProvider(
               requestType: 'coach_leave',
               requesterId: coachId,
-              status: _selectedStatusFilter == 'all'
-                  ? null
-                  : _selectedStatusFilter,
+              status: _selectedStatusFilter == 'all' ? null : _selectedStatusFilter,
             ),
           )
         : const AsyncValue<List<Request>>.data([]);
-
+    
     final modificationRequestsAsync = coachId != null
         ? ref.watch(
             requestListProvider(
               requestType: 'coach_leave_modification',
               requesterId: coachId,
-              status: _selectedStatusFilter == 'all'
-                  ? null
-                  : _selectedStatusFilter,
+              status: _selectedStatusFilter == 'all' ? null : _selectedStatusFilter,
             ),
           )
         : const AsyncValue<List<Request>>.data([]);
@@ -81,9 +76,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
     }
 
     return Scaffold(
-      backgroundColor: isDark
-          ? AppColors.background
-          : AppColorsLight.background,
+      backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
       appBar: MoreScreenAppBar(
         title: 'Leave Requests',
         onReload: handleReload,
@@ -117,151 +110,131 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.all(AppDimensions.paddingL),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Status Filter
-              _buildStatusFilter(isDark),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Status Filter
+            _buildStatusFilter(isDark),
 
+            const SizedBox(height: AppDimensions.spacingL),
+
+            // Add Leave Request Form
+            if (_showAddForm) ...[
+              _buildAddForm(isDark),
               const SizedBox(height: AppDimensions.spacingL),
+            ],
 
-              // Add Leave Request Form
-              if (_showAddForm) ...[
-                _buildAddForm(isDark),
-                const SizedBox(height: AppDimensions.spacingL),
-              ],
-
-              // Leave Request History
-              Text(
-                'My Leave Requests',
+            // Leave Request History
+            Text(
+              'My Leave Requests',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+              ),
+            ),
+            const SizedBox(height: AppDimensions.spacingM),
+            // Combine both leave requests and modification requests
+            leaveRequestsAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, stack) => Text(
+                'Failed to load requests: ${error.toString()}',
                 style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: isDark
-                      ? AppColors.textPrimary
-                      : AppColorsLight.textPrimary,
+                  color: isDark ? AppColors.error : AppColorsLight.error,
                 ),
               ),
-              const SizedBox(height: AppDimensions.spacingM),
-              // Combine both leave requests and modification requests
-              leaveRequestsAsync.when(
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (error, stack) => Text(
-                  'Failed to load requests: ${error.toString()}',
-                  style: TextStyle(
-                    color: isDark ? AppColors.error : AppColorsLight.error,
-                  ),
-                ),
-                data: (leaveRequests) {
-                  return modificationRequestsAsync.when(
-                    loading: () =>
-                        const Center(child: CircularProgressIndicator()),
-                    error: (error, stack) => Text(
-                      'Failed to load modification requests: ${error.toString()}',
-                      style: TextStyle(
-                        color: isDark ? AppColors.error : AppColorsLight.error,
-                      ),
+              data: (leaveRequests) {
+                return modificationRequestsAsync.when(
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (error, stack) => Text(
+                    'Failed to load modification requests: ${error.toString()}',
+                    style: TextStyle(
+                      color: isDark ? AppColors.error : AppColorsLight.error,
                     ),
-                    data: (modificationRequests) {
-                      // Find approved modifications and update original requests
-                      final approvedModifications = modificationRequests
-                          .where((r) => r.isApproved && r.metadata != null)
-                          .toList();
-
-                      // Create a map of original request ID to approved modification
-                      final modificationMap = <int, Request>{};
-                      for (final mod in approvedModifications) {
-                        final originalId =
-                            mod.metadata!['original_request_id'] as int?;
-                        if (originalId != null) {
-                          modificationMap[originalId] = mod;
-                        }
+                  ),
+                  data: (modificationRequests) {
+                    // Find approved modifications and update original requests
+                    final approvedModifications = modificationRequests
+                        .where((r) => r.isApproved && r.metadata != null)
+                        .toList();
+                    
+                    // Create a map of original request ID to approved modification
+                    final modificationMap = <int, Request>{};
+                    for (final mod in approvedModifications) {
+                      final originalId = mod.metadata!['original_request_id'] as int?;
+                      if (originalId != null) {
+                        modificationMap[originalId] = mod;
                       }
-
-                      // Update leave requests with modification data if approved modification exists
-                      final updatedLeaveRequests = leaveRequests.map((req) {
-                        if (modificationMap.containsKey(req.id)) {
-                          final mod = modificationMap[req.id]!;
-                          // Create a new request with updated metadata
-                          final updatedMetadata = Map<String, dynamic>.from(
-                            req.metadata ?? {},
-                          );
-                          updatedMetadata['start_date'] =
-                              mod.metadata!['new_start_date'];
-                          updatedMetadata['end_date'] =
-                              mod.metadata!['new_end_date'];
-                          updatedMetadata['dates'] = mod.metadata!['new_dates'];
-                          updatedMetadata['is_half_day'] =
-                              mod.metadata!['new_is_half_day'];
-                          updatedMetadata['total_days'] =
-                              mod.metadata!['new_total_days'];
-                          updatedMetadata['has_approved_modification'] = true;
-                          updatedMetadata['modification_reason'] =
-                              mod.description;
-                          updatedMetadata['original_reason'] = req.description;
-
-                          return req.copyWith(
-                            description:
-                                '${req.description ?? ''}\n\nModified: ${mod.description ?? ''}',
-                            metadata: updatedMetadata,
-                          );
-                        }
-                        return req;
-                      }).toList();
-
-                      // Combine and sort by creation date (newest first)
-                      final allRequests = [
-                        ...updatedLeaveRequests,
-                        ...modificationRequests,
-                      ]..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
-                      if (allRequests.isEmpty) {
-                        return Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(
-                              AppDimensions.spacingXl,
-                            ),
-                            child: Column(
-                              children: [
-                                Icon(
-                                  Icons.event_busy_outlined,
-                                  size: 48,
-                                  color: isDark
-                                      ? AppColors.textTertiary
-                                      : AppColorsLight.textTertiary,
-                                ),
-                                const SizedBox(height: AppDimensions.spacingM),
-                                Text(
-                                  'No leave requests yet',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: isDark
-                                        ? AppColors.textSecondary
-                                        : AppColorsLight.textSecondary,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                    }
+                    
+                    // Update leave requests with modification data if approved modification exists
+                    final updatedLeaveRequests = leaveRequests.map((req) {
+                      if (modificationMap.containsKey(req.id)) {
+                        final mod = modificationMap[req.id]!;
+                        // Create a new request with updated metadata
+                        final updatedMetadata = Map<String, dynamic>.from(req.metadata ?? {});
+                        updatedMetadata['start_date'] = mod.metadata!['new_start_date'];
+                        updatedMetadata['end_date'] = mod.metadata!['new_end_date'];
+                        updatedMetadata['dates'] = mod.metadata!['new_dates'];
+                        updatedMetadata['is_half_day'] = mod.metadata!['new_is_half_day'];
+                        updatedMetadata['total_days'] = mod.metadata!['new_total_days'];
+                        updatedMetadata['has_approved_modification'] = true;
+                        updatedMetadata['modification_reason'] = mod.description;
+                        updatedMetadata['original_reason'] = req.description;
+                        
+                        return req.copyWith(
+                          description: '${req.description ?? ''}\n\nModified: ${mod.description ?? ''}',
+                          metadata: updatedMetadata,
                         );
                       }
-
-                      return ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: allRequests.length,
-                        itemBuilder: (context, index) {
-                          return _LeaveRequestCard(
-                            request: allRequests[index],
-                            isDark: isDark,
-                          );
-                        },
+                      return req;
+                    }).toList();
+                    
+                    // Combine and sort by creation date (newest first)
+                    final allRequests = [...updatedLeaveRequests, ...modificationRequests]
+                      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+                    
+                    if (allRequests.isEmpty) {
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(AppDimensions.spacingXl),
+                          child: Column(
+                            children: [
+                              Icon(
+                                Icons.event_busy_outlined,
+                                size: 48,
+                                color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
+                              ),
+                              const SizedBox(height: AppDimensions.spacingM),
+                              Text(
+                                'No leave requests yet',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       );
-                    },
-                  );
-                },
-              ),
-            ],
-          ),
+                    }
+
+                    return ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: allRequests.length,
+                      itemBuilder: (context, index) {
+                        return _LeaveRequestCard(
+                          request: allRequests[index],
+                          isDark: isDark,
+                        );
+                      },
+                    );
+                  },
+                );
+              },
+            ),
+          ],
+        ),
         ),
       ),
     );
@@ -321,9 +294,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
-                color: isDark
-                    ? AppColors.textPrimary
-                    : AppColorsLight.textPrimary,
+                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
               ),
             ),
             const SizedBox(height: 8),
@@ -342,9 +313,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
-                      color: isDark
-                          ? AppColors.textPrimary
-                          : AppColorsLight.textPrimary,
+                      color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                     ),
                   ),
                 ],
@@ -358,9 +327,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
-                color: isDark
-                    ? AppColors.textPrimary
-                    : AppColorsLight.textPrimary,
+                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
               ),
             ),
             const SizedBox(height: 8),
@@ -373,9 +340,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
                     Icon(
                       Icons.calendar_today,
                       size: 20,
-                      color: isDark
-                          ? AppColors.textSecondary
-                          : AppColorsLight.textSecondary,
+                      color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                     ),
                     const SizedBox(width: AppDimensions.spacingM),
                     Expanded(
@@ -386,12 +351,8 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
                         style: TextStyle(
                           fontSize: 14,
                           color: _selectedDates.isEmpty
-                              ? (isDark
-                                    ? AppColors.textSecondary
-                                    : AppColorsLight.textSecondary)
-                              : (isDark
-                                    ? AppColors.textPrimary
-                                    : AppColorsLight.textPrimary),
+                              ? (isDark ? AppColors.textSecondary : AppColorsLight.textSecondary)
+                              : (isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
                         ),
                       ),
                     ),
@@ -400,9 +361,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
                         icon: Icon(
                           Icons.clear,
                           size: 18,
-                          color: isDark
-                              ? AppColors.textSecondary
-                              : AppColorsLight.textSecondary,
+                          color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                         ),
                         onPressed: () {
                           setState(() {
@@ -420,9 +379,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
                 '${_selectedDates.length} day${_selectedDates.length > 1 ? 's' : ''} selected',
                 style: TextStyle(
                   fontSize: 12,
-                  color: isDark
-                      ? AppColors.textSecondary
-                      : AppColorsLight.textSecondary,
+                  color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                 ),
               ),
             ],
@@ -439,17 +396,13 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
                       _isHalfDay = value ?? false;
                     });
                   },
-                  activeColor: isDark
-                      ? AppColors.accent
-                      : AppColorsLight.accent,
+                  activeColor: isDark ? AppColors.accent : AppColorsLight.accent,
                 ),
                 Text(
                   'Half Day',
                   style: TextStyle(
                     fontSize: 14,
-                    color: isDark
-                        ? AppColors.textPrimary
-                        : AppColorsLight.textPrimary,
+                    color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                   ),
                 ),
               ],
@@ -463,9 +416,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
-                color: isDark
-                    ? AppColors.textPrimary
-                    : AppColorsLight.textPrimary,
+                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
               ),
             ),
             const SizedBox(height: 8),
@@ -473,16 +424,12 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
               controller: _reasonController,
               maxLines: 4,
               style: TextStyle(
-                color: isDark
-                    ? AppColors.textPrimary
-                    : AppColorsLight.textPrimary,
+                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
               ),
               decoration: InputDecoration(
                 hintText: 'Enter reason for leave...',
                 hintStyle: TextStyle(
-                  color: isDark
-                      ? AppColors.textSecondary
-                      : AppColorsLight.textSecondary,
+                  color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                 ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
@@ -518,9 +465,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
               child: ElevatedButton(
                 onPressed: _submitLeaveRequest,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: isDark
-                      ? AppColors.accent
-                      : AppColorsLight.accent,
+                  backgroundColor: isDark ? AppColors.accent : AppColorsLight.accent,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
@@ -529,7 +474,10 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
                 ),
                 child: const Text(
                   'Send Request',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ),
@@ -541,12 +489,12 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
 
   String _formatSelectedDates() {
     if (_selectedDates.isEmpty) return '';
-
+    
     final sortedDates = _selectedDates.toList()..sort();
     if (sortedDates.length == 1) {
       return DateFormat('MMM dd, yyyy').format(sortedDates[0]);
     }
-
+    
     // Check if dates are consecutive
     bool isConsecutive = true;
     for (int i = 1; i < sortedDates.length; i++) {
@@ -556,7 +504,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
         break;
       }
     }
-
+    
     if (isConsecutive) {
       return '${DateFormat('MMM dd').format(sortedDates.first)} - ${DateFormat('MMM dd, yyyy').format(sortedDates.last)}';
     } else {
@@ -568,9 +516,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
     await showDialog(
       context: context,
       builder: (context) => Dialog(
-        backgroundColor: isDark
-            ? AppColors.cardBackground
-            : AppColorsLight.cardBackground,
+        backgroundColor: isDark ? AppColors.cardBackground : AppColorsLight.cardBackground,
         child: Container(
           padding: const EdgeInsets.all(AppDimensions.paddingM),
           constraints: const BoxConstraints(maxWidth: 400),
@@ -584,9 +530,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
-                      color: isDark
-                          ? AppColors.textPrimary
-                          : AppColorsLight.textPrimary,
+                      color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                     ),
                   ),
                   const SizedBox(height: AppDimensions.spacingM),
@@ -602,26 +546,14 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
                     startingDayOfWeek: StartingDayOfWeek.sunday,
                     calendarStyle: CalendarStyle(
                       outsideDaysVisible: false,
-                      weekendTextStyle: TextStyle(
-                        color: isDark
-                            ? AppColors.textSecondary
-                            : AppColorsLight.textSecondary,
-                      ),
-                      defaultTextStyle: TextStyle(
-                        color: isDark
-                            ? AppColors.textPrimary
-                            : AppColorsLight.textPrimary,
-                      ),
+                      weekendTextStyle: TextStyle(color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary),
+                      defaultTextStyle: TextStyle(color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
                       selectedDecoration: BoxDecoration(
-                        color: isDark
-                            ? AppColors.accent
-                            : AppColorsLight.accent,
+                        color: isDark ? AppColors.accent : AppColorsLight.accent,
                         shape: BoxShape.circle,
                       ),
                       todayDecoration: BoxDecoration(
-                        color:
-                            (isDark ? AppColors.accent : AppColorsLight.accent)
-                                .withValues(alpha: 0.3),
+                        color: (isDark ? AppColors.accent : AppColorsLight.accent).withOpacity(0.3),
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -629,41 +561,28 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
                       formatButtonVisible: false,
                       titleCentered: true,
                       titleTextStyle: TextStyle(
-                        color: isDark
-                            ? AppColors.textPrimary
-                            : AppColorsLight.textPrimary,
+                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                       ),
                       leftChevronIcon: Icon(
                         Icons.chevron_left,
-                        color: isDark
-                            ? AppColors.textPrimary
-                            : AppColorsLight.textPrimary,
+                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                       ),
                       rightChevronIcon: Icon(
                         Icons.chevron_right,
-                        color: isDark
-                            ? AppColors.textPrimary
-                            : AppColorsLight.textPrimary,
+                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                       ),
                     ),
                     onDaySelected: (selectedDay, focusedDay) {
                       setDialogState(() {
-                        final dateKey = DateTime(
-                          selectedDay.year,
-                          selectedDay.month,
-                          selectedDay.day,
-                        );
+                        final dateKey = DateTime(selectedDay.year, selectedDay.month, selectedDay.day);
                         if (_selectedDates.contains(dateKey)) {
                           _selectedDates.remove(dateKey);
                         } else {
                           // Check if adding this date would exceed 1 week
                           if (_selectedDates.length >= 7) {
-                            SuccessSnackbar.showError(
-                              context,
-                              'Maximum 7 days allowed',
-                            );
+                            SuccessSnackbar.showError(context, 'Maximum 7 days allowed');
                             return;
                           }
                           _selectedDates.add(dateKey);
@@ -682,9 +601,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
                       'Selected: ${_formatSelectedDates()}',
                       style: TextStyle(
                         fontSize: 12,
-                        color: isDark
-                            ? AppColors.textSecondary
-                            : AppColorsLight.textSecondary,
+                        color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                       ),
                     ),
                     const SizedBox(height: AppDimensions.spacingS),
@@ -701,9 +618,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
                         child: Text(
                           'Clear',
                           style: TextStyle(
-                            color: isDark
-                                ? AppColors.textSecondary
-                                : AppColorsLight.textSecondary,
+                            color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                           ),
                         ),
                       ),
@@ -711,9 +626,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
                       ElevatedButton(
                         onPressed: () => Navigator.of(context).pop(),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: isDark
-                              ? AppColors.accent
-                              : AppColorsLight.accent,
+                          backgroundColor: isDark ? AppColors.accent : AppColorsLight.accent,
                           foregroundColor: Colors.white,
                         ),
                         child: const Text('Done'),
@@ -742,10 +655,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
 
     // Validate max 7 days
     if (_selectedDates.length > 7) {
-      SuccessSnackbar.showError(
-        context,
-        'Maximum 7 days allowed for leave request',
-      );
+      SuccessSnackbar.showError(context, 'Maximum 7 days allowed for leave request');
       return;
     }
 
@@ -769,18 +679,15 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
       final sortedDates = _selectedDates.toList()..sort();
       final startDate = sortedDates.first;
       final endDate = sortedDates.last;
-
-      final dateStrings = sortedDates
-          .map((d) => d.toIso8601String().split('T')[0])
-          .toList();
-
+      
+      final dateStrings = sortedDates.map((d) => d.toIso8601String().split('T')[0]).toList();
+      
       final requestService = ref.read(requestServiceProvider);
       await requestService.createRequest(
         requestType: 'coach_leave',
         requesterType: 'coach',
         requesterId: coachId!,
-        title:
-            'Leave Request: ${DateFormat('MMM dd').format(startDate)} - ${DateFormat('MMM dd, yyyy').format(endDate)}${_isHalfDay ? ' (Half Day)' : ''}',
+        title: 'Leave Request: ${DateFormat('MMM dd').format(startDate)} - ${DateFormat('MMM dd, yyyy').format(endDate)}${_isHalfDay ? ' (Half Day)' : ''}',
         description: _reasonController.text.trim(),
         metadata: {
           'start_date': startDate.toIso8601String(),
@@ -805,10 +712,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
       }
     } catch (e) {
       if (mounted) {
-        SuccessSnackbar.showError(
-          context,
-          'Failed to submit leave request: ${e.toString()}',
-        );
+        SuccessSnackbar.showError(context, 'Failed to submit leave request: ${e.toString()}');
       }
     }
   }
@@ -818,7 +722,10 @@ class _LeaveRequestCard extends ConsumerWidget {
   final Request request;
   final bool isDark;
 
-  const _LeaveRequestCard({required this.request, required this.isDark});
+  const _LeaveRequestCard({
+    required this.request,
+    required this.isDark,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -834,26 +741,21 @@ class _LeaveRequestCard extends ConsumerWidget {
         if (isModification) {
           // For modification requests, show new dates
           if (request.metadata!['new_start_date'] != null) {
-            startDate = DateFormat(
-              'MMM dd, yyyy',
-            ).format(DateTime.parse(request.metadata!['new_start_date']));
+            startDate = DateFormat('MMM dd, yyyy')
+                .format(DateTime.parse(request.metadata!['new_start_date']));
           }
           if (request.metadata!['new_end_date'] != null) {
-            endDate = DateFormat(
-              'MMM dd, yyyy',
-            ).format(DateTime.parse(request.metadata!['new_end_date']));
+            endDate = DateFormat('MMM dd, yyyy')
+                .format(DateTime.parse(request.metadata!['new_end_date']));
           }
           isHalfDay = request.metadata!['new_is_half_day'] == true;
           totalDays = request.metadata!['new_total_days'] as int?;
-
+          
           // Also get original dates for reference
           if (request.metadata!['original_dates'] != null) {
-            final datesList =
-                request.metadata!['original_dates'] as List<dynamic>?;
+            final datesList = request.metadata!['original_dates'] as List<dynamic>?;
             if (datesList != null) {
-              originalDates = datesList
-                  .map((d) => DateTime.parse(d as String))
-                  .toList();
+              originalDates = datesList.map((d) => DateTime.parse(d as String)).toList();
             }
           }
         } else {
@@ -861,49 +763,41 @@ class _LeaveRequestCard extends ConsumerWidget {
           if (request.metadata!['has_approved_modification'] == true) {
             // Show modified dates
             if (request.metadata!['start_date'] != null) {
-              startDate = DateFormat(
-                'MMM dd, yyyy',
-              ).format(DateTime.parse(request.metadata!['start_date']));
+              startDate = DateFormat('MMM dd, yyyy')
+                  .format(DateTime.parse(request.metadata!['start_date']));
             }
             if (request.metadata!['end_date'] != null) {
-              endDate = DateFormat(
-                'MMM dd, yyyy',
-              ).format(DateTime.parse(request.metadata!['end_date']));
+              endDate = DateFormat('MMM dd, yyyy')
+                  .format(DateTime.parse(request.metadata!['end_date']));
             }
             isHalfDay = request.metadata!['is_half_day'] == true;
             totalDays = request.metadata!['total_days'] as int?;
-
+            
             // Use modified dates for edit button
             if (request.metadata!['dates'] != null) {
               final datesList = request.metadata!['dates'] as List<dynamic>?;
               if (datesList != null) {
-                originalDates = datesList
-                    .map((d) => DateTime.parse(d as String))
-                    .toList();
+                originalDates = datesList.map((d) => DateTime.parse(d as String)).toList();
               }
             }
           } else {
             // Original request without modification
             if (request.metadata!['start_date'] != null) {
-              startDate = DateFormat(
-                'MMM dd, yyyy',
-              ).format(DateTime.parse(request.metadata!['start_date']));
+              startDate = DateFormat('MMM dd, yyyy')
+                  .format(DateTime.parse(request.metadata!['start_date']));
             }
             if (request.metadata!['end_date'] != null) {
-              endDate = DateFormat(
-                'MMM dd, yyyy',
-              ).format(DateTime.parse(request.metadata!['end_date']));
+              endDate = DateFormat('MMM dd, yyyy')
+                  .format(DateTime.parse(request.metadata!['end_date']));
             }
             isHalfDay = request.metadata!['is_half_day'] == true;
             totalDays = request.metadata!['total_days'] as int?;
-
+            
             // Extract original dates for modification button
             if (request.metadata!['dates'] != null) {
               final datesList = request.metadata!['dates'] as List<dynamic>?;
               if (datesList != null) {
-                originalDates = datesList
-                    .map((d) => DateTime.parse(d as String))
-                    .toList();
+                originalDates = datesList.map((d) => DateTime.parse(d as String)).toList();
               }
             }
           }
@@ -927,10 +821,7 @@ class _LeaveRequestCard extends ConsumerWidget {
                   children: [
                     if (isModification)
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: Colors.orange.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(8),
@@ -944,13 +835,9 @@ class _LeaveRequestCard extends ConsumerWidget {
                           ),
                         ),
                       )
-                    else if (request.metadata != null &&
-                        request.metadata!['has_approved_modification'] == true)
+                    else if (request.metadata != null && request.metadata!['has_approved_modification'] == true)
                       Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: Colors.blue.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(8),
@@ -972,10 +859,7 @@ class _LeaveRequestCard extends ConsumerWidget {
                         ),
                       ),
                     if (startDate != null && endDate != null) ...[
-                      if (isModification ||
-                          (request.metadata != null &&
-                              request.metadata!['has_approved_modification'] ==
-                                  true))
+                      if (isModification || (request.metadata != null && request.metadata!['has_approved_modification'] == true)) 
                         const SizedBox(height: 4),
                       Text(
                         startDate == endDate
@@ -984,9 +868,7 @@ class _LeaveRequestCard extends ConsumerWidget {
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
-                          color: isDark
-                              ? AppColors.textPrimary
-                              : AppColorsLight.textPrimary,
+                          color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                         ),
                       ),
                     ],
@@ -995,21 +877,15 @@ class _LeaveRequestCard extends ConsumerWidget {
                         '$totalDays days',
                         style: TextStyle(
                           fontSize: 12,
-                          color: isDark
-                              ? AppColors.textSecondary
-                              : AppColorsLight.textSecondary,
+                          color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                         ),
                       ),
                     const SizedBox(height: 4),
                     Text(
-                      DateFormat(
-                        'MMM dd, yyyy • hh:mm a',
-                      ).format(request.createdAt),
+                      DateFormat('MMM dd, yyyy • hh:mm a').format(request.createdAt),
                       style: TextStyle(
                         fontSize: 12,
-                        color: isDark
-                            ? AppColors.textSecondary
-                            : AppColorsLight.textSecondary,
+                        color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                       ),
                     ),
                   ],
@@ -1024,9 +900,7 @@ class _LeaveRequestCard extends ConsumerWidget {
               request.description!,
               style: TextStyle(
                 fontSize: 14,
-                color: isDark
-                    ? AppColors.textSecondary
-                    : AppColorsLight.textSecondary,
+                color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
               ),
             ),
           ],
@@ -1054,9 +928,7 @@ class _LeaveRequestCard extends ConsumerWidget {
                       request.responseMessage!,
                       style: TextStyle(
                         fontSize: 12,
-                        color: isDark
-                            ? AppColors.textPrimary
-                            : AppColorsLight.textPrimary,
+                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                       ),
                     ),
                   ),
@@ -1065,9 +937,9 @@ class _LeaveRequestCard extends ConsumerWidget {
             ),
           ],
           // Edit button for approved requests (only for original leave requests, not modifications)
-          if (request.isApproved &&
-              !isModification &&
-              originalDates != null &&
+          if (request.isApproved && 
+              !isModification && 
+              originalDates != null && 
               originalDates.isNotEmpty) ...[
             const SizedBox(height: AppDimensions.spacingM),
             SizedBox(
@@ -1075,31 +947,20 @@ class _LeaveRequestCard extends ConsumerWidget {
               child: OutlinedButton.icon(
                 onPressed: () {
                   // Use current dates if modified, otherwise use original dates
-                  final datesToUse =
-                      (request.metadata != null &&
-                          request.metadata!['has_approved_modification'] ==
-                              true &&
-                          request.metadata!['dates'] != null)
+                  final datesToUse = (request.metadata != null && 
+                                     request.metadata!['has_approved_modification'] == true &&
+                                     request.metadata!['dates'] != null)
                       ? (request.metadata!['dates'] as List<dynamic>)
-                            .map((d) => DateTime.parse(d as String))
-                            .toList()
+                          .map((d) => DateTime.parse(d as String))
+                          .toList()
                       : originalDates!;
-
-                  _showModifyDialog(
-                    context,
-                    ref,
-                    request,
-                    datesToUse,
-                    isHalfDay,
-                    isDark,
-                  );
+                  
+                  _showModifyDialog(context, ref, request, datesToUse, isHalfDay, isDark);
                 },
                 icon: const Icon(Icons.edit, size: 18),
                 label: const Text('Modify Leave'),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: isDark
-                      ? AppColors.accent
-                      : AppColorsLight.accent,
+                  foregroundColor: isDark ? AppColors.accent : AppColorsLight.accent,
                   side: BorderSide(
                     color: isDark ? AppColors.accent : AppColorsLight.accent,
                   ),
@@ -1112,14 +973,7 @@ class _LeaveRequestCard extends ConsumerWidget {
     );
   }
 
-  void _showModifyDialog(
-    BuildContext context,
-    WidgetRef ref,
-    Request originalRequest,
-    List<DateTime> originalDates,
-    bool originalIsHalfDay,
-    bool isDark,
-  ) {
+  void _showModifyDialog(BuildContext context, WidgetRef ref, Request originalRequest, List<DateTime> originalDates, bool originalIsHalfDay, bool isDark) {
     showDialog(
       context: context,
       builder: (dialogContext) => _ModifyLeaveDialog(
@@ -1193,8 +1047,7 @@ class _FilterChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chipColor =
-        color ?? (isDark ? AppColors.accent : AppColorsLight.accent);
+    final chipColor = color ?? (isDark ? AppColors.accent : AppColorsLight.accent);
 
     return GestureDetector(
       onTap: onTap,
@@ -1208,9 +1061,7 @@ class _FilterChip extends StatelessWidget {
           border: Border.all(
             color: isSelected
                 ? chipColor
-                : (isDark
-                      ? AppColors.textTertiary
-                      : AppColorsLight.textTertiary),
+                : (isDark ? AppColors.textTertiary : AppColorsLight.textTertiary),
             width: 1,
           ),
         ),
@@ -1221,9 +1072,7 @@ class _FilterChip extends StatelessWidget {
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
             color: isSelected
                 ? chipColor
-                : (isDark
-                      ? AppColors.textSecondary
-                      : AppColorsLight.textSecondary),
+                : (isDark ? AppColors.textSecondary : AppColorsLight.textSecondary),
           ),
         ),
       ),
@@ -1275,12 +1124,12 @@ class _ModifyLeaveDialogState extends ConsumerState<_ModifyLeaveDialog> {
 
   String _formatSelectedDates() {
     if (_selectedDates.isEmpty) return '';
-
+    
     final sortedDates = _selectedDates.toList()..sort();
     if (sortedDates.length == 1) {
       return DateFormat('MMM dd, yyyy').format(sortedDates[0]);
     }
-
+    
     // Check if dates are consecutive
     bool isConsecutive = true;
     for (int i = 1; i < sortedDates.length; i++) {
@@ -1290,7 +1139,7 @@ class _ModifyLeaveDialogState extends ConsumerState<_ModifyLeaveDialog> {
         break;
       }
     }
-
+    
     if (isConsecutive) {
       return '${DateFormat('MMM dd').format(sortedDates.first)} - ${DateFormat('MMM dd, yyyy').format(sortedDates.last)}';
     } else {
@@ -1302,9 +1151,7 @@ class _ModifyLeaveDialogState extends ConsumerState<_ModifyLeaveDialog> {
     await showDialog(
       context: context,
       builder: (context) => Dialog(
-        backgroundColor: widget.isDark
-            ? AppColors.cardBackground
-            : AppColorsLight.cardBackground,
+        backgroundColor: widget.isDark ? AppColors.cardBackground : AppColorsLight.cardBackground,
         child: Container(
           padding: const EdgeInsets.all(AppDimensions.paddingM),
           constraints: const BoxConstraints(maxWidth: 400),
@@ -1318,9 +1165,7 @@ class _ModifyLeaveDialogState extends ConsumerState<_ModifyLeaveDialog> {
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
-                      color: widget.isDark
-                          ? AppColors.textPrimary
-                          : AppColorsLight.textPrimary,
+                      color: widget.isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                     ),
                   ),
                   const SizedBox(height: AppDimensions.spacingM),
@@ -1336,28 +1181,14 @@ class _ModifyLeaveDialogState extends ConsumerState<_ModifyLeaveDialog> {
                     startingDayOfWeek: StartingDayOfWeek.sunday,
                     calendarStyle: CalendarStyle(
                       outsideDaysVisible: false,
-                      weekendTextStyle: TextStyle(
-                        color: widget.isDark
-                            ? AppColors.textSecondary
-                            : AppColorsLight.textSecondary,
-                      ),
-                      defaultTextStyle: TextStyle(
-                        color: widget.isDark
-                            ? AppColors.textPrimary
-                            : AppColorsLight.textPrimary,
-                      ),
+                      weekendTextStyle: TextStyle(color: widget.isDark ? AppColors.textSecondary : AppColorsLight.textSecondary),
+                      defaultTextStyle: TextStyle(color: widget.isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
                       selectedDecoration: BoxDecoration(
-                        color: widget.isDark
-                            ? AppColors.accent
-                            : AppColorsLight.accent,
+                        color: widget.isDark ? AppColors.accent : AppColorsLight.accent,
                         shape: BoxShape.circle,
                       ),
                       todayDecoration: BoxDecoration(
-                        color:
-                            (widget.isDark
-                                    ? AppColors.accent
-                                    : AppColorsLight.accent)
-                                .withValues(alpha: 0.3),
+                        color: (widget.isDark ? AppColors.accent : AppColorsLight.accent).withOpacity(0.3),
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -1365,41 +1196,28 @@ class _ModifyLeaveDialogState extends ConsumerState<_ModifyLeaveDialog> {
                       formatButtonVisible: false,
                       titleCentered: true,
                       titleTextStyle: TextStyle(
-                        color: widget.isDark
-                            ? AppColors.textPrimary
-                            : AppColorsLight.textPrimary,
+                        color: widget.isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                       ),
                       leftChevronIcon: Icon(
                         Icons.chevron_left,
-                        color: widget.isDark
-                            ? AppColors.textPrimary
-                            : AppColorsLight.textPrimary,
+                        color: widget.isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                       ),
                       rightChevronIcon: Icon(
                         Icons.chevron_right,
-                        color: widget.isDark
-                            ? AppColors.textPrimary
-                            : AppColorsLight.textPrimary,
+                        color: widget.isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                       ),
                     ),
                     onDaySelected: (selectedDay, focusedDay) {
                       setDialogState(() {
-                        final dateKey = DateTime(
-                          selectedDay.year,
-                          selectedDay.month,
-                          selectedDay.day,
-                        );
+                        final dateKey = DateTime(selectedDay.year, selectedDay.month, selectedDay.day);
                         if (_selectedDates.contains(dateKey)) {
                           _selectedDates.remove(dateKey);
                         } else {
                           // Check if adding this date would exceed 1 week
                           if (_selectedDates.length >= 7) {
-                            SuccessSnackbar.showError(
-                              context,
-                              'Maximum 7 days allowed',
-                            );
+                            SuccessSnackbar.showError(context, 'Maximum 7 days allowed');
                             return;
                           }
                           _selectedDates.add(dateKey);
@@ -1418,9 +1236,7 @@ class _ModifyLeaveDialogState extends ConsumerState<_ModifyLeaveDialog> {
                       'Selected: ${_formatSelectedDates()}',
                       style: TextStyle(
                         fontSize: 12,
-                        color: widget.isDark
-                            ? AppColors.textSecondary
-                            : AppColorsLight.textSecondary,
+                        color: widget.isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                       ),
                     ),
                     const SizedBox(height: AppDimensions.spacingS),
@@ -1437,9 +1253,7 @@ class _ModifyLeaveDialogState extends ConsumerState<_ModifyLeaveDialog> {
                         child: Text(
                           'Clear',
                           style: TextStyle(
-                            color: widget.isDark
-                                ? AppColors.textSecondary
-                                : AppColorsLight.textSecondary,
+                            color: widget.isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                           ),
                         ),
                       ),
@@ -1447,9 +1261,7 @@ class _ModifyLeaveDialogState extends ConsumerState<_ModifyLeaveDialog> {
                       ElevatedButton(
                         onPressed: () => Navigator.of(context).pop(),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: widget.isDark
-                              ? AppColors.accent
-                              : AppColorsLight.accent,
+                          backgroundColor: widget.isDark ? AppColors.accent : AppColorsLight.accent,
                           foregroundColor: Colors.white,
                         ),
                         child: const Text('Done'),
@@ -1478,25 +1290,18 @@ class _ModifyLeaveDialogState extends ConsumerState<_ModifyLeaveDialog> {
 
     // Validate max 7 days
     if (_selectedDates.length > 7) {
-      SuccessSnackbar.showError(
-        context,
-        'Maximum 7 days allowed for leave request',
-      );
+      SuccessSnackbar.showError(context, 'Maximum 7 days allowed for leave request');
       return;
     }
 
     // Check if dates have changed
     final originalDatesSet = widget.originalDates.toSet();
-    final datesChanged =
-        !_selectedDates.containsAll(originalDatesSet) ||
-        !originalDatesSet.containsAll(_selectedDates) ||
-        _isHalfDay != widget.originalIsHalfDay;
+    final datesChanged = !_selectedDates.containsAll(originalDatesSet) || 
+                        !originalDatesSet.containsAll(_selectedDates) ||
+                        _isHalfDay != widget.originalIsHalfDay;
 
     if (!datesChanged && _reasonController.text.trim().isEmpty) {
-      SuccessSnackbar.showError(
-        context,
-        'Please provide a reason for modification or make changes',
-      );
+      SuccessSnackbar.showError(context, 'Please provide a reason for modification or make changes');
       return;
     }
 
@@ -1524,24 +1329,19 @@ class _ModifyLeaveDialogState extends ConsumerState<_ModifyLeaveDialog> {
       final sortedDates = _selectedDates.toList()..sort();
       final startDate = sortedDates.first;
       final endDate = sortedDates.last;
-
-      final dateStrings = sortedDates
-          .map((d) => d.toIso8601String().split('T')[0])
-          .toList();
-
+      
+      final dateStrings = sortedDates.map((d) => d.toIso8601String().split('T')[0]).toList();
+      
       // Get original dates for comparison
-      final originalDateStrings = widget.originalDates
-          .map((d) => d.toIso8601String().split('T')[0])
-          .toList();
-
+      final originalDateStrings = widget.originalDates.map((d) => d.toIso8601String().split('T')[0]).toList();
+      
       final requestService = ref.read(requestServiceProvider);
       await requestService.createRequest(
         requestType: 'coach_leave_modification',
         requesterType: 'coach',
         requesterId: coachId!,
-        title:
-            'Leave Modification Request: ${DateFormat('MMM dd').format(startDate)} - ${DateFormat('MMM dd, yyyy').format(endDate)}${_isHalfDay ? ' (Half Day)' : ''}',
-        description: _reasonController.text.trim().isEmpty
+        title: 'Leave Modification Request: ${DateFormat('MMM dd').format(startDate)} - ${DateFormat('MMM dd, yyyy').format(endDate)}${_isHalfDay ? ' (Half Day)' : ''}',
+        description: _reasonController.text.trim().isEmpty 
             ? 'Modifying leave dates from ${widget.originalDates.length} days to ${sortedDates.length} days'
             : _reasonController.text.trim(),
         metadata: {
@@ -1561,19 +1361,13 @@ class _ModifyLeaveDialogState extends ConsumerState<_ModifyLeaveDialog> {
       );
 
       if (mounted) {
-        SuccessSnackbar.show(
-          context,
-          'Modification request submitted successfully',
-        );
+        SuccessSnackbar.show(context, 'Modification request submitted successfully');
         widget.onModified();
         Navigator.of(context).pop();
       }
     } catch (e) {
       if (mounted) {
-        SuccessSnackbar.showError(
-          context,
-          'Failed to submit modification request: ${e.toString()}',
-        );
+        SuccessSnackbar.showError(context, 'Failed to submit modification request: ${e.toString()}');
       }
     } finally {
       if (mounted) {
@@ -1587,15 +1381,11 @@ class _ModifyLeaveDialogState extends ConsumerState<_ModifyLeaveDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: widget.isDark
-          ? AppColors.cardBackground
-          : AppColorsLight.cardBackground,
+      backgroundColor: widget.isDark ? AppColors.cardBackground : AppColorsLight.cardBackground,
       title: Text(
         'Modify Leave Request',
         style: TextStyle(
-          color: widget.isDark
-              ? AppColors.textPrimary
-              : AppColorsLight.textPrimary,
+          color: widget.isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
         ),
       ),
       content: SingleChildScrollView(
@@ -1609,22 +1399,18 @@ class _ModifyLeaveDialogState extends ConsumerState<_ModifyLeaveDialog> {
                 'Original: ${_formatSelectedDates()} (${widget.originalDates.length} days)',
                 style: TextStyle(
                   fontSize: 12,
-                  color: widget.isDark
-                      ? AppColors.textSecondary
-                      : AppColorsLight.textSecondary,
+                  color: widget.isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                 ),
               ),
               const SizedBox(height: AppDimensions.spacingM),
-
+              
               // Date Selection
               Text(
                 'Select New Dates',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: widget.isDark
-                      ? AppColors.textPrimary
-                      : AppColorsLight.textPrimary,
+                  color: widget.isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                 ),
               ),
               const SizedBox(height: 8),
@@ -1637,9 +1423,7 @@ class _ModifyLeaveDialogState extends ConsumerState<_ModifyLeaveDialog> {
                       Icon(
                         Icons.calendar_today,
                         size: 20,
-                        color: widget.isDark
-                            ? AppColors.textSecondary
-                            : AppColorsLight.textSecondary,
+                        color: widget.isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                       ),
                       const SizedBox(width: AppDimensions.spacingM),
                       Expanded(
@@ -1650,12 +1434,8 @@ class _ModifyLeaveDialogState extends ConsumerState<_ModifyLeaveDialog> {
                           style: TextStyle(
                             fontSize: 14,
                             color: _selectedDates.isEmpty
-                                ? (widget.isDark
-                                      ? AppColors.textSecondary
-                                      : AppColorsLight.textSecondary)
-                                : (widget.isDark
-                                      ? AppColors.textPrimary
-                                      : AppColorsLight.textPrimary),
+                                ? (widget.isDark ? AppColors.textSecondary : AppColorsLight.textSecondary)
+                                : (widget.isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
                           ),
                         ),
                       ),
@@ -1669,9 +1449,7 @@ class _ModifyLeaveDialogState extends ConsumerState<_ModifyLeaveDialog> {
                   '${_selectedDates.length} day${_selectedDates.length > 1 ? 's' : ''} selected',
                   style: TextStyle(
                     fontSize: 12,
-                    color: widget.isDark
-                        ? AppColors.textSecondary
-                        : AppColorsLight.textSecondary,
+                    color: widget.isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                   ),
                 ),
               ],
@@ -1688,17 +1466,13 @@ class _ModifyLeaveDialogState extends ConsumerState<_ModifyLeaveDialog> {
                         _isHalfDay = value ?? false;
                       });
                     },
-                    activeColor: widget.isDark
-                        ? AppColors.accent
-                        : AppColorsLight.accent,
+                    activeColor: widget.isDark ? AppColors.accent : AppColorsLight.accent,
                   ),
                   Text(
                     'Half Day',
                     style: TextStyle(
                       fontSize: 14,
-                      color: widget.isDark
-                          ? AppColors.textPrimary
-                          : AppColorsLight.textPrimary,
+                      color: widget.isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                     ),
                   ),
                 ],
@@ -1712,9 +1486,7 @@ class _ModifyLeaveDialogState extends ConsumerState<_ModifyLeaveDialog> {
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: widget.isDark
-                      ? AppColors.textPrimary
-                      : AppColorsLight.textPrimary,
+                  color: widget.isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                 ),
               ),
               const SizedBox(height: 8),
@@ -1722,39 +1494,29 @@ class _ModifyLeaveDialogState extends ConsumerState<_ModifyLeaveDialog> {
                 controller: _reasonController,
                 maxLines: 3,
                 style: TextStyle(
-                  color: widget.isDark
-                      ? AppColors.textPrimary
-                      : AppColorsLight.textPrimary,
+                  color: widget.isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                 ),
                 decoration: InputDecoration(
                   hintText: 'Explain why you need to modify the leave...',
                   hintStyle: TextStyle(
-                    color: widget.isDark
-                        ? AppColors.textSecondary
-                        : AppColorsLight.textSecondary,
+                    color: widget.isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                   ),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                     borderSide: BorderSide(
-                      color: widget.isDark
-                          ? AppColors.border
-                          : AppColorsLight.border,
+                      color: widget.isDark ? AppColors.border : AppColorsLight.border,
                     ),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                     borderSide: BorderSide(
-                      color: widget.isDark
-                          ? AppColors.border
-                          : AppColorsLight.border,
+                      color: widget.isDark ? AppColors.border : AppColorsLight.border,
                     ),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                     borderSide: BorderSide(
-                      color: widget.isDark
-                          ? AppColors.accent
-                          : AppColorsLight.accent,
+                      color: widget.isDark ? AppColors.accent : AppColorsLight.accent,
                     ),
                   ),
                 ),
@@ -1769,28 +1531,21 @@ class _ModifyLeaveDialogState extends ConsumerState<_ModifyLeaveDialog> {
           child: Text(
             'Cancel',
             style: TextStyle(
-              color: widget.isDark
-                  ? AppColors.textSecondary
-                  : AppColorsLight.textSecondary,
+              color: widget.isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
             ),
           ),
         ),
         ElevatedButton(
           onPressed: _isLoading ? null : _submitModification,
           style: ElevatedButton.styleFrom(
-            backgroundColor: widget.isDark
-                ? AppColors.accent
-                : AppColorsLight.accent,
+            backgroundColor: widget.isDark ? AppColors.accent : AppColorsLight.accent,
             foregroundColor: Colors.white,
           ),
           child: _isLoading
               ? const SizedBox(
                   width: 16,
                   height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.white,
-                  ),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                 )
               : const Text('Submit Modification'),
         ),

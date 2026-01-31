@@ -16,12 +16,10 @@ class CoachAttendanceViewScreen extends ConsumerStatefulWidget {
   const CoachAttendanceViewScreen({super.key});
 
   @override
-  ConsumerState<CoachAttendanceViewScreen> createState() =>
-      _CoachAttendanceViewScreenState();
+  ConsumerState<CoachAttendanceViewScreen> createState() => _CoachAttendanceViewScreenState();
 }
 
-class _CoachAttendanceViewScreenState
-    extends ConsumerState<CoachAttendanceViewScreen> {
+class _CoachAttendanceViewScreenState extends ConsumerState<CoachAttendanceViewScreen> {
   String _selectedFilter = 'all'; // 'all', 'present', 'absent'
   DateTime? _selectedMonth;
 
@@ -43,9 +41,7 @@ class _CoachAttendanceViewScreenState
     }
 
     final total = records.length;
-    final present = records
-        .where((r) => r.status.toLowerCase() == 'present')
-        .length;
+    final present = records.where((r) => r.status.toLowerCase() == 'present').length;
     final absent = total - present;
 
     return {
@@ -70,9 +66,7 @@ class _CoachAttendanceViewScreenState
     if (_selectedFilter == 'all') {
       return filtered;
     }
-    return filtered
-        .where((record) => record.status.toLowerCase() == _selectedFilter)
-        .toList();
+    return filtered.where((record) => record.status.toLowerCase() == _selectedFilter).toList();
   }
 
   Color _getAttendanceColor(double rate) {
@@ -84,7 +78,7 @@ class _CoachAttendanceViewScreenState
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
-
+    
     return authState.when(
       data: (authValue) {
         if (authValue is! Authenticated) {
@@ -121,18 +115,14 @@ class _CoachAttendanceViewScreenState
   Widget _buildScaffold(int coachId) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final attendanceAsync = ref.watch(
-      coachAttendanceByCoachIdProvider(coachId),
-    );
+    final attendanceAsync = ref.watch(coachAttendanceByCoachIdProvider(coachId));
 
     void handleReload() {
       ref.invalidate(coachAttendanceByCoachIdProvider(coachId));
     }
 
     return Scaffold(
-      backgroundColor: isDark
-          ? AppColors.background
-          : AppColorsLight.background,
+      backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
       appBar: MoreScreenAppBar(
         title: 'Attendance Rate',
         onReload: handleReload,
@@ -147,8 +137,7 @@ class _CoachAttendanceViewScreenState
           loading: () => const Center(child: ListSkeleton(itemCount: 5)),
           error: (error, stack) => ErrorDisplay(
             message: 'Failed to load attendance records: ${error.toString()}',
-            onRetry: () =>
-                ref.invalidate(coachAttendanceByCoachIdProvider(coachId)),
+            onRetry: () => ref.invalidate(coachAttendanceByCoachIdProvider(coachId)),
           ),
           data: (allRecords) {
             final filteredRecords = _filterRecords(allRecords);
@@ -160,14 +149,12 @@ class _CoachAttendanceViewScreenState
                 children: [
                   // Stats Summary
                   _buildStatsSummary(attendanceStats),
-
+                  
                   const SizedBox(height: AppDimensions.spacingL),
-
+                  
                   // Month Selector and Filters
                   Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppDimensions.paddingL,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
                     child: Column(
                       children: [
                         // Month Selector
@@ -175,18 +162,12 @@ class _CoachAttendanceViewScreenState
                           padding: const EdgeInsets.all(AppDimensions.paddingM),
                           child: Row(
                             children: [
-                              const Icon(
-                                Icons.calendar_today,
-                                size: 20,
-                                color: AppColors.textSecondary,
-                              ),
+                              const Icon(Icons.calendar_today, size: 20, color: AppColors.textSecondary),
                               const SizedBox(width: AppDimensions.spacingM),
                               Expanded(
                                 child: Text(
                                   _selectedMonth != null
-                                      ? DateFormat(
-                                          'MMMM yyyy',
-                                        ).format(_selectedMonth!)
+                                      ? DateFormat('MMMM yyyy').format(_selectedMonth!)
                                       : 'All Time',
                                   style: const TextStyle(
                                     color: AppColors.textPrimary,
@@ -199,8 +180,7 @@ class _CoachAttendanceViewScreenState
                                 onPressed: () async {
                                   final picked = await showDatePicker(
                                     context: context,
-                                    initialDate:
-                                        _selectedMonth ?? DateTime.now(),
+                                    initialDate: _selectedMonth ?? DateTime.now(),
                                     firstDate: DateTime(2020),
                                     lastDate: DateTime.now(),
                                     initialDatePickerMode: DatePickerMode.year,
@@ -234,23 +214,20 @@ class _CoachAttendanceViewScreenState
                               _FilterChip(
                                 label: 'All',
                                 isSelected: _selectedFilter == 'all',
-                                onTap: () =>
-                                    setState(() => _selectedFilter = 'all'),
+                                onTap: () => setState(() => _selectedFilter = 'all'),
                               ),
                               const SizedBox(width: AppDimensions.spacingS),
                               _FilterChip(
                                 label: 'Present',
                                 isSelected: _selectedFilter == 'present',
-                                onTap: () =>
-                                    setState(() => _selectedFilter = 'present'),
+                                onTap: () => setState(() => _selectedFilter = 'present'),
                                 color: AppColors.success,
                               ),
                               const SizedBox(width: AppDimensions.spacingS),
                               _FilterChip(
                                 label: 'Absent',
                                 isSelected: _selectedFilter == 'absent',
-                                onTap: () =>
-                                    setState(() => _selectedFilter = 'absent'),
+                                onTap: () => setState(() => _selectedFilter = 'absent'),
                                 color: AppColors.error,
                               ),
                             ],
@@ -259,9 +236,9 @@ class _CoachAttendanceViewScreenState
                       ],
                     ),
                   ),
-
+                  
                   const SizedBox(height: AppDimensions.spacingL),
-
+                  
                   // Attendance Records List
                   if (filteredRecords.isEmpty)
                     Padding(
@@ -291,9 +268,7 @@ class _CoachAttendanceViewScreenState
                     )
                   else
                     Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppDimensions.paddingL,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -308,52 +283,37 @@ class _CoachAttendanceViewScreenState
                           const SizedBox(height: AppDimensions.spacingM),
                           ...filteredRecords.map((record) {
                             return Padding(
-                              padding: const EdgeInsets.only(
-                                bottom: AppDimensions.spacingM,
-                              ),
+                              padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
                               child: NeumorphicContainer(
-                                padding: const EdgeInsets.all(
-                                  AppDimensions.paddingM,
-                                ),
+                                padding: const EdgeInsets.all(AppDimensions.paddingM),
                                 child: Row(
                                   children: [
                                     Container(
                                       width: 50,
                                       height: 50,
                                       decoration: BoxDecoration(
-                                        color:
-                                            record.status.toLowerCase() ==
-                                                'present'
-                                            ? AppColors.success.withValues(alpha: 0.2)
-                                            : AppColors.error.withValues(alpha: 0.2),
-                                        borderRadius: BorderRadius.circular(
-                                          AppDimensions.radiusM,
-                                        ),
+                                        color: record.status.toLowerCase() == 'present'
+                                            ? AppColors.success.withOpacity(0.2)
+                                            : AppColors.error.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(AppDimensions.radiusM),
                                       ),
                                       child: Icon(
                                         record.status.toLowerCase() == 'present'
                                             ? Icons.check_circle
                                             : Icons.cancel,
-                                        color:
-                                            record.status.toLowerCase() ==
-                                                'present'
+                                        color: record.status.toLowerCase() == 'present'
                                             ? AppColors.success
                                             : AppColors.error,
                                         size: 24,
                                       ),
                                     ),
-                                    const SizedBox(
-                                      width: AppDimensions.spacingM,
-                                    ),
+                                    const SizedBox(width: AppDimensions.spacingM),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            DateFormat(
-                                              'EEEE, MMMM d, yyyy',
-                                            ).format(record.date),
+                                            DateFormat('EEEE, MMMM d, yyyy').format(record.date),
                                             style: const TextStyle(
                                               fontSize: 16,
                                               fontWeight: FontWeight.w600,
@@ -363,20 +323,14 @@ class _CoachAttendanceViewScreenState
                                           const SizedBox(height: 4),
                                           Container(
                                             padding: const EdgeInsets.symmetric(
-                                              horizontal:
-                                                  AppDimensions.spacingS,
+                                              horizontal: AppDimensions.spacingS,
                                               vertical: 2,
                                             ),
                                             decoration: BoxDecoration(
-                                              color:
-                                                  record.status.toLowerCase() ==
-                                                      'present'
+                                              color: record.status.toLowerCase() == 'present'
                                                   ? AppColors.success
                                                   : AppColors.error,
-                                              borderRadius:
-                                                  BorderRadius.circular(
-                                                    AppDimensions.radiusS,
-                                                  ),
+                                              borderRadius: BorderRadius.circular(AppDimensions.radiusS),
                                             ),
                                             child: Text(
                                               record.status.toUpperCase(),
@@ -387,8 +341,7 @@ class _CoachAttendanceViewScreenState
                                               ),
                                             ),
                                           ),
-                                          if (record.remarks != null &&
-                                              record.remarks!.isNotEmpty) ...[
+                                          if (record.remarks != null && record.remarks!.isNotEmpty) ...[
                                             const SizedBox(height: 4),
                                             Text(
                                               record.remarks!,
@@ -523,7 +476,10 @@ class _StatItem extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           label,
-          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          style: const TextStyle(
+            fontSize: 12,
+            color: AppColors.textSecondary,
+          ),
         ),
       ],
     );
@@ -554,22 +510,18 @@ class _FilterChip extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           color: isSelected
-              ? (color ?? AppColors.accent).withValues(alpha: 0.2)
+              ? (color ?? AppColors.accent).withOpacity(0.2)
               : AppColors.cardBackground,
           borderRadius: BorderRadius.circular(AppDimensions.radiusS),
           border: Border.all(
-            color: isSelected
-                ? (color ?? AppColors.accent)
-                : Colors.transparent,
+            color: isSelected ? (color ?? AppColors.accent) : Colors.transparent,
             width: 1,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected
-                ? (color ?? AppColors.accent)
-                : AppColors.textSecondary,
+            color: isSelected ? (color ?? AppColors.accent) : AppColors.textSecondary,
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
           ),
         ),

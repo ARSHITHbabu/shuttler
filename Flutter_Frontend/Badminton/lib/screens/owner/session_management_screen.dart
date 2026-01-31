@@ -403,7 +403,7 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
                   vertical: AppDimensions.spacingS,
                 ),
                 decoration: BoxDecoration(
-                  color: _getSessionTypeColor(session.sessionType).withValues(alpha:0.2),
+                  color: _getSessionTypeColor(session.sessionType).withOpacity(0.2),
                   borderRadius: BorderRadius.circular(AppDimensions.radiusS),
                 ),
                 child: Text(
@@ -961,7 +961,7 @@ class _TabButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
         decoration: BoxDecoration(
-          color: isActive ? AppColors.accent.withValues(alpha:0.2) : Colors.transparent,
+          color: isActive ? AppColors.accent.withOpacity(0.2) : Colors.transparent,
           borderRadius: BorderRadius.circular(AppDimensions.radiusS),
         ),
         child: Center(

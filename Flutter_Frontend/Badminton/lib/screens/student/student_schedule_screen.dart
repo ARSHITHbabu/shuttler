@@ -383,8 +383,8 @@ class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
                             alignment: Alignment.center,
                             decoration: BoxDecoration(
                               color: isHoliday 
-                                  ? Colors.red.withValues(alpha:0.5)
-                                  : AppColors.accent.withValues(alpha:0.3),
+                                  ? Colors.red.withOpacity(0.5)
+                                  : AppColors.accent.withOpacity(0.3),
                               shape: BoxShape.circle,
                             ),
                             child: Text(
@@ -448,7 +448,7 @@ class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
                             Container(
                               padding: const EdgeInsets.all(AppDimensions.paddingS),
                               decoration: BoxDecoration(
-                                color: Colors.red.withValues(alpha:0.1),
+                                color: Colors.red.withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(AppDimensions.radiusS),
                               ),
                               child: Row(
@@ -478,10 +478,10 @@ class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
                                 padding: const EdgeInsets.all(AppDimensions.paddingS),
                                 decoration: BoxDecoration(
                                   color: event.eventType == 'holiday' 
-                                      ? Colors.red.withValues(alpha:0.1)
+                                      ? Colors.red.withOpacity(0.1)
                                       : event.eventType == 'tournament'
-                                          ? Colors.blue.withValues(alpha:0.1)
-                                          : Colors.green.withValues(alpha:0.1),
+                                          ? Colors.blue.withOpacity(0.1)
+                                          : Colors.green.withOpacity(0.1),
                                   borderRadius: BorderRadius.circular(AppDimensions.radiusS),
                                 ),
                                 child: Row(

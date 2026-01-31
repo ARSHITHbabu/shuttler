@@ -14,7 +14,6 @@ import '../common/privacy_policy_screen.dart';
 import '../common/terms_conditions_screen.dart';
 import '../common/help_support_screen.dart';
 import '../../widgets/forms/change_password_dialog.dart';
-import '../../widgets/common/more_screen_app_bar.dart';
 import 'student_profile_screen.dart';
 
 /// Student Settings Screen - App preferences and account settings
@@ -294,7 +293,6 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                 ],
               ),
             ),
-          ),
           ],
         ),
       ),
@@ -621,6 +619,7 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
             ),
           ),
         ],
+        ),
       ),
     );
   }

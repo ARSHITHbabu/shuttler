@@ -117,8 +117,8 @@ class _StudentAnnouncementsScreenState extends ConsumerState<StudentAnnouncement
                 },
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -181,7 +181,7 @@ class _StudentAnnouncementsScreenState extends ConsumerState<StudentAnnouncement
                   vertical: AppDimensions.spacingS,
                 ),
                 decoration: BoxDecoration(
-                  color: announcement.priorityColor.withValues(alpha: 0.2),
+                  color: announcement.priorityColor.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(AppDimensions.radiusS),
                 ),
                 child: Text(
@@ -234,7 +234,7 @@ class _StudentAnnouncementsScreenState extends ConsumerState<StudentAnnouncement
                       vertical: AppDimensions.spacingS,
                     ),
                     decoration: BoxDecoration(
-                      color: announcement.priorityColor.withValues(alpha: 0.2),
+                      color: announcement.priorityColor.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(AppDimensions.radiusS),
                     ),
                     child: Text(

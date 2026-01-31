@@ -398,12 +398,15 @@ class _PerformanceTrackingScreenState
     
     void handleReload() {
       if (_selectedBatchId != null && _selectedStudentId != null) {
-        ref.invalidate(performanceByStudentProvider(_selectedStudentId!));
+        ref.invalidate(performanceHistoryProvider(
+          studentId: _selectedStudentId!,
+          batchId: _selectedBatchId!,
+        ));
       }
       if (_selectedBatchId != null) {
         ref.invalidate(batchStudentsProvider(_selectedBatchId!));
       }
-      ref.invalidate(batchListProvider);
+      ref.invalidate(allBatchesProvider);
     }
 
     return Scaffold(
@@ -429,7 +432,7 @@ class _PerformanceTrackingScreenState
         },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
-          child: Padding(
+        child: Padding(
           padding: const EdgeInsets.all(AppDimensions.paddingL),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -747,7 +750,7 @@ class _PerformanceTrackingScreenState
               color: AppColors.cardBackground,
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha:0.1),
+                  color: Colors.black.withOpacity(0.1),
                   blurRadius: 10,
                   offset: const Offset(0, -2),
                 ),
@@ -802,7 +805,7 @@ class _PerformanceTrackingScreenState
       constraints: BoxConstraints(minWidth: minTableWidth),
       child: Table(
         border: TableBorder.all(
-          color: AppColors.textSecondary.withValues(alpha:0.2),
+          color: AppColors.textSecondary.withOpacity(0.2),
           width: 1,
         ),
         columnWidths: {
@@ -816,7 +819,7 @@ class _PerformanceTrackingScreenState
         children: [
           // Header row
           TableRow(
-            decoration: BoxDecoration(color: AppColors.accent.withValues(alpha:0.1)),
+            decoration: BoxDecoration(color: AppColors.accent.withOpacity(0.1)),
             children: [
               _buildTableHeaderCell('Student'),
               ..._skills.map(
@@ -916,13 +919,13 @@ class _PerformanceTrackingScreenState
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(4),
             borderSide: BorderSide(
-              color: AppColors.textSecondary.withValues(alpha:0.3),
+              color: AppColors.textSecondary.withOpacity(0.3),
             ),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(4),
             borderSide: BorderSide(
-              color: AppColors.textSecondary.withValues(alpha:0.3),
+              color: AppColors.textSecondary.withOpacity(0.3),
             ),
           ),
           focusedBorder: OutlineInputBorder(
@@ -980,13 +983,13 @@ class _PerformanceTrackingScreenState
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(4),
             borderSide: BorderSide(
-              color: AppColors.textSecondary.withValues(alpha:0.3),
+              color: AppColors.textSecondary.withOpacity(0.3),
             ),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(4),
             borderSide: BorderSide(
-              color: AppColors.textSecondary.withValues(alpha:0.3),
+              color: AppColors.textSecondary.withOpacity(0.3),
             ),
           ),
           focusedBorder: OutlineInputBorder(
@@ -997,7 +1000,7 @@ class _PerformanceTrackingScreenState
           filled: true,
           fillColor: AppColors.cardBackground,
           hintText: 'Add comments...',
-          hintStyle: TextStyle(color: AppColors.textSecondary.withValues(alpha:0.5)),
+          hintStyle: TextStyle(color: AppColors.textSecondary.withOpacity(0.5)),
         ),
         onChanged: (value) {
           setState(() {
@@ -1044,7 +1047,7 @@ class _PerformanceTrackingScreenState
                       vertical: AppDimensions.spacingS,
                     ),
                     decoration: BoxDecoration(
-                      color: AppColors.accent.withValues(alpha:0.2),
+                      color: AppColors.accent.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(
                         AppDimensions.radiusS,
                       ),
@@ -1205,7 +1208,7 @@ class _PerformanceTrackingScreenState
                   horizontalInterval: 1,
                   getDrawingHorizontalLine: (value) {
                     return FlLine(
-                      color: AppColors.textSecondary.withValues(alpha:0.1),
+                      color: AppColors.textSecondary.withOpacity(0.1),
                       strokeWidth: 1,
                     );
                   },
@@ -1261,7 +1264,7 @@ class _PerformanceTrackingScreenState
                 borderData: FlBorderData(
                   show: true,
                   border: Border.all(
-                    color: AppColors.textSecondary.withValues(alpha:0.2),
+                    color: AppColors.textSecondary.withOpacity(0.2),
                     width: 1,
                   ),
                 ),
@@ -1289,7 +1292,7 @@ class _PerformanceTrackingScreenState
                     ),
                     belowBarData: BarAreaData(
                       show: true,
-                      color: AppColors.accent.withValues(alpha:0.1),
+                      color: AppColors.accent.withOpacity(0.1),
                     ),
                   ),
                 ],

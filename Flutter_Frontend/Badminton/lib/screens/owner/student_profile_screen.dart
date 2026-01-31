@@ -130,7 +130,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                   width: 80,
                   height: 80,
                   decoration: BoxDecoration(
-                    color: AppColors.accent.withValues(alpha:0.2),
+                    color: AppColors.accent.withOpacity(0.2),
                     shape: BoxShape.circle,
                   ),
                   child: Center(
@@ -482,7 +482,7 @@ class _TabButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
         decoration: BoxDecoration(
-          color: isActive ? AppColors.accent.withValues(alpha:0.2) : Colors.transparent,
+          color: isActive ? AppColors.accent.withOpacity(0.2) : Colors.transparent,
           borderRadius: BorderRadius.circular(AppDimensions.radiusS),
         ),
         child: Center(

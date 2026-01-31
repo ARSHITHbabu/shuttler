@@ -18,13 +18,11 @@ class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
 
   @override
-  ConsumerState<NotificationsScreen> createState() =>
-      _NotificationsScreenState();
+  ConsumerState<NotificationsScreen> createState() => _NotificationsScreenState();
 }
 
 class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
-  String _selectedFilter =
-      'all'; // 'all', 'fee_due', 'attendance', 'announcement', 'general'
+  String _selectedFilter = 'all'; // 'all', 'fee_due', 'attendance', 'announcement', 'general'
   String _readFilter = 'all'; // 'all', 'read', 'unread'
 
   @override
@@ -107,30 +105,24 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       isReadFilter = false;
     }
 
-    final notificationsAsync = ref.watch(
-      notificationManagerProvider(
+    final notificationsAsync = ref.watch(notificationManagerProvider(
+      userId: authState.userId,
+      userType: authState.userType,
+      type: typeFilter,
+      isRead: isReadFilter,
+    ));
+
+    void handleReload() {
+      ref.invalidate(notificationManagerProvider(
         userId: authState.userId,
         userType: authState.userType,
         type: typeFilter,
         isRead: isReadFilter,
-      ),
-    );
-
-    void handleReload() {
-      ref.invalidate(
-        notificationManagerProvider(
-          userId: authState.userId,
-          userType: authState.userType,
-          type: typeFilter,
-          isRead: isReadFilter,
-        ),
-      );
+      ));
     }
 
     return Scaffold(
-      backgroundColor: isDark
-          ? AppColors.background
-          : AppColorsLight.background,
+      backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
       appBar: MoreScreenAppBar(
         title: 'Notifications',
         onReload: handleReload,
@@ -152,24 +144,22 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           await Future.delayed(const Duration(milliseconds: 300));
         },
         child: Column(
-          children: [
-            // Filters
-            _buildFilters(),
-
-            // Notifications List
-            Expanded(
-              child: notificationsAsync.when(
+        children: [
+          // Filters
+          _buildFilters(),
+          
+          // Notifications List
+          Expanded(
+            child: notificationsAsync.when(
                 loading: () => const ListSkeleton(itemCount: 5),
                 error: (error, stack) => ErrorDisplay(
                   message: 'Failed to load notifications: ${error.toString()}',
-                  onRetry: () => ref.invalidate(
-                    notificationManagerProvider(
-                      userId: authState.userId,
-                      userType: authState.userType,
-                      type: typeFilter,
-                      isRead: isReadFilter,
-                    ),
-                  ),
+                  onRetry: () => ref.invalidate(notificationManagerProvider(
+                    userId: authState.userId,
+                    userType: authState.userType,
+                    type: typeFilter,
+                    isRead: isReadFilter,
+                  )),
                 ),
                 data: (notifications) {
                   if (notifications.isEmpty) {
@@ -191,7 +181,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 },
               ),
             ),
-          ],
+        ],
         ),
       ),
     );
@@ -216,39 +206,28 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           Wrap(
             spacing: AppDimensions.spacingS,
             runSpacing: AppDimensions.spacingS,
-            children:
-                ['all', 'fee_due', 'attendance', 'announcement', 'general'].map(
-                  (type) {
-                    final isSelected = _selectedFilter == type;
-                    return GestureDetector(
-                      onTap: () => setState(() => _selectedFilter = type),
-                      child: NeumorphicContainer(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppDimensions.paddingM,
-                          vertical: AppDimensions.spacingS,
-                        ),
-                        color: isSelected
-                            ? AppColors.accent
-                            : AppColors.cardBackground,
-                        borderRadius: AppDimensions.radiusS,
-                        child: Text(
-                          type == 'all'
-                              ? 'All'
-                              : type.replaceAll('_', ' ').toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: isSelected
-                                ? FontWeight.w600
-                                : FontWeight.normal,
-                            color: isSelected
-                                ? AppColors.background
-                                : AppColors.textPrimary,
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ).toList(),
+            children: ['all', 'fee_due', 'attendance', 'announcement', 'general'].map((type) {
+              final isSelected = _selectedFilter == type;
+              return GestureDetector(
+                onTap: () => setState(() => _selectedFilter = type),
+                child: NeumorphicContainer(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppDimensions.paddingM,
+                    vertical: AppDimensions.spacingS,
+                  ),
+                  color: isSelected ? AppColors.accent : AppColors.cardBackground,
+                  borderRadius: AppDimensions.radiusS,
+                  child: Text(
+                    type == 'all' ? 'All' : type.replaceAll('_', ' ').toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                      color: isSelected ? AppColors.background : AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
           ),
           const SizedBox(height: AppDimensions.spacingM),
           const Text(
@@ -272,20 +251,14 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                     horizontal: AppDimensions.paddingM,
                     vertical: AppDimensions.spacingS,
                   ),
-                  color: isSelected
-                      ? AppColors.accent
-                      : AppColors.cardBackground,
+                  color: isSelected ? AppColors.accent : AppColors.cardBackground,
                   borderRadius: AppDimensions.radiusS,
                   child: Text(
                     status == 'all' ? 'All' : status.toUpperCase(),
                     style: TextStyle(
                       fontSize: 12,
-                      fontWeight: isSelected
-                          ? FontWeight.w600
-                          : FontWeight.normal,
-                      color: isSelected
-                          ? AppColors.background
-                          : AppColors.textPrimary,
+                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                      color: isSelected ? AppColors.background : AppColors.textPrimary,
                     ),
                   ),
                 ),
@@ -303,38 +276,31 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     try {
       final authState = await ref.read(authProvider.future);
       if (authState is Authenticated) {
-        final notificationManager = ref.read(
-          notificationManagerProvider(
-            userId: authState.userId,
-            userType: authState.userType,
-          ).notifier,
-        );
-
+        final notificationManager = ref.read(notificationManagerProvider(
+          userId: authState.userId,
+          userType: authState.userType,
+        ).notifier);
+        
         await notificationManager.markAsRead(notification.id);
-
+        
         if (mounted) {
           SuccessSnackbar.showInfo(context, 'Notification marked as read');
         }
       }
     } catch (e) {
       if (mounted) {
-        SuccessSnackbar.showError(
-          context,
-          'Failed to mark notification as read: ${e.toString()}',
-        );
+        SuccessSnackbar.showError(context, 'Failed to mark notification as read: ${e.toString()}');
       }
     }
   }
 
   Future<void> _markAllAsRead(Authenticated authState) async {
     try {
-      final notificationsAsync = ref.read(
-        notificationManagerProvider(
-          userId: authState.userId,
-          userType: authState.userType,
-        ),
-      );
-
+      final notificationsAsync = ref.read(notificationManagerProvider(
+        userId: authState.userId,
+        userType: authState.userType,
+      ));
+      
       final notifications = notificationsAsync.valueOrNull ?? [];
       final unreadIds = notifications
           .where((n) => !n.isRead)
@@ -343,32 +309,24 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
       if (unreadIds.isEmpty) {
         if (mounted) {
-          SuccessSnackbar.showInfo(
-            context,
-            'All notifications are already read',
-          );
+          SuccessSnackbar.showInfo(context, 'All notifications are already read');
         }
         return;
       }
 
-      final notificationManager = ref.read(
-        notificationManagerProvider(
-          userId: authState.userId,
-          userType: authState.userType,
-        ).notifier,
-      );
-
+      final notificationManager = ref.read(notificationManagerProvider(
+        userId: authState.userId,
+        userType: authState.userType,
+      ).notifier);
+      
       await notificationManager.markAllAsRead(unreadIds);
-
+      
       if (mounted) {
         SuccessSnackbar.show(context, 'All notifications marked as read');
       }
     } catch (e) {
       if (mounted) {
-        SuccessSnackbar.showError(
-          context,
-          'Failed to mark all as read: ${e.toString()}',
-        );
+        SuccessSnackbar.showError(context, 'Failed to mark all as read: ${e.toString()}');
       }
     }
   }
@@ -388,25 +346,20 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       try {
         final authState = await ref.read(authProvider.future);
         if (authState is Authenticated) {
-          final notificationManager = ref.read(
-            notificationManagerProvider(
-              userId: authState.userId,
-              userType: authState.userType,
-            ).notifier,
-          );
-
+          final notificationManager = ref.read(notificationManagerProvider(
+            userId: authState.userId,
+            userType: authState.userType,
+          ).notifier);
+          
           await notificationManager.deleteNotification(notification.id);
-
+          
           if (mounted) {
             SuccessSnackbar.show(context, 'Notification deleted successfully');
           }
         }
       } catch (e) {
         if (mounted) {
-          SuccessSnackbar.showError(
-            context,
-            'Failed to delete notification: ${e.toString()}',
-          );
+          SuccessSnackbar.showError(context, 'Failed to delete notification: ${e.toString()}');
         }
       }
     }
@@ -478,7 +431,7 @@ class _NotificationCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppDimensions.spacingM),
-
+          
           // Content
           Expanded(
             child: Column(
@@ -491,9 +444,7 @@ class _NotificationCard extends StatelessWidget {
                         notification.title,
                         style: TextStyle(
                           fontSize: 16,
-                          fontWeight: isUnread
-                              ? FontWeight.w600
-                              : FontWeight.normal,
+                          fontWeight: isUnread ? FontWeight.w600 : FontWeight.normal,
                           color: AppColors.textPrimary,
                         ),
                       ),
@@ -530,7 +481,7 @@ class _NotificationCard extends StatelessWidget {
               ],
             ),
           ),
-
+          
           // Delete button
           IconButton(
             icon: const Icon(Icons.delete_outline, size: 20),

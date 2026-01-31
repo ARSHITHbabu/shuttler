@@ -336,6 +336,7 @@ class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
             ),
           ],
         ),
+        ),
       ),
     );
   }
