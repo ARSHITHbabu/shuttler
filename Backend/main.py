@@ -1052,6 +1052,7 @@ class StudentCreate(BaseModel):
     date_of_birth: Optional[str] = None  # Required for profile completion
     address: Optional[str] = None  # Required for profile completion
     t_shirt_size: Optional[str] = None  # Required for profile completion
+    blood_group: Optional[str] = None
 
 class Student(BaseModel):
     id: int
@@ -1066,6 +1067,7 @@ class Student(BaseModel):
     address: Optional[str] = None
     status: str = "active"
     t_shirt_size: Optional[str] = None
+    blood_group: Optional[str] = None
     profile_photo: Optional[str] = None
     fcm_token: Optional[str] = None
 
@@ -1086,6 +1088,7 @@ class StudentUpdate(BaseModel):
     date_of_birth: Optional[str] = None
     address: Optional[str] = None
     t_shirt_size: Optional[str] = None
+    blood_group: Optional[str] = None
     status: Optional[str] = None
     profile_photo: Optional[str] = None
 
@@ -1451,6 +1454,7 @@ class StudentRegistrationRequestCreate(BaseModel):
     date_of_birth: Optional[str] = None
     address: Optional[str] = None
     t_shirt_size: Optional[str] = None
+    blood_group: Optional[str] = None
 
 class StudentRegistrationRequest(BaseModel):
     id: int
@@ -1467,6 +1471,7 @@ class StudentRegistrationRequest(BaseModel):
     date_of_birth: Optional[str] = None
     address: Optional[str] = None
     t_shirt_size: Optional[str] = None
+    blood_group: Optional[str] = None
     
     class Config:
         from_attributes = True

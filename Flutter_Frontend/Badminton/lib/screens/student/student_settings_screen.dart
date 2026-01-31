@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
@@ -14,6 +13,7 @@ import '../common/privacy_policy_screen.dart';
 import '../common/terms_conditions_screen.dart';
 import '../common/help_support_screen.dart';
 import '../../widgets/forms/change_password_dialog.dart';
+import 'student_profile_screen.dart';
 
 /// Student Settings Screen - App preferences and account settings
 /// Students can toggle theme, manage notifications, and logout
@@ -142,18 +142,23 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                     isDark: isDark,
                     children: [
                       _buildActionTile(
+                        title: 'Profile',
+                        icon: Icons.person_outline,
+                        isDark: isDark,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const StudentProfileScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      const Divider(height: 1),
+                      _buildActionTile(
                         title: 'Change Password',
                         icon: Icons.lock_outline,
                         isDark: isDark,
                         onTap: () => _showChangePassword(isDark),
-                      ),
-                      const Divider(height: 1),
-                      _buildActionTile(
-                        title: 'Logout',
-                        icon: Icons.logout,
-                        isDark: isDark,
-                        isDestructive: true,
-                        onTap: () => _showLogoutConfirmation(isDark),
                       ),
                     ],
                   ),
@@ -533,54 +538,5 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
         );
       }
     });
-  }
-
-  void _showLogoutConfirmation(bool isDark) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: isDark ? AppColors.cardBackground : AppColorsLight.cardBackground,
-        title: Text(
-          'Logout',
-          style: TextStyle(
-            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-          ),
-        ),
-        content: Text(
-          'Are you sure you want to logout?',
-          style: TextStyle(
-            color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(
-              'Cancel',
-              style: TextStyle(
-                color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () async {
-              final navigator = Navigator.of(context);
-              final router = GoRouter.of(context);
-              navigator.pop();
-              await ref.read(authProvider.notifier).logout();
-              if (mounted) {
-                router.go('/');
-              }
-            },
-            child: Text(
-              'Logout',
-              style: TextStyle(
-                color: isDark ? AppColors.error : AppColorsLight.error,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }

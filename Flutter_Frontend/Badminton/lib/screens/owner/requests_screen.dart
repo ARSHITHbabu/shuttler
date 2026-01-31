@@ -843,6 +843,8 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
             _buildDetailRow(Icons.location_on, request.address!, isDark),
           if (request.tShirtSize != null)
             _buildDetailRow(Icons.checkroom, 'T-Shirt Size: ${request.tShirtSize}', isDark),
+          if (request.bloodGroup != null)
+            _buildDetailRow(Icons.bloodtype_outlined, 'Blood Group: ${request.bloodGroup}', isDark),
 
           // Review notes (if reviewed)
           if (request.reviewNotes != null && request.reviewNotes!.isNotEmpty) ...[
