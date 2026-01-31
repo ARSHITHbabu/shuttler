@@ -123,3 +123,8 @@ Backend/uploads/*
 !Backend/uploads/.gitkeep
 
 postgres_docs.txt
+
+# ========================================
+# SCRIPTS
+# ========================================
+*.ps1
