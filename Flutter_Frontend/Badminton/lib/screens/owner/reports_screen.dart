@@ -79,8 +79,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         );
 
         final totalDays = _endDate!.difference(_startDate!).inDays + 1;
-        final presentCount = attendance.where((a) => a.status == 'present').length;
-        final absentCount = attendance.where((a) => a.status == 'absent').length;
+        final presentCount = attendance
+            .where((a) => a.status == 'present')
+            .length;
+        final absentCount = attendance
+            .where((a) => a.status == 'absent')
+            .length;
         final attendanceRate = attendance.isEmpty
             ? 0.0
             : (presentCount / attendance.length) * 100;
@@ -88,7 +92,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         setState(() {
           _generatedReport = {
             'type': 'Attendance Report',
-            'period': '${_startDate!.day}/${_startDate!.month}/${_startDate!.year} - ${_endDate!.day}/${_endDate!.month}/${_endDate!.year}',
+            'period':
+                '${_startDate!.day}/${_startDate!.month}/${_startDate!.year} - ${_endDate!.day}/${_endDate!.month}/${_endDate!.year}',
             'generatedOn': DateTime.now().toIso8601String().split('T')[0],
             'data': {
               'totalDays': totalDays,
@@ -112,7 +117,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         double totalAmount = 0.0;
         double paidAmount = 0.0;
         double pendingAmount = 0.0;
-        
+
         for (final fee in fees) {
           totalAmount += fee.amount;
           if (fee.status == 'paid') {
@@ -125,7 +130,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         setState(() {
           _generatedReport = {
             'type': 'Fee Report',
-            'period': '${_startDate!.day}/${_startDate!.month}/${_startDate!.year} - ${_endDate!.day}/${_endDate!.month}/${_endDate!.year}',
+            'period':
+                '${_startDate!.day}/${_startDate!.month}/${_startDate!.year} - ${_endDate!.day}/${_endDate!.month}/${_endDate!.year}',
             'generatedOn': DateTime.now().toIso8601String().split('T')[0],
             'data': {
               'totalFees': fees.length,
@@ -142,11 +148,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         setState(() {
           _generatedReport = {
             'type': 'Performance Report',
-            'period': '${_startDate!.day}/${_startDate!.month}/${_startDate!.year} - ${_endDate!.day}/${_endDate!.month}/${_endDate!.year}',
+            'period':
+                '${_startDate!.day}/${_startDate!.month}/${_startDate!.year} - ${_endDate!.day}/${_endDate!.month}/${_endDate!.year}',
             'generatedOn': DateTime.now().toIso8601String().split('T')[0],
-            'data': {
-              'message': 'Performance report generation coming soon',
-            },
+            'data': {'message': 'Performance report generation coming soon'},
           };
         });
       }
@@ -156,7 +161,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        SuccessSnackbar.showError(context, 'Error generating report: ${e.toString()}');
+        SuccessSnackbar.showError(
+          context,
+          'Error generating report: ${e.toString()}',
+        );
       }
     } finally {
       setState(() {
@@ -173,7 +181,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    
+
     void handleReload() {
       // Reports screen doesn't have specific providers to reload
       // But we can refresh the screen state
@@ -181,7 +189,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     }
 
     return Scaffold(
-      backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+      backgroundColor: isDark
+          ? AppColors.background
+          : AppColorsLight.background,
       appBar: MoreScreenAppBar(
         title: 'Reports',
         onReload: handleReload,
@@ -193,108 +203,121 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           await Future.delayed(const Duration(milliseconds: 300));
         },
         child: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.backgroundGradient,
-        ),
-        child: SafeArea(
-          top: false,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              return SingleChildScrollView(
-                physics: const ClampingScrollPhysics(),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                  child: Padding(
-                    padding: const EdgeInsets.all(AppDimensions.paddingL),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Report Type Selection
-                        Column(
-                          children: _reportTypes.map((type) {
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
-                              child: NeumorphicContainer(
-                                padding: const EdgeInsets.all(AppDimensions.paddingL),
-                                onTap: () {
-                                  setState(() {
-                                    _selectedType = type['id'];
-                                  });
-                                },
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 48,
-                                      height: 48,
-                                      decoration: BoxDecoration(
-                                        color: AppColors.background,
-                                        borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-                                        boxShadow: NeumorphicStyles.getInsetShadow(),
-                                      ),
-                                      child: Icon(
-                                        type['icon'],
-                                        color: AppColors.iconPrimary,
-                                        size: 24,
-                                      ),
-                                    ),
-                                    const SizedBox(width: AppDimensions.spacingM),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            type['title'],
-                                            style: const TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w600,
-                                              color: AppColors.textPrimary,
-                                            ),
-                                          ),
-                                          Text(
-                                            type['description'],
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                              color: AppColors.textSecondary,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const Icon(
-                                      Icons.chevron_right,
-                                      color: AppColors.textTertiary,
-                                    ),
-                                  ],
+          decoration: const BoxDecoration(
+            gradient: AppColors.backgroundGradient,
+          ),
+          child: SafeArea(
+            top: false,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  physics: const ClampingScrollPhysics(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(AppDimensions.paddingL),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Report Type Selection
+                          Column(
+                            children: _reportTypes.map((type) {
+                              return Padding(
+                                padding: const EdgeInsets.only(
+                                  bottom: AppDimensions.spacingM,
                                 ),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-
-                        const SizedBox(height: AppDimensions.spacingXl),
-
-                        // Previously Generated Reports (if any)
-                        if (_generatedReport != null) ...[
-                          const SizedBox(height: AppDimensions.spacingXl),
-                          const Text(
-                            'Generated Report',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
-                            ),
+                                child: NeumorphicContainer(
+                                  padding: const EdgeInsets.all(
+                                    AppDimensions.paddingL,
+                                  ),
+                                  onTap: () {
+                                    setState(() {
+                                      _selectedType = type['id'];
+                                    });
+                                  },
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 48,
+                                        height: 48,
+                                        decoration: BoxDecoration(
+                                          color: AppColors.background,
+                                          borderRadius: BorderRadius.circular(
+                                            AppDimensions.radiusM,
+                                          ),
+                                          boxShadow:
+                                              NeumorphicStyles.getInsetShadow(),
+                                        ),
+                                        child: Icon(
+                                          type['icon'],
+                                          color: AppColors.iconPrimary,
+                                          size: 24,
+                                        ),
+                                      ),
+                                      const SizedBox(
+                                        width: AppDimensions.spacingM,
+                                      ),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              type['title'],
+                                              style: const TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w600,
+                                                color: AppColors.textPrimary,
+                                              ),
+                                            ),
+                                            Text(
+                                              type['description'],
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                color: AppColors.textSecondary,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const Icon(
+                                        Icons.chevron_right,
+                                        color: AppColors.textTertiary,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }).toList(),
                           ),
-                          const SizedBox(height: AppDimensions.spacingM),
-                        ],
 
-                        const SizedBox(height: 100), // Space for bottom nav
-                      ],
+                          const SizedBox(height: AppDimensions.spacingXl),
+
+                          // Previously Generated Reports (if any)
+                          if (_generatedReport != null) ...[
+                            const SizedBox(height: AppDimensions.spacingXl),
+                            const Text(
+                              'Generated Report',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: AppDimensions.spacingM),
+                          ],
+
+                          const SizedBox(height: 100), // Space for bottom nav
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -307,9 +330,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.backgroundGradient,
-        ),
+        decoration: const BoxDecoration(gradient: AppColors.backgroundGradient),
         child: SafeArea(
           child: LayoutBuilder(
             builder: (context, constraints) {
@@ -403,7 +424,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         // Filters (based on report type)
                         if (_selectedType == 'attendance')
                           NeumorphicContainer(
-                            padding: const EdgeInsets.all(AppDimensions.paddingM),
+                            padding: const EdgeInsets.all(
+                              AppDimensions.paddingM,
+                            ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -416,18 +439,34 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                 ),
                                 const SizedBox(height: AppDimensions.spacingS),
                                 NeumorphicInsetContainer(
-                                  padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: AppDimensions.paddingM,
+                                  ),
                                   child: DropdownButton<String>(
                                     value: 'all',
                                     isExpanded: true,
                                     underline: const SizedBox(),
                                     dropdownColor: AppColors.cardBackground,
-                                    style: const TextStyle(color: AppColors.textPrimary),
+                                    style: const TextStyle(
+                                      color: AppColors.textPrimary,
+                                    ),
                                     items: const [
-                                      DropdownMenuItem(value: 'all', child: Text('All Batches')),
-                                      DropdownMenuItem(value: '1', child: Text('Morning Batch A')),
-                                      DropdownMenuItem(value: '2', child: Text('Evening Batch B')),
-                                      DropdownMenuItem(value: '3', child: Text('Weekend Batch')),
+                                      DropdownMenuItem(
+                                        value: 'all',
+                                        child: Text('All Batches'),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: '1',
+                                        child: Text('Morning Batch A'),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: '2',
+                                        child: Text('Evening Batch B'),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: '3',
+                                        child: Text('Weekend Batch'),
+                                      ),
                                     ],
                                     onChanged: (value) {},
                                   ),
@@ -438,7 +477,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
                         if (_selectedType == 'fee')
                           NeumorphicContainer(
-                            padding: const EdgeInsets.all(AppDimensions.paddingM),
+                            padding: const EdgeInsets.all(
+                              AppDimensions.paddingM,
+                            ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -450,20 +491,31 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: AppDimensions.spacingS),
-                                ...['All', 'Paid', 'Pending', 'Overdue'].map((status) {
-                                  final statusValue = status == 'All' ? null : status.toLowerCase();
-                                  final isSelected = _selectedStatus == statusValue;
+                                ...['All', 'Paid', 'Pending', 'Overdue'].map((
+                                  status,
+                                ) {
+                                  final statusValue = status == 'All'
+                                      ? null
+                                      : status.toLowerCase();
+                                  final isSelected =
+                                      _selectedStatus == statusValue;
                                   return Padding(
-                                    padding: const EdgeInsets.only(bottom: AppDimensions.spacingS),
+                                    padding: const EdgeInsets.only(
+                                      bottom: AppDimensions.spacingS,
+                                    ),
                                     child: NeumorphicInsetContainer(
-                                      padding: const EdgeInsets.all(AppDimensions.spacingM),
+                                      padding: const EdgeInsets.all(
+                                        AppDimensions.spacingM,
+                                      ),
                                       child: Row(
                                         children: [
                                           Checkbox(
                                             value: isSelected,
                                             onChanged: (value) {
                                               setState(() {
-                                                _selectedStatus = value ?? false ? statusValue : null;
+                                                _selectedStatus = value ?? false
+                                                    ? statusValue
+                                                    : null;
                                               });
                                             },
                                             activeColor: AppColors.accent,
@@ -472,7 +524,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                             child: GestureDetector(
                                               onTap: () {
                                                 setState(() {
-                                                  _selectedStatus = isSelected ? null : statusValue;
+                                                  _selectedStatus = isSelected
+                                                      ? null
+                                                      : statusValue;
                                                 });
                                               },
                                               child: Text(
@@ -506,7 +560,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                 const SizedBox(
                                   width: 20,
                                   height: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 )
                               else
                                 const Icon(
@@ -516,7 +572,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                 ),
                               const SizedBox(width: AppDimensions.spacingS),
                               Text(
-                                _isGenerating ? 'Generating...' : 'Generate Report',
+                                _isGenerating
+                                    ? 'Generating...'
+                                    : 'Generate Report',
                                 style: TextStyle(
                                   fontSize: 16,
                                   color: _isGenerating
@@ -532,12 +590,15 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         if (_generatedReport != null) ...[
                           const SizedBox(height: AppDimensions.spacingL),
                           NeumorphicContainer(
-                            padding: const EdgeInsets.all(AppDimensions.paddingL),
+                            padding: const EdgeInsets.all(
+                              AppDimensions.paddingL,
+                            ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
                                   children: [
                                     Text(
                                       _generatedReport!['type'] as String,
@@ -567,7 +628,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                           value: 'pdf',
                                           child: Row(
                                             children: [
-                                              Icon(Icons.picture_as_pdf, size: 18),
+                                              Icon(
+                                                Icons.picture_as_pdf,
+                                                size: 18,
+                                              ),
                                               SizedBox(width: 8),
                                               Text('Export as PDF'),
                                             ],
@@ -593,7 +657,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: AppDimensions.spacingM),
-                                _buildReportSummary(_generatedReport!['data'] as Map<String, dynamic>),
+                                _buildReportSummary(
+                                  _generatedReport!['data']
+                                      as Map<String, dynamic>,
+                                ),
                               ],
                             ),
                           ),
@@ -617,10 +684,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SummaryRow(
-            label: 'Total Days',
-            value: data['totalDays'].toString(),
-          ),
+          _SummaryRow(label: 'Total Days', value: data['totalDays'].toString()),
           _SummaryRow(
             label: 'Total Records',
             value: data['totalRecords'].toString(),
@@ -637,7 +701,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           ),
           _SummaryRow(
             label: 'Attendance Rate',
-            value: '${((data['attendanceRate'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(1)}%',
+            value:
+                '${((data['attendanceRate'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(1)}%',
             color: AppColors.iconPrimary,
           ),
         ],
@@ -646,22 +711,22 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SummaryRow(
-            label: 'Total Fees',
-            value: data['totalFees'].toString(),
-          ),
+          _SummaryRow(label: 'Total Fees', value: data['totalFees'].toString()),
           _SummaryRow(
             label: 'Total Amount',
-            value: '\$${_formatCurrency((data['totalAmount'] as num?)?.toDouble() ?? 0.0)}',
+            value:
+                '\$${_formatCurrency((data['totalAmount'] as num?)?.toDouble() ?? 0.0)}',
           ),
           _SummaryRow(
             label: 'Paid Amount',
-            value: '\$${_formatCurrency((data['paidAmount'] as num?)?.toDouble() ?? 0.0)}',
+            value:
+                '\$${_formatCurrency((data['paidAmount'] as num?)?.toDouble() ?? 0.0)}',
             color: AppColors.success,
           ),
           _SummaryRow(
             label: 'Pending Amount',
-            value: '\$${_formatCurrency((data['pendingAmount'] as num?)?.toDouble() ?? 0.0)}',
+            value:
+                '\$${_formatCurrency((data['pendingAmount'] as num?)?.toDouble() ?? 0.0)}',
             color: AppColors.error,
           ),
         ],
@@ -669,9 +734,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     } else {
       return Text(
         data['message'] ?? 'No data available',
-        style: const TextStyle(
-          color: AppColors.textSecondary,
-        ),
+        style: const TextStyle(color: AppColors.textSecondary),
       );
     }
   }
@@ -694,7 +757,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     try {
       // Get academy details
       final storageService = ref.read(storageServiceProvider);
-      final academyName = storageService.getAcademyName() ?? 'Badminton Academy';
+      final academyName =
+          storageService.getAcademyName() ?? 'Badminton Academy';
       final academyAddress = storageService.getAcademyAddress() ?? '';
       final academyContact = storageService.getAcademyContact() ?? '';
       final academyEmail = storageService.getAcademyEmail() ?? '';
@@ -702,32 +766,39 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       final reportType = _generatedReport!['type'] as String;
       final data = _generatedReport!['data'] as Map<String, dynamic>;
       final period = _generatedReport!['period'] as String;
-      
+
       String csvContent = '';
-      
+
       // CSV Header with Academy Details
-      csvContent += '═══════════════════════════════════════════════════════════\n';
+      csvContent +=
+          '═══════════════════════════════════════════════════════════\n';
       csvContent += '                    SHUTTLER\n';
       csvContent += '          Badminton Academy Management System\n';
-      csvContent += '═══════════════════════════════════════════════════════════\n\n';
+      csvContent +=
+          '═══════════════════════════════════════════════════════════\n\n';
       csvContent += 'ACADEMY DETAILS\n';
-      csvContent += '───────────────────────────────────────────────────────────\n';
+      csvContent +=
+          '───────────────────────────────────────────────────────────\n';
       csvContent += 'Academy Name: $academyName\n';
       if (academyAddress.isNotEmpty) csvContent += 'Address: $academyAddress\n';
       if (academyContact.isNotEmpty) csvContent += 'Contact: $academyContact\n';
       if (academyEmail.isNotEmpty) csvContent += 'Email: $academyEmail\n';
-      csvContent += '───────────────────────────────────────────────────────────\n\n';
+      csvContent +=
+          '───────────────────────────────────────────────────────────\n\n';
       csvContent += 'REPORT INFORMATION\n';
-      csvContent += '───────────────────────────────────────────────────────────\n';
+      csvContent +=
+          '───────────────────────────────────────────────────────────\n';
       csvContent += 'Report Type: $reportType\n';
       csvContent += 'Period: $period\n';
       csvContent += 'Generated On: ${_generatedReport!['generatedOn']}\n';
-      csvContent += '───────────────────────────────────────────────────────────\n\n';
-      
+      csvContent +=
+          '───────────────────────────────────────────────────────────\n\n';
+
       if (_selectedType == 'attendance') {
         // Attendance CSV
         csvContent += 'ATTENDANCE DATA\n';
-        csvContent += '───────────────────────────────────────────────────────────\n';
+        csvContent +=
+            '───────────────────────────────────────────────────────────\n';
         csvContent += 'Date,Student Name,Student ID,Batch,Status\n';
         final attendance = data['attendance'] as List<dynamic>;
         for (var att in attendance) {
@@ -740,19 +811,24 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         }
         csvContent += '\n';
         csvContent += 'SUMMARY STATISTICS\n';
-        csvContent += '───────────────────────────────────────────────────────────\n';
+        csvContent +=
+            '───────────────────────────────────────────────────────────\n';
         csvContent += 'Metric,Value\n';
         csvContent += 'Total Days,${data['totalDays']}\n';
         csvContent += 'Total Records,${data['totalRecords']}\n';
         csvContent += 'Present,${data['presentCount']}\n';
         csvContent += 'Absent,${data['absentCount']}\n';
-        csvContent += 'Attendance Rate,${((data['attendanceRate'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(1)}%\n';
-        csvContent += '═══════════════════════════════════════════════════════════\n';
+        csvContent +=
+            'Attendance Rate,${((data['attendanceRate'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(1)}%\n';
+        csvContent +=
+            '═══════════════════════════════════════════════════════════\n';
       } else if (_selectedType == 'fee') {
         // Fee CSV
         csvContent += 'FEE DATA\n';
-        csvContent += '───────────────────────────────────────────────────────────\n';
-        csvContent += 'Student Name,Student ID,Amount,Status,Due Date,Paid Date\n';
+        csvContent +=
+            '───────────────────────────────────────────────────────────\n';
+        csvContent +=
+            'Student Name,Student ID,Amount,Status,Due Date,Paid Date\n';
         final fees = data['fees'] as List<dynamic>;
         for (var fee in fees) {
           final studentName = fee.studentName?.toString() ?? 'N/A';
@@ -762,38 +838,43 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           final dueDate = fee.dueDate?.toString() ?? 'N/A';
           // Get paidDate from first payment if available
           String paidDate = 'N/A';
-          if (fee.payments != null && fee.payments is List && (fee.payments as List).isNotEmpty) {
+          if (fee.payments != null &&
+              fee.payments is List &&
+              (fee.payments as List).isNotEmpty) {
             final firstPayment = (fee.payments as List).first;
             if (firstPayment.paidDate != null) {
               paidDate = firstPayment.paidDate.toString();
             }
           }
-          csvContent += '$studentName,$studentId,$amount,$status,$dueDate,$paidDate\n';
+          csvContent +=
+              '$studentName,$studentId,$amount,$status,$dueDate,$paidDate\n';
         }
         csvContent += '\n';
         csvContent += 'SUMMARY STATISTICS\n';
-        csvContent += '───────────────────────────────────────────────────────────\n';
+        csvContent +=
+            '───────────────────────────────────────────────────────────\n';
         csvContent += 'Metric,Value\n';
         csvContent += 'Total Fees,${data['totalFees']}\n';
-        csvContent += 'Total Amount,\$${((data['totalAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}\n';
-        csvContent += 'Paid Amount,\$${((data['paidAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}\n';
-        csvContent += 'Pending Amount,\$${((data['pendingAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}\n';
-        csvContent += '═══════════════════════════════════════════════════════════\n';
+        csvContent +=
+            'Total Amount,\$${((data['totalAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}\n';
+        csvContent +=
+            'Paid Amount,\$${((data['paidAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}\n';
+        csvContent +=
+            'Pending Amount,\$${((data['pendingAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}\n';
+        csvContent +=
+            '═══════════════════════════════════════════════════════════\n';
       }
-      
+
       // Save CSV to file
       final fileName = 'report_${DateTime.now().millisecondsSinceEpoch}.csv';
-      
+
       if (kIsWeb) {
         // Web: Download file using browser download
         final bytes = Uint8List.fromList(csvContent.codeUnits);
         downloadFileWeb(bytes, fileName, 'text/csv');
-        
+
         if (mounted) {
-          SuccessSnackbar.show(
-            context,
-            'CSV exported successfully',
-          );
+          SuccessSnackbar.show(context, 'CSV exported successfully');
         }
       } else {
         // Mobile/Desktop: Save to file system
@@ -808,9 +889,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           );
         }
       }
-      
     } catch (e) {
-      SuccessSnackbar.showError(context, 'Failed to export CSV: ${e.toString()}');
+      SuccessSnackbar.showError(
+        context,
+        'Failed to export CSV: ${e.toString()}',
+      );
     }
   }
 
@@ -823,7 +906,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     try {
       // Get academy details
       final storageService = ref.read(storageServiceProvider);
-      final academyName = storageService.getAcademyName() ?? 'Badminton Academy';
+      final academyName =
+          storageService.getAcademyName() ?? 'Badminton Academy';
       final academyAddress = storageService.getAcademyAddress() ?? '';
       final academyContact = storageService.getAcademyContact() ?? '';
       final academyEmail = storageService.getAcademyEmail() ?? '';
@@ -869,7 +953,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                           ),
                         ),
                       ],
-                      if (academyContact.isNotEmpty || academyEmail.isNotEmpty) ...[
+                      if (academyContact.isNotEmpty ||
+                          academyEmail.isNotEmpty) ...[
                         pw.SizedBox(height: 4),
                         pw.Row(
                           children: [
@@ -881,8 +966,15 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                   color: PdfColors.grey300,
                                 ),
                               ),
-                            if (academyContact.isNotEmpty && academyEmail.isNotEmpty)
-                              pw.Text(' | ', style: pw.TextStyle(fontSize: 10, color: PdfColors.grey300)),
+                            if (academyContact.isNotEmpty &&
+                                academyEmail.isNotEmpty)
+                              pw.Text(
+                                ' | ',
+                                style: pw.TextStyle(
+                                  fontSize: 10,
+                                  color: PdfColors.grey300,
+                                ),
+                              ),
                             if (academyEmail.isNotEmpty)
                               pw.Text(
                                 'Email: $academyEmail',
@@ -903,36 +995,35 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   height: 60,
                   decoration: pw.BoxDecoration(
                     color: PdfColors.blue700,
-                    borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
+                    borderRadius: const pw.BorderRadius.all(
+                      pw.Radius.circular(8),
+                    ),
                   ),
                   child: pw.Center(
-                    child: pw.Text(
-                      '🏸',
-                      style: pw.TextStyle(fontSize: 32),
-                    ),
+                    child: pw.Text('🏸', style: pw.TextStyle(fontSize: 32)),
                   ),
                 ),
               ],
             ),
           ),
           pw.SizedBox(height: 20),
-          
+
           // Report Title
           pw.Text(
             reportType,
-            style: pw.TextStyle(
-              fontSize: 22,
-              fontWeight: pw.FontWeight.bold,
-            ),
+            style: pw.TextStyle(fontSize: 22, fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 10),
-          
+
           // Report Info
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
               pw.Text('Period: $period', style: pw.TextStyle(fontSize: 11)),
-              pw.Text('Generated: $generatedOn', style: pw.TextStyle(fontSize: 11)),
+              pw.Text(
+                'Generated: $generatedOn',
+                style: pw.TextStyle(fontSize: 11),
+              ),
             ],
           ),
           pw.SizedBox(height: 20),
@@ -948,7 +1039,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             build: (pw.Context context) {
               return [
                 ...buildPDFHeader(),
-                
+
                 // Summary Statistics
                 pw.Text(
                   'Summary',
@@ -1017,7 +1108,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         ),
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('${(data['attendanceRate'] as num).toStringAsFixed(1)}%'),
+                          child: pw.Text(
+                            '${(data['attendanceRate'] as num).toStringAsFixed(1)}%',
+                          ),
                         ),
                       ],
                     ),
@@ -1035,7 +1128,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             build: (pw.Context context) {
               return [
                 ...buildPDFHeader(),
-                
+
                 // Summary Statistics
                 pw.Text(
                   'Summary',
@@ -1056,7 +1149,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         ),
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('\$ ${((data['totalAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}'),
+                          child: pw.Text(
+                            '\$ ${((data['totalAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}',
+                          ),
                         ),
                       ],
                     ),
@@ -1068,7 +1163,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         ),
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('\$ ${((data['paidAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}'),
+                          child: pw.Text(
+                            '\$ ${((data['paidAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}',
+                          ),
                         ),
                       ],
                     ),
@@ -1080,7 +1177,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         ),
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('\$ ${((data['pendingAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}'),
+                          child: pw.Text(
+                            '\$ ${((data['pendingAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}',
+                          ),
                         ),
                       ],
                     ),
@@ -1092,7 +1191,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         ),
                         pw.Padding(
                           padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('\$ ${((data['overdueAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}'),
+                          child: pw.Text(
+                            '\$ ${((data['overdueAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}',
+                          ),
                         ),
                       ],
                     ),
@@ -1110,7 +1211,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             build: (pw.Context context) {
               return [
                 ...buildPDFHeader(),
-                
+
                 // Summary
                 pw.Text(
                   'Performance Summary',
@@ -1122,7 +1223,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 pw.SizedBox(height: 10),
                 pw.Text('Total Students: ${data['totalStudents']}'),
                 pw.SizedBox(height: 10),
-                pw.Text('Average Performance: ${(data['averagePerformance'] as num).toStringAsFixed(1)}'),
+                pw.Text(
+                  'Average Performance: ${(data['averagePerformance'] as num).toStringAsFixed(1)}',
+                ),
               ];
             },
           ),
@@ -1132,16 +1235,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       // Save PDF to file
       final bytes = await pdf.save();
       final fileName = 'report_${DateTime.now().millisecondsSinceEpoch}.pdf';
-      
+
       if (kIsWeb) {
         // Web: Download file using browser download
         downloadFileWeb(bytes, fileName, 'application/pdf');
-        
+
         if (mounted) {
-          SuccessSnackbar.show(
-            context,
-            'PDF exported successfully',
-          );
+          SuccessSnackbar.show(context, 'PDF exported successfully');
         }
       } else {
         // Mobile/Desktop: Save to file system
@@ -1158,7 +1258,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       }
     } catch (e) {
       if (mounted) {
-        SuccessSnackbar.showError(context, 'Failed to export PDF: ${e.toString()}');
+        SuccessSnackbar.showError(
+          context,
+          'Failed to export PDF: ${e.toString()}',
+        );
       }
     }
   }
@@ -1218,7 +1321,9 @@ class _DatePickerField extends StatelessWidget {
                   ? '${date!.day}/${date!.month}/${date!.year}'
                   : 'Select date',
               style: TextStyle(
-                color: date != null ? AppColors.textPrimary : AppColors.textHint,
+                color: date != null
+                    ? AppColors.textPrimary
+                    : AppColors.textHint,
                 fontSize: 14,
               ),
             ),
@@ -1234,11 +1339,7 @@ class _SummaryRow extends StatelessWidget {
   final String value;
   final Color? color;
 
-  const _SummaryRow({
-    required this.label,
-    required this.value,
-    this.color,
-  });
+  const _SummaryRow({required this.label, required this.value, this.color});
 
   @override
   Widget build(BuildContext context) {
