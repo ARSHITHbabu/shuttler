@@ -7,9 +7,7 @@ import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/batch_provider.dart';
-import '../../providers/student_provider.dart';
 import '../../models/batch.dart';
-import '../../models/student.dart';
 
 /// Student Batches Screen - View enrolled batches (READ-ONLY)
 class StudentBatchesScreen extends ConsumerStatefulWidget {

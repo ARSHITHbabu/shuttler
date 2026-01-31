@@ -828,7 +828,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       final data = _generatedReport!['data'] as Map<String, dynamic>;
 
       // Helper function to build PDF header
-      List<pw.Widget> _buildPDFHeader() {
+      List<pw.Widget> buildPDFHeader() {
         return [
           // Academy Header with Logo
           pw.Container(
@@ -940,7 +940,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             margin: const pw.EdgeInsets.all(40),
             build: (pw.Context context) {
               return [
-                ..._buildPDFHeader(),
+                ...buildPDFHeader(),
                 
                 // Summary Statistics
                 pw.Text(
@@ -1027,7 +1027,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             margin: const pw.EdgeInsets.all(40),
             build: (pw.Context context) {
               return [
-                ..._buildPDFHeader(),
+                ...buildPDFHeader(),
                 
                 // Summary Statistics
                 pw.Text(
@@ -1102,7 +1102,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             margin: const pw.EdgeInsets.all(40),
             build: (pw.Context context) {
               return [
-                ..._buildPDFHeader(),
+                ...buildPDFHeader(),
                 
                 // Summary
                 pw.Text(

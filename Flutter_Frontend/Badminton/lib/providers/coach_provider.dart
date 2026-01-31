@@ -33,16 +33,19 @@ Future<CoachStats> coachStats(CoachStatsRef ref, int coachId) async {
   // Get assigned batches using optimized endpoint
   final assignedBatches = await batchService.getBatchesByCoachId(coachId);
   
-  // Calculate total students across all batches
-  int totalStudents = 0;
+  // Calculate total unique students across all batches
+  Set<int> uniqueStudentIds = {};
   for (var batch in assignedBatches) {
     try {
       final students = await batchService.getBatchStudents(batch.id);
-      totalStudents += students.length;
+      for (var student in students) {
+        uniqueStudentIds.add(student.id);
+      }
     } catch (e) {
       // Skip if error fetching students for this batch
     }
   }
+  final totalStudents = uniqueStudentIds.length;
   
   // Get today's sessions count
   // Count batches that run today and are upcoming (like owner dashboard)

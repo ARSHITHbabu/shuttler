@@ -234,7 +234,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 if (widget.userType == 'student') ...[
                   const SizedBox(height: AppDimensions.spacingL),
                   DropdownButtonFormField<String>(
-                    value: _selectedBloodGroup,
+                    initialValue: _selectedBloodGroup,
                     decoration: InputDecoration(
                       labelText: 'Blood Group (Optional)',
                       hintText: 'Select your blood group',

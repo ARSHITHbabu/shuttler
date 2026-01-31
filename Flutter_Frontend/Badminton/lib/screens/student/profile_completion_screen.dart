@@ -428,7 +428,7 @@ class _ProfileCompletionScreenState
 
                 // Blood Group Dropdown
                 DropdownButtonFormField<String>(
-                  value: _selectedBloodGroup,
+                  initialValue: _selectedBloodGroup,
                   decoration: InputDecoration(
                     labelText: 'Blood Group *',
                     hintText: 'Select your blood group',
