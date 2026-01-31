@@ -54,7 +54,6 @@ class _StatCardSkeleton extends StatelessWidget {
       highlightColor: AppColors.surfaceLight,
       period: const Duration(milliseconds: 1200),
       child: Container(
-        height: 100,
         padding: const EdgeInsets.all(AppDimensions.paddingM),
         decoration: BoxDecoration(
           color: AppColors.cardBackground,
@@ -63,6 +62,7 @@ class _StatCardSkeleton extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
               width: 40,
@@ -72,19 +72,19 @@ class _StatCardSkeleton extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
               ),
             ),
-            const SizedBox(height: AppDimensions.spacingM),
+            const SizedBox(height: AppDimensions.spacingS),
             Container(
               width: 60,
-              height: 20,
+              height: 18,
               decoration: BoxDecoration(
                 color: AppColors.surfaceLight,
                 borderRadius: BorderRadius.circular(4),
               ),
             ),
-            const SizedBox(height: AppDimensions.spacingS),
+            const SizedBox(height: AppDimensions.spacingXs),
             Container(
               width: 80,
-              height: 14,
+              height: 12,
               decoration: BoxDecoration(
                 color: AppColors.surfaceLight,
                 borderRadius: BorderRadius.circular(4),

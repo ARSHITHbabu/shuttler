@@ -20,6 +20,7 @@ import '../core/services/tournament_service.dart';
 import '../core/services/session_service.dart';
 import '../core/services/video_service.dart';
 import '../core/services/leave_request_service.dart';
+import '../core/services/student_registration_request_service.dart';
 import '../core/network/connectivity_service.dart';
 import '../core/network/request_queue.dart';
 import 'package:dio/dio.dart';
@@ -183,6 +184,13 @@ VideoService videoService(VideoServiceRef ref) {
 LeaveRequestService leaveRequestService(LeaveRequestServiceRef ref) {
   final apiService = ref.watch(apiServiceProvider);
   return LeaveRequestService(apiService);
+}
+
+/// Provider for StudentRegistrationRequestService singleton
+@riverpod
+StudentRegistrationRequestService studentRegistrationRequestService(StudentRegistrationRequestServiceRef ref) {
+  final apiService = ref.watch(apiServiceProvider);
+  return StudentRegistrationRequestService(apiService);
 }
 
 /// Provider for ConnectivityService singleton
