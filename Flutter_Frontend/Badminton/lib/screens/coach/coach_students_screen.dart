@@ -313,7 +313,7 @@ class _FilterChip extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           color: isSelected
-              ? (color ?? AppColors.accent).withOpacity(0.2)
+              ? (color ?? AppColors.accent).withValues(alpha:0.2)
               : AppColors.cardBackground,
           borderRadius: BorderRadius.circular(AppDimensions.radiusS),
           border: Border.all(

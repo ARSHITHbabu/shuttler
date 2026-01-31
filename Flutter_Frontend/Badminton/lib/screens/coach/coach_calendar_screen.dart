@@ -19,7 +19,8 @@ class CoachCalendarScreen extends ConsumerStatefulWidget {
   const CoachCalendarScreen({super.key});
 
   @override
-  ConsumerState<CoachCalendarScreen> createState() => _CoachCalendarScreenState();
+  ConsumerState<CoachCalendarScreen> createState() =>
+      _CoachCalendarScreenState();
 }
 
 class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
@@ -27,7 +28,9 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
   DateTime _selectedDay = DateTime.now();
   CalendarFormat _calendarFormat = CalendarFormat.month;
 
-  Map<DateTime, List<CalendarEvent>> _groupEventsByDate(List<CalendarEvent> events) {
+  Map<DateTime, List<CalendarEvent>> _groupEventsByDate(
+    List<CalendarEvent> events,
+  ) {
     final Map<DateTime, List<CalendarEvent>> grouped = {};
     for (var event in events) {
       final date = DateTime(event.date.year, event.date.month, event.date.day);
@@ -40,18 +43,19 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    
+
     void handleReload() {
       final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
       final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
-      ref.invalidate(calendarEventsProvider(
-        startDate: firstDay,
-        endDate: lastDay,
-      ));
+      ref.invalidate(
+        calendarEventsProvider(startDate: firstDay, endDate: lastDay),
+      );
     }
 
     return Scaffold(
-      backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+      backgroundColor: isDark
+          ? AppColors.background
+          : AppColorsLight.background,
       appBar: MoreScreenAppBar(
         title: 'Calendar',
         onReload: handleReload,
@@ -70,28 +74,28 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
   Widget _buildCalendarBody() {
     final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
     final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
-    final eventsAsync = ref.watch(calendarEventsProvider(
-      startDate: firstDay,
-      endDate: lastDay,
-    ));
+    final eventsAsync = ref.watch(
+      calendarEventsProvider(startDate: firstDay, endDate: lastDay),
+    );
 
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
-        child: eventsAsync.when(
-          loading: () => const Center(child: ListSkeleton(itemCount: 5)),
-          error: (error, stack) => ErrorDisplay(
-            message: 'Failed to load calendar events: ${error.toString()}',
-            onRetry: () => ref.invalidate(calendarEventsProvider(
-              startDate: firstDay,
-              endDate: lastDay,
-            )),
+      child: eventsAsync.when(
+        loading: () => const Center(child: ListSkeleton(itemCount: 5)),
+        error: (error, stack) => ErrorDisplay(
+          message: 'Failed to load calendar events: ${error.toString()}',
+          onRetry: () => ref.invalidate(
+            calendarEventsProvider(startDate: firstDay, endDate: lastDay),
           ),
-          data: (events) {
-            final groupedEvents = _groupEventsByDate(events);
-            // Get Canadian holidays for the focused year
-            final canadianHolidays = CanadianHolidays.getHolidaysForYear(_focusedDay.year);
+        ),
+        data: (events) {
+          final groupedEvents = _groupEventsByDate(events);
+          // Get Canadian holidays for the focused year
+          final canadianHolidays = CanadianHolidays.getHolidaysForYear(
+            _focusedDay.year,
+          );
 
-            return Column(
+          return Column(
             children: [
               // Calendar
               NeumorphicContainer(
@@ -115,14 +119,18 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
                   startingDayOfWeek: StartingDayOfWeek.sunday,
                   calendarStyle: CalendarStyle(
                     outsideDaysVisible: false,
-                    weekendTextStyle: const TextStyle(color: AppColors.textSecondary),
-                    defaultTextStyle: const TextStyle(color: AppColors.textPrimary),
+                    weekendTextStyle: const TextStyle(
+                      color: AppColors.textSecondary,
+                    ),
+                    defaultTextStyle: const TextStyle(
+                      color: AppColors.textPrimary,
+                    ),
                     selectedDecoration: BoxDecoration(
                       color: AppColors.accent,
                       shape: BoxShape.circle,
                     ),
                     todayDecoration: BoxDecoration(
-                      color: AppColors.accent.withOpacity(0.3),
+                      color: AppColors.accent.withValues(alpha: 0.3),
                       shape: BoxShape.circle,
                     ),
                     // Hide marker dots - using colored date numbers instead
@@ -134,11 +142,21 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
                     formatButtonShowsNext: false,
                     formatButtonDecoration: BoxDecoration(
                       color: AppColors.cardBackground,
-                      borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                      borderRadius: BorderRadius.circular(
+                        AppDimensions.radiusS,
+                      ),
                     ),
-                    formatButtonTextStyle: const TextStyle(color: AppColors.textPrimary),
-                    leftChevronIcon: const Icon(Icons.chevron_left, color: AppColors.textPrimary),
-                    rightChevronIcon: const Icon(Icons.chevron_right, color: AppColors.textPrimary),
+                    formatButtonTextStyle: const TextStyle(
+                      color: AppColors.textPrimary,
+                    ),
+                    leftChevronIcon: const Icon(
+                      Icons.chevron_left,
+                      color: AppColors.textPrimary,
+                    ),
+                    rightChevronIcon: const Icon(
+                      Icons.chevron_right,
+                      color: AppColors.textPrimary,
+                    ),
                     titleTextStyle: const TextStyle(
                       color: AppColors.textPrimary,
                       fontSize: 18,
@@ -171,8 +189,12 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
                       final isToday = isSameDay(DateTime.now(), date);
 
                       // Check if events contain holiday type
-                      final hasHolidayEvent = groupedEvents[dateKey]?.any((e) => e.isHoliday) ?? false;
-                      final hasNonHolidayEvent = groupedEvents[dateKey]?.any((e) => !e.isHoliday) ?? false;
+                      final hasHolidayEvent =
+                          groupedEvents[dateKey]?.any((e) => e.isHoliday) ??
+                          false;
+                      final hasNonHolidayEvent =
+                          groupedEvents[dateKey]?.any((e) => !e.isHoliday) ??
+                          false;
 
                       if (!isSelected && !isToday) {
                         // Canadian holidays or holiday events - show in red
@@ -205,8 +227,12 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
                     selectedBuilder: (context, date, focusedDay) {
                       final dateKey = DateTime(date.year, date.month, date.day);
                       final isHoliday = canadianHolidays.containsKey(dateKey);
-                      final hasHolidayEvent = groupedEvents[dateKey]?.any((e) => e.isHoliday) ?? false;
-                      final hasNonHolidayEvent = groupedEvents[dateKey]?.any((e) => !e.isHoliday) ?? false;
+                      final hasHolidayEvent =
+                          groupedEvents[dateKey]?.any((e) => e.isHoliday) ??
+                          false;
+                      final hasNonHolidayEvent =
+                          groupedEvents[dateKey]?.any((e) => !e.isHoliday) ??
+                          false;
 
                       Color bgColor = AppColors.accent;
                       if (isHoliday || hasHolidayEvent) {
@@ -234,22 +260,27 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
                     todayBuilder: (context, date, focusedDay) {
                       final dateKey = DateTime(date.year, date.month, date.day);
                       final isHoliday = canadianHolidays.containsKey(dateKey);
-                      final hasHolidayEvent = groupedEvents[dateKey]?.any((e) => e.isHoliday) ?? false;
-                      final hasNonHolidayEvent = groupedEvents[dateKey]?.any((e) => !e.isHoliday) ?? false;
+                      final hasHolidayEvent =
+                          groupedEvents[dateKey]?.any((e) => e.isHoliday) ??
+                          false;
+                      final hasNonHolidayEvent =
+                          groupedEvents[dateKey]?.any((e) => !e.isHoliday) ??
+                          false;
                       final isSelected = isSameDay(_selectedDay, date);
 
-                      if (isSelected) return null; // Let selectedBuilder handle it
+                      if (isSelected)
+                        return null; // Let selectedBuilder handle it
 
-                      Color bgColor = AppColors.accent.withOpacity(0.3);
+                      Color bgColor = AppColors.accent.withValues(alpha: 0.3);
                       Color textColor = AppColors.textPrimary;
                       FontWeight fontWeight = FontWeight.normal;
 
                       if (isHoliday || hasHolidayEvent) {
-                        bgColor = Colors.red.withOpacity(0.5);
+                        bgColor = Colors.red.withValues(alpha: 0.5);
                         textColor = Colors.red;
                         fontWeight = FontWeight.bold;
                       } else if (hasNonHolidayEvent) {
-                        bgColor = const Color(0xFF00A86B).withOpacity(0.3);
+                        bgColor = const Color(0xFF00A86B).withValues(alpha: 0.3);
                         textColor = const Color(0xFF00A86B);
                         fontWeight = FontWeight.bold;
                       }
@@ -279,15 +310,21 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
               _buildSelectedDayEvents(groupedEvents),
             ],
           );
-          },
-        ),
+        },
+      ),
     );
   }
 
-  Widget _buildSelectedDayEvents(Map<DateTime, List<CalendarEvent>> groupedEvents) {
-    final date = DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day);
+  Widget _buildSelectedDayEvents(
+    Map<DateTime, List<CalendarEvent>> groupedEvents,
+  ) {
+    final date = DateTime(
+      _selectedDay.year,
+      _selectedDay.month,
+      _selectedDay.day,
+    );
     final dayEvents = groupedEvents[date] ?? [];
-    
+
     // Check if this is a Canadian holiday
     final holidayName = CanadianHolidays.getHolidayName(_selectedDay);
     final hasHoliday = holidayName != null;
@@ -296,7 +333,9 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppDimensions.paddingL,
+          ),
           child: Text(
             DateFormat('EEEE, MMMM dd, yyyy').format(_selectedDay),
             style: const TextStyle(
@@ -313,19 +352,26 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
             child: EmptyState.noEvents(),
           )
         else ...[
-          if (hasHoliday) Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
-            child: _buildHolidayCard(holidayName),
+          if (hasHoliday)
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimensions.paddingL,
+              ),
+              child: _buildHolidayCard(holidayName),
+            ),
+          ...dayEvents.map(
+            (event) => Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimensions.paddingL,
+              ),
+              child: _buildEventCard(event),
+            ),
           ),
-          ...dayEvents.map((event) => Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
-                child: _buildEventCard(event),
-              )),
         ],
       ],
     );
   }
-  
+
   Widget _buildHolidayCard(String holidayName) {
     return NeumorphicContainer(
       padding: const EdgeInsets.all(AppDimensions.paddingM),
@@ -414,7 +460,8 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
                     // No edit/delete buttons - read-only for coaches
                   ],
                 ),
-                if (event.description != null && event.description!.isNotEmpty) ...[
+                if (event.description != null &&
+                    event.description!.isNotEmpty) ...[
                   const SizedBox(height: AppDimensions.spacingS),
                   Text(
                     event.description!,

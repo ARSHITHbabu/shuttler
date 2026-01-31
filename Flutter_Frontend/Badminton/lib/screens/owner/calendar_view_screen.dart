@@ -338,7 +338,7 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                       shape: BoxShape.circle,
                     ),
                     todayDecoration: BoxDecoration(
-                      color: AppColors.accent.withOpacity(0.3),
+                      color: AppColors.accent.withValues(alpha:0.3),
                       shape: BoxShape.circle,
                     ),
                     // Hide marker dots - using colored date numbers instead
@@ -454,16 +454,16 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
 
                       if (isSelected) return null; // Let selectedBuilder handle it
 
-                      Color bgColor = AppColors.accent.withOpacity(0.3);
+                      Color bgColor = AppColors.accent.withValues(alpha:0.3);
                       Color textColor = AppColors.textPrimary;
                       FontWeight fontWeight = FontWeight.normal;
 
                       if (isHoliday || hasHolidayEvent) {
-                        bgColor = Colors.red.withOpacity(0.5);
+                        bgColor = Colors.red.withValues(alpha:0.5);
                         textColor = Colors.red;
                         fontWeight = FontWeight.bold;
                       } else if (hasNonHolidayEvent) {
-                        bgColor = const Color(0xFF00A86B).withOpacity(0.3);
+                        bgColor = const Color(0xFF00A86B).withValues(alpha:0.3);
                         textColor = const Color(0xFF00A86B);
                         fontWeight = FontWeight.bold;
                       }

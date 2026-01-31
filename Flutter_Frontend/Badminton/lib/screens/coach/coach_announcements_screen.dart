@@ -15,10 +15,12 @@ class CoachAnnouncementsScreen extends ConsumerStatefulWidget {
   const CoachAnnouncementsScreen({super.key});
 
   @override
-  ConsumerState<CoachAnnouncementsScreen> createState() => _CoachAnnouncementsScreenState();
+  ConsumerState<CoachAnnouncementsScreen> createState() =>
+      _CoachAnnouncementsScreenState();
 }
 
-class _CoachAnnouncementsScreenState extends ConsumerState<CoachAnnouncementsScreen> {
+class _CoachAnnouncementsScreenState
+    extends ConsumerState<CoachAnnouncementsScreen> {
   String _selectedFilter = 'all'; // 'all', 'urgent', 'high', 'normal'
 
   @override
@@ -32,7 +34,9 @@ class _CoachAnnouncementsScreenState extends ConsumerState<CoachAnnouncementsScr
     }
 
     return Scaffold(
-      backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+      backgroundColor: isDark
+          ? AppColors.background
+          : AppColorsLight.background,
       appBar: MoreScreenAppBar(
         title: 'Announcements',
         onReload: handleReload,
@@ -96,7 +100,9 @@ class _CoachAnnouncementsScreenState extends ConsumerState<CoachAnnouncementsScr
                   // Filter by priority
                   final filteredAnnouncements = _selectedFilter == 'all'
                       ? announcements
-                      : announcements.where((a) => a.priority == _selectedFilter).toList();
+                      : announcements
+                            .where((a) => a.priority == _selectedFilter)
+                            .toList();
 
                   if (filteredAnnouncements.isEmpty) {
                     return EmptyState.noAnnouncements();
@@ -136,7 +142,8 @@ class _CoachAnnouncementsScreenState extends ConsumerState<CoachAnnouncementsScr
                   children: [
                     Row(
                       children: [
-                        if (announcement.priority == 'urgent' || announcement.priority == 'high')
+                        if (announcement.priority == 'urgent' ||
+                            announcement.priority == 'high')
                           const Icon(
                             Icons.priority_high,
                             size: 16,
@@ -177,7 +184,7 @@ class _CoachAnnouncementsScreenState extends ConsumerState<CoachAnnouncementsScr
                   vertical: AppDimensions.spacingS,
                 ),
                 decoration: BoxDecoration(
-                  color: announcement.priorityColor.withOpacity(0.2),
+                  color: announcement.priorityColor.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(AppDimensions.radiusS),
                 ),
                 child: Text(
@@ -204,7 +211,10 @@ class _CoachAnnouncementsScreenState extends ConsumerState<CoachAnnouncementsScr
     );
   }
 
-  void _showAnnouncementDetails(BuildContext context, Announcement announcement) {
+  void _showAnnouncementDetails(
+    BuildContext context,
+    Announcement announcement,
+  ) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -230,8 +240,10 @@ class _CoachAnnouncementsScreenState extends ConsumerState<CoachAnnouncementsScr
                       vertical: AppDimensions.spacingS,
                     ),
                     decoration: BoxDecoration(
-                      color: announcement.priorityColor.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                      color: announcement.priorityColor.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(
+                        AppDimensions.radiusS,
+                      ),
                     ),
                     child: Text(
                       announcement.priority.toUpperCase(),
@@ -316,7 +328,7 @@ class _FilterChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chipColor = color ?? AppColors.accent;
-    
+
     return GestureDetector(
       onTap: onTap,
       child: NeumorphicContainer(
