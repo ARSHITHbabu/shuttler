@@ -7,6 +7,8 @@ import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/neumorphic_button.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../providers/service_providers.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/student_provider.dart';
 
 /// Academy Details Screen - Edit academy information
 class AcademyDetailsScreen extends ConsumerStatefulWidget {
@@ -43,18 +45,32 @@ class _AcademyDetailsScreenState extends ConsumerState<AcademyDetailsScreen> {
 
   Future<void> _loadAcademyDetails() async {
     try {
-      final storageService = ref.read(storageServiceProvider);
-      if (!storageService.isInitialized) {
-        await storageService.init();
-      }
+      // Try to load from active owner (backend)
+      final owner = await ref.read(activeOwnerProvider.future);
+      
+      if (owner != null && owner.academyName != null) {
+        setState(() {
+          _academyNameController.text = owner.academyName ?? '';
+          _addressController.text = owner.academyAddress ?? '';
+          _contactController.text = owner.academyContact ?? '';
+          _emailController.text = owner.academyEmail ?? '';
+          _isLoading = false;
+        });
+      } else {
+        // Fallback to local storage
+        final storageService = ref.read(storageServiceProvider);
+        if (!storageService.isInitialized) {
+          await storageService.init();
+        }
 
-      setState(() {
-        _academyNameController.text = storageService.getAcademyName() ?? '';
-        _addressController.text = storageService.getAcademyAddress() ?? '';
-        _contactController.text = storageService.getAcademyContact() ?? '';
-        _emailController.text = storageService.getAcademyEmail() ?? '';
-        _isLoading = false;
-      });
+        setState(() {
+          _academyNameController.text = storageService.getAcademyName() ?? '';
+          _addressController.text = storageService.getAcademyAddress() ?? '';
+          _contactController.text = storageService.getAcademyContact() ?? '';
+          _emailController.text = storageService.getAcademyEmail() ?? '';
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       setState(() {
         _isLoading = false;
@@ -73,10 +89,32 @@ class _AcademyDetailsScreenState extends ConsumerState<AcademyDetailsScreen> {
         await storageService.init();
       }
 
+      // Save locally first for responsiveness
       await storageService.saveAcademyName(_academyNameController.text.trim());
       await storageService.saveAcademyAddress(_addressController.text.trim());
       await storageService.saveAcademyContact(_contactController.text.trim());
       await storageService.saveAcademyEmail(_emailController.text.trim());
+
+      // Save to backend if user is owner
+      final authState = ref.read(authProvider);
+      if (authState is AsyncData && authState.value is Authenticated) {
+        final auth = authState.value as Authenticated;
+        if (auth.userType == 'owner') {
+          final ownerService = ref.read(ownerServiceProvider);
+          await ownerService.updateOwner(
+            auth.userId,
+            {
+              'academy_name': _academyNameController.text.trim(),
+              'academy_address': _addressController.text.trim(),
+              'academy_contact': _contactController.text.trim(),
+              'academy_email': _emailController.text.trim(),
+            },
+          );
+          
+          // Invalidate active owner to refresh across app
+          ref.invalidate(activeOwnerProvider);
+        }
+      }
 
       if (mounted) {
         SuccessSnackbar.show(context, 'Academy details saved successfully');

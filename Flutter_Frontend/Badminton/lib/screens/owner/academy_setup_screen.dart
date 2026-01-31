@@ -10,6 +10,7 @@ import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/profile_image_picker.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/service_providers.dart';
+import '../../providers/student_provider.dart';
 import 'package:dio/dio.dart';
 
 /// Academy Setup Screen - Initial academy configuration
@@ -109,6 +110,10 @@ class _AcademySetupScreenState extends ConsumerState<AcademySetupScreen> {
         'name': _ownerNameController.text.trim(),
         'phone': _phoneController.text.trim(),
         'email': _emailController.text.trim(),
+        'academy_name': _academyNameController.text.trim(),
+        'academy_address': '${_addressController.text.trim()}, ${_cityController.text.trim()}, ${_stateController.text.trim()}',
+        'academy_contact': _phoneController.text.trim(),
+        'academy_email': _emailController.text.trim(),
       };
 
       await ownerService.updateOwner(authState.userId, ownerData);
@@ -119,10 +124,13 @@ class _AcademySetupScreenState extends ConsumerState<AcademySetupScreen> {
         await storageService.init();
       }
       await storageService.saveAcademyName(_academyNameController.text.trim());
-      await storageService.saveAcademyAddress(_addressController.text.trim());
+      await storageService.saveAcademyAddress('${_addressController.text.trim()}, ${_cityController.text.trim()}, ${_stateController.text.trim()}');
       // Use owner's contact and email as academy contact/email if not set separately
       await storageService.saveAcademyContact(_phoneController.text.trim());
       await storageService.saveAcademyEmail(_emailController.text.trim());
+      
+      // Invalidate active owner to refresh across app
+      ref.invalidate(activeOwnerProvider);
 
       if (mounted) {
         SuccessSnackbar.show(context, 'Academy setup completed successfully');
