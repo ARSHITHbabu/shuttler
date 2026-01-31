@@ -138,19 +138,13 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                 onRetry: () => ref.invalidate(studentListProvider),
               ),
               data: (allStudents) {
-                // Apply status filter - exclude rejected students from the list completely
+                // Apply status filter
                 var filteredStudents = allStudents.where((student) {
-                  // Always exclude rejected students - they should not appear in the list
-                  if (student.status == 'rejected') {
-                    return false;
-                  }
-                  
                   if (_selectedFilter == 'active') {
                     return student.status == 'active';
                   } else if (_selectedFilter == 'inactive') {
                     return student.status == 'inactive';
                   }
-                  // For 'all' filter, show all except rejected
                   return true;
                 }).toList();
 

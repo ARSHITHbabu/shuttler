@@ -395,25 +395,6 @@ final videoServiceProvider = AutoDisposeProvider<VideoService>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef VideoServiceRef = AutoDisposeProviderRef<VideoService>;
-String _$requestServiceHash() => r'7859dd38950fb08db0a97de1ad8f785afe94baa7';
-
-/// Provider for RequestService singleton
-///
-/// Copied from [requestService].
-@ProviderFor(requestService)
-final requestServiceProvider = AutoDisposeProvider<RequestService>.internal(
-  requestService,
-  name: r'requestServiceProvider',
-  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
-      ? null
-      : _$requestServiceHash,
-  dependencies: null,
-  allTransitiveDependencies: null,
-);
-
-@Deprecated('Will be removed in 3.0. Use Ref instead')
-// ignore: unused_element
-typedef RequestServiceRef = AutoDisposeProviderRef<RequestService>;
 String _$connectivityServiceHash() =>
     r'2514faa3d7f3227d473e300af7d0188339855ef3';
 
