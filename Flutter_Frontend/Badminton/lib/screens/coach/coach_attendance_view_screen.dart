@@ -259,7 +259,7 @@ class _CoachAttendanceViewScreenState extends ConsumerState<CoachAttendanceViewS
                             Text(
                               _selectedFilter == 'all'
                                   ? 'No attendance records found'
-                                  : 'No ${_selectedFilter} records found',
+                                  : 'No $_selectedFilter records found',
                               style: const TextStyle(
                                 color: AppColors.textSecondary,
                                 fontSize: 16,
@@ -361,7 +361,7 @@ class _CoachAttendanceViewScreenState extends ConsumerState<CoachAttendanceViewS
                                 ),
                               ),
                             );
-                          }).toList(),
+                          }),
                         ],
                       ),
                     ),

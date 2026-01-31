@@ -310,7 +310,7 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
                     return NeumorphicContainer(
                       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
                       child: DropdownButtonFormField<int>(
-                        value: _selectedBatchId,
+                        initialValue: _selectedBatchId,
                         decoration: const InputDecoration(
                           border: InputBorder.none,
                           hintText: 'Select a batch',
@@ -352,7 +352,7 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
                     NeumorphicContainer(
                       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
                       child: DropdownButtonFormField<int>(
-                        value: _selectedStudentId,
+                        initialValue: _selectedStudentId,
                         decoration: const InputDecoration(
                           border: InputBorder.none,
                           hintText: 'Select a student',

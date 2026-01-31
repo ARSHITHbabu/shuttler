@@ -12,7 +12,6 @@ import '../../../providers/fee_provider.dart';
 import '../../../models/fee.dart';
 import '../../../models/fee_payment.dart';
 import '../../../models/student.dart';
-import '../../../models/student_with_batch_fee.dart';
 import 'package:intl/intl.dart';
 
 /// Fees Tab - Shows student fees and allows managing payments

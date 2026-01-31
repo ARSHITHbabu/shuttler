@@ -24,7 +24,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
   final _reasonController = TextEditingController();
   String _selectedStatusFilter = 'all'; // 'all', 'pending', 'approved', 'rejected'
   bool _showAddForm = false;
-  Set<DateTime> _selectedDates = {};
+  final Set<DateTime> _selectedDates = {};
   bool _isHalfDay = false;
   DateTime _focusedDay = DateTime.now();
 

@@ -367,7 +367,7 @@ class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
           child: NeumorphicContainer(
             padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
             child: DropdownButtonFormField<int?>(
-              value: _selectedYear,
+              initialValue: _selectedYear,
               decoration: InputDecoration(
                 border: InputBorder.none,
                 hintText: 'All Years',
@@ -397,7 +397,7 @@ class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
           child: NeumorphicContainer(
             padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
             child: DropdownButtonFormField<int?>(
-              value: _selectedMonth,
+              initialValue: _selectedMonth,
               decoration: InputDecoration(
                 border: InputBorder.none,
                 hintText: 'All Months',
