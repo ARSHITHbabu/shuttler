@@ -1,7 +1,6 @@
 /// Stub for dart:io on web platform
 /// Provides minimal stubs to prevent compilation errors
 /// These classes should never be instantiated on web - the code path is protected by kIsWeb check
-library;
 
 /// Stub Directory class for web (should never be used)
 class Directory {

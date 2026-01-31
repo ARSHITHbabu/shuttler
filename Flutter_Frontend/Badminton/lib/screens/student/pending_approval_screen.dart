@@ -28,7 +28,7 @@ class _PendingApprovalScreenState
     setState(() => _isRefreshing = true);
     try {
       final authState = ref.read(authProvider);
-      authState.whenData((authValue) async {
+      await authState.whenData((authValue) async {
         if (authValue is Authenticated && authValue.userType == 'student') {
           // Invalidate student provider to force refresh
           ref.invalidate(studentByIdProvider(authValue.userId));

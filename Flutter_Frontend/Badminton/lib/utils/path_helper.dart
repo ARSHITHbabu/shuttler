@@ -1,6 +1,5 @@
 /// Platform-agnostic path helper
 /// Uses conditional imports to provide the right implementation
-library;
 
 // Conditional imports
 import 'path_helper_stub.dart'

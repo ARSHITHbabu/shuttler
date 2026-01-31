@@ -118,9 +118,7 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
                       return _RequestCard(
                         request: requests[index],
                         isDark: isDark,
-                        onApprove: () => requests[index].requestType == 'coach_leave_modification'
-                            ? _handleModificationRequest(requests[index])
-                            : _handleApprove(requests[index]),
+                        onApprove: () => _handleApprove(requests[index]),
                         onReject: () => _handleReject(requests[index]),
                         onView: () =>
                             _showRequestDetails(requests[index], isDark),
@@ -374,8 +372,8 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
         final requestService = ref.read(requestServiceProvider);
         await requestService.approveRequest(request.id);
 
-        // Handle coach leave requests and modifications
-        if ((request.requestType == 'coach_leave' || request.requestType == 'coach_leave_modification') && request.metadata != null) {
+        // If it's a coach leave request, create calendar events
+        if (request.requestType == 'coach_leave' && request.metadata != null) {
           try {
             final authState = ref.read(authProvider);
             int? ownerId;
@@ -387,138 +385,57 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
               }
             });
 
-            final calendarService = ref.read(calendarServiceProvider);
+            coachName = request.metadata!['coach_name'] as String? ?? 'Coach';
+            final isHalfDay = request.metadata!['is_half_day'] == true;
 
-            if (request.requestType == 'coach_leave_modification') {
-              // Handle modification: delete old events and create new ones
-              coachName = request.metadata!['coach_name'] as String? ?? 'Coach';
-              final originalIsHalfDay = request.metadata!['original_is_half_day'] == true;
-              final newIsHalfDay = request.metadata!['new_is_half_day'] == true;
-
-              // Get original dates
-              List<DateTime> originalDates = [];
-              if (request.metadata!['original_dates'] != null) {
-                final datesList = request.metadata!['original_dates'] as List<dynamic>?;
-                if (datesList != null) {
-                  originalDates = datesList.map((d) => DateTime.parse(d as String)).toList();
-                }
+            // Get dates from metadata
+            List<DateTime> leaveDates = [];
+            if (request.metadata!['dates'] != null) {
+              // If dates array exists, use it
+              final datesList = request.metadata!['dates'] as List<dynamic>?;
+              if (datesList != null) {
+                leaveDates = datesList.map((d) => DateTime.parse(d as String)).toList();
               }
-
-              // Get new dates
-              List<DateTime> newDates = [];
-              if (request.metadata!['new_dates'] != null) {
-                final datesList = request.metadata!['new_dates'] as List<dynamic>?;
-                if (datesList != null) {
-                  newDates = datesList.map((d) => DateTime.parse(d as String)).toList();
-                }
-              }
-
-              if (ownerId != null && originalDates.isNotEmpty && newDates.isNotEmpty) {
-                // Get all calendar events for the date range to find matching leave events
-                final minDate = originalDates.first.isBefore(newDates.first) 
-                    ? originalDates.first 
-                    : newDates.first;
-                final maxDate = originalDates.last.isAfter(newDates.last) 
-                    ? originalDates.last 
-                    : newDates.last;
-                
-                final allEvents = await calendarService.getCalendarEvents(
-                  startDate: minDate.subtract(const Duration(days: 1)),
-                  endDate: maxDate.add(const Duration(days: 1)),
-                  eventType: 'leave',
-                );
-
-                // Find and delete events matching the original leave dates and coach name
-                final originalDateStrings = originalDates.map((d) => d.toIso8601String().split('T')[0]).toSet();
-                final originalEventTitle = originalIsHalfDay 
-                    ? '$coachName - Leave (Half Day)'
-                    : '$coachName - Leave';
-
-                for (final event in allEvents) {
-                  final eventDateStr = event.date.toIso8601String().split('T')[0];
-                  if (originalDateStrings.contains(eventDateStr) && 
-                      event.title == originalEventTitle) {
-                    try {
-                      await calendarService.deleteCalendarEvent(event.id);
-                    } catch (e) {
-                      debugPrint('Failed to delete calendar event ${event.id}: $e');
-                    }
-                  }
-                }
-
-                // Create new calendar events for the new dates
-                for (final date in newDates) {
-                  final eventTitle = newIsHalfDay 
-                      ? '$coachName - Leave (Half Day)'
-                      : '$coachName - Leave';
-                  
-                  final eventData = {
-                    'title': eventTitle,
-                    'event_type': 'leave',
-                    'date': date.toIso8601String().split('T')[0],
-                    'created_by': ownerId,
-                    'creator_type': 'owner',
-                    'description': request.description ?? 'Coach leave modification',
-                  };
-
-                  await calendarService.createCalendarEvent(eventData);
-                }
-
-                // Note: The modification request itself contains all the info needed
-                // The original request metadata doesn't need to be updated as the modification
-                // request serves as the record of the change
-              }
-            } else {
-              // Handle regular leave request: create calendar events
-              coachName = request.metadata!['coach_name'] as String? ?? 'Coach';
-              final isHalfDay = request.metadata!['is_half_day'] == true;
-
-              // Get dates from metadata
-              List<DateTime> leaveDates = [];
-              if (request.metadata!['dates'] != null) {
-                // If dates array exists, use it
-                final datesList = request.metadata!['dates'] as List<dynamic>?;
-                if (datesList != null) {
-                  leaveDates = datesList.map((d) => DateTime.parse(d as String)).toList();
-                }
-              } else if (request.metadata!['start_date'] != null && request.metadata!['end_date'] != null) {
-                // Otherwise, generate dates from start to end
-                final startDate = DateTime.parse(request.metadata!['start_date']);
-                final endDate = DateTime.parse(request.metadata!['end_date']);
-                var currentDate = startDate;
-                while (!currentDate.isAfter(endDate)) {
-                  leaveDates.add(currentDate);
-                  currentDate = currentDate.add(const Duration(days: 1));
-                }
-              }
-
-              if (ownerId != null && leaveDates.isNotEmpty) {
-                // Create calendar events for each leave date
-                for (final date in leaveDates) {
-                  final eventTitle = isHalfDay 
-                      ? '$coachName - Leave (Half Day)'
-                      : '$coachName - Leave';
-                  
-                  final eventData = {
-                    'title': eventTitle,
-                    'event_type': 'leave',
-                    'date': date.toIso8601String().split('T')[0],
-                    'created_by': ownerId,
-                    'creator_type': 'owner',
-                    'description': request.description ?? 'Coach leave request',
-                  };
-
-                  await calendarService.createCalendarEvent(eventData);
-                }
+            } else if (request.metadata!['start_date'] != null && request.metadata!['end_date'] != null) {
+              // Otherwise, generate dates from start to end
+              final startDate = DateTime.parse(request.metadata!['start_date']);
+              final endDate = DateTime.parse(request.metadata!['end_date']);
+              var currentDate = startDate;
+              while (!currentDate.isAfter(endDate)) {
+                leaveDates.add(currentDate);
+                currentDate = currentDate.add(const Duration(days: 1));
               }
             }
-            
-            // Invalidate calendar providers to refresh the calendar
-            ref.invalidate(calendarEventsProvider);
-            ref.invalidate(calendarEventListProvider);
+
+            if (ownerId != null && leaveDates.isNotEmpty) {
+              // Create calendar events for each leave date
+              final calendarService = ref.read(calendarServiceProvider);
+              
+              for (final date in leaveDates) {
+                final eventTitle = isHalfDay 
+                    ? '$coachName - Leave (Half Day)'
+                    : '$coachName - Leave';
+                
+                final eventData = {
+                  'title': eventTitle,
+                  'event_type': 'leave',
+                  'date': date.toIso8601String().split('T')[0],
+                  'created_by': ownerId,
+                  'creator_type': 'owner',
+                  'description': request.description ?? 'Coach leave request',
+                };
+
+                await calendarService.createCalendarEvent(eventData);
+              }
+              
+              // Invalidate calendar providers to refresh the calendar
+              // Invalidate all calendar event providers by invalidating the family
+              ref.invalidate(calendarEventsProvider);
+              ref.invalidate(calendarEventListProvider);
+            }
           } catch (e) {
             // Log error but don't fail the approval
-            debugPrint('Failed to process calendar events: $e');
+            debugPrint('Failed to create calendar events: $e');
           }
         }
 
@@ -541,254 +458,6 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
             'Failed to approve request: ${e.toString()}',
           );
         }
-      }
-    }
-  }
-
-  Future<void> _handleModificationRequest(Request modificationRequest) async {
-    if (modificationRequest.metadata == null) {
-      SuccessSnackbar.showError(context, 'Invalid modification request');
-      return;
-    }
-
-    final originalRequestId = modificationRequest.metadata!['original_request_id'] as int?;
-    if (originalRequestId == null) {
-      SuccessSnackbar.showError(context, 'Original request not found');
-      return;
-    }
-
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    // Show dialog with three options
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: isDark
-            ? AppColors.cardBackground
-            : AppColorsLight.cardBackground,
-        title: Text(
-          'Modification Request',
-          style: TextStyle(
-            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-          ),
-        ),
-        content: Text(
-          'Choose an action for this modification request:',
-          style: TextStyle(
-            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop('approve_modification'),
-            child: Text(
-              'Approve Modification',
-              style: TextStyle(
-                color: Colors.green,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop('reject_modification'),
-            child: Text(
-              'Reject Modification',
-              style: TextStyle(
-                color: Colors.orange,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop('reject_whole_leave'),
-            child: Text(
-              'Reject Whole Leave',
-              style: TextStyle(
-                color: Colors.red,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop('cancel'),
-            child: Text(
-              'Cancel',
-              style: TextStyle(
-                color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (result == null || result == 'cancel' || !mounted) return;
-
-    try {
-      final requestService = ref.read(requestServiceProvider);
-      final calendarService = ref.read(calendarServiceProvider);
-      final authState = ref.read(authProvider);
-      int? ownerId;
-
-      authState.whenData((authValue) {
-        if (authValue is Authenticated && authValue.userType == 'owner') {
-          ownerId = authValue.userId;
-        }
-      });
-
-      if (result == 'approve_modification') {
-        // Approve modification: update calendar events
-        await requestService.approveRequest(modificationRequest.id);
-        
-        // Update calendar events (delete old, create new)
-        final coachName = modificationRequest.metadata!['coach_name'] as String? ?? 'Coach';
-        final originalIsHalfDay = modificationRequest.metadata!['original_is_half_day'] == true;
-        final newIsHalfDay = modificationRequest.metadata!['new_is_half_day'] == true;
-
-        List<DateTime> originalDates = [];
-        if (modificationRequest.metadata!['original_dates'] != null) {
-          final datesList = modificationRequest.metadata!['original_dates'] as List<dynamic>?;
-          if (datesList != null) {
-            originalDates = datesList.map((d) => DateTime.parse(d as String)).toList();
-          }
-        }
-
-        List<DateTime> newDates = [];
-        if (modificationRequest.metadata!['new_dates'] != null) {
-          final datesList = modificationRequest.metadata!['new_dates'] as List<dynamic>?;
-          if (datesList != null) {
-            newDates = datesList.map((d) => DateTime.parse(d as String)).toList();
-          }
-        }
-
-        if (ownerId != null && originalDates.isNotEmpty && newDates.isNotEmpty) {
-          // Get all calendar events for the date range
-          final minDate = originalDates.first.isBefore(newDates.first) 
-              ? originalDates.first 
-              : newDates.first;
-          final maxDate = originalDates.last.isAfter(newDates.last) 
-              ? originalDates.last 
-              : newDates.last;
-          
-          final allEvents = await calendarService.getCalendarEvents(
-            startDate: minDate.subtract(const Duration(days: 1)),
-            endDate: maxDate.add(const Duration(days: 1)),
-            eventType: 'leave',
-          );
-
-          // Delete old events
-          final originalDateStrings = originalDates.map((d) => d.toIso8601String().split('T')[0]).toSet();
-          final originalEventTitle = originalIsHalfDay 
-              ? '$coachName - Leave (Half Day)'
-              : '$coachName - Leave';
-
-          for (final event in allEvents) {
-            final eventDateStr = event.date.toIso8601String().split('T')[0];
-            if (originalDateStrings.contains(eventDateStr) && 
-                event.title == originalEventTitle) {
-              try {
-                await calendarService.deleteCalendarEvent(event.id);
-              } catch (e) {
-                debugPrint('Failed to delete calendar event ${event.id}: $e');
-              }
-            }
-          }
-
-          // Create new events
-          for (final date in newDates) {
-            final eventTitle = newIsHalfDay 
-                ? '$coachName - Leave (Half Day)'
-                : '$coachName - Leave';
-            
-            final eventData = {
-              'title': eventTitle,
-              'event_type': 'leave',
-              'date': date.toIso8601String().split('T')[0],
-              'created_by': ownerId,
-              'creator_type': 'owner',
-              'description': modificationRequest.description ?? 'Coach leave modification',
-            };
-
-            await calendarService.createCalendarEvent(eventData);
-          }
-        }
-
-        if (mounted) {
-          SuccessSnackbar.show(context, 'Modification approved successfully');
-        }
-      } else if (result == 'reject_modification') {
-        // Reject modification: keep original leave, just reject the modification request
-        await requestService.rejectRequest(modificationRequest.id, responseMessage: 'Modification rejected. Original leave remains approved.');
-        
-        if (mounted) {
-          SuccessSnackbar.show(context, 'Modification rejected. Original leave remains.');
-        }
-      } else if (result == 'reject_whole_leave') {
-        // Reject whole leave: reject both modification and original request, delete calendar events
-        await requestService.rejectRequest(modificationRequest.id, responseMessage: 'Whole leave request rejected.');
-        
-        // Also reject the original request
-        try {
-          await requestService.rejectRequest(originalRequestId, responseMessage: 'Leave request rejected due to modification rejection.');
-        } catch (e) {
-          debugPrint('Failed to reject original request: $e');
-        }
-
-        // Delete calendar events for original leave
-        final coachName = modificationRequest.metadata!['coach_name'] as String? ?? 'Coach';
-        final originalIsHalfDay = modificationRequest.metadata!['original_is_half_day'] == true;
-
-        List<DateTime> originalDates = [];
-        if (modificationRequest.metadata!['original_dates'] != null) {
-          final datesList = modificationRequest.metadata!['original_dates'] as List<dynamic>?;
-          if (datesList != null) {
-            originalDates = datesList.map((d) => DateTime.parse(d as String)).toList();
-          }
-        }
-
-        if (ownerId != null && originalDates.isNotEmpty) {
-          final minDate = originalDates.first.subtract(const Duration(days: 1));
-          final maxDate = originalDates.last.add(const Duration(days: 1));
-          
-          final allEvents = await calendarService.getCalendarEvents(
-            startDate: minDate,
-            endDate: maxDate,
-            eventType: 'leave',
-          );
-
-          final originalDateStrings = originalDates.map((d) => d.toIso8601String().split('T')[0]).toSet();
-          final originalEventTitle = originalIsHalfDay 
-              ? '$coachName - Leave (Half Day)'
-              : '$coachName - Leave';
-
-          for (final event in allEvents) {
-            final eventDateStr = event.date.toIso8601String().split('T')[0];
-            if (originalDateStrings.contains(eventDateStr) && 
-                event.title == originalEventTitle) {
-              try {
-                await calendarService.deleteCalendarEvent(event.id);
-              } catch (e) {
-                debugPrint('Failed to delete calendar event ${event.id}: $e');
-              }
-            }
-          }
-        }
-
-        if (mounted) {
-          SuccessSnackbar.show(context, 'Whole leave request rejected');
-        }
-      }
-
-      if (mounted) {
-        ref.invalidate(requestListProvider);
-        ref.invalidate(pendingRequestsCountProvider);
-        ref.invalidate(calendarEventsProvider);
-        ref.invalidate(calendarEventListProvider);
-      }
-    } catch (e) {
-      if (mounted) {
-        SuccessSnackbar.showError(
-          context,
-          'Failed to process modification: ${e.toString()}',
-        );
       }
     }
   }
@@ -838,83 +507,31 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
     String? leaveDates;
     bool isHalfDay = false;
     int? totalDays;
-    String? originalLeaveDates;
-    int? originalTotalDays;
-    bool isModification = request.requestType == 'coach_leave_modification';
     
-    if ((request.requestType == 'coach_leave' || request.requestType == 'coach_leave_modification') && request.metadata != null) {
+    if (request.requestType == 'coach_leave' && request.metadata != null) {
       coachName = request.metadata!['coach_name'] as String?;
+      isHalfDay = request.metadata!['is_half_day'] == true;
+      totalDays = request.metadata!['total_days'] as int?;
       
-      if (isModification) {
-        // Show both original and new dates for modifications
-        isHalfDay = request.metadata!['new_is_half_day'] == true;
-        totalDays = request.metadata!['new_total_days'] as int?;
-        originalTotalDays = request.metadata!['original_total_days'] as int?;
-        
-        try {
-          // Original dates
-          if (request.metadata!['original_start_date'] != null && request.metadata!['original_end_date'] != null) {
-            final startDate = DateTime.parse(request.metadata!['original_start_date']);
-            final endDate = DateTime.parse(request.metadata!['original_end_date']);
-            
-            if (startDate.year == endDate.year && 
-                startDate.month == endDate.month && 
-                startDate.day == endDate.day) {
-              originalLeaveDates = DateFormat('MMM dd, yyyy').format(startDate);
-            } else {
-              originalLeaveDates = '${DateFormat('MMM dd').format(startDate)} - ${DateFormat('MMM dd, yyyy').format(endDate)}';
-            }
-            
-            if (request.metadata!['original_is_half_day'] == true) {
-              originalLeaveDates += ' (Half Day)';
-            }
+      try {
+        if (request.metadata!['start_date'] != null && request.metadata!['end_date'] != null) {
+          final startDate = DateTime.parse(request.metadata!['start_date']);
+          final endDate = DateTime.parse(request.metadata!['end_date']);
+          
+          if (startDate.year == endDate.year && 
+              startDate.month == endDate.month && 
+              startDate.day == endDate.day) {
+            leaveDates = DateFormat('MMM dd, yyyy').format(startDate);
+          } else {
+            leaveDates = '${DateFormat('MMM dd').format(startDate)} - ${DateFormat('MMM dd, yyyy').format(endDate)}';
           }
           
-          // New dates
-          if (request.metadata!['new_start_date'] != null && request.metadata!['new_end_date'] != null) {
-            final startDate = DateTime.parse(request.metadata!['new_start_date']);
-            final endDate = DateTime.parse(request.metadata!['new_end_date']);
-            
-            if (startDate.year == endDate.year && 
-                startDate.month == endDate.month && 
-                startDate.day == endDate.day) {
-              leaveDates = DateFormat('MMM dd, yyyy').format(startDate);
-            } else {
-              leaveDates = '${DateFormat('MMM dd').format(startDate)} - ${DateFormat('MMM dd, yyyy').format(endDate)}';
-            }
-            
-            if (isHalfDay) {
-              leaveDates += ' (Half Day)';
-            }
+          if (isHalfDay) {
+            leaveDates += ' (Half Day)';
           }
-        } catch (e) {
-          // Handle parsing error
         }
-      } else {
-        // Regular leave request
-        isHalfDay = request.metadata!['is_half_day'] == true;
-        totalDays = request.metadata!['total_days'] as int?;
-        
-        try {
-          if (request.metadata!['start_date'] != null && request.metadata!['end_date'] != null) {
-            final startDate = DateTime.parse(request.metadata!['start_date']);
-            final endDate = DateTime.parse(request.metadata!['end_date']);
-            
-            if (startDate.year == endDate.year && 
-                startDate.month == endDate.month && 
-                startDate.day == endDate.day) {
-              leaveDates = DateFormat('MMM dd, yyyy').format(startDate);
-            } else {
-              leaveDates = '${DateFormat('MMM dd').format(startDate)} - ${DateFormat('MMM dd, yyyy').format(endDate)}';
-            }
-            
-            if (isHalfDay) {
-              leaveDates += ' (Half Day)';
-            }
-          }
-        } catch (e) {
-          // Handle parsing error
-        }
+      } catch (e) {
+        // Handle parsing error
       }
     }
     
@@ -960,36 +577,16 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
                 isDark: isDark,
               ),
               // Show leave dates for leave requests
-              if ((request.requestType == 'coach_leave' || request.requestType == 'coach_leave_modification') && leaveDates != null) ...[
+              if (request.requestType == 'coach_leave' && leaveDates != null) ...[
                 const SizedBox(height: 8),
-                if (isModification && originalLeaveDates != null) ...[
-                  _DetailRow(
-                    label: 'Original Dates',
-                    value: originalLeaveDates,
-                    isDark: isDark,
-                  ),
-                  if (originalTotalDays != null && originalTotalDays > 1)
-                    _DetailRow(
-                      label: 'Original Days',
-                      value: '$originalTotalDays days',
-                      isDark: isDark,
-                    ),
-                  const SizedBox(height: 4),
-                  _DetailRow(
-                    label: 'New Dates',
-                    value: leaveDates,
-                    isDark: isDark,
-                  ),
-                ] else ...[
-                  _DetailRow(
-                    label: 'Leave Dates',
-                    value: leaveDates,
-                    isDark: isDark,
-                  ),
-                ],
+                _DetailRow(
+                  label: 'Leave Dates',
+                  value: leaveDates,
+                  isDark: isDark,
+                ),
                 if (totalDays != null && totalDays > 1)
                   _DetailRow(
-                    label: isModification ? 'New Total Days' : 'Total Days',
+                    label: 'Total Days',
                     value: '$totalDays days',
                     isDark: isDark,
                   ),
@@ -1092,8 +689,6 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
         return 'Coach Registration';
       case 'coach_leave':
         return 'Coach Leave Request';
-      case 'coach_leave_modification':
-        return 'Coach Leave Modification';
       case 'batch_enrollment':
         return 'Batch Enrollment';
       default:
@@ -1261,8 +856,6 @@ class _RequestCard extends StatelessWidget {
         return Icons.person_add_outlined;
       case 'coach_leave':
         return Icons.event_busy;
-      case 'coach_leave_modification':
-        return Icons.edit_calendar;
       case 'batch_enrollment':
         return Icons.group_add;
       default:

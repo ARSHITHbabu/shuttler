@@ -12,6 +12,7 @@ import '../../widgets/common/confirmation_dialog.dart';
 import '../../providers/session_provider.dart';
 import '../../providers/batch_provider.dart';
 import '../../models/session.dart';
+import '../../models/batch.dart';
 
 /// Session/Season Management Screen - Manage sessions that group batches
 /// Separate from SessionManagementScreen which manages practice/tournament/camp sessions

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import '../../core/constants/colors.dart';
+import '../../core/constants/dimensions.dart';
 
 /// Full-screen video player dialog
 class VideoPlayerDialog extends StatefulWidget {
