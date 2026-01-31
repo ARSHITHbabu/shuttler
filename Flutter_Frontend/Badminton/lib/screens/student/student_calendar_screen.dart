@@ -126,7 +126,7 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
                               shape: BoxShape.circle,
                             ),
                             todayDecoration: BoxDecoration(
-                              color: (isDark ? AppColors.accent : AppColorsLight.accent).withOpacity(0.3),
+                              color: (isDark ? AppColors.accent : AppColorsLight.accent).withValues(alpha: 0.3),
                               shape: BoxShape.circle,
                             ),
                             // Hide marker dots - using colored date numbers instead
@@ -245,16 +245,16 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
 
                               if (isSelected) return null; // Let selectedBuilder handle it
 
-                              Color bgColor = (isDark ? AppColors.accent : AppColorsLight.accent).withOpacity(0.3);
+                              Color bgColor = (isDark ? AppColors.accent : AppColorsLight.accent).withValues(alpha: 0.3);
                               Color textColorValue = textPrimary;
                               FontWeight fontWeight = FontWeight.normal;
 
                               if (isHoliday || hasHolidayEvent) {
-                                bgColor = Colors.red.withOpacity(0.5);
+                                bgColor = Colors.red.withValues(alpha: 0.5);
                                 textColorValue = Colors.red;
                                 fontWeight = FontWeight.bold;
                               } else if (hasNonHolidayEvent) {
-                                bgColor = const Color(0xFF00A86B).withOpacity(0.3);
+                                bgColor = const Color(0xFF00A86B).withValues(alpha: 0.3);
                                 textColorValue = const Color(0xFF00A86B);
                                 fontWeight = FontWeight.bold;
                               }
@@ -288,7 +288,8 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
               },
             ),
           );
-        },
+          },
+        ),
       ),
     );
   }

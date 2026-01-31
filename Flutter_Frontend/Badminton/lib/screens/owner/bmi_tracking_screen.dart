@@ -21,11 +21,8 @@ import 'package:intl/intl.dart';
 /// Matches React reference: BMITracking.tsx
 class BMITrackingScreen extends ConsumerStatefulWidget {
   final Student? initialStudent;
-  
-  const BMITrackingScreen({
-    super.key,
-    this.initialStudent,
-  });
+
+  const BMITrackingScreen({super.key, this.initialStudent});
 
   @override
   ConsumerState<BMITrackingScreen> createState() => _BMITrackingScreenState();
@@ -44,7 +41,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
   String? _healthStatus;
   int? _editingBMIRecordId; // Track if we're editing an existing record
   bool _isInitializing = false;
-  
+
   // Search functionality
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
@@ -59,7 +56,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
     if (widget.initialStudent != null) {
       _initializeWithStudent(widget.initialStudent!);
     }
-    
+
     // Setup focus listener
     _searchFocusNode.addListener(() {
       if (_searchFocusNode.hasFocus) {
@@ -79,17 +76,20 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
         _selectedStudent = student;
         _searchController.text = student.name;
       });
-      
+
       // Load BMI history
       await _loadBMIHistory();
-      
+
       if (!mounted) return;
       setState(() => _isInitializing = false);
     } catch (e) {
       if (!mounted) return;
       setState(() => _isInitializing = false);
       if (mounted) {
-        SuccessSnackbar.showError(context, 'Failed to initialize: ${e.toString()}');
+        SuccessSnackbar.showError(
+          context,
+          'Failed to initialize: ${e.toString()}',
+        );
       }
     }
   }
@@ -102,14 +102,14 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
     _searchFocusNode.dispose();
     super.dispose();
   }
-  
+
   void _clearSearch() {
     setState(() {
       _searchQuery = '';
       _searchController.clear();
     });
   }
-  
+
   void _selectStudent(Student student) {
     setState(() {
       _selectedStudentId = student.id;
@@ -120,7 +120,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
     });
     _loadBMIHistory();
   }
-  
+
   void _clearSelection() {
     setState(() {
       _selectedStudentId = null;
@@ -182,7 +182,10 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
       if (!mounted) return;
       setState(() => _isLoading = false);
       if (mounted) {
-        SuccessSnackbar.showError(context, 'Failed to load BMI history: ${e.toString()}');
+        SuccessSnackbar.showError(
+          context,
+          'Failed to load BMI history: ${e.toString()}',
+        );
       }
     }
   }
@@ -206,7 +209,10 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
       final weight = double.parse(weightText);
 
       if (height <= 0 || weight <= 0) {
-        SuccessSnackbar.showError(context, 'Height and weight must be greater than 0');
+        SuccessSnackbar.showError(
+          context,
+          'Height and weight must be greater than 0',
+        );
         return;
       }
 
@@ -226,9 +232,12 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
       }
 
       if (mounted) {
-        SuccessSnackbar.show(context, _editingBMIRecordId != null
-            ? 'BMI record updated successfully'
-            : 'BMI record saved successfully');
+        SuccessSnackbar.show(
+          context,
+          _editingBMIRecordId != null
+              ? 'BMI record updated successfully'
+              : 'BMI record saved successfully',
+        );
         setState(() {
           _showAddForm = false;
           _heightController.clear();
@@ -243,7 +252,10 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        SuccessSnackbar.showError(context, 'Failed to save BMI record: ${e.toString()}');
+        SuccessSnackbar.showError(
+          context,
+          'Failed to save BMI record: ${e.toString()}',
+        );
       }
     }
   }
@@ -280,7 +292,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
 
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    
+
     void handleReload() {
       if (_selectedStudentId != null) {
         ref.invalidate(bmiByStudentProvider(_selectedStudentId!));
@@ -289,7 +301,9 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
     }
 
     return Scaffold(
-      backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+      backgroundColor: isDark
+          ? AppColors.background
+          : AppColorsLight.background,
       appBar: MoreScreenAppBar(
         title: 'BMI Tracking',
         onReload: handleReload,
@@ -302,7 +316,10 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
             ),
             onPressed: () {
               if (_selectedStudentId == null) {
-                SuccessSnackbar.showError(context, 'Please select a student first');
+                SuccessSnackbar.showError(
+                  context,
+                  'Please select a student first',
+                );
                 return;
               }
               setState(() => _showAddForm = true);
@@ -327,24 +344,39 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
           },
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-          child: Padding(
-            padding: const EdgeInsets.all(AppDimensions.paddingL),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Student Selector
-                GestureDetector(
-                  onTap: () {}, // Prevent closing when tapping on the selector
-                  child: _buildStudentSelector(),
-                ),
+            child: Padding(
+              padding: const EdgeInsets.all(AppDimensions.paddingL),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Student Selector
+                  GestureDetector(
+                    onTap:
+                        () {}, // Prevent closing when tapping on the selector
+                    child: _buildStudentSelector(),
+                  ),
 
-                if (_selectedStudentId != null) ...[
-                  const SizedBox(height: AppDimensions.spacingL),
+                  if (_selectedStudentId != null) ...[
+                    const SizedBox(height: AppDimensions.spacingL),
 
-                  // BMI Trend Chart
-                  if (_bmiHistory.length >= 2) ...[
+                    // BMI Trend Chart
+                    if (_bmiHistory.length >= 2) ...[
+                      const Text(
+                        'BMI Trend Chart',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: AppDimensions.spacingM),
+                      _buildBMITrendChart(),
+                      const SizedBox(height: AppDimensions.spacingL),
+                    ],
+
+                    // BMI History
                     const Text(
-                      'BMI Trend Chart',
+                      'BMI History',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
@@ -352,51 +384,37 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
                       ),
                     ),
                     const SizedBox(height: AppDimensions.spacingM),
-                    _buildBMITrendChart(),
-                    const SizedBox(height: AppDimensions.spacingL),
-                  ],
 
-                  // BMI History
-                  const Text(
-                    'BMI History',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: AppDimensions.spacingM),
-
-                  if (_isLoading)
-                    const Center(child: ListSkeleton(itemCount: 3))
-                  else if (_bmiHistory.isEmpty)
-                    Center(
-                      child: Column(
-                        children: [
-                          const Icon(
-                            Icons.monitor_weight_outlined,
-                            size: 64,
-                            color: AppColors.textSecondary,
-                          ),
-                          const SizedBox(height: AppDimensions.spacingM),
-                          const Text(
-                            'No BMI records yet',
-                            style: TextStyle(
+                    if (_isLoading)
+                      const Center(child: ListSkeleton(itemCount: 3))
+                    else if (_bmiHistory.isEmpty)
+                      Center(
+                        child: Column(
+                          children: [
+                            const Icon(
+                              Icons.monitor_weight_outlined,
+                              size: 64,
                               color: AppColors.textSecondary,
-                              fontSize: 16,
                             ),
-                          ),
-                        ],
-                      ),
-                    )
-                  else
-                    ..._bmiHistory.map((record) => _buildBMICard(record)),
+                            const SizedBox(height: AppDimensions.spacingM),
+                            const Text(
+                              'No BMI records yet',
+                              style: TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      ..._bmiHistory.map((record) => _buildBMICard(record)),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -407,21 +425,27 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
       children: [
         // Search Field
         NeumorphicContainer(
-          padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppDimensions.paddingM,
+          ),
           child: TextField(
             controller: _searchController,
             focusNode: _searchFocusNode,
             style: const TextStyle(color: AppColors.textPrimary),
             decoration: InputDecoration(
-              hintText: _selectedStudent != null 
-                  ? _selectedStudent!.name 
+              hintText: _selectedStudent != null
+                  ? _selectedStudent!.name
                   : 'Search students...',
               hintStyle: const TextStyle(color: AppColors.textSecondary),
               border: InputBorder.none,
               icon: const Icon(Icons.search, color: AppColors.textSecondary),
               suffixIcon: _searchQuery.isNotEmpty || _selectedStudent != null
                   ? IconButton(
-                      icon: const Icon(Icons.close, size: 20, color: AppColors.textSecondary),
+                      icon: const Icon(
+                        Icons.close,
+                        size: 20,
+                        color: AppColors.textSecondary,
+                      ),
                       onPressed: () {
                         if (_selectedStudent != null) {
                           _clearSelection();
@@ -443,7 +467,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
             },
           ),
         ),
-        
+
         // Filter Chips
         if (_showDropdown) ...[
           const SizedBox(height: AppDimensions.spacingM),
@@ -474,7 +498,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
             ),
           ),
         ],
-        
+
         // Dropdown List
         if (_showDropdown) ...[
           const SizedBox(height: AppDimensions.spacingM),
@@ -483,12 +507,12 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
       ],
     );
   }
-  
+
   Widget _buildDropdownList() {
     final studentsAsync = _searchQuery.isEmpty
         ? ref.watch(studentListProvider)
         : ref.watch(studentSearchProvider(_searchQuery));
-    
+
     return Container(
       constraints: const BoxConstraints(maxHeight: 300),
       decoration: BoxDecoration(
@@ -496,7 +520,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
         borderRadius: BorderRadius.circular(AppDimensions.radiusM),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -526,7 +550,9 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
           }).toList();
 
           // Sort filtered students alphabetically by name
-          filteredStudents.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+          filteredStudents.sort(
+            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+          );
 
           if (filteredStudents.isEmpty) {
             return Padding(
@@ -545,8 +571,8 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
                       _selectedFilter == 'active'
                           ? 'No active students found'
                           : _selectedFilter == 'inactive'
-                              ? 'No inactive students found'
-                              : 'No students found',
+                          ? 'No inactive students found'
+                          : 'No students found',
                       style: const TextStyle(
                         color: AppColors.textSecondary,
                         fontSize: 14,
@@ -560,7 +586,9 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
 
           return ListView.builder(
             shrinkWrap: true,
-            padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
+            padding: const EdgeInsets.symmetric(
+              vertical: AppDimensions.spacingS,
+            ),
             itemCount: filteredStudents.length,
             itemBuilder: (context, index) {
               final student = filteredStudents[index];
@@ -571,7 +599,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
       ),
     );
   }
-  
+
   Widget _buildStudentListItem(Student student) {
     return InkWell(
       onTap: () => _selectStudent(student),
@@ -691,7 +719,10 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
                   },
                   child: Row(
                     children: [
-                      const Icon(Icons.calendar_today, color: AppColors.textSecondary),
+                      const Icon(
+                        Icons.calendar_today,
+                        color: AppColors.textSecondary,
+                      ),
                       const SizedBox(width: AppDimensions.spacingM),
                       Text(
                         DateFormat('dd MMM, yyyy').format(_selectedDate),
@@ -749,8 +780,12 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
                           vertical: AppDimensions.spacingS,
                         ),
                         decoration: BoxDecoration(
-                          color: _getHealthStatusColor(_healthStatus!).withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                          color: _getHealthStatusColor(
+                            _healthStatus!,
+                          ).withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(
+                            AppDimensions.radiusS,
+                          ),
                         ),
                         child: Text(
                           _healthStatus!.toUpperCase(),
@@ -773,13 +808,20 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.accent,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingM),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppDimensions.spacingM,
+                    ),
                   ),
                   child: _isLoading
                       ? const ListSkeleton(itemCount: 3)
                       : Text(
-                          _editingBMIRecordId != null ? 'Update BMI Record' : 'Save BMI Record',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                          _editingBMIRecordId != null
+                              ? 'Update BMI Record'
+                              : 'Save BMI Record',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                 ),
               ),
@@ -804,7 +846,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
   Future<void> _deleteBMIRecord(BMIRecord record) async {
     final widgetRef = ref;
     final isMounted = mounted;
-    
+
     ConfirmationDialog.showDelete(
       context,
       'BMI Record',
@@ -826,7 +868,10 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
         } catch (e) {
           setState(() => _isLoading = false);
           if (isMounted && mounted) {
-            SuccessSnackbar.showError(context, 'Failed to delete BMI record: ${e.toString()}');
+            SuccessSnackbar.showError(
+              context,
+              'Failed to delete BMI record: ${e.toString()}',
+            );
           }
         }
       },
@@ -859,28 +904,45 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
                       vertical: AppDimensions.spacingS,
                     ),
                     decoration: BoxDecoration(
-                      color: _getHealthStatusColor(record.healthStatus ?? 'normal').withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                      color: _getHealthStatusColor(
+                        record.healthStatus ?? 'normal',
+                      ).withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(
+                        AppDimensions.radiusS,
+                      ),
                     ),
                     child: Text(
                       record.healthStatus?.toUpperCase() ?? 'NORMAL',
                       style: TextStyle(
-                        color: _getHealthStatusColor(record.healthStatus ?? 'normal'),
+                        color: _getHealthStatusColor(
+                          record.healthStatus ?? 'normal',
+                        ),
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
                   PopupMenuButton(
-                    icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+                    icon: const Icon(
+                      Icons.more_vert,
+                      size: 20,
+                      color: AppColors.textSecondary,
+                    ),
                     color: AppColors.cardBackground,
                     itemBuilder: (context) => [
                       PopupMenuItem(
                         child: const Row(
                           children: [
-                            Icon(Icons.edit, size: 18, color: AppColors.textPrimary),
+                            Icon(
+                              Icons.edit,
+                              size: 18,
+                              color: AppColors.textPrimary,
+                            ),
                             SizedBox(width: 8),
-                            Text('Edit', style: TextStyle(color: AppColors.textPrimary)),
+                            Text(
+                              'Edit',
+                              style: TextStyle(color: AppColors.textPrimary),
+                            ),
                           ],
                         ),
                         onTap: () {
@@ -892,9 +954,16 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
                       PopupMenuItem(
                         child: const Row(
                           children: [
-                            Icon(Icons.delete, size: 18, color: AppColors.error),
+                            Icon(
+                              Icons.delete,
+                              size: 18,
+                              color: AppColors.error,
+                            ),
                             SizedBox(width: 8),
-                            Text('Delete', style: TextStyle(color: AppColors.error)),
+                            Text(
+                              'Delete',
+                              style: TextStyle(color: AppColors.error),
+                            ),
                           ],
                         ),
                         onTap: () {
@@ -913,7 +982,9 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
           if (record.healthStatus != null)
             Builder(
               builder: (context) {
-                final achievementMsg = BMIRecord.getAchievementMessage(record.bmi);
+                final achievementMsg = BMIRecord.getAchievementMessage(
+                  record.bmi,
+                );
                 if (achievementMsg != null) {
                   return _buildAchievementLabel(achievementMsg);
                 }
@@ -924,8 +995,14 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildInfoItem('Height', '${record.height.toStringAsFixed(1)} cm'),
-              _buildInfoItem('Weight', '${record.weight.toStringAsFixed(1)} kg'),
+              _buildInfoItem(
+                'Height',
+                '${record.height.toStringAsFixed(1)} cm',
+              ),
+              _buildInfoItem(
+                'Weight',
+                '${record.weight.toStringAsFixed(1)} kg',
+              ),
               _buildInfoItem('BMI', record.bmi.toStringAsFixed(1)),
             ],
           ),
@@ -940,10 +1017,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
       children: [
         Text(
           label,
-          style: const TextStyle(
-            color: AppColors.textSecondary,
-            fontSize: 12,
-          ),
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
         ),
         const SizedBox(height: 4),
         Text(
@@ -967,7 +1041,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
           Icon(
             Icons.lightbulb_outline,
             size: 16,
-            color: AppColors.accent.withOpacity(0.7),
+            color: AppColors.accent.withValues(alpha: 0.7),
           ),
           const SizedBox(width: AppDimensions.spacingS),
           Expanded(
@@ -1015,8 +1089,12 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
     }).toList();
 
     // Calculate min and max BMI for Y axis
-    final minBMI = sortedHistory.map((r) => r.bmi).reduce((a, b) => a < b ? a : b);
-    final maxBMI = sortedHistory.map((r) => r.bmi).reduce((a, b) => a > b ? a : b);
+    final minBMI = sortedHistory
+        .map((r) => r.bmi)
+        .reduce((a, b) => a < b ? a : b);
+    final maxBMI = sortedHistory
+        .map((r) => r.bmi)
+        .reduce((a, b) => a > b ? a : b);
     final yMin = (minBMI - 2.0).clamp(0.0, double.infinity);
     final yMax = (maxBMI + 2.0);
 
@@ -1027,10 +1105,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
         children: [
           const Text(
             'BMI Trend Over Time',
-            style: TextStyle(
-              fontSize: 14,
-              color: AppColors.textSecondary,
-            ),
+            style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
           ),
           const SizedBox(height: AppDimensions.spacingM),
           SizedBox(
@@ -1043,7 +1118,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
                   horizontalInterval: 2,
                   getDrawingHorizontalLine: (value) {
                     return FlLine(
-                      color: AppColors.textSecondary.withOpacity(0.1),
+                      color: AppColors.textSecondary.withValues(alpha: 0.1),
                       strokeWidth: 1,
                     );
                   },
@@ -1099,7 +1174,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
                 borderData: FlBorderData(
                   show: true,
                   border: Border.all(
-                    color: AppColors.textSecondary.withOpacity(0.2),
+                    color: AppColors.textSecondary.withValues(alpha: 0.2),
                     width: 1,
                   ),
                 ),
@@ -1120,7 +1195,9 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
                         final record = sortedHistory[index];
                         return FlDotCirclePainter(
                           radius: 4,
-                          color: _getHealthStatusColor(record.healthStatus ?? 'normal'),
+                          color: _getHealthStatusColor(
+                            record.healthStatus ?? 'normal',
+                          ),
                           strokeWidth: 2,
                           strokeColor: AppColors.background,
                         );
@@ -1128,7 +1205,7 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
                     ),
                     belowBarData: BarAreaData(
                       show: true,
-                      color: AppColors.accent.withOpacity(0.1),
+                      color: AppColors.accent.withValues(alpha: 0.1),
                     ),
                   ),
                 ],
@@ -1167,18 +1244,12 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
         Container(
           width: 12,
           height: 12,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 4),
         Text(
           label,
-          style: const TextStyle(
-            color: AppColors.textSecondary,
-            fontSize: 10,
-          ),
+          style: const TextStyle(color: AppColors.textSecondary, fontSize: 10),
         ),
       ],
     );
@@ -1209,18 +1280,22 @@ class _FilterChip extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           color: isSelected
-              ? (color ?? AppColors.accent).withOpacity(0.2)
+              ? (color ?? AppColors.accent).withValues(alpha: 0.2)
               : AppColors.cardBackground,
           borderRadius: BorderRadius.circular(AppDimensions.radiusS),
           border: Border.all(
-            color: isSelected ? (color ?? AppColors.accent) : Colors.transparent,
+            color: isSelected
+                ? (color ?? AppColors.accent)
+                : Colors.transparent,
             width: 1,
           ),
         ),
         child: Text(
           label,
           style: TextStyle(
-            color: isSelected ? (color ?? AppColors.accent) : AppColors.textSecondary,
+            color: isSelected
+                ? (color ?? AppColors.accent)
+                : AppColors.textSecondary,
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
           ),
         ),
