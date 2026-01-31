@@ -9,6 +9,7 @@ import '../../widgets/common/success_snackbar.dart';
 import '../../providers/request_provider.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/common/more_screen_app_bar.dart';
 import '../../models/request.dart';
 
 /// Coach Leave Request Screen - Submit and view leave requests
@@ -70,27 +71,17 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
           )
         : const AsyncValue<List<Request>>.data([]);
 
+    void _handleReload() {
+      ref.invalidate(requestListProvider);
+    }
+
     return Scaffold(
       backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(
-            Icons.arrow_back,
-            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-          ),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text(
-          'Leave Requests',
-          style: TextStyle(
-            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        actions: [
+      appBar: MoreScreenAppBar(
+        title: 'Leave Requests',
+        onReload: _handleReload,
+        isDark: isDark,
+        additionalActions: [
           // Plus button to add request
           IconButton(
             icon: Icon(
@@ -110,9 +101,15 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppDimensions.paddingL),
-        child: Column(
+      body: RefreshIndicator(
+        onRefresh: () async {
+          _handleReload();
+          await Future.delayed(const Duration(milliseconds: 300));
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(AppDimensions.paddingL),
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Status Filter
@@ -237,6 +234,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
               },
             ),
           ],
+        ),
         ),
       ),
     );

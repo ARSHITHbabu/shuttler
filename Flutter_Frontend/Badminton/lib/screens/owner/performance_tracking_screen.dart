@@ -9,6 +9,7 @@ import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
+import '../../widgets/common/more_screen_app_bar.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/performance_provider.dart';
 import '../../providers/batch_provider.dart';
@@ -392,31 +393,45 @@ class _PerformanceTrackingScreenState
       );
     }
 
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
+    void _handleReload() {
+      if (_selectedBatchId != null && _selectedStudentId != null) {
+        ref.invalidate(performanceHistoryProvider(
+          studentId: _selectedStudentId!,
+          batchId: _selectedBatchId!,
+        ));
+      }
+      if (_selectedBatchId != null) {
+        ref.invalidate(batchStudentsProvider(_selectedBatchId!));
+      }
+      ref.invalidate(allBatchesProvider);
+    }
+
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: const Text(
-          'Performance Tracking',
-          style: TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        actions: [
+      backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+      appBar: MoreScreenAppBar(
+        title: 'Performance Tracking',
+        onReload: _handleReload,
+        isDark: isDark,
+        additionalActions: [
           IconButton(
-            icon: const Icon(Icons.add, color: AppColors.accent),
+            icon: Icon(
+              Icons.add,
+              color: isDark ? AppColors.accent : AppColorsLight.accent,
+            ),
             onPressed: _openAddForm,
           ),
         ],
       ),
-      body: SingleChildScrollView(
+      body: RefreshIndicator(
+        onRefresh: () async {
+          _handleReload();
+          await Future.delayed(const Duration(milliseconds: 300));
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
         child: Padding(
           padding: const EdgeInsets.all(AppDimensions.paddingL),
           child: Column(
@@ -642,6 +657,8 @@ class _PerformanceTrackingScreenState
           });
           _loadPerformanceHistory();
         },
+      ),
+        ),
       ),
     );
   }

@@ -6,6 +6,7 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
+import '../../widgets/common/more_screen_app_bar.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/batch_provider.dart';
 import '../../providers/auth_provider.dart';
@@ -240,23 +241,41 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final batchesAsync = ref.watch(batchListProvider);
 
+    void _handleReload() {
+      ref.invalidate(batchListProvider);
+      if (_selectedBatchId != null) {
+        ref.invalidate(batchStudentsProvider(_selectedBatchId!));
+      }
+      if (_selectedStudentId != null) {
+        _loadVideos();
+      }
+    }
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Video Management'),
-        backgroundColor: AppColors.background,
-        elevation: 0,
+      backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+      appBar: MoreScreenAppBar(
+        title: 'Video Management',
+        onReload: _handleReload,
+        isDark: isDark,
       ),
-      backgroundColor: AppColors.background,
       floatingActionButton: _selectedStudentId != null && !_showUploadForm
           ? FloatingActionButton(
               onPressed: () => setState(() => _showUploadForm = true),
-              backgroundColor: AppColors.accent,
+              backgroundColor: isDark ? AppColors.accent : AppColorsLight.accent,
               child: const Icon(Icons.add, color: Colors.white),
             )
           : null,
-      body: SingleChildScrollView(
+      body: RefreshIndicator(
+        onRefresh: () async {
+          _handleReload();
+          await Future.delayed(const Duration(milliseconds: 300));
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(AppDimensions.paddingL),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -353,6 +372,7 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
               _buildVideoList(),
             ],
           ],
+        ),
         ),
       ),
     );

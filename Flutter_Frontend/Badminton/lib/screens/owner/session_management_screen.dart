@@ -8,6 +8,7 @@ import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
+import '../../widgets/common/more_screen_app_bar.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/batch_provider.dart';
@@ -214,31 +215,36 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
       return _buildAddForm();
     }
 
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
+    void _handleReload() {
+      ref.invalidate(allBatchesProvider);
+      ref.invalidate(allCoachesProvider);
+    }
+
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: const Text(
-          'Sessions',
-          style: TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        actions: [
+      backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+      appBar: MoreScreenAppBar(
+        title: 'Sessions',
+        onReload: _handleReload,
+        isDark: isDark,
+        additionalActions: [
           IconButton(
-            icon: const Icon(Icons.add, color: AppColors.accent),
+            icon: Icon(
+              Icons.add,
+              color: isDark ? AppColors.accent : AppColorsLight.accent,
+            ),
             onPressed: () => setState(() => _showAddForm = true),
           ),
         ],
       ),
-      body: Column(
+      body: RefreshIndicator(
+        onRefresh: () async {
+          _handleReload();
+          await Future.delayed(const Duration(milliseconds: 300));
+        },
+        child: Column(
         children: [
           // Tab Selector
           Padding(
@@ -444,6 +450,7 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
             ),
           ],
         ],
+        ),
       ),
     );
   }
