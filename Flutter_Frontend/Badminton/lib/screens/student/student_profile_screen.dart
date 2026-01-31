@@ -429,7 +429,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                                     maxLines: 3,
                                   )
                                 else
-                                  _buildInfoRow('Address', student.address ?? 'Not set', isDark, isFullWidth: true),
+                                  _buildInfoRow('Address', student.address ?? 'Not set', isDark),
                               ],
                             ),
 
@@ -606,7 +606,7 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
               ],
             )
           : Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   label,
@@ -615,12 +615,17 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
                     color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                   ),
                 ),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                const Spacer(),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    value,
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                    ),
                   ),
                 ),
               ],

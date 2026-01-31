@@ -64,6 +64,15 @@ class _CustomTextFieldState extends State<CustomTextField> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
+    final labelColor = isDark ? AppColors.textSecondary : AppColorsLight.textSecondary;
+    final textColor = isDark ? AppColors.textPrimary : AppColorsLight.textPrimary;
+    final hintColor = isDark ? AppColors.textHint : AppColorsLight.textHint;
+    final iconColor = isDark ? AppColors.textSecondary : AppColorsLight.textSecondary;
+    final accentColor = isDark ? AppColors.accent : AppColorsLight.accent;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -71,8 +80,8 @@ class _CustomTextFieldState extends State<CustomTextField> {
         if (widget.label != null) ...[
           Text(
             widget.label!,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
+            style: TextStyle(
+              color: labelColor,
               fontSize: 14,
               fontWeight: FontWeight.w500,
             ),
@@ -87,7 +96,7 @@ class _CustomTextFieldState extends State<CustomTextField> {
             decoration: NeumorphicStyles.inputDecoration(
               borderRadius: widget.borderRadius,
               border: _isFocused
-                  ? Border.all(color: AppColors.accent, width: 2)
+                  ? Border.all(color: accentColor, width: 2)
                   : (widget.errorText != null
                       ? Border.all(color: AppColors.error, width: 2)
                       : null),
@@ -107,29 +116,29 @@ class _CustomTextFieldState extends State<CustomTextField> {
               minLines: widget.minLines,
               maxLength: widget.maxLength,
               inputFormatters: widget.inputFormatters,
-              style: const TextStyle(
-                color: AppColors.textPrimary,
+              style: TextStyle(
+                color: textColor,
                 fontSize: 16,
               ),
               decoration: InputDecoration(
                 hintText: widget.hint,
-                hintStyle: const TextStyle(
-                  color: AppColors.textHint,
+                hintStyle: TextStyle(
+                  color: hintColor,
                   fontSize: 16,
                 ),
                 prefixIcon: widget.prefixIcon != null
                     ? Icon(
                         widget.prefixIcon,
                         color: _isFocused
-                            ? AppColors.accent
-                            : AppColors.textSecondary,
+                            ? accentColor
+                            : iconColor,
                       )
                     : null,
                 suffixIcon: widget.suffixIcon != null
                     ? IconButton(
                         icon: Icon(
                           widget.suffixIcon,
-                          color: AppColors.textSecondary,
+                          color: iconColor,
                         ),
                         onPressed: widget.onSuffixIconTap,
                       )

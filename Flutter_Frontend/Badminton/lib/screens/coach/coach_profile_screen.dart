@@ -48,14 +48,18 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final authState = ref.watch(authProvider);
     
     return authState.when(
       data: (authValue) {
         if (authValue is! Authenticated) {
           return Scaffold(
+            backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
             appBar: AppBar(
               title: const Text('Profile'),
+              backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
             ),
             body: const Center(
               child: Text(
@@ -67,14 +71,22 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
         }
 
         final coachId = authValue.userId;
-        return _buildScaffold(coachId);
+        return _buildScaffold(coachId, isDark);
       },
       loading: () => Scaffold(
-        appBar: AppBar(title: const Text('Profile')),
+        backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+        appBar: AppBar(
+          title: const Text('Profile'),
+          backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+        ),
         body: const Center(child: ProfileSkeleton()),
       ),
       error: (error, stack) => Scaffold(
-        appBar: AppBar(title: const Text('Profile')),
+        backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+        appBar: AppBar(
+          title: const Text('Profile'),
+          backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+        ),
         body: Center(
           child: Text(
             'Error: ${error.toString()}',
@@ -85,14 +97,15 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
     );
   }
 
-  Widget _buildScaffold(int coachId) {
+  Widget _buildScaffold(int coachId, bool isDark) {
     final coachAsync = ref.watch(coachByIdProvider(coachId));
     final coachStatsAsync = ref.watch(coachStatsProvider(coachId));
 
     return Scaffold(
+      backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
       appBar: AppBar(
         title: const Text('Profile'),
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
         elevation: 0,
       ),
       body: RefreshIndicator(
@@ -126,6 +139,9 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
   }
 
   Widget _buildContent(Coach coach, AsyncValue<CoachStats> statsAsync) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.all(AppDimensions.paddingL),
@@ -148,18 +164,18 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
                     const SizedBox(height: AppDimensions.spacingM),
                     Text(
                       coach.name,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
+                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       coach.email,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 14,
-                        color: AppColors.textSecondary,
+                        color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                       ),
                     ),
                   ],
@@ -448,12 +464,15 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
     return Text(
       title,
-      style: const TextStyle(
+      style: TextStyle(
         fontSize: 16,
         fontWeight: FontWeight.w600,
-        color: AppColors.textPrimary,
+        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
       ),
     );
   }
@@ -470,6 +489,9 @@ class _StatRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
       child: Row(
@@ -477,17 +499,17 @@ class _StatRow extends StatelessWidget {
         children: [
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
-              color: AppColors.textSecondary,
+              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
             ),
           ),
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
+              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
             ),
           ),
         ],
