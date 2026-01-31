@@ -135,7 +135,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () => context.pop(),
+          onPressed: () {
+            // Check if we can pop, otherwise navigate to home
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/');
+            }
+          },
         ),
       ),
       body: SafeArea(

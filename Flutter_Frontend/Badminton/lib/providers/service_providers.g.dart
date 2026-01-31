@@ -416,6 +416,28 @@ final leaveRequestServiceProvider =
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef LeaveRequestServiceRef = AutoDisposeProviderRef<LeaveRequestService>;
+String _$studentRegistrationRequestServiceHash() =>
+    r'fe04b7c123b73f2ccc9cb7bf36330e38b1d74a42';
+
+/// Provider for StudentRegistrationRequestService singleton
+///
+/// Copied from [studentRegistrationRequestService].
+@ProviderFor(studentRegistrationRequestService)
+final studentRegistrationRequestServiceProvider =
+    AutoDisposeProvider<StudentRegistrationRequestService>.internal(
+      studentRegistrationRequestService,
+      name: r'studentRegistrationRequestServiceProvider',
+      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+          ? null
+          : _$studentRegistrationRequestServiceHash,
+      dependencies: null,
+      allTransitiveDependencies: null,
+    );
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef StudentRegistrationRequestServiceRef =
+    AutoDisposeProviderRef<StudentRegistrationRequestService>;
 String _$connectivityServiceHash() =>
     r'2514faa3d7f3227d473e300af7d0188339855ef3';
 

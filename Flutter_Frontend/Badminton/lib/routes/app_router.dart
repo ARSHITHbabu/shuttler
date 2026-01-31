@@ -6,6 +6,7 @@ import '../screens/auth/signup_screen.dart';
 import '../screens/auth/forgot_password_screen.dart';
 import '../screens/student/profile_completion_screen.dart';
 import '../screens/student/student_dashboard.dart';
+import '../screens/student/registration_pending_screen.dart';
 import '../screens/owner/academy_setup_screen.dart';
 import '../screens/owner/owner_dashboard.dart';
 import '../screens/owner/notifications_screen.dart';
@@ -74,6 +75,16 @@ class AppRouter {
           path: '/student-profile-complete',
           name: 'student-profile-complete',
           builder: (context, state) => const ProfileCompletionScreen(),
+        ),
+
+        // Student Registration Pending route
+        GoRoute(
+          path: '/student-registration-pending',
+          name: 'student-registration-pending',
+          builder: (context, state) {
+            final email = state.extra as String? ?? '';
+            return RegistrationPendingScreen(email: email);
+          },
         ),
 
         // Student Dashboard route

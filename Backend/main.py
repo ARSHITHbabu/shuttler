@@ -395,6 +395,27 @@ class LeaveRequestDB(Base):
     reviewed_at = Column(DateTime(timezone=True), nullable=True)
     review_notes = Column(Text, nullable=True)
 
+class StudentRegistrationRequestDB(Base):
+    """Student registration requests awaiting owner approval"""
+    __tablename__ = "student_registration_requests"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    email = Column(String, nullable=False, unique=True)
+    phone = Column(String, nullable=False)
+    password = Column(String, nullable=False)  # Hashed password
+    status = Column(String, default="pending")  # "pending", "approved", "rejected"
+    submitted_at = Column(DateTime(timezone=True), server_default=func.now())
+    reviewed_by = Column(Integer, nullable=True)  # Owner ID who reviewed
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    review_notes = Column(Text, nullable=True)
+    # Store registration data temporarily
+    guardian_name = Column(String, nullable=True)
+    guardian_phone = Column(String, nullable=True)
+    date_of_birth = Column(String, nullable=True)
+    address = Column(Text, nullable=True)
+    t_shirt_size = Column(String, nullable=True)
+
 # ==================== Database Migration Functions ====================
 
 def check_and_add_column(engine, table_name: str, column_name: str, column_type: str, nullable: bool = True, default_value: str = None):
@@ -815,6 +836,17 @@ def migrate_database_schema(engine):
                 print(f"❌ Error creating leave_requests table: {e}")
         else:
             print("✅ leave_requests table exists")
+        
+        # Check if student_registration_requests table exists
+        if 'student_registration_requests' not in tables:
+            print("⚠️  student_registration_requests table not found. Creating...")
+            try:
+                StudentRegistrationRequestDB.__table__.create(bind=engine)
+                print("✅ student_registration_requests table created!")
+            except Exception as e:
+                print(f"❌ Error creating student_registration_requests table: {e}")
+        else:
+            print("✅ student_registration_requests table exists")
         
         # Migrate calendar_events table - add end_date and related_leave_request_id columns
         if 'calendar_events' in tables:
@@ -1405,6 +1437,41 @@ class LeaveRequest(BaseModel):
         from_attributes = True
 
 class LeaveRequestUpdate(BaseModel):
+    status: str  # "approved" or "rejected"
+    review_notes: Optional[str] = None
+
+# Student Registration Request Models
+class StudentRegistrationRequestCreate(BaseModel):
+    name: str
+    email: str
+    phone: str
+    password: str
+    guardian_name: Optional[str] = None
+    guardian_phone: Optional[str] = None
+    date_of_birth: Optional[str] = None
+    address: Optional[str] = None
+    t_shirt_size: Optional[str] = None
+
+class StudentRegistrationRequest(BaseModel):
+    id: int
+    name: str
+    email: str
+    phone: str
+    status: str  # "pending", "approved", "rejected"
+    submitted_at: str
+    reviewed_by: Optional[int] = None
+    reviewed_at: Optional[str] = None
+    review_notes: Optional[str] = None
+    guardian_name: Optional[str] = None
+    guardian_phone: Optional[str] = None
+    date_of_birth: Optional[str] = None
+    address: Optional[str] = None
+    t_shirt_size: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+class StudentRegistrationRequestUpdate(BaseModel):
     status: str  # "approved" or "rejected"
     review_notes: Optional[str] = None
 
@@ -5663,6 +5730,238 @@ def delete_leave_request(request_id: int, coach_id: int):
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error deleting leave request: {str(e)}")
+    finally:
+        db.close()
+
+# ==================== Student Registration Request Routes ====================
+
+@app.post("/students/registration-request", response_model=StudentRegistrationRequest)
+def create_student_registration_request(request: StudentRegistrationRequestCreate):
+    """Create a student registration request - requires owner approval"""
+    db = SessionLocal()
+    try:
+        # Check if email already exists in students table
+        existing_student = db.query(StudentDB).filter(StudentDB.email == request.email).first()
+        if existing_student:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        
+        # Check if email already exists in pending requests
+        existing_request = db.query(StudentRegistrationRequestDB).filter(
+            StudentRegistrationRequestDB.email == request.email
+        ).first()
+        if existing_request:
+            raise HTTPException(status_code=400, detail="Registration request already exists for this email")
+        
+        # Hash password
+        hashed_password = hash_password(request.password)
+        
+        # Create registration request
+        db_request = StudentRegistrationRequestDB(
+            name=request.name,
+            email=request.email,
+            phone=request.phone,
+            password=hashed_password,
+            guardian_name=request.guardian_name,
+            guardian_phone=request.guardian_phone,
+            date_of_birth=request.date_of_birth,
+            address=request.address,
+            t_shirt_size=request.t_shirt_size,
+            status="pending"
+        )
+        db.add(db_request)
+        db.commit()
+        db.refresh(db_request)
+        
+        # Convert to response model
+        return StudentRegistrationRequest(
+            id=db_request.id,
+            name=db_request.name,
+            email=db_request.email,
+            phone=db_request.phone,
+            status=db_request.status,
+            submitted_at=db_request.submitted_at.isoformat() if db_request.submitted_at else "",
+            reviewed_by=db_request.reviewed_by,
+            reviewed_at=db_request.reviewed_at.isoformat() if db_request.reviewed_at else None,
+            review_notes=db_request.review_notes,
+            guardian_name=db_request.guardian_name,
+            guardian_phone=db_request.guardian_phone,
+            date_of_birth=db_request.date_of_birth,
+            address=db_request.address,
+            t_shirt_size=db_request.t_shirt_size
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error creating registration request: {str(e)}")
+    finally:
+        db.close()
+
+@app.get("/student-registration-requests/", response_model=List[StudentRegistrationRequest])
+def get_student_registration_requests(
+    status: Optional[str] = Query(None, description="Filter by status: pending, approved, rejected")
+):
+    """Get all student registration requests - owner only"""
+    db = SessionLocal()
+    try:
+        query = db.query(StudentRegistrationRequestDB)
+        if status:
+            query = query.filter(StudentRegistrationRequestDB.status == status)
+        requests = query.order_by(StudentRegistrationRequestDB.submitted_at.desc()).all()
+        
+        # Convert to response models
+        return [
+            StudentRegistrationRequest(
+                id=req.id,
+                name=req.name,
+                email=req.email,
+                phone=req.phone,
+                status=req.status,
+                submitted_at=req.submitted_at.isoformat() if req.submitted_at else "",
+                reviewed_by=req.reviewed_by,
+                reviewed_at=req.reviewed_at.isoformat() if req.reviewed_at else None,
+                review_notes=req.review_notes,
+                guardian_name=req.guardian_name,
+                guardian_phone=req.guardian_phone,
+                date_of_birth=req.date_of_birth,
+                address=req.address,
+                t_shirt_size=req.t_shirt_size
+            )
+            for req in requests
+        ]
+    finally:
+        db.close()
+
+@app.get("/student-registration-requests/{request_id}", response_model=StudentRegistrationRequest)
+def get_student_registration_request(request_id: int):
+    """Get a specific registration request"""
+    db = SessionLocal()
+    try:
+        request = db.query(StudentRegistrationRequestDB).filter(
+            StudentRegistrationRequestDB.id == request_id
+        ).first()
+        if not request:
+            raise HTTPException(status_code=404, detail="Registration request not found")
+        
+        return StudentRegistrationRequest(
+            id=request.id,
+            name=request.name,
+            email=request.email,
+            phone=request.phone,
+            status=request.status,
+            submitted_at=request.submitted_at.isoformat() if request.submitted_at else "",
+            reviewed_by=request.reviewed_by,
+            reviewed_at=request.reviewed_at.isoformat() if request.reviewed_at else None,
+            review_notes=request.review_notes,
+            guardian_name=request.guardian_name,
+            guardian_phone=request.guardian_phone,
+            date_of_birth=request.date_of_birth,
+            address=request.address,
+            t_shirt_size=request.t_shirt_size
+        )
+    finally:
+        db.close()
+
+@app.put("/student-registration-requests/{request_id}", response_model=StudentRegistrationRequest)
+def update_registration_request_status(
+    request_id: int,
+    update: StudentRegistrationRequestUpdate,
+    owner_id: int = Query(..., description="Owner ID reviewing the request")
+):
+    """Approve or reject a student registration request"""
+    db = SessionLocal()
+    try:
+        request = db.query(StudentRegistrationRequestDB).filter(
+            StudentRegistrationRequestDB.id == request_id
+        ).first()
+        
+        if not request:
+            raise HTTPException(status_code=404, detail="Registration request not found")
+        
+        if request.status != "pending":
+            raise HTTPException(status_code=400, detail="Request has already been reviewed")
+        
+        # Update request status
+        request.status = update.status
+        request.reviewed_by = owner_id
+        request.reviewed_at = datetime.now()
+        request.review_notes = update.review_notes
+        
+        # If approved, create the student account
+        if update.status == "approved":
+            # Check if student already exists (race condition check)
+            existing_student = db.query(StudentDB).filter(
+                StudentDB.email == request.email
+            ).first()
+            
+            if existing_student:
+                raise HTTPException(status_code=400, detail="Student with this email already exists")
+            
+            # Create student account
+            db_student = StudentDB(
+                name=request.name,
+                email=request.email,
+                phone=request.phone,
+                password=request.password,  # Already hashed
+                guardian_name=request.guardian_name,
+                guardian_phone=request.guardian_phone,
+                date_of_birth=request.date_of_birth,
+                address=request.address,
+                t_shirt_size=request.t_shirt_size,
+                added_by="self",
+                status="active"  # Active after approval
+            )
+            db.add(db_student)
+        
+        db.commit()
+        db.refresh(request)
+        
+        # Convert to response model
+        return StudentRegistrationRequest(
+            id=request.id,
+            name=request.name,
+            email=request.email,
+            phone=request.phone,
+            status=request.status,
+            submitted_at=request.submitted_at.isoformat() if request.submitted_at else "",
+            reviewed_by=request.reviewed_by,
+            reviewed_at=request.reviewed_at.isoformat() if request.reviewed_at else None,
+            review_notes=request.review_notes,
+            guardian_name=request.guardian_name,
+            guardian_phone=request.guardian_phone,
+            date_of_birth=request.date_of_birth,
+            address=request.address,
+            t_shirt_size=request.t_shirt_size
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error updating registration request: {str(e)}")
+    finally:
+        db.close()
+
+@app.get("/students/check-registration-status/{email}")
+def check_registration_status(email: str):
+    """Check if a registration request exists for an email"""
+    db = SessionLocal()
+    try:
+        request = db.query(StudentRegistrationRequestDB).filter(
+            StudentRegistrationRequestDB.email == email
+        ).order_by(StudentRegistrationRequestDB.submitted_at.desc()).first()
+        
+        if not request:
+            return {"exists": False}
+        
+        return {
+            "exists": True,
+            "status": request.status,
+            "submitted_at": request.submitted_at.isoformat() if request.submitted_at else None,
+            "reviewed_at": request.reviewed_at.isoformat() if request.reviewed_at else None,
+            "review_notes": request.review_notes
+        }
     finally:
         db.close()
 
