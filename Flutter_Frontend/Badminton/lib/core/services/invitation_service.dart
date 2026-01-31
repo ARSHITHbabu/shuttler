@@ -80,6 +80,21 @@ class InvitationService {
     }
   }
 
+  /// Get all pending invitations (owner view)
+  Future<List<Map<String, dynamic>>> getPendingInvitations() async {
+    try {
+      final response = await _apiService.get('/invitations/pending');
+      if (response.data is List) {
+        return (response.data as List)
+            .map((json) => json as Map<String, dynamic>)
+            .toList();
+      }
+      return [];
+    } catch (e) {
+      throw Exception('Failed to fetch pending invitations: ${_apiService.getErrorMessage(e)}');
+    }
+  }
+
   /// Update invitation status (approved/rejected)
   Future<Map<String, dynamic>> updateInvitationStatus(
     int invitationId,
