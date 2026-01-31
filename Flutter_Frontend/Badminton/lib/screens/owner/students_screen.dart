@@ -138,19 +138,13 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                 onRetry: () => ref.invalidate(studentListProvider),
               ),
               data: (allStudents) {
-                // Apply status filter - exclude rejected students from the list completely
+                // Apply status filter
                 var filteredStudents = allStudents.where((student) {
-                  // Always exclude rejected students - they should not appear in the list
-                  if (student.status == 'rejected') {
-                    return false;
-                  }
-                  
                   if (_selectedFilter == 'active') {
                     return student.status == 'active';
                   } else if (_selectedFilter == 'inactive') {
                     return student.status == 'inactive';
                   }
-                  // For 'all' filter, show all except rejected
                   return true;
                 }).toList();
 
@@ -518,7 +512,7 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                           color: AppColors.background,
                           borderRadius: BorderRadius.circular(AppDimensions.radiusS),
                           border: Border.all(
-                            color: AppColors.accent.withValues(alpha:0.3),
+                            color: AppColors.accent.withOpacity(0.3),
                             width: 1,
                           ),
                         ),
@@ -870,7 +864,7 @@ class _FilterChip extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           color: isSelected
-              ? (color ?? AppColors.accent).withValues(alpha:0.2)
+              ? (color ?? AppColors.accent).withOpacity(0.2)
               : AppColors.cardBackground,
           borderRadius: BorderRadius.circular(AppDimensions.radiusS),
           border: Border.all(
@@ -964,10 +958,10 @@ class _StudentBatchAndFeeStatus extends ConsumerWidget {
                                 vertical: 4,
                               ),
                               decoration: BoxDecoration(
-                                color: AppColors.accent.withValues(alpha:0.2),
+                                color: AppColors.accent.withOpacity(0.2),
                                 borderRadius: BorderRadius.circular(AppDimensions.radiusS),
                                 border: Border.all(
-                                  color: AppColors.accent.withValues(alpha:0.3),
+                                  color: AppColors.accent.withOpacity(0.3),
                                   width: 1,
                                 ),
                               ),

@@ -9,10 +9,10 @@ import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
-import '../../widgets/common/more_screen_app_bar.dart';
 import '../../providers/session_provider.dart';
 import '../../providers/batch_provider.dart';
 import '../../models/session.dart';
+import '../../models/batch.dart';
 
 /// Session/Season Management Screen - Manage sessions that group batches
 /// Separate from SessionManagementScreen which manages practice/tournament/camp sessions
@@ -20,12 +20,10 @@ class SessionSeasonManagementScreen extends ConsumerStatefulWidget {
   const SessionSeasonManagementScreen({super.key});
 
   @override
-  ConsumerState<SessionSeasonManagementScreen> createState() =>
-      _SessionSeasonManagementScreenState();
+  ConsumerState<SessionSeasonManagementScreen> createState() => _SessionSeasonManagementScreenState();
 }
 
-class _SessionSeasonManagementScreenState
-    extends ConsumerState<SessionSeasonManagementScreen> {
+class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonManagementScreen> {
   bool _showAddForm = false;
   bool _isLoading = false;
   Session? _editingSession;
@@ -95,9 +93,7 @@ class _SessionSeasonManagementScreenState
       };
 
       final statusFilter = _selectedTab == 'active' ? 'active' : 'archived';
-      final sessionManager = ref.read(
-        sessionManagerProvider(status: statusFilter).notifier,
-      );
+      final sessionManager = ref.read(sessionManagerProvider(status: statusFilter).notifier);
 
       if (_editingSession != null) {
         await sessionManager.updateSession(_editingSession!.id, sessionData);
@@ -125,32 +121,27 @@ class _SessionSeasonManagementScreenState
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        SuccessSnackbar.showError(
-          context,
-          'Failed to ${_editingSession != null ? 'update' : 'create'} session: ${e.toString()}',
-        );
+        SuccessSnackbar.showError(context, 'Failed to ${_editingSession != null ? 'update' : 'create'} session: ${e.toString()}');
       }
     }
   }
 
   Future<void> _deleteSession(int id) async {
-    final confirmed = await ConfirmationDialog.showDelete(context, 'Session');
+    final confirmed = await ConfirmationDialog.showDelete(
+      context,
+      'Session',
+    );
 
     if (confirmed == true && mounted) {
       try {
-        final sessionManager = ref.read(
-          sessionManagerProvider(status: _selectedTab).notifier,
-        );
+        final sessionManager = ref.read(sessionManagerProvider(status: _selectedTab).notifier);
         await sessionManager.deleteSession(id);
         if (mounted) {
           SuccessSnackbar.show(context, 'Session deleted successfully');
         }
       } catch (e) {
         if (mounted) {
-          SuccessSnackbar.showError(
-            context,
-            'Failed to delete session: ${e.toString()}',
-          );
+          SuccessSnackbar.showError(context, 'Failed to delete session: ${e.toString()}');
         }
       }
     }
@@ -162,31 +153,26 @@ class _SessionSeasonManagementScreenState
       return _buildAddForm();
     }
 
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    void handleReload() {
-      final statusFilter = _selectedTab == 'active' ? 'active' : 'archived';
-      ref.invalidate(sessionListProvider(status: statusFilter));
-      ref.invalidate(sessionManagerProvider(status: statusFilter));
-    }
-
     return Scaffold(
-      backgroundColor: isDark
-          ? AppColors.background
-          : AppColorsLight.background,
-      appBar: MoreScreenAppBar(
-        title: 'Session Management',
-        onReload: handleReload,
-        isDark: isDark,
-        additionalActions: [
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text(
+          'Session Management',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        actions: [
           IconButton(
-            icon: Icon(
-              Icons.add,
-              color: isDark
-                  ? AppColors.textPrimary
-                  : AppColorsLight.textPrimary,
-            ),
+            icon: const Icon(Icons.add, color: AppColors.textPrimary),
             onPressed: _openAddForm,
           ),
         ],
@@ -240,7 +226,7 @@ class _SessionSeasonManagementScreenState
               },
             ),
             const SizedBox(height: AppDimensions.spacingM),
-
+            
             // Start Date
             NeumorphicContainer(
               padding: const EdgeInsets.all(AppDimensions.paddingM),
@@ -258,10 +244,7 @@ class _SessionSeasonManagementScreenState
                 },
                 child: Row(
                   children: [
-                    const Icon(
-                      Icons.calendar_today,
-                      color: AppColors.textSecondary,
-                    ),
+                    const Icon(Icons.calendar_today, color: AppColors.textSecondary),
                     const SizedBox(width: AppDimensions.spacingM),
                     Text(
                       _startDate != null
@@ -278,7 +261,7 @@ class _SessionSeasonManagementScreenState
               ),
             ),
             const SizedBox(height: AppDimensions.spacingM),
-
+            
             // End Date
             NeumorphicContainer(
               padding: const EdgeInsets.all(AppDimensions.paddingM),
@@ -286,11 +269,7 @@ class _SessionSeasonManagementScreenState
                 onTap: () async {
                   final date = await showDatePicker(
                     context: context,
-                    initialDate:
-                        _endDate ??
-                        (_startDate ?? DateTime.now()).add(
-                          const Duration(days: 90),
-                        ),
+                    initialDate: _endDate ?? (_startDate ?? DateTime.now()).add(const Duration(days: 90)),
                     firstDate: _startDate ?? DateTime(2020),
                     lastDate: DateTime(2030),
                   );
@@ -300,10 +279,7 @@ class _SessionSeasonManagementScreenState
                 },
                 child: Row(
                   children: [
-                    const Icon(
-                      Icons.calendar_today,
-                      color: AppColors.textSecondary,
-                    ),
+                    const Icon(Icons.calendar_today, color: AppColors.textSecondary),
                     const SizedBox(width: AppDimensions.spacingM),
                     Text(
                       _endDate != null
@@ -320,11 +296,14 @@ class _SessionSeasonManagementScreenState
               ),
             ),
             const SizedBox(height: AppDimensions.spacingM),
-
+            
             // Status
             const Text(
               'Status',
-              style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+              style: TextStyle(
+                fontSize: 14,
+                color: AppColors.textSecondary,
+              ),
             ),
             const SizedBox(height: AppDimensions.spacingS),
             Wrap(
@@ -346,15 +325,13 @@ class _SessionSeasonManagementScreenState
               ],
             ),
             const SizedBox(height: AppDimensions.spacingL),
-
+            
             // Save Button
             ElevatedButton(
               onPressed: _isLoading ? null : _saveSession,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.accent,
-                padding: const EdgeInsets.symmetric(
-                  vertical: AppDimensions.paddingM,
-                ),
+                padding: const EdgeInsets.symmetric(vertical: AppDimensions.paddingM),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(AppDimensions.radiusM),
                 ),
@@ -369,9 +346,7 @@ class _SessionSeasonManagementScreenState
                       ),
                     )
                   : Text(
-                      _editingSession != null
-                          ? 'Update Session'
-                          : 'Create Session',
+                      _editingSession != null ? 'Update Session' : 'Create Session',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 16,
@@ -388,11 +363,6 @@ class _SessionSeasonManagementScreenState
   Widget _buildSessionList() {
     final statusFilter = _selectedTab == 'active' ? 'active' : 'archived';
     final sessionsAsync = ref.watch(sessionListProvider(status: statusFilter));
-
-    void handleReload() {
-      ref.invalidate(sessionListProvider(status: statusFilter));
-      ref.invalidate(sessionManagerProvider(status: statusFilter));
-    }
 
     return Column(
       children: [
@@ -422,22 +392,21 @@ class _SessionSeasonManagementScreenState
             ],
           ),
         ),
-
+        
         // Session List
         Expanded(
           child: RefreshIndicator(
             onRefresh: () async {
-              handleReload();
-              await Future.delayed(const Duration(milliseconds: 300));
+              final statusFilter = _selectedTab == 'active' ? 'active' : 'archived';
+              ref.invalidate(sessionListProvider(status: statusFilter));
+              ref.invalidate(sessionManagerProvider(status: statusFilter));
             },
             child: sessionsAsync.when(
               loading: () => const Center(child: ListSkeleton(itemCount: 5)),
               error: (error, stack) => ErrorDisplay(
                 message: 'Failed to load sessions: ${error.toString()}',
                 onRetry: () {
-                  final statusFilter = _selectedTab == 'active'
-                      ? 'active'
-                      : 'archived';
+                  final statusFilter = _selectedTab == 'active' ? 'active' : 'archived';
                   ref.invalidate(sessionListProvider(status: statusFilter));
                 },
               ),
@@ -474,9 +443,7 @@ class _SessionSeasonManagementScreenState
                   itemBuilder: (context, index) {
                     final session = sessions[index];
                     return Padding(
-                      padding: const EdgeInsets.only(
-                        bottom: AppDimensions.spacingM,
-                      ),
+                      padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
                       child: _SessionCard(
                         session: session,
                         onEdit: () => _openEditForm(session),
@@ -499,9 +466,7 @@ class _SessionSeasonManagementScreenState
     // For now, show a dialog with batch count
     final batchesAsync = ref.read(batchListProvider);
     batchesAsync.whenData((batches) {
-      final sessionBatches = batches
-          .where((b) => b.sessionId == session.id)
-          .toList();
+      final sessionBatches = batches.where((b) => b.sessionId == session.id).toList();
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -588,9 +553,7 @@ class _StatusChip extends StatelessWidget {
           color: isSelected ? AppColors.accent : AppColors.cardBackground,
           borderRadius: BorderRadius.circular(AppDimensions.radiusS),
           border: Border.all(
-            color: isSelected
-                ? AppColors.accent
-                : AppColors.textSecondary.withValues(alpha: 0.3),
+            color: isSelected ? AppColors.accent : AppColors.textSecondary.withValues(alpha: 0.3),
           ),
         ),
         child: Text(
@@ -656,9 +619,7 @@ class _SessionCard extends StatelessWidget {
                   vertical: 4,
                 ),
                 decoration: BoxDecoration(
-                  color: session.isActive
-                      ? AppColors.success
-                      : AppColors.textSecondary,
+                  color: session.isActive ? AppColors.success : AppColors.textSecondary,
                   borderRadius: BorderRadius.circular(AppDimensions.radiusS),
                 ),
                 child: Text(
@@ -678,11 +639,7 @@ class _SessionCard extends StatelessWidget {
             children: [
               TextButton.icon(
                 onPressed: onViewBatches,
-                icon: const Icon(
-                  Icons.list,
-                  size: 16,
-                  color: AppColors.textSecondary,
-                ),
+                icon: const Icon(Icons.list, size: 16, color: AppColors.textSecondary),
                 label: const Text(
                   'View Batches',
                   style: TextStyle(color: AppColors.textSecondary),
@@ -698,11 +655,7 @@ class _SessionCard extends StatelessWidget {
               ),
               TextButton.icon(
                 onPressed: onDelete,
-                icon: const Icon(
-                  Icons.delete,
-                  size: 16,
-                  color: AppColors.error,
-                ),
+                icon: const Icon(Icons.delete, size: 16, color: AppColors.error),
                 label: const Text(
                   'Delete',
                   style: TextStyle(color: AppColors.error),

@@ -8,7 +8,6 @@ import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
-import '../../widgets/common/more_screen_app_bar.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/announcement_provider.dart';
 import '../../models/announcement.dart';
@@ -20,12 +19,10 @@ class AnnouncementManagementScreen extends ConsumerStatefulWidget {
   const AnnouncementManagementScreen({super.key});
 
   @override
-  ConsumerState<AnnouncementManagementScreen> createState() =>
-      _AnnouncementManagementScreenState();
+  ConsumerState<AnnouncementManagementScreen> createState() => _AnnouncementManagementScreenState();
 }
 
-class _AnnouncementManagementScreenState
-    extends ConsumerState<AnnouncementManagementScreen> {
+class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManagementScreen> {
   bool _showAddForm = false;
   bool _isLoading = false;
   Announcement? _editingAnnouncement; // Track if we're editing
@@ -43,6 +40,7 @@ class _AnnouncementManagementScreenState
     _messageController.dispose();
     super.dispose();
   }
+
 
   void _editAnnouncement(Announcement announcement) {
     setState(() {
@@ -70,7 +68,7 @@ class _AnnouncementManagementScreenState
     setState(() => _isLoading = true);
     try {
       final authState = await ref.read(authProvider.future);
-
+      
       int? createdBy;
       String? creatorType;
       if (authState is Authenticated) {
@@ -88,10 +86,7 @@ class _AnnouncementManagementScreenState
       // Validate required fields
       if (createdBy == null || creatorType == null) {
         if (mounted) {
-          SuccessSnackbar.showError(
-            context,
-            'Unable to determine user information. Please try again.',
-          );
+          SuccessSnackbar.showError(context, 'Unable to determine user information. Please try again.');
         }
         setState(() => _isLoading = false);
         return;
@@ -107,15 +102,10 @@ class _AnnouncementManagementScreenState
         'scheduled_at': _scheduledAt?.toIso8601String(),
       };
 
-      final announcementManager = ref.read(
-        announcementManagerProvider().notifier,
-      );
-
+      final announcementManager = ref.read(announcementManagerProvider().notifier);
+      
       if (_editingAnnouncement != null) {
-        await announcementManager.updateAnnouncement(
-          _editingAnnouncement!.id,
-          announcementData,
-        );
+        await announcementManager.updateAnnouncement(_editingAnnouncement!.id, announcementData);
         if (mounted) {
           SuccessSnackbar.show(context, 'Announcement updated successfully');
         }
@@ -141,10 +131,7 @@ class _AnnouncementManagementScreenState
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        SuccessSnackbar.showError(
-          context,
-          'Failed to ${_editingAnnouncement != null ? 'update' : 'create'} announcement: ${e.toString()}',
-        );
+        SuccessSnackbar.showError(context, 'Failed to ${_editingAnnouncement != null ? 'update' : 'create'} announcement: ${e.toString()}');
       }
     }
   }
@@ -157,19 +144,14 @@ class _AnnouncementManagementScreenState
 
     if (confirmed == true && mounted) {
       try {
-        final announcementManager = ref.read(
-          announcementManagerProvider().notifier,
-        );
+        final announcementManager = ref.read(announcementManagerProvider().notifier);
         await announcementManager.deleteAnnouncement(id);
         if (mounted) {
           SuccessSnackbar.show(context, 'Announcement deleted successfully');
         }
       } catch (e) {
         if (mounted) {
-          SuccessSnackbar.showError(
-            context,
-            'Failed to delete announcement: ${e.toString()}',
-          );
+          SuccessSnackbar.showError(context, 'Failed to delete announcement: ${e.toString()}');
         }
       }
     }
@@ -177,103 +159,95 @@ class _AnnouncementManagementScreenState
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
     if (_showAddForm) {
       return _buildAddForm();
     }
 
-    void handleReload() {
-      ref.invalidate(announcementManagerProvider);
-    }
-
     return Scaffold(
-      backgroundColor: isDark
-          ? AppColors.background
-          : AppColorsLight.background,
-      appBar: MoreScreenAppBar(
-        title: 'Announcements',
-        onReload: handleReload,
-        isDark: isDark,
-        additionalActions: [
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text(
+          'Announcements',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        actions: [
           IconButton(
-            icon: Icon(
-              Icons.add,
-              color: isDark ? AppColors.accent : AppColorsLight.accent,
-            ),
+            icon: const Icon(Icons.add, color: AppColors.accent),
             onPressed: () => setState(() => _showAddForm = true),
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          handleReload();
-          await Future.delayed(const Duration(milliseconds: 300));
-        },
-        child: Column(
-          children: [
-            // Filter Chips
-            Padding(
-              padding: const EdgeInsets.all(AppDimensions.paddingM),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _FilterChip(
-                      label: 'All',
-                      isSelected: _selectedFilter == 'all',
-                      onTap: () => setState(() => _selectedFilter = 'all'),
-                    ),
-                    const SizedBox(width: AppDimensions.spacingS),
-                    _FilterChip(
-                      label: 'Urgent',
-                      isSelected: _selectedFilter == 'urgent',
-                      onTap: () => setState(() => _selectedFilter = 'urgent'),
-                      color: AppColors.error,
-                    ),
-                    const SizedBox(width: AppDimensions.spacingS),
-                    _FilterChip(
-                      label: 'High',
-                      isSelected: _selectedFilter == 'high',
-                      onTap: () => setState(() => _selectedFilter = 'high'),
-                      color: AppColors.warning,
-                    ),
-                    const SizedBox(width: AppDimensions.spacingS),
-                    _FilterChip(
-                      label: 'Normal',
-                      isSelected: _selectedFilter == 'normal',
-                      onTap: () => setState(() => _selectedFilter = 'normal'),
-                      color: AppColors.success,
-                    ),
-                  ],
-                ),
+      body: Column(
+        children: [
+          // Filter Chips
+          Padding(
+            padding: const EdgeInsets.all(AppDimensions.paddingM),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _FilterChip(
+                    label: 'All',
+                    isSelected: _selectedFilter == 'all',
+                    onTap: () => setState(() => _selectedFilter = 'all'),
+                  ),
+                  const SizedBox(width: AppDimensions.spacingS),
+                  _FilterChip(
+                    label: 'Urgent',
+                    isSelected: _selectedFilter == 'urgent',
+                    onTap: () => setState(() => _selectedFilter = 'urgent'),
+                    color: AppColors.error,
+                  ),
+                  const SizedBox(width: AppDimensions.spacingS),
+                  _FilterChip(
+                    label: 'High',
+                    isSelected: _selectedFilter == 'high',
+                    onTap: () => setState(() => _selectedFilter = 'high'),
+                    color: AppColors.warning,
+                  ),
+                  const SizedBox(width: AppDimensions.spacingS),
+                  _FilterChip(
+                    label: 'Normal',
+                    isSelected: _selectedFilter == 'normal',
+                    onTap: () => setState(() => _selectedFilter = 'normal'),
+                    color: AppColors.success,
+                  ),
+                ],
               ),
             ),
+          ),
 
-            // Announcements List
-            Expanded(
+          // Announcements List
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(announcementManagerProvider());
+              },
               child: Consumer(
                 builder: (context, ref, child) {
-                  final announcementsAsync = ref.watch(
-                    announcementManagerProvider(),
-                  );
-
+                  final announcementsAsync = ref.watch(announcementManagerProvider());
+                  
                   return announcementsAsync.when(
                     loading: () => const ListSkeleton(itemCount: 5),
                     error: (error, stack) => ErrorDisplay(
-                      message:
-                          'Failed to load announcements: ${error.toString()}',
-                      onRetry: () =>
-                          ref.invalidate(announcementManagerProvider()),
+                      message: 'Failed to load announcements: ${error.toString()}',
+                      onRetry: () => ref.invalidate(announcementManagerProvider()),
                     ),
                     data: (announcements) {
                       // Filter by priority
                       final filteredAnnouncements = _selectedFilter == 'all'
                           ? announcements
-                          : announcements
-                                .where((a) => a.priority == _selectedFilter)
-                                .toList();
+                          : announcements.where((a) => a.priority == _selectedFilter).toList();
 
                       if (filteredAnnouncements.isEmpty) {
                         return EmptyState.noAnnouncements(
@@ -283,7 +257,6 @@ class _AnnouncementManagementScreenState
 
                       return ListView.builder(
                         padding: const EdgeInsets.all(AppDimensions.paddingL),
-                        physics: const AlwaysScrollableScrollPhysics(),
                         itemCount: filteredAnnouncements.length,
                         itemBuilder: (context, index) {
                           final announcement = filteredAnnouncements[index];
@@ -295,8 +268,8 @@ class _AnnouncementManagementScreenState
                 },
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -348,7 +321,10 @@ class _AnnouncementManagementScreenState
               // Priority
               const Text(
                 'Priority',
-                style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+                style: TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textSecondary,
+                ),
               ),
               const SizedBox(height: AppDimensions.spacingS),
               Row(
@@ -387,8 +363,8 @@ class _AnnouncementManagementScreenState
               // Target Audience
               NeumorphicContainer(
                 padding: const EdgeInsets.all(AppDimensions.paddingM),
-                child: DropdownButtonFormField<String>(
-                  initialValue: _selectedTargetAudience,
+            child: DropdownButtonFormField<String>(
+              initialValue: _selectedTargetAudience,
                   decoration: const InputDecoration(
                     labelText: 'Target Audience',
                     labelStyle: TextStyle(color: AppColors.textSecondary),
@@ -398,14 +374,8 @@ class _AnnouncementManagementScreenState
                   style: const TextStyle(color: AppColors.textPrimary),
                   items: const [
                     DropdownMenuItem(value: 'all', child: Text('All')),
-                    DropdownMenuItem(
-                      value: 'students',
-                      child: Text('Students Only'),
-                    ),
-                    DropdownMenuItem(
-                      value: 'coaches',
-                      child: Text('Coaches Only'),
-                    ),
+                    DropdownMenuItem(value: 'students', child: Text('Students Only')),
+                    DropdownMenuItem(value: 'coaches', child: Text('Coaches Only')),
                   ],
                   onChanged: (value) {
                     if (value != null) {
@@ -449,17 +419,12 @@ class _AnnouncementManagementScreenState
                   },
                   child: Row(
                     children: [
-                      const Icon(
-                        Icons.schedule,
-                        color: AppColors.textSecondary,
-                      ),
+                      const Icon(Icons.schedule, color: AppColors.textSecondary),
                       const SizedBox(width: AppDimensions.spacingM),
                       Expanded(
                         child: Text(
                           _scheduledAt != null
-                              ? DateFormat(
-                                  'dd MMM, yyyy • hh:mm a',
-                                ).format(_scheduledAt!)
+                              ? DateFormat('dd MMM, yyyy • hh:mm a').format(_scheduledAt!)
                               : 'Schedule for later (Optional)',
                           style: TextStyle(
                             color: _scheduledAt != null
@@ -490,9 +455,7 @@ class _AnnouncementManagementScreenState
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.accent,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      vertical: AppDimensions.spacingM,
-                    ),
+                    padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingM),
                   ),
                   child: _isLoading
                       ? const SizedBox(
@@ -501,13 +464,8 @@ class _AnnouncementManagementScreenState
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : Text(
-                          _editingAnnouncement != null
-                              ? 'Update Announcement'
-                              : 'Publish Announcement',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
+                          _editingAnnouncement != null ? 'Update Announcement' : 'Publish Announcement',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                         ),
                 ),
               ),
@@ -534,8 +492,7 @@ class _AnnouncementManagementScreenState
                   children: [
                     Row(
                       children: [
-                        if (announcement.priority == 'urgent' ||
-                            announcement.priority == 'high')
+                        if (announcement.priority == 'urgent' || announcement.priority == 'high')
                           const Icon(
                             Icons.priority_high,
                             size: 16,
@@ -565,50 +522,36 @@ class _AnnouncementManagementScreenState
                   ],
                 ),
               ),
-              PopupMenuButton(
-                icon: const Icon(
-                  Icons.more_vert,
-                  size: 20,
-                  color: AppColors.textSecondary,
-                ),
-                color: AppColors.cardBackground,
-                itemBuilder: (context) => [
-                  PopupMenuItem(
-                    child: const Row(
-                      children: [
-                        Icon(
-                          Icons.edit,
-                          size: 18,
-                          color: AppColors.textPrimary,
-                        ),
-                        SizedBox(width: 8),
-                        Text(
-                          'Edit',
-                          style: TextStyle(color: AppColors.textPrimary),
-                        ),
-                      ],
-                    ),
-                    onTap: () {
-                      Future.delayed(Duration.zero, () {
-                        _editAnnouncement(announcement);
-                      });
-                    },
-                  ),
-                  PopupMenuItem(
-                    child: const Row(
-                      children: [
-                        Icon(Icons.delete, size: 18, color: AppColors.error),
-                        SizedBox(width: 8),
-                        Text(
-                          'Delete',
-                          style: TextStyle(color: AppColors.error),
-                        ),
-                      ],
-                    ),
-                    onTap: () => _deleteAnnouncement(announcement.id),
-                  ),
-                ],
-              ),
+                      PopupMenuButton(
+                        icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
+                        color: AppColors.cardBackground,
+                        itemBuilder: (context) => [
+                          PopupMenuItem(
+                            child: const Row(
+                              children: [
+                                Icon(Icons.edit, size: 18, color: AppColors.textPrimary),
+                                SizedBox(width: 8),
+                                Text('Edit', style: TextStyle(color: AppColors.textPrimary)),
+                              ],
+                            ),
+                            onTap: () {
+                              Future.delayed(Duration.zero, () {
+                                _editAnnouncement(announcement);
+                              });
+                            },
+                          ),
+                          PopupMenuItem(
+                            child: const Row(
+                              children: [
+                                Icon(Icons.delete, size: 18, color: AppColors.error),
+                                SizedBox(width: 8),
+                                Text('Delete', style: TextStyle(color: AppColors.error)),
+                              ],
+                            ),
+                            onTap: () => _deleteAnnouncement(announcement.id),
+                          ),
+                        ],
+                      ),
             ],
           ),
           const SizedBox(height: AppDimensions.spacingM),
@@ -620,7 +563,7 @@ class _AnnouncementManagementScreenState
                   vertical: AppDimensions.spacingS,
                 ),
                 decoration: BoxDecoration(
-                  color: announcement.priorityColor.withValues(alpha: 0.2),
+                  color: announcement.priorityColor.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(AppDimensions.radiusS),
                 ),
                 child: Text(
@@ -716,7 +659,7 @@ class _FilterChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chipColor = color ?? AppColors.accent;
-
+    
     return GestureDetector(
       onTap: onTap,
       child: NeumorphicContainer(

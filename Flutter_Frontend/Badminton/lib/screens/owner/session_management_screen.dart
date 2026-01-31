@@ -8,7 +8,6 @@ import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
-import '../../widgets/common/more_screen_app_bar.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/batch_provider.dart';
@@ -215,36 +214,31 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
       return _buildAddForm();
     }
 
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    
-    void handleReload() {
-      ref.invalidate(batchListProvider);
-      ref.invalidate(coachListProvider);
-    }
-
     return Scaffold(
-      backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
-      appBar: MoreScreenAppBar(
-        title: 'Sessions',
-        onReload: handleReload,
-        isDark: isDark,
-        additionalActions: [
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text(
+          'Sessions',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        actions: [
           IconButton(
-            icon: Icon(
-              Icons.add,
-              color: isDark ? AppColors.accent : AppColorsLight.accent,
-            ),
+            icon: const Icon(Icons.add, color: AppColors.accent),
             onPressed: () => setState(() => _showAddForm = true),
           ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          handleReload();
-          await Future.delayed(const Duration(milliseconds: 300));
-        },
-        child: Column(
+      body: Column(
         children: [
           // Tab Selector
           Padding(
@@ -360,7 +354,6 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
           ),
         ],
       ),
-      ),
     );
   }
 
@@ -404,7 +397,7 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
                   vertical: AppDimensions.spacingS,
                 ),
                 decoration: BoxDecoration(
-                  color: _getSessionTypeColor(session.sessionType).withValues(alpha:0.2),
+                  color: _getSessionTypeColor(session.sessionType).withOpacity(0.2),
                   borderRadius: BorderRadius.circular(AppDimensions.radiusS),
                 ),
                 child: Text(
@@ -962,7 +955,7 @@ class _TabButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
         decoration: BoxDecoration(
-          color: isActive ? AppColors.accent.withValues(alpha:0.2) : Colors.transparent,
+          color: isActive ? AppColors.accent.withOpacity(0.2) : Colors.transparent,
           borderRadius: BorderRadius.circular(AppDimensions.radiusS),
         ),
         child: Center(

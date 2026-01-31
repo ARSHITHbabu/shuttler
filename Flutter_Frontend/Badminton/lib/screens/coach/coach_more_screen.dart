@@ -14,6 +14,7 @@ import 'coach_video_management_screen.dart';
 import '../owner/bmi_tracking_screen.dart';
 import '../owner/performance_tracking_screen.dart';
 import 'coach_fees_screen.dart';
+import 'leave_request_screen.dart';
 
 /// Coach More Screen - Navigation hub for additional features
 class CoachMoreScreen extends ConsumerStatefulWidget {
@@ -150,12 +151,26 @@ class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
             _MenuItem(
               icon: Icons.video_library_outlined,
               title: 'Video Management',
-              subtitle: 'Manage training videos',
+              subtitle: 'Upload and manage training videos',
               isDark: isDark,
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (context) => const CoachVideoManagementScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.event_busy_outlined,
+              title: 'Requests',
+              subtitle: 'Submit and view leave requests',
+              isDark: isDark,
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const LeaveRequestScreen(),
                   ),
                 );
               },

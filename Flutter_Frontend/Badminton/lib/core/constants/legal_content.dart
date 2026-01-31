@@ -1,6 +1,5 @@
 /// Legal content for Privacy Policy, Terms & Conditions, and Help & Support
 /// This content is shared across all portals (Owner, Coach, Student)
-library;
 
 class LegalContent {
   // App name used in legal documents

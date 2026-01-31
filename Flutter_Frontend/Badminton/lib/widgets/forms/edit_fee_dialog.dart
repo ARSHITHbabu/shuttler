@@ -8,6 +8,7 @@ import '../../widgets/common/loading_spinner.dart';
 import '../../providers/service_providers.dart';
 import '../../models/fee.dart';
 import '../../models/student.dart';
+import '../../models/batch.dart';
 import 'package:intl/intl.dart';
 
 /// Dialog for editing an existing fee record
@@ -195,7 +196,7 @@ class _EditFeeDialogState extends ConsumerState<EditFeeDialog> {
                   NeumorphicContainer(
                     padding: const EdgeInsets.all(AppDimensions.paddingM),
                     child: DropdownButtonFormField<int>(
-                      initialValue: _selectedPayeeId,
+                      value: _selectedPayeeId,
                       decoration: const InputDecoration(
                         labelText: 'Payee (Student from Batch)',
                         labelStyle: TextStyle(color: AppColors.textSecondary),

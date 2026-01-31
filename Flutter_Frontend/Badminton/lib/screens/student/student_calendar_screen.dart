@@ -6,7 +6,6 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
-import '../../widgets/common/more_screen_app_bar.dart';
 import '../../providers/calendar_provider.dart';
 import '../../models/calendar_event.dart';
 import '../../core/utils/canadian_holidays.dart';
@@ -47,39 +46,43 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
     final textSecondary = isDark ? AppColors.textSecondary : AppColorsLight.textSecondary;
     final cardBackground = isDark ? AppColors.cardBackground : AppColorsLight.cardBackground;
 
-    void handleReload() {
-      final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
-      final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
-      ref.invalidate(calendarEventsProvider(
-        startDate: firstDay,
-        endDate: lastDay,
-      ));
-    }
-
     return Scaffold(
       backgroundColor: backgroundColor,
-      appBar: MoreScreenAppBar(
-        title: 'Calendar',
-        onReload: handleReload,
-        isDark: isDark,
-        onBack: widget.onBack,
+      appBar: AppBar(
+        backgroundColor: backgroundColor,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: textPrimary),
+          onPressed: widget.onBack ?? () => Navigator.of(context).pop(),
+        ),
+        title: Text(
+          'Calendar',
+          style: TextStyle(
+            color: textPrimary,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        // No add button - read-only for students
       ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          handleReload();
-          await Future.delayed(const Duration(milliseconds: 300));
-        },
-        child: Builder(
-          builder: (context) {
-            // Get events for the current month using provider
-            final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
-            final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
-            final eventsAsync = ref.watch(calendarEventsProvider(
-              startDate: firstDay,
-              endDate: lastDay,
-            ));
+      body: Builder(
+        builder: (context) {
+          // Get events for the current month using provider
+          final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
+          final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
+          final eventsAsync = ref.watch(calendarEventsProvider(
+            startDate: firstDay,
+            endDate: lastDay,
+          ));
 
-            return eventsAsync.when(
+          return RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(calendarEventsProvider(
+                startDate: firstDay,
+                endDate: lastDay,
+              ));
+            },
+            child: eventsAsync.when(
               loading: () => const Center(child: ListSkeleton(itemCount: 5)),
               error: (error, stack) => ErrorDisplay(
                 message: 'Failed to load calendar events: ${error.toString()}',
@@ -126,7 +129,7 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
                               shape: BoxShape.circle,
                             ),
                             todayDecoration: BoxDecoration(
-                              color: (isDark ? AppColors.accent : AppColorsLight.accent).withValues(alpha: 0.3),
+                              color: (isDark ? AppColors.accent : AppColorsLight.accent).withOpacity(0.3),
                               shape: BoxShape.circle,
                             ),
                             // Hide marker dots - using colored date numbers instead
@@ -245,16 +248,16 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
 
                               if (isSelected) return null; // Let selectedBuilder handle it
 
-                              Color bgColor = (isDark ? AppColors.accent : AppColorsLight.accent).withValues(alpha: 0.3);
+                              Color bgColor = (isDark ? AppColors.accent : AppColorsLight.accent).withOpacity(0.3);
                               Color textColorValue = textPrimary;
                               FontWeight fontWeight = FontWeight.normal;
 
                               if (isHoliday || hasHolidayEvent) {
-                                bgColor = Colors.red.withValues(alpha: 0.5);
+                                bgColor = Colors.red.withOpacity(0.5);
                                 textColorValue = Colors.red;
                                 fontWeight = FontWeight.bold;
                               } else if (hasNonHolidayEvent) {
-                                bgColor = const Color(0xFF00A86B).withValues(alpha: 0.3);
+                                bgColor = const Color(0xFF00A86B).withOpacity(0.3);
                                 textColorValue = const Color(0xFF00A86B);
                                 fontWeight = FontWeight.bold;
                               }
@@ -286,9 +289,9 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
                   ),
                 );
               },
-            );
-          },
-        ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -302,6 +305,7 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
     final hasHoliday = holidayName != null;
 
     final textPrimary = isDark ? AppColors.textPrimary : AppColorsLight.textPrimary;
+    final textSecondary = isDark ? AppColors.textSecondary : AppColorsLight.textSecondary;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

@@ -7,7 +7,6 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
-import '../../widgets/common/more_screen_app_bar.dart';
 import '../../providers/coach_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/calendar_provider.dart';
@@ -19,8 +18,7 @@ class CoachScheduleScreen extends ConsumerStatefulWidget {
   const CoachScheduleScreen({super.key});
 
   @override
-  ConsumerState<CoachScheduleScreen> createState() =>
-      _CoachScheduleScreenState();
+  ConsumerState<CoachScheduleScreen> createState() => _CoachScheduleScreenState();
 }
 
 class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
@@ -31,35 +29,20 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
   Map<DateTime, List<Schedule>> _groupSessionsByDate(List<Schedule> sessions) {
     final Map<DateTime, List<Schedule>> grouped = {};
     for (var session in sessions) {
-      final date = DateTime(
-        session.date.year,
-        session.date.month,
-        session.date.day,
-      );
+      final date = DateTime(session.date.year, session.date.month, session.date.day);
       grouped.putIfAbsent(date, () => []).add(session);
     }
     return grouped;
   }
 
-  List<Schedule> _getSessionsForDay(
-    DateTime day,
-    Map<DateTime, List<Schedule>> groupedSessions,
-  ) {
+  List<Schedule> _getSessionsForDay(DateTime day, Map<DateTime, List<Schedule>> groupedSessions) {
     final dateKey = DateTime(day.year, day.month, day.day);
     return groupedSessions[dateKey] ?? [];
   }
 
   /// Get day name from weekday number
   String _getDayName(int weekday) {
-    const days = [
-      'Monday',
-      'Tuesday',
-      'Wednesday',
-      'Thursday',
-      'Friday',
-      'Saturday',
-      'Sunday',
-    ];
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     return days[weekday - 1];
   }
 
@@ -93,7 +76,7 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
-
+    
     return authState.when(
       data: (authValue) {
         if (authValue is! Authenticated) {
@@ -132,36 +115,33 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
     final batchesAsync = ref.watch(coachBatchesProvider(coachId));
     final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
     final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
-    final eventsAsync = ref.watch(
-      calendarEventsProvider(startDate: firstDay, endDate: lastDay),
-    );
-
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    void handleReload() {
-      ref.invalidate(coachScheduleProvider(coachId));
-      ref.invalidate(coachBatchesProvider(coachId));
-      final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
-      final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
-      ref.invalidate(
-        calendarEventsProvider(startDate: firstDay, endDate: lastDay),
-      );
-    }
+    final eventsAsync = ref.watch(calendarEventsProvider(
+      startDate: firstDay,
+      endDate: lastDay,
+    ));
 
     return Scaffold(
-      backgroundColor: isDark
-          ? AppColors.background
-          : AppColorsLight.background,
-      appBar: MoreScreenAppBar(
-        title: 'Schedule',
-        onReload: handleReload,
-        isDark: isDark,
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        title: const Text(
+          'Schedule',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          handleReload();
-          await Future.delayed(const Duration(milliseconds: 300));
+          ref.invalidate(coachScheduleProvider(coachId));
+          ref.invalidate(coachBatchesProvider(coachId));
+          ref.invalidate(calendarEventsProvider(
+            startDate: firstDay,
+            endDate: lastDay,
+          ));
         },
         child: scheduleAsync.when(
           loading: () => const Center(child: ListSkeleton(itemCount: 5)),
@@ -171,10 +151,8 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
           ),
           data: (sessions) {
             final groupedSessions = _groupSessionsByDate(sessions);
-            final canadianHolidays = CanadianHolidays.getHolidaysForYear(
-              _focusedDay.year,
-            );
-
+            final canadianHolidays = CanadianHolidays.getHolidaysForYear(_focusedDay.year);
+            
             return SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               child: Column(
@@ -187,8 +165,7 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
                       firstDay: DateTime.utc(2020, 1, 1),
                       lastDay: DateTime.utc(2030, 12, 31),
                       focusedDay: _focusedDay,
-                      selectedDayPredicate: (day) =>
-                          isSameDay(_selectedDay, day),
+                      selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
                       calendarFormat: _calendarFormat,
                       availableCalendarFormats: const {
                         CalendarFormat.month: 'Month',
@@ -211,29 +188,18 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
                           _focusedDay = focusedDay;
                         });
                       },
-                      eventLoader: (day) =>
-                          _getSessionsForDay(day, groupedSessions),
+                      eventLoader: (day) => _getSessionsForDay(day, groupedSessions),
                       headerStyle: HeaderStyle(
                         formatButtonVisible: true,
                         titleCentered: true,
                         formatButtonShowsNext: false,
                         formatButtonDecoration: BoxDecoration(
                           color: AppColors.cardBackground,
-                          borderRadius: BorderRadius.circular(
-                            AppDimensions.radiusS,
-                          ),
+                          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
                         ),
-                        formatButtonTextStyle: const TextStyle(
-                          color: AppColors.textPrimary,
-                        ),
-                        leftChevronIcon: const Icon(
-                          Icons.chevron_left,
-                          color: AppColors.textPrimary,
-                        ),
-                        rightChevronIcon: const Icon(
-                          Icons.chevron_right,
-                          color: AppColors.textPrimary,
-                        ),
+                        formatButtonTextStyle: const TextStyle(color: AppColors.textPrimary),
+                        leftChevronIcon: const Icon(Icons.chevron_left, color: AppColors.textPrimary),
+                        rightChevronIcon: const Icon(Icons.chevron_right, color: AppColors.textPrimary),
                         titleTextStyle: const TextStyle(
                           color: AppColors.textPrimary,
                           fontSize: 18,
@@ -246,12 +212,8 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
                       ),
                       calendarStyle: CalendarStyle(
                         outsideDaysVisible: false,
-                        weekendTextStyle: const TextStyle(
-                          color: AppColors.textSecondary,
-                        ),
-                        defaultTextStyle: const TextStyle(
-                          color: AppColors.textPrimary,
-                        ),
+                        weekendTextStyle: const TextStyle(color: AppColors.textSecondary),
+                        defaultTextStyle: const TextStyle(color: AppColors.textPrimary),
                         selectedDecoration: BoxDecoration(
                           color: AppColors.accent,
                           shape: BoxShape.circle,
@@ -263,17 +225,11 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
                       ),
                       calendarBuilders: CalendarBuilders(
                         defaultBuilder: (context, date, focusedDay) {
-                          final dateKey = DateTime(
-                            date.year,
-                            date.month,
-                            date.day,
-                          );
-                          final isHoliday = canadianHolidays.containsKey(
-                            dateKey,
-                          );
+                          final dateKey = DateTime(date.year, date.month, date.day);
+                          final isHoliday = canadianHolidays.containsKey(dateKey);
                           final isSelected = isSameDay(_selectedDay, date);
                           final isToday = isSameDay(DateTime.now(), date);
-
+                          
                           if (isHoliday && !isSelected && !isToday) {
                             return Center(
                               child: Text(
@@ -288,15 +244,9 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
                           return null;
                         },
                         selectedBuilder: (context, date, focusedDay) {
-                          final dateKey = DateTime(
-                            date.year,
-                            date.month,
-                            date.day,
-                          );
-                          final isHoliday = canadianHolidays.containsKey(
-                            dateKey,
-                          );
-
+                          final dateKey = DateTime(date.year, date.month, date.day);
+                          final isHoliday = canadianHolidays.containsKey(dateKey);
+                          
                           return Container(
                             margin: const EdgeInsets.all(4.0),
                             alignment: Alignment.center,
@@ -314,43 +264,33 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
                           );
                         },
                         todayBuilder: (context, date, focusedDay) {
-                          final dateKey = DateTime(
-                            date.year,
-                            date.month,
-                            date.day,
-                          );
-                          final isHoliday = canadianHolidays.containsKey(
-                            dateKey,
-                          );
+                          final dateKey = DateTime(date.year, date.month, date.day);
+                          final isHoliday = canadianHolidays.containsKey(dateKey);
                           final isSelected = isSameDay(_selectedDay, date);
-
+                          
                           if (isSelected) return null;
-
+                          
                           return Container(
                             margin: const EdgeInsets.all(4.0),
                             alignment: Alignment.center,
                             decoration: BoxDecoration(
-                              color: isHoliday
-                                  ? Colors.red.withValues(alpha: 0.5)
-                                  : AppColors.accent.withValues(alpha: 0.3),
+                              color: isHoliday 
+                                  ? Colors.red.withOpacity(0.5)
+                                  : AppColors.accent.withOpacity(0.3),
                               shape: BoxShape.circle,
                             ),
                             child: Text(
                               '${date.day}',
                               style: TextStyle(
-                                color: isHoliday
-                                    ? Colors.red
-                                    : AppColors.textPrimary,
-                                fontWeight: isHoliday
-                                    ? FontWeight.bold
-                                    : FontWeight.normal,
+                                color: isHoliday ? Colors.red : AppColors.textPrimary,
+                                fontWeight: isHoliday ? FontWeight.bold : FontWeight.normal,
                               ),
                             ),
                           );
                         },
                         markerBuilder: (context, date, events) {
                           if (events.isEmpty) return null;
-
+                          
                           return Positioned(
                             bottom: 1,
                             child: Container(
@@ -366,32 +306,19 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
                       ),
                     ),
                   ),
-
+                  
                   // Selected Day Events
-                  if (_getSessionsForDay(
-                        _selectedDay,
-                        groupedSessions,
-                      ).isNotEmpty ||
-                      (canadianHolidays.containsKey(
-                            DateTime(
-                              _selectedDay.year,
-                              _selectedDay.month,
-                              _selectedDay.day,
-                            ),
-                          ) &&
-                          eventsAsync.valueOrNull != null)) ...[
+                  if (_getSessionsForDay(_selectedDay, groupedSessions).isNotEmpty ||
+                      (canadianHolidays.containsKey(DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day)) &&
+                       eventsAsync.valueOrNull != null)) ...[
                     NeumorphicContainer(
-                      margin: const EdgeInsets.symmetric(
-                        horizontal: AppDimensions.paddingL,
-                      ),
+                      margin: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
                       padding: const EdgeInsets.all(AppDimensions.paddingM),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            DateFormat(
-                              'EEEE, MMMM d, yyyy',
-                            ).format(_selectedDay),
+                            DateFormat('EEEE, MMMM d, yyyy').format(_selectedDay),
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
@@ -400,55 +327,29 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
                           ),
                           const SizedBox(height: AppDimensions.spacingM),
                           // Sessions
-                          ..._getSessionsForDay(
-                            _selectedDay,
-                            groupedSessions,
-                          ).map(
-                            (session) => Padding(
-                              padding: const EdgeInsets.only(
-                                bottom: AppDimensions.spacingS,
-                              ),
+                          ..._getSessionsForDay(_selectedDay, groupedSessions).map((session) => 
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: AppDimensions.spacingS),
                               child: _SessionCard(session: session),
                             ),
                           ),
                           // Holidays
-                          if (canadianHolidays.containsKey(
-                            DateTime(
-                              _selectedDay.year,
-                              _selectedDay.month,
-                              _selectedDay.day,
-                            ),
-                          )) ...[
-                            if (_getSessionsForDay(
-                              _selectedDay,
-                              groupedSessions,
-                            ).isNotEmpty)
+                          if (canadianHolidays.containsKey(DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day))) ...[
+                            if (_getSessionsForDay(_selectedDay, groupedSessions).isNotEmpty)
                               const SizedBox(height: AppDimensions.spacingS),
                             Container(
-                              padding: const EdgeInsets.all(
-                                AppDimensions.paddingS,
-                              ),
+                              padding: const EdgeInsets.all(AppDimensions.paddingS),
                               decoration: BoxDecoration(
-                                color: Colors.red.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(
-                                  AppDimensions.radiusS,
-                                ),
+                                color: Colors.red.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(AppDimensions.radiusS),
                               ),
                               child: Row(
                                 children: [
-                                  const Icon(
-                                    Icons.event,
-                                    color: Colors.red,
-                                    size: 20,
-                                  ),
+                                  const Icon(Icons.event, color: Colors.red, size: 20),
                                   const SizedBox(width: AppDimensions.spacingS),
                                   Expanded(
                                     child: Text(
-                                      canadianHolidays[DateTime(
-                                        _selectedDay.year,
-                                        _selectedDay.month,
-                                        _selectedDay.day,
-                                      )]!,
+                                      canadianHolidays[DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day)]!,
                                       style: const TextStyle(
                                         color: Colors.red,
                                         fontWeight: FontWeight.w600,
@@ -461,106 +362,79 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
                           ],
                           // Calendar Events
                           if (eventsAsync.valueOrNull != null) ...[
-                            ...eventsAsync.valueOrNull!
-                                .where(
-                                  (event) =>
-                                      isSameDay(event.date, _selectedDay),
-                                )
-                                .map(
-                                  (event) => Padding(
-                                    padding: const EdgeInsets.only(
-                                      top: AppDimensions.spacingS,
+                            ...eventsAsync.valueOrNull!.where((event) => 
+                              isSameDay(event.date, _selectedDay)
+                            ).map((event) => Padding(
+                              padding: const EdgeInsets.only(top: AppDimensions.spacingS),
+                              child: Container(
+                                padding: const EdgeInsets.all(AppDimensions.paddingS),
+                                decoration: BoxDecoration(
+                                  color: event.eventType == 'holiday' 
+                                      ? Colors.red.withOpacity(0.1)
+                                      : event.eventType == 'tournament'
+                                          ? Colors.blue.withOpacity(0.1)
+                                          : Colors.green.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      event.eventIcon,
+                                      color: event.eventType == 'holiday' 
+                                          ? Colors.red
+                                          : event.eventType == 'tournament'
+                                              ? Colors.blue
+                                              : Colors.green,
+                                      size: 20,
                                     ),
-                                    child: Container(
-                                      padding: const EdgeInsets.all(
-                                        AppDimensions.paddingS,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: event.eventType == 'holiday'
-                                            ? Colors.red.withValues(alpha: 0.1)
-                                            : event.eventType == 'tournament'
-                                            ? Colors.blue.withValues(alpha: 0.1)
-                                            : Colors.green.withValues(alpha: 0.1),
-                                        borderRadius: BorderRadius.circular(
-                                          AppDimensions.radiusS,
-                                        ),
-                                      ),
-                                      child: Row(
+                                    const SizedBox(width: AppDimensions.spacingS),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Icon(
-                                            event.eventIcon,
-                                            color: event.eventType == 'holiday'
-                                                ? Colors.red
-                                                : event.eventType ==
-                                                      'tournament'
-                                                ? Colors.blue
-                                                : Colors.green,
-                                            size: 20,
-                                          ),
-                                          const SizedBox(
-                                            width: AppDimensions.spacingS,
-                                          ),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  event.title,
-                                                  style: TextStyle(
-                                                    color:
-                                                        event.eventType ==
-                                                            'holiday'
-                                                        ? Colors.red
-                                                        : event.eventType ==
-                                                              'tournament'
-                                                        ? Colors.blue
-                                                        : Colors.green,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
-                                                if (event.description != null &&
-                                                    event
-                                                        .description!
-                                                        .isNotEmpty) ...[
-                                                  const SizedBox(height: 4),
-                                                  Text(
-                                                    event.description!,
-                                                    style: const TextStyle(
-                                                      fontSize: 12,
-                                                      color: AppColors
-                                                          .textSecondary,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ],
+                                          Text(
+                                            event.title,
+                                            style: TextStyle(
+                                              color: event.eventType == 'holiday' 
+                                                  ? Colors.red
+                                                  : event.eventType == 'tournament'
+                                                      ? Colors.blue
+                                                      : Colors.green,
+                                              fontWeight: FontWeight.w600,
                                             ),
                                           ),
+                                          if (event.description != null && event.description!.isNotEmpty) ...[
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              event.description!,
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                                color: AppColors.textSecondary,
+                                              ),
+                                            ),
+                                          ],
                                         ],
                                       ),
                                     ),
-                                  ),
+                                  ],
                                 ),
+                              ),
+                            )),
                           ],
                         ],
                       ),
                     ),
                   ],
-
+                  
                   // Batch Operating Days Info - filtered by selected day
                   batchesAsync.when(
                     data: (batches) {
                       if (batches.isEmpty) return const SizedBox.shrink();
 
                       // Filter batches that operate on the selected day
-                      final filteredBatches = batches
-                          .where(
-                            (batch) => _batchOperatesOnDay(
-                              batch.period,
-                              _selectedDay.weekday,
-                            ),
-                          )
-                          .toList();
+                      final filteredBatches = batches.where(
+                        (batch) => _batchOperatesOnDay(batch.period, _selectedDay.weekday)
+                      ).toList();
 
                       if (filteredBatches.isEmpty) {
                         return NeumorphicContainer(
@@ -605,33 +479,29 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
                               ),
                             ),
                             const SizedBox(height: AppDimensions.spacingM),
-                            ...filteredBatches.map(
-                              (batch) => Padding(
-                                padding: const EdgeInsets.only(
-                                  bottom: AppDimensions.spacingS,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        batch.batchName,
-                                        style: const TextStyle(
-                                          color: AppColors.textPrimary,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ),
-                                    Text(
-                                      batch.period,
+                            ...filteredBatches.map((batch) => Padding(
+                              padding: const EdgeInsets.only(bottom: AppDimensions.spacingS),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      batch.batchName,
                                       style: const TextStyle(
-                                        color: AppColors.textSecondary,
-                                        fontSize: 12,
+                                        color: AppColors.textPrimary,
+                                        fontWeight: FontWeight.w500,
                                       ),
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                  Text(
+                                    batch.period,
+                                    style: const TextStyle(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
                               ),
-                            ),
+                            )),
                           ],
                         ),
                       );
@@ -660,7 +530,7 @@ class _SessionCard extends StatelessWidget {
     Color typeColor = AppColors.accent;
     String typeLabel = session.sessionType.toUpperCase();
     IconData typeIcon = Icons.sports_outlined;
-
+    
     if (session.sessionType.toLowerCase() == 'tournament') {
       typeColor = AppColors.warning;
       typeIcon = Icons.emoji_events_outlined;
@@ -682,7 +552,11 @@ class _SessionCard extends StatelessWidget {
                   color: typeColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(AppDimensions.radiusS),
                 ),
-                child: Icon(typeIcon, size: 20, color: typeColor),
+                child: Icon(
+                  typeIcon,
+                  size: 20,
+                  color: typeColor,
+                ),
               ),
               const SizedBox(width: AppDimensions.spacingM),
               Expanded(
@@ -788,8 +662,7 @@ class _SessionCard extends StatelessWidget {
               ],
             ),
           ],
-          if (session.description != null &&
-              session.description!.isNotEmpty) ...[
+          if (session.description != null && session.description!.isNotEmpty) ...[
             const SizedBox(height: AppDimensions.spacingS),
             Text(
               session.description!,

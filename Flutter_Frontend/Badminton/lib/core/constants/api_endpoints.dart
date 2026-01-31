@@ -108,11 +108,4 @@ class ApiEndpoints {
   // Image Upload (NEW)
   static const String uploadImage = '/api/upload/image';
   static String imageUrl(String filename) => '/uploads/$filename';
-
-  // Requests (NEW)
-  static const String requests = '/requests/';
-  static String requestById(int id) => '/requests/$id';
-  static String approveRequest(int id) => '/requests/$id/approve';
-  static String rejectRequest(int id) => '/requests/$id/reject';
-  static const String requestStats = '/requests/stats/summary';
 }

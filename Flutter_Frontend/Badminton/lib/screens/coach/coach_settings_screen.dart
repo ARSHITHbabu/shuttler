@@ -1,13 +1,13 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
-import '../../widgets/common/more_screen_app_bar.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/theme_provider.dart';
@@ -74,26 +74,31 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    void handleReload() {
-      // Settings screen doesn't need to reload providers, but we can refresh the UI
-      setState(() {});
-    }
-
     return Scaffold(
       backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
-      appBar: MoreScreenAppBar(
-        title: 'Settings',
-        onReload: handleReload,
-        isDark: isDark,
-      ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          handleReload();
-          await Future.delayed(const Duration(milliseconds: 300));
-        },
-        child: CustomScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
+      body: CustomScrollView(
+        slivers: [
+          // App Bar
+          SliverAppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            pinned: true,
+            leading: IconButton(
+              icon: Icon(
+                Icons.arrow_back,
+                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+              ),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            title: Text(
+              'Settings',
+              style: TextStyle(
+                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            centerTitle: true,
+          ),
 
           // Content
           SliverToBoxAdapter(
@@ -287,7 +292,6 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
             ),
           ),
         ],
-      ),
       ),
     );
   }

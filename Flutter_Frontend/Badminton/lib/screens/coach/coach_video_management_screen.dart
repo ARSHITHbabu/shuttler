@@ -6,7 +6,6 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
-import '../../widgets/common/more_screen_app_bar.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/coach_provider.dart';
 import '../../providers/auth_provider.dart';
@@ -263,21 +262,14 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
 
         final coachId = authValue.userId;
         final batchesAsync = ref.watch(coachBatchesProvider(coachId));
-        final theme = Theme.of(context);
-        final isDark = theme.brightness == Brightness.dark;
-
-        void handleReload() {
-          ref.invalidate(coachBatchesProvider(coachId));
-          _loadVideos();
-        }
 
         return Scaffold(
-          appBar: MoreScreenAppBar(
-            title: 'Video Management',
-            isDark: isDark,
-            onReload: handleReload,
+          appBar: AppBar(
+            title: const Text('Video Management'),
+            backgroundColor: AppColors.background,
+            elevation: 0,
           ),
-          backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+          backgroundColor: AppColors.background,
           floatingActionButton: _selectedStudentId != null && !_showUploadForm
               ? FloatingActionButton(
                   onPressed: () => setState(() => _showUploadForm = true),
@@ -285,15 +277,9 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
                   child: const Icon(Icons.add, color: Colors.white),
                 )
               : null,
-          body: RefreshIndicator(
-            onRefresh: () async {
-              handleReload();
-              await Future.delayed(const Duration(milliseconds: 300));
-            },
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(AppDimensions.paddingL),
-              child: Column(
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.all(AppDimensions.paddingL),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Batch Selector
@@ -324,7 +310,7 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
                     return NeumorphicContainer(
                       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
                       child: DropdownButtonFormField<int>(
-                        initialValue: _selectedBatchId,
+                        value: _selectedBatchId,
                         decoration: const InputDecoration(
                           border: InputBorder.none,
                           hintText: 'Select a batch',
@@ -366,7 +352,7 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
                     NeumorphicContainer(
                       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
                       child: DropdownButtonFormField<int>(
-                        initialValue: _selectedStudentId,
+                        value: _selectedStudentId,
                         decoration: const InputDecoration(
                           border: InputBorder.none,
                           hintText: 'Select a student',
@@ -403,38 +389,29 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
               ],
             ),
           ),
-          ),
         );
       },
-      loading: () {
-        final theme = Theme.of(context);
-        final isDark = theme.brightness == Brightness.dark;
-        return Scaffold(
-          appBar: MoreScreenAppBar(
-            title: 'Video Management',
-            onReload: null,
-            isDark: isDark,
+      loading: () => Scaffold(
+        appBar: AppBar(
+          title: const Text('Video Management'),
+          backgroundColor: AppColors.background,
+          elevation: 0,
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      ),
+      error: (error, _) => Scaffold(
+        appBar: AppBar(
+          title: const Text('Video Management'),
+          backgroundColor: AppColors.background,
+          elevation: 0,
+        ),
+        body: Center(
+          child: Text(
+            'Error: ${error.toString()}',
+            style: const TextStyle(color: AppColors.error),
           ),
-          body: const Center(child: CircularProgressIndicator()),
-        );
-      },
-      error: (error, _) {
-        final theme = Theme.of(context);
-        final isDark = theme.brightness == Brightness.dark;
-        return Scaffold(
-          appBar: MoreScreenAppBar(
-            title: 'Video Management',
-            onReload: null,
-            isDark: isDark,
-          ),
-          body: Center(
-            child: Text(
-              'Error: ${error.toString()}',
-              style: const TextStyle(color: AppColors.error),
-            ),
-          ),
-        );
-      },
+        ),
+      ),
     );
   }
 

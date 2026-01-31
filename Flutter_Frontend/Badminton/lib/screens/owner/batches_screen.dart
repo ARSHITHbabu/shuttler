@@ -699,7 +699,7 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                                 }
                               });
                             },
-                            selectedColor: AppColors.accent.withValues(alpha:0.3),
+                            selectedColor: AppColors.accent.withOpacity(0.3),
                             checkmarkColor: AppColors.accent,
                             labelStyle: TextStyle(
                               color: isSelected

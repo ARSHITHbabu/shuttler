@@ -1,6 +1,7 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../models/student.dart';
 import '../models/schedule.dart';
+import '../models/batch.dart';
 import '../utils/batch_time_utils.dart';
 import 'service_providers.dart';
 import 'batch_provider.dart';

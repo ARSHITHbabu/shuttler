@@ -35,10 +35,6 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
     super.initState();
   }
 
-  void handleReload() {
-    ref.invalidate(studentsWithBatchFeesProvider);
-  }
-
   @override
   Widget build(BuildContext context) {
     // Check if we can pop (i.e., if screen was pushed separately)
@@ -70,8 +66,15 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
         builder: (context, constraints) {
             return RefreshIndicator(
               onRefresh: () async {
-                handleReload();
-                await Future.delayed(const Duration(milliseconds: 300));
+                // Invalidate both providers to refresh data
+                ref.invalidate(studentsWithBatchFeesProvider);
+                String? statusFilter;
+                if (_selectedFilter == 'overdue') {
+                  statusFilter = null;
+                } else if (_selectedFilter != 'all') {
+                  statusFilter = _selectedFilter;
+                }
+                ref.invalidate(feeListProvider(status: statusFilter));
               },
             child: SingleChildScrollView(
               physics: const ClampingScrollPhysics(),

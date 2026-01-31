@@ -316,24 +316,28 @@ class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
                   ? const Center(child: CircularProgressIndicator())
                   : _videos.isEmpty
                       ? _buildEmptyState(isDark)
-                      : _filteredVideos.isEmpty && (_selectedYear != null || _selectedMonth != null)
-                          ? _buildNoFilterResults(isDark)
-                          : ListView.builder(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: AppDimensions.paddingL,
-                              ),
-                              itemCount: _filteredVideos.length,
-                              itemBuilder: (context, index) {
-                                return Padding(
-                                  padding: const EdgeInsets.only(
-                                    bottom: AppDimensions.spacingM,
+                      : RefreshIndicator(
+                          onRefresh: _loadVideos,
+                          child: _filteredVideos.isEmpty && (_selectedYear != null || _selectedMonth != null)
+                              ? _buildNoFilterResults(isDark)
+                              : ListView.builder(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: AppDimensions.paddingL,
                                   ),
-                                  child: _buildVideoCard(_filteredVideos[index], isDark),
-                                );
-                              },
-                            ),
+                                  itemCount: _filteredVideos.length,
+                                  itemBuilder: (context, index) {
+                                    return Padding(
+                                      padding: const EdgeInsets.only(
+                                        bottom: AppDimensions.spacingM,
+                                      ),
+                                      child: _buildVideoCard(_filteredVideos[index], isDark),
+                                    );
+                                  },
+                                ),
+                        ),
             ),
           ],
+        ),
         ),
       ),
     );
@@ -364,7 +368,7 @@ class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
           child: NeumorphicContainer(
             padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
             child: DropdownButtonFormField<int?>(
-              initialValue: _selectedYear,
+              value: _selectedYear,
               decoration: InputDecoration(
                 border: InputBorder.none,
                 hintText: 'All Years',
@@ -394,7 +398,7 @@ class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
           child: NeumorphicContainer(
             padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
             child: DropdownButtonFormField<int?>(
-              initialValue: _selectedMonth,
+              value: _selectedMonth,
               decoration: InputDecoration(
                 border: InputBorder.none,
                 hintText: 'All Months',

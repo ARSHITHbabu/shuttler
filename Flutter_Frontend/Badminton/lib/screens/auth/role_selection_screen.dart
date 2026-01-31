@@ -133,7 +133,7 @@ class _RoleCardState extends State<_RoleCard> {
             Container(
               padding: const EdgeInsets.all(AppDimensions.paddingM),
               decoration: BoxDecoration(
-                color: AppColors.accent.withValues(alpha:0.1),
+                color: AppColors.accent.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(AppDimensions.radiusM),
               ),
               child: Icon(

@@ -77,20 +77,22 @@ class _AddFeeDialogState extends ConsumerState<AddFeeDialog> {
           (b) => b.id == widget.initialBatchId,
           orElse: () => batches.first,
         );
-        _selectedBatchId = initialBatch.id;
-        _selectedBatch = initialBatch;
-        // Auto-fill fee amount from batch if not already set
-        if (widget.initialFeeAmount == null) {
-          try {
-            final feeString = initialBatch.fees.replaceAll(RegExp(r'[\$,\s]'), '');
-            final batchFee = double.parse(feeString);
-            _totalFeeController.text = batchFee.toStringAsFixed(0);
-          } catch (e) {
-            // If parsing fails, keep current value or use 0
-          }
-        }
-        await _loadBatchStudents(initialBatch.id);
+        if (initialBatch != null) {
+          _selectedBatchId = initialBatch.id;
+          _selectedBatch = initialBatch;
+          // Auto-fill fee amount from batch if not already set
+          if (widget.initialFeeAmount == null) {
+            try {
+              final feeString = initialBatch.fees.replaceAll(RegExp(r'[\$,\s]'), '');
+              final batchFee = double.parse(feeString);
+              _totalFeeController.text = batchFee.toStringAsFixed(0);
+            } catch (e) {
+              // If parsing fails, keep current value or use 0
             }
+          }
+          await _loadBatchStudents(initialBatch.id);
+        }
+      }
     } catch (e) {
       setState(() {
         _loadingBatches = false;
