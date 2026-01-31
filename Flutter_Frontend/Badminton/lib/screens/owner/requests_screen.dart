@@ -118,7 +118,9 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
                       return _RequestCard(
                         request: requests[index],
                         isDark: isDark,
-                        onApprove: () => _handleApprove(requests[index]),
+                        onApprove: () => requests[index].requestType == 'coach_leave_modification'
+                            ? _handleModificationRequest(requests[index])
+                            : _handleApprove(requests[index]),
                         onReject: () => _handleReject(requests[index]),
                         onView: () =>
                             _showRequestDetails(requests[index], isDark),
@@ -539,6 +541,254 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
             'Failed to approve request: ${e.toString()}',
           );
         }
+      }
+    }
+  }
+
+  Future<void> _handleModificationRequest(Request modificationRequest) async {
+    if (modificationRequest.metadata == null) {
+      SuccessSnackbar.showError(context, 'Invalid modification request');
+      return;
+    }
+
+    final originalRequestId = modificationRequest.metadata!['original_request_id'] as int?;
+    if (originalRequestId == null) {
+      SuccessSnackbar.showError(context, 'Original request not found');
+      return;
+    }
+
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    // Show dialog with three options
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: isDark
+            ? AppColors.cardBackground
+            : AppColorsLight.cardBackground,
+        title: Text(
+          'Modification Request',
+          style: TextStyle(
+            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+          ),
+        ),
+        content: Text(
+          'Choose an action for this modification request:',
+          style: TextStyle(
+            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop('approve_modification'),
+            child: Text(
+              'Approve Modification',
+              style: TextStyle(
+                color: Colors.green,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop('reject_modification'),
+            child: Text(
+              'Reject Modification',
+              style: TextStyle(
+                color: Colors.orange,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop('reject_whole_leave'),
+            child: Text(
+              'Reject Whole Leave',
+              style: TextStyle(
+                color: Colors.red,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop('cancel'),
+            child: Text(
+              'Cancel',
+              style: TextStyle(
+                color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (result == null || result == 'cancel' || !mounted) return;
+
+    try {
+      final requestService = ref.read(requestServiceProvider);
+      final calendarService = ref.read(calendarServiceProvider);
+      final authState = ref.read(authProvider);
+      int? ownerId;
+
+      authState.whenData((authValue) {
+        if (authValue is Authenticated && authValue.userType == 'owner') {
+          ownerId = authValue.userId;
+        }
+      });
+
+      if (result == 'approve_modification') {
+        // Approve modification: update calendar events
+        await requestService.approveRequest(modificationRequest.id);
+        
+        // Update calendar events (delete old, create new)
+        final coachName = modificationRequest.metadata!['coach_name'] as String? ?? 'Coach';
+        final originalIsHalfDay = modificationRequest.metadata!['original_is_half_day'] == true;
+        final newIsHalfDay = modificationRequest.metadata!['new_is_half_day'] == true;
+
+        List<DateTime> originalDates = [];
+        if (modificationRequest.metadata!['original_dates'] != null) {
+          final datesList = modificationRequest.metadata!['original_dates'] as List<dynamic>?;
+          if (datesList != null) {
+            originalDates = datesList.map((d) => DateTime.parse(d as String)).toList();
+          }
+        }
+
+        List<DateTime> newDates = [];
+        if (modificationRequest.metadata!['new_dates'] != null) {
+          final datesList = modificationRequest.metadata!['new_dates'] as List<dynamic>?;
+          if (datesList != null) {
+            newDates = datesList.map((d) => DateTime.parse(d as String)).toList();
+          }
+        }
+
+        if (ownerId != null && originalDates.isNotEmpty && newDates.isNotEmpty) {
+          // Get all calendar events for the date range
+          final minDate = originalDates.first.isBefore(newDates.first) 
+              ? originalDates.first 
+              : newDates.first;
+          final maxDate = originalDates.last.isAfter(newDates.last) 
+              ? originalDates.last 
+              : newDates.last;
+          
+          final allEvents = await calendarService.getCalendarEvents(
+            startDate: minDate.subtract(const Duration(days: 1)),
+            endDate: maxDate.add(const Duration(days: 1)),
+            eventType: 'leave',
+          );
+
+          // Delete old events
+          final originalDateStrings = originalDates.map((d) => d.toIso8601String().split('T')[0]).toSet();
+          final originalEventTitle = originalIsHalfDay 
+              ? '$coachName - Leave (Half Day)'
+              : '$coachName - Leave';
+
+          for (final event in allEvents) {
+            final eventDateStr = event.date.toIso8601String().split('T')[0];
+            if (originalDateStrings.contains(eventDateStr) && 
+                event.title == originalEventTitle) {
+              try {
+                await calendarService.deleteCalendarEvent(event.id);
+              } catch (e) {
+                debugPrint('Failed to delete calendar event ${event.id}: $e');
+              }
+            }
+          }
+
+          // Create new events
+          for (final date in newDates) {
+            final eventTitle = newIsHalfDay 
+                ? '$coachName - Leave (Half Day)'
+                : '$coachName - Leave';
+            
+            final eventData = {
+              'title': eventTitle,
+              'event_type': 'leave',
+              'date': date.toIso8601String().split('T')[0],
+              'created_by': ownerId,
+              'creator_type': 'owner',
+              'description': modificationRequest.description ?? 'Coach leave modification',
+            };
+
+            await calendarService.createCalendarEvent(eventData);
+          }
+        }
+
+        if (mounted) {
+          SuccessSnackbar.show(context, 'Modification approved successfully');
+        }
+      } else if (result == 'reject_modification') {
+        // Reject modification: keep original leave, just reject the modification request
+        await requestService.rejectRequest(modificationRequest.id, responseMessage: 'Modification rejected. Original leave remains approved.');
+        
+        if (mounted) {
+          SuccessSnackbar.show(context, 'Modification rejected. Original leave remains.');
+        }
+      } else if (result == 'reject_whole_leave') {
+        // Reject whole leave: reject both modification and original request, delete calendar events
+        await requestService.rejectRequest(modificationRequest.id, responseMessage: 'Whole leave request rejected.');
+        
+        // Also reject the original request
+        try {
+          await requestService.rejectRequest(originalRequestId, responseMessage: 'Leave request rejected due to modification rejection.');
+        } catch (e) {
+          debugPrint('Failed to reject original request: $e');
+        }
+
+        // Delete calendar events for original leave
+        final coachName = modificationRequest.metadata!['coach_name'] as String? ?? 'Coach';
+        final originalIsHalfDay = modificationRequest.metadata!['original_is_half_day'] == true;
+
+        List<DateTime> originalDates = [];
+        if (modificationRequest.metadata!['original_dates'] != null) {
+          final datesList = modificationRequest.metadata!['original_dates'] as List<dynamic>?;
+          if (datesList != null) {
+            originalDates = datesList.map((d) => DateTime.parse(d as String)).toList();
+          }
+        }
+
+        if (ownerId != null && originalDates.isNotEmpty) {
+          final minDate = originalDates.first.subtract(const Duration(days: 1));
+          final maxDate = originalDates.last.add(const Duration(days: 1));
+          
+          final allEvents = await calendarService.getCalendarEvents(
+            startDate: minDate,
+            endDate: maxDate,
+            eventType: 'leave',
+          );
+
+          final originalDateStrings = originalDates.map((d) => d.toIso8601String().split('T')[0]).toSet();
+          final originalEventTitle = originalIsHalfDay 
+              ? '$coachName - Leave (Half Day)'
+              : '$coachName - Leave';
+
+          for (final event in allEvents) {
+            final eventDateStr = event.date.toIso8601String().split('T')[0];
+            if (originalDateStrings.contains(eventDateStr) && 
+                event.title == originalEventTitle) {
+              try {
+                await calendarService.deleteCalendarEvent(event.id);
+              } catch (e) {
+                debugPrint('Failed to delete calendar event ${event.id}: $e');
+              }
+            }
+          }
+        }
+
+        if (mounted) {
+          SuccessSnackbar.show(context, 'Whole leave request rejected');
+        }
+      }
+
+      if (mounted) {
+        ref.invalidate(requestListProvider);
+        ref.invalidate(pendingRequestsCountProvider);
+        ref.invalidate(calendarEventsProvider);
+        ref.invalidate(calendarEventListProvider);
+      }
+    } catch (e) {
+      if (mounted) {
+        SuccessSnackbar.showError(
+          context,
+          'Failed to process modification: ${e.toString()}',
+        );
       }
     }
   }

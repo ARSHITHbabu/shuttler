@@ -49,10 +49,21 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
       }
     });
 
+    // Get both leave requests and modification requests
     final leaveRequestsAsync = coachId != null
         ? ref.watch(
             requestListProvider(
               requestType: 'coach_leave',
+              requesterId: coachId,
+              status: _selectedStatusFilter == 'all' ? null : _selectedStatusFilter,
+            ),
+          )
+        : const AsyncValue<List<Request>>.data([]);
+    
+    final modificationRequestsAsync = coachId != null
+        ? ref.watch(
+            requestListProvider(
+              requestType: 'coach_leave_modification',
               requesterId: coachId,
               status: _selectedStatusFilter == 'all' ? null : _selectedStatusFilter,
             ),
@@ -125,6 +136,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
               ),
             ),
             const SizedBox(height: AppDimensions.spacingM),
+            // Combine both leave requests and modification requests
             leaveRequestsAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (error, stack) => Text(
@@ -133,40 +145,92 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
                   color: isDark ? AppColors.error : AppColorsLight.error,
                 ),
               ),
-              data: (requests) {
-                if (requests.isEmpty) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(AppDimensions.spacingXl),
-                      child: Column(
-                        children: [
-                          Icon(
-                            Icons.event_busy_outlined,
-                            size: 48,
-                            color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
-                          ),
-                          const SizedBox(height: AppDimensions.spacingM),
-                          Text(
-                            'No leave requests yet',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
+              data: (leaveRequests) {
+                return modificationRequestsAsync.when(
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (error, stack) => Text(
+                    'Failed to load modification requests: ${error.toString()}',
+                    style: TextStyle(
+                      color: isDark ? AppColors.error : AppColorsLight.error,
                     ),
-                  );
-                }
+                  ),
+                  data: (modificationRequests) {
+                    // Find approved modifications and update original requests
+                    final approvedModifications = modificationRequests
+                        .where((r) => r.isApproved && r.metadata != null)
+                        .toList();
+                    
+                    // Create a map of original request ID to approved modification
+                    final modificationMap = <int, Request>{};
+                    for (final mod in approvedModifications) {
+                      final originalId = mod.metadata!['original_request_id'] as int?;
+                      if (originalId != null) {
+                        modificationMap[originalId] = mod;
+                      }
+                    }
+                    
+                    // Update leave requests with modification data if approved modification exists
+                    final updatedLeaveRequests = leaveRequests.map((req) {
+                      if (modificationMap.containsKey(req.id)) {
+                        final mod = modificationMap[req.id]!;
+                        // Create a new request with updated metadata
+                        final updatedMetadata = Map<String, dynamic>.from(req.metadata ?? {});
+                        updatedMetadata['start_date'] = mod.metadata!['new_start_date'];
+                        updatedMetadata['end_date'] = mod.metadata!['new_end_date'];
+                        updatedMetadata['dates'] = mod.metadata!['new_dates'];
+                        updatedMetadata['is_half_day'] = mod.metadata!['new_is_half_day'];
+                        updatedMetadata['total_days'] = mod.metadata!['new_total_days'];
+                        updatedMetadata['has_approved_modification'] = true;
+                        updatedMetadata['modification_reason'] = mod.description;
+                        updatedMetadata['original_reason'] = req.description;
+                        
+                        return req.copyWith(
+                          description: '${req.description ?? ''}\n\nModified: ${mod.description ?? ''}',
+                          metadata: updatedMetadata,
+                        );
+                      }
+                      return req;
+                    }).toList();
+                    
+                    // Combine and sort by creation date (newest first)
+                    final allRequests = [...updatedLeaveRequests, ...modificationRequests]
+                      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+                    
+                    if (allRequests.isEmpty) {
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(AppDimensions.spacingXl),
+                          child: Column(
+                            children: [
+                              Icon(
+                                Icons.event_busy_outlined,
+                                size: 48,
+                                color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
+                              ),
+                              const SizedBox(height: AppDimensions.spacingM),
+                              Text(
+                                'No leave requests yet',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
 
-                return ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: requests.length,
-                  itemBuilder: (context, index) {
-                    return _LeaveRequestCard(
-                      request: requests[index],
-                      isDark: isDark,
+                    return ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: allRequests.length,
+                      itemBuilder: (context, index) {
+                        return _LeaveRequestCard(
+                          request: allRequests[index],
+                          isDark: isDark,
+                        );
+                      },
                     );
                   },
                 );
@@ -672,25 +736,49 @@ class _LeaveRequestCard extends ConsumerWidget {
     bool isHalfDay = false;
     int? totalDays;
     List<DateTime>? originalDates;
+    bool isModification = request.requestType == 'coach_leave_modification';
 
     if (request.metadata != null) {
       try {
-        if (request.metadata!['start_date'] != null) {
-          startDate = DateFormat('MMM dd, yyyy')
-              .format(DateTime.parse(request.metadata!['start_date']));
-        }
-        if (request.metadata!['end_date'] != null) {
-          endDate = DateFormat('MMM dd, yyyy')
-              .format(DateTime.parse(request.metadata!['end_date']));
-        }
-        isHalfDay = request.metadata!['is_half_day'] == true;
-        totalDays = request.metadata!['total_days'] as int?;
-        
-        // Extract original dates for modification
-        if (request.metadata!['dates'] != null) {
-          final datesList = request.metadata!['dates'] as List<dynamic>?;
-          if (datesList != null) {
-            originalDates = datesList.map((d) => DateTime.parse(d as String)).toList();
+        if (isModification) {
+          // For modification requests, show new dates
+          if (request.metadata!['new_start_date'] != null) {
+            startDate = DateFormat('MMM dd, yyyy')
+                .format(DateTime.parse(request.metadata!['new_start_date']));
+          }
+          if (request.metadata!['new_end_date'] != null) {
+            endDate = DateFormat('MMM dd, yyyy')
+                .format(DateTime.parse(request.metadata!['new_end_date']));
+          }
+          isHalfDay = request.metadata!['new_is_half_day'] == true;
+          totalDays = request.metadata!['new_total_days'] as int?;
+          
+          // Also get original dates for reference
+          if (request.metadata!['original_dates'] != null) {
+            final datesList = request.metadata!['original_dates'] as List<dynamic>?;
+            if (datesList != null) {
+              originalDates = datesList.map((d) => DateTime.parse(d as String)).toList();
+            }
+          }
+        } else {
+          // Regular leave request
+          if (request.metadata!['start_date'] != null) {
+            startDate = DateFormat('MMM dd, yyyy')
+                .format(DateTime.parse(request.metadata!['start_date']));
+          }
+          if (request.metadata!['end_date'] != null) {
+            endDate = DateFormat('MMM dd, yyyy')
+                .format(DateTime.parse(request.metadata!['end_date']));
+          }
+          isHalfDay = request.metadata!['is_half_day'] == true;
+          totalDays = request.metadata!['total_days'] as int?;
+          
+          // Extract original dates for modification button
+          if (request.metadata!['dates'] != null) {
+            final datesList = request.metadata!['dates'] as List<dynamic>?;
+            if (datesList != null) {
+              originalDates = datesList.map((d) => DateTime.parse(d as String)).toList();
+            }
           }
         }
       } catch (e) {
@@ -710,7 +798,48 @@ class _LeaveRequestCard extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (startDate != null && endDate != null)
+                    if (isModification)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          'Modification Request',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.orange,
+                          ),
+                        ),
+                      )
+                    else if (request.metadata != null && request.metadata!['has_approved_modification'] == true)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.edit, size: 12, color: Colors.blue),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Modified',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.blue,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    if (startDate != null && endDate != null) ...[
+                      if (isModification || (request.metadata != null && request.metadata!['has_approved_modification'] == true)) 
+                        const SizedBox(height: 4),
                       Text(
                         startDate == endDate
                             ? '$startDate${isHalfDay ? ' (Half Day)' : ''}'
@@ -721,6 +850,7 @@ class _LeaveRequestCard extends ConsumerWidget {
                           color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                         ),
                       ),
+                    ],
                     if (totalDays != null && totalDays > 1)
                       Text(
                         '$totalDays days',
