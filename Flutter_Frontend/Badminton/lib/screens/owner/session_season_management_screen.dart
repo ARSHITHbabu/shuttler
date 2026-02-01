@@ -634,8 +634,10 @@ class _SessionCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppDimensions.spacingM),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+          Wrap(
+            alignment: WrapAlignment.end,
+            spacing: AppDimensions.spacingS,
+            runSpacing: AppDimensions.spacingS,
             children: [
               TextButton.icon(
                 onPressed: onViewBatches,

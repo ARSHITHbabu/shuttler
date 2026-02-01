@@ -269,11 +269,14 @@ class _AddPaymentDialogState extends ConsumerState<AddPaymentDialog> {
                       children: [
                         const Icon(Icons.calendar_today, color: AppColors.textSecondary),
                         const SizedBox(width: AppDimensions.spacingM),
-                        Text(
-                          'Date of Payment: ${DateFormat('dd MMM, yyyy').format(_paidDate)}',
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 16,
+                        Expanded(
+                          child: Text(
+                            'Date of Payment: ${DateFormat('dd MMM, yyyy').format(_paidDate)}',
+                            style: const TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: 16,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],

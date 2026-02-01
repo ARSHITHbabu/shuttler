@@ -513,17 +513,20 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                                 },
                                 child: Row(
                                   children: [
-                                    const Icon(Icons.access_time, color: AppColors.textSecondary),
-                                    const SizedBox(width: AppDimensions.spacingM),
-                                    Text(
-                                      _startTime != null
-                                          ? _startTime!.format(context)
-                                          : 'Select start time',
-                                      style: TextStyle(
-                                        color: _startTime != null
-                                            ? AppColors.textPrimary
-                                            : AppColors.textSecondary,
-                                        fontSize: 16,
+                                    const Icon(Icons.access_time, color: AppColors.textSecondary, size: 20),
+                                    const SizedBox(width: AppDimensions.spacingS),
+                                    Expanded(
+                                      child: Text(
+                                        _startTime != null
+                                            ? _startTime!.format(context)
+                                            : 'Start Time',
+                                        style: TextStyle(
+                                          color: _startTime != null
+                                              ? AppColors.textPrimary
+                                              : AppColors.textSecondary,
+                                          fontSize: 14,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
                                   ],
@@ -547,17 +550,20 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                                 },
                                 child: Row(
                                   children: [
-                                    const Icon(Icons.access_time, color: AppColors.textSecondary),
-                                    const SizedBox(width: AppDimensions.spacingM),
-                                    Text(
-                                      _endTime != null
-                                          ? _endTime!.format(context)
-                                          : 'Select end time',
-                                      style: TextStyle(
-                                        color: _endTime != null
-                                            ? AppColors.textPrimary
-                                            : AppColors.textSecondary,
-                                        fontSize: 16,
+                                    const Icon(Icons.access_time, color: AppColors.textSecondary, size: 20),
+                                    const SizedBox(width: AppDimensions.spacingS),
+                                    Expanded(
+                                      child: Text(
+                                        _endTime != null
+                                            ? _endTime!.format(context)
+                                            : 'End Time',
+                                        style: TextStyle(
+                                          color: _endTime != null
+                                              ? AppColors.textPrimary
+                                              : AppColors.textSecondary,
+                                          fontSize: 14,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
                                   ],

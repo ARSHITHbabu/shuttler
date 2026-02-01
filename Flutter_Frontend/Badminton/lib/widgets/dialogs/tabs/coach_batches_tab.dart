@@ -96,16 +96,26 @@ class CoachBatchesTab extends ConsumerWidget {
                           children: [
                             const Icon(Icons.access_time, size: 16, color: AppColors.textSecondary),
                             const SizedBox(width: AppDimensions.spacingS),
-                            Text(
-                              batch.timing,
-                              style: const TextStyle(color: AppColors.textPrimary),
+                            Expanded(
+                              child: Text(
+                                batch.timing,
+                                style: const TextStyle(color: AppColors.textPrimary),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                            const SizedBox(width: AppDimensions.spacingM),
+                          ],
+                        ),
+                        const SizedBox(height: AppDimensions.spacingS),
+                        Row(
+                          children: [
                             const Icon(Icons.calendar_today, size: 16, color: AppColors.textSecondary),
                             const SizedBox(width: AppDimensions.spacingS),
-                            Text(
-                              batch.period,
-                              style: const TextStyle(color: AppColors.textPrimary),
+                            Expanded(
+                              child: Text(
+                                batch.period,
+                                style: const TextStyle(color: AppColors.textPrimary),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                           ],
                         ),
