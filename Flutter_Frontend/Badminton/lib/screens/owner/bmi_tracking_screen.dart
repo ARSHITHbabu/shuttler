@@ -1134,15 +1134,14 @@ class _BMITrackingScreenState extends ConsumerState<BMITrackingScreen> {
           ),
           const SizedBox(height: AppDimensions.spacingS),
           // Legend
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: AppDimensions.spacingM,
+            runSpacing: AppDimensions.spacingS,
             children: [
               _buildLegendItem(Colors.blue, 'Underweight'),
-              const SizedBox(width: AppDimensions.spacingM),
               _buildLegendItem(AppColors.success, 'Normal'),
-              const SizedBox(width: AppDimensions.spacingM),
               _buildLegendItem(AppColors.warning, 'Overweight'),
-              const SizedBox(width: AppDimensions.spacingM),
               _buildLegendItem(AppColors.error, 'Obese'),
             ],
           ),

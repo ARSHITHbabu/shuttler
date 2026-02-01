@@ -206,109 +206,111 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
                   _selectedBatchId = batchId;
                 });
               },
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(
-                    Icons.groups,
-                    color: AppColors.textSecondary,
-                    size: 20,
-                  ),
-                  const SizedBox(width: AppDimensions.spacingS),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          batchName,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        if (batch.timeRange.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            batch.timeRange,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 4),
-                        Wrap(
-                          spacing: AppDimensions.spacingM,
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.groups,
+                        color: AppColors.textSecondary,
+                        size: 20,
+                      ),
+                      const SizedBox(width: AppDimensions.spacingS),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (batchPending > 0)
+                            Text(
+                              batchName,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                            if (batch.timeRange.isNotEmpty) ...[
+                              const SizedBox(height: 4),
                               Text(
-                                '\$${batchPending.toStringAsFixed(0)} pending',
+                                batch.timeRange,
                                 style: const TextStyle(
                                   fontSize: 12,
-                                  color: AppColors.warning,
+                                  color: AppColors.textSecondary,
                                 ),
                               ),
-                            if (batchPaid > 0)
-                              Text(
-                                '\$${batchPaid.toStringAsFixed(0)} paid',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.success,
-                                ),
-                              ),
-                            if (batchOverdue > 0)
-                              Text(
-                                '\$${batchOverdue.toStringAsFixed(0)} overdue',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.error,
-                                ),
-                              ),
+                            ],
                           ],
                         ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppDimensions.spacingS,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.cardBackground,
-                      borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                    ),
-                    child: Text(
-                      '${studentFees.length} student${studentFees.length != 1 ? 's' : ''}',
-                      style: const TextStyle(
-                        fontSize: 12,
+                      ),
+                      const Icon(
+                        Icons.chevron_right,
                         color: AppColors.textSecondary,
                       ),
-                    ),
+                    ],
                   ),
-                  const SizedBox(width: AppDimensions.spacingS),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppDimensions.spacingS,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.accent.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                    ),
-                    child: Text(
-                      '\$${batchFeeAmount.toStringAsFixed(0)}/student',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.accent,
-                        fontWeight: FontWeight.w600,
+                  const SizedBox(height: AppDimensions.spacingM),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppDimensions.spacingS,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.cardBackground,
+                          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                        ),
+                        child: Text(
+                          '${studentFees.length} student${studentFees.length != 1 ? 's' : ''}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: AppDimensions.spacingS),
+                      Expanded(
+                        child: Text(
+                          '\$${batchFeeAmount.toStringAsFixed(0)}/student',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.accent,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: AppDimensions.spacingS),
-                  const Icon(
-                    Icons.chevron_right,
-                    color: AppColors.textSecondary,
+                  const SizedBox(height: AppDimensions.spacingS),
+                  Wrap(
+                    spacing: AppDimensions.spacingM,
+                    children: [
+                      if (batchPending > 0)
+                        Text(
+                          '\$${batchPending.toStringAsFixed(0)} pending',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.warning,
+                          ),
+                        ),
+                      if (batchPaid > 0)
+                        Text(
+                          '\$${batchPaid.toStringAsFixed(0)} paid',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.success,
+                          ),
+                        ),
+                      if (batchOverdue > 0)
+                        Text(
+                          '\$${batchOverdue.toStringAsFixed(0)} overdue',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.error,
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ),
@@ -531,41 +533,47 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
   }) {
     return NeumorphicContainer(
       padding: const EdgeInsets.all(AppDimensions.paddingM),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _SummaryItem(
-            label: 'Total Students',
-            value: totalStudents.toString(),
-            color: AppColors.textSecondary,
-          ),
-          _SummaryItem(
-            label: 'Total Fee',
-            value: '\$${totalFeeAmount.toStringAsFixed(0)}',
-            color: AppColors.textPrimary,
-          ),
-          _SummaryItem(
-            label: 'Paid',
-            value: '\$${paidAmount.toStringAsFixed(0)}',
-            color: AppColors.success,
-          ),
-          _SummaryItem(
-            label: 'Pending',
-            value: '\$${pendingAmount.toStringAsFixed(0)}',
-            color: AppColors.warning,
-          ),
-          _SummaryItem(
-            label: 'Overdue',
-            value: '\$${overdueAmount.toStringAsFixed(0)}',
-            color: AppColors.error,
-          ),
-          if (totalFeeAmount > 0)
+      child: SizedBox(
+        width: double.infinity,
+        child: Wrap(
+          alignment: WrapAlignment.spaceEvenly,
+          runAlignment: WrapAlignment.center,
+          spacing: AppDimensions.spacingL,
+          runSpacing: AppDimensions.spacingM,
+          children: [
             _SummaryItem(
-              label: 'Collection',
-              value: '$collectionRate%',
-              color: AppColors.accent,
+              label: 'Total Students',
+              value: totalStudents.toString(),
+              color: AppColors.textSecondary,
             ),
-        ],
+            _SummaryItem(
+              label: 'Total Fee',
+              value: '\$${totalFeeAmount.toStringAsFixed(0)}',
+              color: AppColors.textPrimary,
+            ),
+            _SummaryItem(
+              label: 'Paid',
+              value: '\$${paidAmount.toStringAsFixed(0)}',
+              color: AppColors.success,
+            ),
+            _SummaryItem(
+              label: 'Pending',
+              value: '\$${pendingAmount.toStringAsFixed(0)}',
+              color: AppColors.warning,
+            ),
+            _SummaryItem(
+              label: 'Overdue',
+              value: '\$${overdueAmount.toStringAsFixed(0)}',
+              color: AppColors.error,
+            ),
+            if (totalFeeAmount > 0)
+              _SummaryItem(
+                label: 'Collection',
+                value: '$collectionRate%',
+                color: AppColors.accent,
+              ),
+          ],
+        ),
       ),
     );
   }
