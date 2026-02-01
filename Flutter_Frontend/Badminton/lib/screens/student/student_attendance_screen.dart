@@ -597,12 +597,17 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
                   });
                 },
               ),
-              Text(
-                '${months[currentMonth.month - 1]} ${currentMonth.year}',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+              Expanded(
+                child: Center(
+                  child: Text(
+                    '${months[currentMonth.month - 1]} ${currentMonth.year}',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
               IconButton(
