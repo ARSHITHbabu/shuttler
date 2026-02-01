@@ -660,11 +660,14 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
                     children: [
                       const Icon(Icons.calendar_today, color: AppColors.textSecondary),
                       const SizedBox(width: AppDimensions.spacingM),
-                      Text(
-                        'Start Date: ${DateFormat('dd MMM, yyyy').format(_selectedStartDate)}',
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 16,
+                      Expanded(
+                        child: Text(
+                          'Start Date: ${DateFormat('dd MMM, yyyy').format(_selectedStartDate)}',
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 16,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
@@ -693,11 +696,14 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
                     children: [
                       const Icon(Icons.calendar_today, color: AppColors.textSecondary),
                       const SizedBox(width: AppDimensions.spacingM),
-                      Text(
-                        'End Date: ${DateFormat('dd MMM, yyyy').format(_selectedEndDate)}',
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 16,
+                      Expanded(
+                        child: Text(
+                          'End Date: ${DateFormat('dd MMM, yyyy').format(_selectedEndDate)}',
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 16,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
