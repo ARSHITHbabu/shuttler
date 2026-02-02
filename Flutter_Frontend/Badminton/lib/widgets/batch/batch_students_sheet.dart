@@ -11,19 +11,22 @@ import '../../providers/student_provider.dart';
 import '../../models/batch.dart';
 import '../../models/student.dart';
 
+import 'batch_students_list.dart';
+
 /// Bottom sheet for managing students in a batch
 class BatchStudentsSheet extends ConsumerStatefulWidget {
   final Batch batch;
+  final bool isOwner;
 
-  const BatchStudentsSheet({super.key, required this.batch});
+  const BatchStudentsSheet({super.key, required this.batch, this.isOwner = true});
 
   /// Show the sheet
-  static Future<void> show(BuildContext context, Batch batch) async {
+  static Future<void> show(BuildContext context, Batch batch, {bool isOwner = true}) async {
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => BatchStudentsSheet(batch: batch),
+      builder: (context) => BatchStudentsSheet(batch: batch, isOwner: isOwner),
     );
   }
 
@@ -32,14 +35,12 @@ class BatchStudentsSheet extends ConsumerStatefulWidget {
 }
 
 class _BatchStudentsSheetState extends ConsumerState<BatchStudentsSheet> {
-  bool _isRemoving = false;
-
   @override
   Widget build(BuildContext context) {
     return Container(
       height: MediaQuery.of(context).size.height * 0.7,
       decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor,
+        color: AppColors.cardBackground,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(AppDimensions.radiusL)),
       ),
       child: Column(
@@ -75,11 +76,12 @@ class _BatchStudentsSheetState extends ConsumerState<BatchStudentsSheet> {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    IconButton(
-                      icon: const Icon(Icons.person_add, color: AppColors.accent),
-                      onPressed: () => AddStudentsSheet.show(context, widget.batch),
-                      tooltip: 'Add Students',
-                    ),
+                    if (widget.isOwner)
+                      IconButton(
+                        icon: const Icon(Icons.person_add, color: AppColors.accent),
+                        onPressed: () => AddStudentsSheet.show(context, widget.batch),
+                        tooltip: 'Add Students',
+                      ),
                     IconButton(
                       icon: const Icon(Icons.close),
                       onPressed: () => Navigator.of(context).pop(),
@@ -94,149 +96,16 @@ class _BatchStudentsSheetState extends ConsumerState<BatchStudentsSheet> {
 
           // Students List
           Expanded(
-            child: _buildStudentsList(),
+            child: SingleChildScrollView(
+              child: BatchStudentsList(
+                batch: widget.batch,
+                isOwner: widget.isOwner,
+              ),
+            ),
           ),
         ],
       ),
     );
-  }
-
-  Widget _buildStudentsList() {
-    final studentsAsync = ref.watch(batchStudentsProvider(widget.batch.id));
-
-    return studentsAsync.when(
-      loading: () => const Center(child: ListSkeleton(itemCount: 5)),
-      error: (error, stack) => ErrorDisplay(
-        message: 'Failed to load students: ${error.toString()}',
-        onRetry: () => ref.invalidate(batchStudentsProvider(widget.batch.id)),
-      ),
-      data: (students) {
-        if (students.isEmpty) {
-          return Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              EmptyState.noStudents(),
-              const SizedBox(height: AppDimensions.spacingM),
-              TextButton.icon(
-                onPressed: () => AddStudentsSheet.show(context, widget.batch),
-                icon: const Icon(Icons.person_add),
-                label: const Text('Add Students'),
-              ),
-            ],
-          );
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(AppDimensions.paddingL),
-          itemCount: students.length,
-          itemBuilder: (context, index) {
-            final student = students[index];
-            return Padding(
-              padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
-              child: NeumorphicContainer(
-                padding: const EdgeInsets.all(AppDimensions.paddingM),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 24,
-                      backgroundColor: AppColors.background,
-                      child: Text(
-                        student.name.isNotEmpty ? student.name[0].toUpperCase() : '?',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: AppDimensions.spacingM),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            student.name,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                          if (student.phone.isNotEmpty) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              student.phone,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: _isRemoving
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.remove_circle_outline, color: AppColors.error),
-                      onPressed: _isRemoving ? null : () => _removeStudent(student),
-                      tooltip: 'Remove from batch',
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Future<void> _removeStudent(Student student) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Remove Student'),
-        content: Text('Are you sure you want to remove ${student.name} from this batch?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    setState(() => _isRemoving = true);
-
-    try {
-      await ref.read(batchListProvider.notifier).removeStudent(
-        widget.batch.id,
-        student.id,
-      );
-      if (mounted) {
-        SuccessSnackbar.show(context, '${student.name} removed from batch');
-      }
-    } catch (e) {
-      if (mounted) {
-        SuccessSnackbar.showError(context, 'Failed to remove student: ${e.toString()}');
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isRemoving = false);
-      }
-    }
   }
 }
 

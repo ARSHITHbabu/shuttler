@@ -10,10 +10,12 @@ import '../../providers/batch_provider.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/session_provider.dart';
 import '../../providers/student_provider.dart';
-import '../../widgets/batch/batch_students_sheet.dart';
+import '../../core/constants/api_endpoints.dart';
+import '../batch/batch_students_list.dart';
+import '../batch/batch_students_sheet.dart';
 import '../../models/batch.dart';
 import '../../models/coach.dart';
-import '../../core/constants/api_endpoints.dart';
+import '../../models/student.dart';
 
 /// Batch Details Dialog - Comprehensive dialog for viewing and editing batch details
 class BatchDetailsDialog extends ConsumerStatefulWidget {
@@ -59,6 +61,7 @@ class _BatchDetailsDialogState extends ConsumerState<BatchDetailsDialog> {
   List<Coach> _coaches = [];
   bool _isLoadingCoaches = false;
   bool _isSaving = false;
+  String _activeTab = 'info'; // 'info' or 'students'
 
   @override
   void initState() {
@@ -244,13 +247,16 @@ class _BatchDetailsDialogState extends ConsumerState<BatchDetailsDialog> {
           mainAxisSize: MainAxisSize.min,
           children: [
             _buildHeader(),
+            if (widget.batch != null && !_isEditing) _buildTabSelector(),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(AppDimensions.paddingL),
-                child: _isEditing ? _buildEditForm() : _buildViewDetails(),
+                child: _activeTab == 'info' 
+                    ? (_isEditing ? _buildEditForm() : _buildViewDetails())
+                    : BatchStudentsList(batch: widget.batch!, isOwner: widget.isOwner),
               ),
             ),
-            if (_isEditing) _buildFooter(),
+            if (_isEditing && _activeTab == 'info') _buildFooter(),
           ],
         ),
       ),
@@ -280,12 +286,20 @@ class _BatchDetailsDialogState extends ConsumerState<BatchDetailsDialog> {
               ),
             ),
           ),
-          if (widget.batch != null && widget.isOwner && !_isEditing)
-            IconButton(
-              icon: const Icon(Icons.edit, color: AppColors.accent),
-              onPressed: () => setState(() => _isEditing = true),
-              tooltip: 'Edit Batch',
-            ),
+          if (widget.batch != null && widget.isOwner && !_isEditing) ...[
+            if (_activeTab == 'students')
+              IconButton(
+                icon: const Icon(Icons.person_add, color: AppColors.accent),
+                onPressed: () => AddStudentsSheet.show(context, widget.batch!),
+                tooltip: 'Add Students',
+              )
+            else
+              IconButton(
+                icon: const Icon(Icons.edit, color: AppColors.accent),
+                onPressed: () => setState(() => _isEditing = true),
+                tooltip: 'Edit Batch',
+              ),
+          ],
           IconButton(
             icon: const Icon(Icons.close, color: AppColors.textSecondary),
             onPressed: () => Navigator.of(context).pop(),
@@ -327,35 +341,39 @@ class _BatchDetailsDialogState extends ConsumerState<BatchDetailsDialog> {
             )).toList(),
           ),
           
-        const SizedBox(height: AppDimensions.spacingL),
-        SizedBox(
-          width: double.infinity,
-          child: NeumorphicContainer(
-            padding: const EdgeInsets.symmetric(vertical: AppDimensions.paddingM),
-            onTap: () {
-              Navigator.of(context).pop();
-              // Original implementation of viewing students
-              _showBatchStudents(context, batch);
-            },
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.people_outline, color: AppColors.accent),
-                const SizedBox(width: AppDimensions.spacingS),
-                Text(
-                  widget.isOwner ? 'Manage Students' : 'View Students',
-                  style: const TextStyle(color: AppColors.accent, fontWeight: FontWeight.w600),
-                ),
-              ],
-            ),
-          ),
-        ),
       ],
     );
   }
 
-  void _showBatchStudents(BuildContext context, Batch batch) {
-    BatchStudentsSheet.show(context, batch);
+  Widget _buildTabSelector() {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      margin: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL, vertical: AppDimensions.paddingS),
+      child: NeumorphicContainer(
+        padding: EdgeInsets.zero,
+        child: Row(
+          children: [
+            Expanded(
+              child: _TabButton(
+                label: 'Info',
+                icon: Icons.info_outline,
+                isActive: _activeTab == 'info',
+                onTap: () => setState(() => _activeTab = 'info'),
+              ),
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: _TabButton(
+                label: 'Students',
+                icon: Icons.people_outline,
+                isActive: _activeTab == 'students',
+                onTap: () => setState(() => _activeTab = 'students'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildEditForm() {
@@ -598,6 +616,57 @@ class _BatchDetailsDialogState extends ConsumerState<BatchDetailsDialog> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _TabButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool isActive;
+  final VoidCallback onTap;
+
+  const _TabButton({
+    required this.label,
+    required this.icon,
+    required this.isActive,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          vertical: AppDimensions.spacingS,
+          horizontal: AppDimensions.spacingXs,
+        ),
+        decoration: BoxDecoration(
+          color: isActive ? AppColors.accent.withOpacity(0.15) : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: isActive ? AppColors.accent : AppColors.textSecondary,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: isActive ? AppColors.accent : AppColors.textSecondary,
+                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                fontSize: 13,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
