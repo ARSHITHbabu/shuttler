@@ -15,6 +15,7 @@ import '../../providers/student_provider.dart';
 import '../../widgets/forms/add_payment_dialog.dart';
 import '../../widgets/forms/edit_fee_dialog.dart';
 import '../../models/fee_payment.dart';
+import '../../models/batch_fee_group.dart';
 import 'student_profile_screen.dart';
 
 /// Fees Screen - Shows paid and unpaid fees with overview and deep view
@@ -137,7 +138,7 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
             _selectedFee == null && _selectedBatchId == null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             for (final batchEntry in batchGroups.entries) {
-              for (final studentFee in batchEntry.value) {
+              for (final studentFee in batchEntry.value.students) {
                 if ((widget.selectedStudentId != null && 
                      studentFee.student.id == widget.selectedStudentId) ||
                     (widget.selectedStudentName != null && 
@@ -162,8 +163,8 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
         // Sort batches by name
         final sortedBatches = batchGroups.entries.toList()
           ..sort((a, b) {
-            final nameA = a.value.first.batch.batchName;
-            final nameB = b.value.first.batch.batchName;
+            final nameA = a.value.batch.batchName;
+            final nameB = b.value.batch.batchName;
             return nameA.compareTo(nameB);
           });
 
@@ -171,10 +172,19 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: sortedBatches.map((batchEntry) {
             final batchId = batchEntry.key;
-            final studentFees = batchEntry.value;
-            final batch = studentFees.first.batch;
+            final group = batchEntry.value;
+            final studentFees = group.students;
+            final batch = group.batch;
             final batchName = batch.batchName;
-            final batchFeeAmount = studentFees.first.batchFeeAmount;
+            
+            // Parse batch fee amount
+            double batchFeeAmount = 0;
+            try {
+              final feeString = batch.fees.replaceAll(RegExp(r'[\$,\s]'), '');
+              batchFeeAmount = double.parse(feeString);
+            } catch (e) {
+              batchFeeAmount = 0;
+            }
             
             // Calculate batch stats for preview
             double batchPending = 0;
@@ -335,20 +345,40 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
         },
       ),
       data: (batchGroups) {
-        final studentFees = batchGroups[_selectedBatchId];
-        if (studentFees == null || studentFees.isEmpty) {
-          return const Padding(
-            padding: EdgeInsets.all(AppDimensions.paddingM),
-            child: Text(
-              'No students found in this batch',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
-          );
+        final group = batchGroups[_selectedBatchId];
+        if (group == null) {
+          return const Center(child: Text('Batch not found'));
         }
-
-        final batch = studentFees.first.batch;
+        
+        final studentFees = group.students;
+        final batch = group.batch;
         final batchName = batch.batchName;
         final batchTimeRange = batch.timeRange;
+
+        if (studentFees.isEmpty) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildBatchDetailHeader(batchName, batchTimeRange),
+              const SizedBox(height: AppDimensions.spacingL),
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(AppDimensions.paddingL),
+                  child: Column(
+                    children: [
+                      Icon(Icons.people_outline, size: 48, color: AppColors.textTertiary),
+                      SizedBox(height: AppDimensions.spacingM),
+                      Text(
+                        'No students assigned to this batch.',
+                        style: TextStyle(color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
 
         // Filter students based on selected filter
         List<StudentWithBatchFee> filteredStudents = studentFees;
@@ -396,51 +426,7 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Batch Header with Back Button
-            NeumorphicContainer(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppDimensions.paddingM,
-                vertical: AppDimensions.spacingS,
-              ),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(
-                      Icons.arrow_back,
-                      color: AppColors.textSecondary,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _selectedBatchId = null;
-                        _selectedFilter = 'all'; // Reset filter when going back
-                      });
-                    },
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          batchName,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        if (batchTimeRange.isNotEmpty)
-                          Text(
-                            batchTimeRange,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            _buildBatchDetailHeader(batchName, batchTimeRange),
             const SizedBox(height: AppDimensions.spacingL),
             
             // Filter Chips
@@ -1348,6 +1334,54 @@ class _FeesScreenState extends ConsumerState<FeesScreen> {
               foregroundColor: Colors.white,
             ),
             child: const Text('Send'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBatchDetailHeader(String batchName, String batchTimeRange) {
+    return NeumorphicContainer(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppDimensions.paddingM,
+        vertical: AppDimensions.spacingS,
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(
+              Icons.arrow_back,
+              color: AppColors.textSecondary,
+            ),
+            onPressed: () {
+              setState(() {
+                _selectedBatchId = null;
+                _selectedFilter = 'all'; // Reset filter when going back
+              });
+            },
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  batchName,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                if (batchTimeRange.isNotEmpty)
+                  Text(
+                    batchTimeRange,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+              ],
+            ),
           ),
         ],
       ),
