@@ -162,14 +162,8 @@ class _AddStudentDialogState extends ConsumerState<AddStudentDialog> {
             children: [
             if (hasPhone && hasEmail) ...[
               _InviteOption(
-                icon: Icons.chat,
-                label: 'Send via WhatsApp',
-                onTap: () => _sendViaWhatsApp(phone, inviteLink),
-              ),
-              const SizedBox(height: AppDimensions.spacingS),
-              _InviteOption(
                 icon: Icons.message,
-                label: 'Send via Messages',
+                label: 'Send via Message',
                 onTap: () => _sendViaSMS(phone, inviteLink),
               ),
               const SizedBox(height: AppDimensions.spacingS),
@@ -186,14 +180,8 @@ class _AddStudentDialogState extends ConsumerState<AddStudentDialog> {
               ),
             ] else if (hasPhone) ...[
               _InviteOption(
-                icon: Icons.chat,
-                label: 'Send via WhatsApp',
-                onTap: () => _sendViaWhatsApp(phone, inviteLink),
-              ),
-              const SizedBox(height: AppDimensions.spacingS),
-              _InviteOption(
                 icon: Icons.message,
-                label: 'Send via Messages',
+                label: 'Send via Message',
                 onTap: () => _sendViaSMS(phone, inviteLink),
               ),
               const SizedBox(height: AppDimensions.spacingS),
@@ -228,21 +216,7 @@ class _AddStudentDialogState extends ConsumerState<AddStudentDialog> {
     );
   }
 
-  Future<void> _sendViaWhatsApp(String phone, String link) async {
-    final url = 'https://wa.me/$phone?text=${Uri.encodeComponent('Join our academy! $link')}';
-    if (await canLaunchUrl(Uri.parse(url))) {
-      await launchUrl(Uri.parse(url));
-      Navigator.of(context).pop(); // Close invite options
-      Navigator.of(context).pop(); // Close main dialog
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not open WhatsApp'),
-          backgroundColor: AppColors.error,
-        ),
-      );
-    }
-  }
+
 
   Future<void> _sendViaSMS(String phone, String link) async {
     final url = 'sms:$phone?body=${Uri.encodeComponent('Join our academy! $link')}';

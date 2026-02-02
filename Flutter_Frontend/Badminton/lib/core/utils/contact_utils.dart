@@ -25,26 +25,14 @@ class ContactUtils {
     }
   }
 
-  static Future<void> launchSms(String phone) async {
+  static Future<void> launchSms(String phone, {String? message}) async {
     final Uri smsUri = Uri(
       scheme: 'sms',
       path: phone,
+      queryParameters: message != null ? {'body': message} : null,
     );
     if (await canLaunchUrl(smsUri)) {
       await launchUrl(smsUri);
-    }
-  }
-
-  static Future<void> launchWhatsApp(String phone) async {
-    // Sanitize phone number (remove all non-digit characters)
-    final cleanedPhone = phone.replaceAll(RegExp(r'\D'), '');
-    final Uri whatsappUri = Uri.parse("https://wa.me/$cleanedPhone");
-    
-    if (await canLaunchUrl(whatsappUri)) {
-      await launchUrl(
-        whatsappUri,
-        mode: LaunchMode.externalApplication,
-      );
     }
   }
 
@@ -130,25 +118,12 @@ class ContactUtils {
                 Expanded(
                   child: _ContactActionCard(
                     icon: Icons.message_outlined,
-                    label: 'SMS',
+                    label: 'Message',
                     color: AppColors.accent,
                     isDark: isDark,
                     onTap: () {
                       Navigator.pop(context);
                       launchSms(phone);
-                    },
-                  ),
-                ),
-                const SizedBox(width: AppDimensions.spacingS),
-                Expanded(
-                  child: _ContactActionCard(
-                    icon: Icons.chat,
-                    label: 'WhatsApp',
-                    color: const Color(0xFF25D366),
-                    isDark: isDark,
-                    onTap: () {
-                      Navigator.pop(context);
-                      launchWhatsApp(phone);
                     },
                   ),
                 ),
