@@ -3,6 +3,7 @@ import '../models/fee.dart';
 import '../models/student_with_batch_fee.dart';
 import '../models/student.dart';
 import '../models/batch.dart';
+import '../models/batch_fee_group.dart';
 import 'service_providers.dart';
 import 'dashboard_provider.dart';
 import 'batch_provider.dart';
@@ -153,7 +154,7 @@ Future<List<Fee>> overdueFees(OverdueFeesRef ref) async {
 /// Provider for all students with their batch enrollments and fee status
 /// Returns students grouped by batch with their fee information
 @riverpod
-Future<Map<int, List<StudentWithBatchFee>>> studentsWithBatchFees(
+Future<Map<int, BatchFeeGroup>> studentsWithBatchFees(
   StudentsWithBatchFeesRef ref,
 ) async {
   final batchService = ref.watch(batchServiceProvider);
@@ -165,8 +166,8 @@ Future<Map<int, List<StudentWithBatchFee>>> studentsWithBatchFees(
   // Get all existing fees
   final allFees = await feeService.getFees();
   
-  // Map to store batchId -> List<StudentWithBatchFee>
-  final Map<int, List<StudentWithBatchFee>> result = {};
+  // Map to store batchId -> BatchFeeGroup
+  final Map<int, BatchFeeGroup> result = {};
   
   // For each batch, get enrolled students and match with fees
   for (final batch in batches) {
@@ -205,9 +206,11 @@ Future<Map<int, List<StudentWithBatchFee>>> studentsWithBatchFees(
         );
       }).toList();
       
-      if (studentFeeList.isNotEmpty) {
-        result[batch.id] = studentFeeList;
-      }
+      // Always add the batch to the result, even if studentFeeList is empty
+      result[batch.id] = BatchFeeGroup(
+        batch: batch,
+        students: studentFeeList,
+      );
     } catch (e) {
       // Skip batch if there's an error fetching students
       continue;
