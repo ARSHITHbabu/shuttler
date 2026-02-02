@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
+import '../../providers/auth_provider.dart';
+import '../../widgets/owner/force_change_password_dialog.dart';
 import 'home_screen.dart';
 import 'batches_screen.dart';
 import 'attendance_screen.dart';
@@ -10,15 +13,35 @@ import 'more_screen.dart';
 
 /// Owner Dashboard with bottom navigation
 /// Matches React reference: OwnerDashboard.tsx
-class OwnerDashboard extends StatefulWidget {
+class OwnerDashboard extends ConsumerStatefulWidget {
   const OwnerDashboard({super.key});
 
   @override
-  State<OwnerDashboard> createState() => _OwnerDashboardState();
+  ConsumerState<OwnerDashboard> createState() => _OwnerDashboardState();
 }
 
-class _OwnerDashboardState extends State<OwnerDashboard> {
+class _OwnerDashboardState extends ConsumerState<OwnerDashboard> {
   int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    // Check if user must change password
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkForceChangePassword();
+    });
+  }
+
+  void _checkForceChangePassword() {
+    final authState = ref.read(authProvider).value;
+    if (authState is Authenticated && authState.mustChangePassword) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const ForceChangePasswordDialog(),
+      );
+    }
+  }
 
   final List<Widget> _screens = [
     const HomeScreen(),

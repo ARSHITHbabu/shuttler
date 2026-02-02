@@ -140,6 +140,10 @@ class OwnerDB(Base):
     academy_contact = Column(String(50), nullable=True)
     academy_email = Column(String(100), nullable=True)
     
+    # Ownership and Permissions:
+    role = Column(String(20), default="owner")  # "owner" (primary), "co_owner"
+    must_change_password = Column(Boolean, default=False)
+    
     # RELATIONSHIPS (will be defined after the related models are created):
     # Note: Announcements and calendar events now support both coaches and owners via polymorphic relationships
 
@@ -486,6 +490,8 @@ def migrate_database_schema(engine):
             check_and_add_column(engine, 'owners', 'academy_address', 'TEXT', nullable=True)
             check_and_add_column(engine, 'owners', 'academy_contact', 'VARCHAR(50)', nullable=True)
             check_and_add_column(engine, 'owners', 'academy_email', 'VARCHAR(100)', nullable=True)
+            check_and_add_column(engine, 'owners', 'role', 'VARCHAR(20)', nullable=True, default_value="'owner'")
+            check_and_add_column(engine, 'owners', 'must_change_password', 'BOOLEAN', nullable=True, default_value="FALSE")
         
         # Migrate students table
         if 'students' in tables:
@@ -938,6 +944,10 @@ class CoachLogin(BaseModel):
     email: str
     password: str
 
+class UnifiedLoginRequest(BaseModel):
+    email: str
+    password: str
+
 class ForgotPasswordRequest(BaseModel):
     email: str
     user_type: str  # "coach", "owner", or "student"
@@ -972,6 +982,8 @@ class OwnerCreate(BaseModel):
     password: str
     specialization: Optional[str] = None
     experience_years: Optional[int] = None
+    role: Optional[str] = "owner"
+    must_change_password: Optional[bool] = False
 
 class Owner(BaseModel):
     id: int
@@ -981,6 +993,8 @@ class Owner(BaseModel):
     specialization: Optional[str] = None
     experience_years: Optional[int] = None
     status: str = "active"
+    role: str = "owner"
+    must_change_password: bool = False
     profile_photo: Optional[str] = None
     fcm_token: Optional[str] = None
     academy_name: Optional[str] = None
@@ -1002,12 +1016,16 @@ class OwnerUpdate(BaseModel):
     password: Optional[str] = None
     specialization: Optional[str] = None
     experience_years: Optional[int] = None
+    must_change_password: Optional[bool] = None
     profile_photo: Optional[str] = None
     fcm_token: Optional[str] = None
     academy_name: Optional[str] = None
     academy_address: Optional[str] = None
     academy_contact: Optional[str] = None
     academy_email: Optional[str] = None
+
+class TransferOwnershipRequest(BaseModel):
+    new_owner_id: int
 
 # Batch Models
 # Session Models
@@ -1798,6 +1816,117 @@ def delete_coach(coach_id: int):
     finally:
         db.close()
 
+@app.post("/auth/login")
+def unified_login(login_data: UnifiedLoginRequest):
+    """
+    Unified login endpoint that detects user type (owner, coach, or student)
+    and validates credentials.
+    """
+    db = SessionLocal()
+    try:
+        # 1. Try OwnerDB
+        owner = db.query(OwnerDB).filter(OwnerDB.email == login_data.email).first()
+        if owner:
+            password_valid = False
+            if owner.password.startswith('$2b$') or owner.password.startswith('$2a$'):
+                password_valid = verify_password(login_data.password, owner.password)
+            else:
+                password_valid = (owner.password == login_data.password)
+                if password_valid:
+                    owner.password = hash_password(login_data.password)
+                    db.commit()
+            
+            if password_valid:
+                if owner.status == "inactive":
+                    return {"success": False, "message": "Your account has been deactivated."}
+                
+                return {
+                    "success": True,
+                    "userType": "owner",
+                    "user": {
+                        "id": owner.id,
+                        "name": owner.name,
+                        "email": owner.email,
+                        "phone": owner.phone,
+                        "role": owner.role,
+                        "must_change_password": owner.must_change_password,
+                        "profile_photo": owner.profile_photo
+                    }
+                }
+
+        # 2. Try CoachDB
+        coach = db.query(CoachDB).filter(CoachDB.email == login_data.email).first()
+        if coach:
+            password_valid = False
+            if coach.password.startswith('$2b$') or coach.password.startswith('$2a$'):
+                password_valid = verify_password(login_data.password, coach.password)
+            else:
+                password_valid = (coach.password == login_data.password)
+                if password_valid:
+                    coach.password = hash_password(login_data.password)
+                    db.commit()
+            
+            if password_valid:
+                if coach.status == "inactive":
+                    return {"success": False, "message": "Your account has been deactivated."}
+                
+                return {
+                    "success": True,
+                    "userType": "coach",
+                    "user": {
+                        "id": coach.id,
+                        "name": coach.name,
+                        "email": coach.email,
+                        "phone": coach.phone,
+                        "specialization": coach.specialization,
+                        "experience_years": coach.experience_years,
+                        "status": coach.status,
+                        "profile_photo": coach.profile_photo
+                    }
+                }
+
+        # 3. Try StudentDB
+        student = db.query(StudentDB).filter(StudentDB.email == login_data.email).first()
+        if student:
+            password_valid = False
+            if student.password.startswith('$2b$') or student.password.startswith('$2a$'):
+                password_valid = verify_password(login_data.password, student.password)
+            else:
+                password_valid = (student.password == login_data.password)
+                if password_valid:
+                    student.password = hash_password(login_data.password)
+                    db.commit()
+            
+            if password_valid:
+                # Check profile completeness
+                required_profile_fields = {
+                    'guardian_name': student.guardian_name,
+                    'guardian_phone': student.guardian_phone,
+                    'date_of_birth': student.date_of_birth,
+                    'address': student.address,
+                    'profile_photo': student.profile_photo,
+                    't_shirt_size': student.t_shirt_size,
+                }
+                profile_complete = all(v is not None and str(v).strip() != '' for v in required_profile_fields.values())
+                
+                return {
+                    "success": True,
+                    "userType": "student",
+                    "profile_complete": profile_complete,
+                    "user": {
+                        "id": student.id,
+                        "name": student.name,
+                        "email": student.email,
+                        "phone": student.phone,
+                        "status": student.status,
+                        "profile_photo": student.profile_photo
+                    }
+                }
+
+        return {"success": False, "message": "Invalid email or password"}
+    finally:
+        db.close()
+
 @app.post("/coaches/login")
 def login_coach(login_data: CoachLogin):
     """Login endpoint for coaches only - owners should use /owners/login"""
@@ -1862,13 +1991,28 @@ def forgot_password(request: ForgotPasswordRequest):
     """Request password reset - generates a reset token"""
     db = SessionLocal()
     try:
-        # Find user by email and type
-        if request.user_type == "coach":
+        # Find user by email across all tables to determine user_type
+        user = None
+        user_type = request.user_type # Use provided as hint
+
+        # Try provided type first
+        if user_type == "coach":
             user = db.query(CoachDB).filter(CoachDB.email == request.email).first()
-        elif request.user_type == "owner":
+        elif user_type == "owner":
             user = db.query(OwnerDB).filter(OwnerDB.email == request.email).first()
-        else:
+        elif user_type == "student":
             user = db.query(StudentDB).filter(StudentDB.email == request.email).first()
+        
+        # If not found, search all
+        if not user:
+            user = db.query(OwnerDB).filter(OwnerDB.email == request.email).first()
+            if user: user_type = "owner"
+            else:
+                user = db.query(CoachDB).filter(CoachDB.email == request.email).first()
+                if user: user_type = "coach"
+                else:
+                    user = db.query(StudentDB).filter(StudentDB.email == request.email).first()
+                    if user: user_type = "student"
         
         if not user:
             # Don't reveal if email exists for security
@@ -1883,7 +2027,7 @@ def forgot_password(request: ForgotPasswordRequest):
         # Store token with expiration (1 hour)
         password_reset_tokens[reset_token] = {
             "email": request.email,
-            "user_type": request.user_type,
+            "user_type": user_type, # Use the detected type
             "expires_at": datetime.now() + timedelta(hours=1)
         }
         
@@ -1927,10 +2071,11 @@ def reset_password(request: ResetPasswordRequest):
                 "message": "Invalid reset token"
             }
         
-        # Find user
-        if request.user_type == "coach":
+        # Find user using the user_type from token
+        target_user_type = token_data["user_type"]
+        if target_user_type == "coach":
             user = db.query(CoachDB).filter(CoachDB.email == request.email).first()
-        elif request.user_type == "owner":
+        elif target_user_type == "owner":
             user = db.query(OwnerDB).filter(OwnerDB.email == request.email).first()
         else:
             user = db.query(StudentDB).filter(StudentDB.email == request.email).first()
@@ -2044,6 +2189,10 @@ def create_owner(owner: OwnerCreate):
         owner_dict['password'] = hash_password(owner_dict['password'])
         owner_dict['status'] = "active"  # Default status
         
+        # If creating a co-owner, set must_change_password to True
+        if owner_dict.get('role') == 'co_owner':
+            owner_dict['must_change_password'] = True
+        
         # Explicitly create OwnerDB instance (saves to owners table)
         db_owner = OwnerDB(**owner_dict)
         
@@ -2122,6 +2271,8 @@ def update_owner(owner_id: int, owner_update: OwnerUpdate):
         # Hash password if provided
         if 'password' in update_data:
             update_data['password'] = hash_password(update_data['password'])
+            # Reset must_change_password if they are changing their password
+            update_data['must_change_password'] = False
         
         for key, value in update_data.items():
             setattr(owner, key, value)
@@ -2196,6 +2347,8 @@ def login_owner(login_data: OwnerLogin):
                     "specialization": owner.specialization,
                     "experience_years": owner.experience_years,
                     "status": owner.status,
+                    "role": owner.role,
+                    "must_change_password": owner.must_change_password,
                     "profile_photo": owner.profile_photo
                 }
             }
@@ -2204,6 +2357,45 @@ def login_owner(login_data: OwnerLogin):
                 "success": False,
                 "message": "Invalid email or password"
             }
+    finally:
+        db.close()
+
+@app.post("/owners/{owner_id}/transfer-ownership")
+def transfer_ownership(owner_id: int, request: TransferOwnershipRequest):
+    """
+    Transfer primary ownership to another user.
+    The current owner becomes a co_owner.
+    """
+    db = SessionLocal()
+    try:
+        # 1. Verify current owner exists and is actually the owner
+        current_owner = db.query(OwnerDB).filter(OwnerDB.id == owner_id).first()
+        if not current_owner:
+            raise HTTPException(status_code=404, detail="Current owner not found")
+        
+        if current_owner.role != "owner":
+            raise HTTPException(status_code=403, detail="Only the primary owner can transfer ownership")
+        
+        # 2. Verify new owner exists
+        new_owner = db.query(OwnerDB).filter(OwnerDB.id == request.new_owner_id).first()
+        if not new_owner:
+            raise HTTPException(status_code=404, detail="New owner not found")
+        
+        if new_owner.id == current_owner.id:
+            raise HTTPException(status_code=400, detail="Cannot transfer ownership to yourself")
+
+        # 3. Swap roles
+        new_owner.role = "owner"
+        current_owner.role = "co_owner"
+        
+        db.commit()
+        return {"success": True, "message": f"Ownership transferred to {new_owner.name}"}
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
 
