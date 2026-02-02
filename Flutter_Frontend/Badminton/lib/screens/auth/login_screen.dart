@@ -12,12 +12,7 @@ import '../../providers/auth_provider.dart';
 
 /// Login screen for user authentication
 class LoginScreen extends ConsumerStatefulWidget {
-  final String userType;
-
-  const LoginScreen({
-    super.key,
-    required this.userType,
-  });
+  const LoginScreen({super.key});
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
@@ -49,24 +44,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final result = await ref.read(authProvider.notifier).login(
             email: _emailController.text.trim(),
             password: _passwordController.text,
-            userType: widget.userType,
             rememberMe: _rememberMe,
           );
 
       if (mounted) {
+        final userType = result['userType'];
+        
         // Check profile completeness for students
-        if (widget.userType == 'student') {
+        if (userType == 'student') {
           final profileComplete = result['profile_complete'] ?? false;
           if (!profileComplete) {
-            // Redirect to profile completion page
             context.go('/student-profile-complete');
             return;
           }
         }
 
-        // Navigate to appropriate dashboard based on user type
+        // Navigate based on user type
         String route;
-        switch (widget.userType) {
+        switch (userType) {
           case 'owner':
             route = '/owner-dashboard';
             break;
@@ -83,46 +78,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       }
     } catch (e) {
       if (mounted) {
-        // Extract user-friendly error message
-        String errorMessage = 'An error occurred. Please try again.';
-        if (e.toString().contains('Exception: ')) {
-          errorMessage = e.toString().replaceAll('Exception: ', '');
-        } else if (e.toString().isNotEmpty) {
-          errorMessage = e.toString();
-        }
-        
-        SuccessSnackbar.showError(context, errorMessage);
+        SuccessSnackbar.showError(context, e.toString().replaceAll('Exception: ', ''));
       }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
       }
-    }
-  }
-
-  String _getRoleTitle() {
-    switch (widget.userType) {
-      case 'owner':
-        return 'Owner';
-      case 'coach':
-        return 'Coach';
-      case 'student':
-        return 'Student';
-      default:
-        return 'User';
-    }
-  }
-
-  IconData _getRoleIcon() {
-    switch (widget.userType) {
-      case 'owner':
-        return Icons.admin_panel_settings;
-      case 'coach':
-        return Icons.person_outline;
-      case 'student':
-        return Icons.school_outlined;
-      default:
-        return Icons.person;
     }
   }
 
@@ -133,17 +94,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () {
-            // Check if we can pop, otherwise navigate to home
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go('/');
-            }
-          },
-        ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -153,15 +103,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Role Icon
+                // App Icon
                 Container(
                   padding: const EdgeInsets.all(AppDimensions.paddingL),
                   decoration: BoxDecoration(
                     color: AppColors.accent.withOpacity(0.1),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(
-                    _getRoleIcon(),
+                  child: const Icon(
+                    Icons.sports_tennis,
                     size: 64,
                     color: AppColors.accent,
                   ),
@@ -181,7 +131,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                 // Subtitle
                 Text(
-                  'Sign in as ${_getRoleTitle()}',
+                  'Sign in to your account',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                         color: AppColors.textSecondary,
@@ -263,7 +213,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       onPressed: _isLoading
                           ? null
                           : () {
-                              context.push('/forgot-password', extra: widget.userType);
+                              context.push('/forgot-password');
                             },
                       child: Text(
                         'Forgot Password?',
@@ -302,7 +252,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       onPressed: _isLoading
                           ? null
                           : () {
-                              context.push('/signup', extra: widget.userType);
+                              context.push('/signup');
                             },
                       child: Text(
                         'Sign Up',

@@ -16,44 +16,34 @@ import '../screens/coach/coach_dashboard.dart';
 class AppRouter {
   static GoRouter createRouter() {
     return GoRouter(
-      initialLocation: '/',
+      initialLocation: '/login',
       debugLogDiagnostics: true,
       routes: [
-        // Root route - Role Selection
+        // Root route - Redirect to login
         GoRoute(
           path: '/',
-          name: 'role-selection',
-          builder: (context, state) => const RoleSelectionScreen(),
+          redirect: (context, state) => '/login',
         ),
 
         // Login route
         GoRoute(
           path: '/login',
           name: 'login',
-          builder: (context, state) {
-            final userType = state.extra as String? ?? 'student';
-            return LoginScreen(userType: userType);
-          },
+          builder: (context, state) => const LoginScreen(),
         ),
 
         // Signup route
         GoRoute(
           path: '/signup',
           name: 'signup',
-          builder: (context, state) {
-            final userType = state.extra as String? ?? 'student';
-            return SignupScreen(userType: userType);
-          },
+          builder: (context, state) => const SignupScreen(),
         ),
 
         // Forgot Password route
         GoRoute(
           path: '/forgot-password',
           name: 'forgot-password',
-          builder: (context, state) {
-            final userType = state.extra as String? ?? 'student';
-            return ForgotPasswordScreen(userType: userType);
-          },
+          builder: (context, state) => const ForgotPasswordScreen(),
         ),
 
         // Owner Dashboard route

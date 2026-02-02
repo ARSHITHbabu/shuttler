@@ -103,7 +103,6 @@ class Auth extends _$Auth {
   Future<Map<String, dynamic>> login({
     required String email,
     required String password,
-    required String userType,
     bool rememberMe = false,
   }) async {
     state = const AsyncValue.loading();
@@ -114,10 +113,10 @@ class Auth extends _$Auth {
       final result = await authService.login(
         email: email,
         password: password,
-        userType: userType,
         rememberMe: rememberMe,
       );
 
+      final userType = result['userType'] as String;
       final user = result['user'];
 
       state = AsyncValue.data(
