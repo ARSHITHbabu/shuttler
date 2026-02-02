@@ -133,6 +133,16 @@ class AuthService {
         await _storageService.saveUserEmail(email);
         await _storageService.saveUserName(userData['name']);
         await _storageService.saveRememberMe(rememberMe);
+        
+        // Save owner-specific fields if applicable
+        if (userType == 'owner') {
+          if (userData.containsKey('role')) {
+            await _storageService.saveUserRole(userData['role']);
+          }
+          if (userData.containsKey('must_change_password')) {
+            await _storageService.saveMustChangePassword(userData['must_change_password'] == true);
+          }
+        }
 
         // Return user data with profile completeness for students
         final Map<String, dynamic> result = {'user': userData};
@@ -321,6 +331,16 @@ class AuthService {
     return _storageService.getUserName();
   }
 
+  /// Get current user role (for owners)
+  String? getUserRole() {
+    return _storageService.getUserRole();
+  }
+
+  /// Get must change password flag
+  bool getMustChangePassword() {
+    return _storageService.getMustChangePassword();
+  }
+
   /// Get auth token
   String? getAuthToken() {
     return _storageService.getAuthToken();
@@ -386,6 +406,16 @@ class AuthService {
         // Update stored user data
         await _storageService.saveUserName(data['name']);
         await _storageService.saveUserEmail(data['email']);
+        
+        // Update owner-specific fields
+        if (userType == 'owner') {
+          if (data.containsKey('role')) {
+            await _storageService.saveUserRole(data['role']);
+          }
+          if (data.containsKey('must_change_password')) {
+            await _storageService.saveMustChangePassword(data['must_change_password'] == true);
+          }
+        }
 
         return data;
       } else {

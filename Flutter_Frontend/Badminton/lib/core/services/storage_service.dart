@@ -7,6 +7,8 @@ class StorageService {
   static const String _keyUserType = 'user_type';
   static const String _keyUserEmail = 'user_email';
   static const String _keyUserName = 'user_name';
+  static const String _keyUserRole = 'user_role';
+  static const String _keyMustChangePassword = 'must_change_password';
   static const String _keyRememberMe = 'remember_me';
   static const String _keyFcmToken = 'fcm_token';
   
@@ -151,6 +153,38 @@ class StorageService {
     await _ensureInitialized();
     return await _prefs!.remove(_keyUserName);
   }
+  
+  // User Role (owner/co_owner)
+  Future<bool> saveUserRole(String role) async {
+    await _ensureInitialized();
+    return await _prefs!.setString(_keyUserRole, role);
+  }
+
+  String? getUserRole() {
+    if (!_isInitialized) return null;
+    return _prefs!.getString(_keyUserRole);
+  }
+
+  Future<bool> removeUserRole() async {
+    await _ensureInitialized();
+    return await _prefs!.remove(_keyUserRole);
+  }
+
+  // Must Change Password
+  Future<bool> saveMustChangePassword(bool value) async {
+    await _ensureInitialized();
+    return await _prefs!.setBool(_keyMustChangePassword, value);
+  }
+
+  bool getMustChangePassword() {
+    if (!_isInitialized) return false;
+    return _prefs!.getBool(_keyMustChangePassword) ?? false;
+  }
+
+  Future<bool> removeMustChangePassword() async {
+    await _ensureInitialized();
+    return await _prefs!.remove(_keyMustChangePassword);
+  }
 
   // Remember Me
   Future<bool> saveRememberMe(bool value) async {
@@ -192,6 +226,8 @@ class StorageService {
     await removeUserType();
     await removeUserEmail();
     await removeUserName();
+    await removeUserRole();
+    await removeMustChangePassword();
   }
 
   // Check if user is logged in
@@ -213,6 +249,8 @@ class StorageService {
       'userType': getUserType(),
       'email': getUserEmail(),
       'name': getUserName(),
+      'role': getUserRole(),
+      'mustChangePassword': getMustChangePassword(),
       'fcmToken': getFcmToken(),
     };
   }
