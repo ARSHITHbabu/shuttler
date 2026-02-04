@@ -11,6 +11,7 @@ class PerformanceService {
   /// Get performance records for a student
   Future<List<Performance>> getPerformanceRecords({
     int? studentId,
+    int? batchId,
     DateTime? startDate,
     DateTime? endDate,
   }) async {
@@ -18,6 +19,9 @@ class PerformanceService {
       final queryParams = <String, dynamic>{};
       if (studentId != null) {
         queryParams['student_id'] = studentId;
+      }
+      if (batchId != null) {
+        queryParams['batch_id'] = batchId;
       }
       if (startDate != null) {
         queryParams['start_date'] = startDate.toIso8601String().split('T')[0];

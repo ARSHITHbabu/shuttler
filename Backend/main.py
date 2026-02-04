@@ -1328,6 +1328,8 @@ class PerformanceFrontend(BaseModel):
     id: int
     student_id: int
     student_name: Optional[str] = None
+    batch_id: int
+    batch_name: Optional[str] = None
     date: str
     serve: int  # 1-5 rating
     smash: int  # 1-5 rating
@@ -1339,6 +1341,7 @@ class PerformanceFrontend(BaseModel):
 
 class PerformanceFrontendCreate(BaseModel):
     student_id: int
+    batch_id: int
     date: str
     serve: int = 0
     smash: int = 0
@@ -1349,6 +1352,7 @@ class PerformanceFrontendCreate(BaseModel):
 
 class PerformanceFrontendUpdate(BaseModel):
     date: Optional[str] = None
+    batch_id: Optional[int] = None
     serve: Optional[int] = None
     smash: Optional[int] = None
     footwork: Optional[int] = None
@@ -4247,11 +4251,25 @@ def transform_performance_to_frontend(records: List[PerformanceDB], db) -> Optio
     student = db.query(StudentDB).filter(StudentDB.id == records[0].student_id).first()
     student_name = student.name if student else None
     
+    # Get batch name
+    batch_name = "Unknown"
+    try:
+        batch = db.query(BatchDB).filter(BatchDB.id == records[0].batch_id).first()
+        batch_name = batch.batch_name if batch else "Unknown"
+    except Exception:
+        # Fallback for potential migration issues
+        from sqlalchemy import text
+        result = db.execute(text("SELECT batch_name FROM batches WHERE id = :batch_id"), {"batch_id": records[0].batch_id}).first()
+        if result:
+            batch_name = result[0]
+    
     # Initialize with defaults
     result = {
         "id": records[0].id,  # Use first record's ID
         "student_id": records[0].student_id,
         "student_name": student_name,
+        "batch_id": records[0].batch_id,
+        "batch_name": batch_name,
         "date": records[0].date,
         "serve": 0,
         "smash": 0,
@@ -4308,10 +4326,10 @@ def get_performance_records(
         
         all_records = query.order_by(PerformanceDB.date.desc()).all()
         
-        # Group by date and student_id
+        # Group by date, student_id, and batch_id
         grouped = {}
         for record in all_records:
-            key = f"{record.date}_{record.student_id}"
+            key = f"{record.date}_{record.student_id}_{record.batch_id}"
             if key not in grouped:
                 grouped[key] = []
             grouped[key].append(record)
@@ -4337,11 +4355,12 @@ def get_performance_record(record_id: int):
         if not first_record:
             raise HTTPException(status_code=404, detail="Performance record not found")
         
-        # Get all records for the same date and student
+        # Get all records for the same date, student, and batch
         all_records = db.query(PerformanceDB).filter(
             and_(
                 PerformanceDB.student_id == first_record.student_id,
-                PerformanceDB.date == first_record.date
+                PerformanceDB.date == first_record.date,
+                PerformanceDB.batch_id == first_record.batch_id
             )
         ).all()
         
@@ -4361,16 +4380,6 @@ def create_performance_record_v2(performance_data: PerformanceFrontendCreate):
         # Get current user for recorded_by (you may need to adjust this based on your auth)
         recorded_by = "owner"  # Default, should come from auth context
         
-        # Get student to find batch_id (required by backend model)
-        student = db.query(StudentDB).filter(StudentDB.id == performance_data.student_id).first()
-        if not student:
-            raise HTTPException(status_code=404, detail="Student not found")
-        
-        # Get student's first batch enrollment, or use default
-        batch_student = db.query(BatchStudentDB).filter(
-            BatchStudentDB.student_id == performance_data.student_id
-        ).first()
-        batch_id = batch_student.batch_id if batch_student else 1
         
         # Create individual records for each skill with rating > 0
         skill_mappings = {
@@ -4386,7 +4395,7 @@ def create_performance_record_v2(performance_data: PerformanceFrontendCreate):
             if rating > 0:  # Only create record if rating is provided
                 db_performance = PerformanceDB(
                     student_id=performance_data.student_id,
-                    batch_id=batch_id,
+                    batch_id=performance_data.batch_id,
                     date=performance_data.date,
                     skill=skill,
                     rating=rating,
@@ -4405,11 +4414,12 @@ def create_performance_record_v2(performance_data: PerformanceFrontendCreate):
         for record in created_records:
             db.refresh(record)
         
-        # Get all records for this date/student to return in frontend format
+        # Get all records for this date/student/batch to return in frontend format
         all_records = db.query(PerformanceDB).filter(
             and_(
                 PerformanceDB.student_id == performance_data.student_id,
-                PerformanceDB.date == performance_data.date
+                PerformanceDB.date == performance_data.date,
+                PerformanceDB.batch_id == performance_data.batch_id
             )
         ).all()
         
@@ -4436,11 +4446,12 @@ def update_performance_record(record_id: int, performance_update: PerformanceFro
         if not first_record:
             raise HTTPException(status_code=404, detail="Performance record not found")
         
-        # Get all records for the same date and student
+        # Get all records for the same date, student, and batch
         all_records = db.query(PerformanceDB).filter(
             and_(
                 PerformanceDB.student_id == first_record.student_id,
-                PerformanceDB.date == first_record.date
+                PerformanceDB.date == first_record.date,
+                PerformanceDB.batch_id == first_record.batch_id
             )
         ).all()
         
@@ -4498,7 +4509,8 @@ def update_performance_record(record_id: int, performance_update: PerformanceFro
         updated_records = db.query(PerformanceDB).filter(
             and_(
                 PerformanceDB.student_id == first_record.student_id,
-                PerformanceDB.date == new_date
+                PerformanceDB.date == new_date,
+                PerformanceDB.batch_id == first_record.batch_id
             )
         ).all()
         
@@ -4525,11 +4537,12 @@ def delete_performance_record(record_id: int):
         if not first_record:
             raise HTTPException(status_code=404, detail="Performance record not found")
         
-        # Delete all records for the same date and student
+        # Delete all records for the same date, student, and batch
         all_records = db.query(PerformanceDB).filter(
             and_(
                 PerformanceDB.student_id == first_record.student_id,
-                PerformanceDB.date == first_record.date
+                PerformanceDB.date == first_record.date,
+                PerformanceDB.batch_id == first_record.batch_id
             )
         ).all()
         
