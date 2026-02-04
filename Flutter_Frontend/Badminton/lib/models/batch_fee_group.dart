@@ -11,6 +11,11 @@ class BatchFeeGroup {
     required this.students,
   });
 
+  // Convenience getters
+  String get batchName => batch.batchName;
+  int get batchId => batch.id;
+  int get totalStudents => students.length;
+
   /// Check if the batch has any students
   bool get hasStudents => students.isNotEmpty;
 
@@ -42,4 +47,24 @@ class BatchFeeGroup {
     }
     return overdue;
   }
+
+  // Counts
+  int get paidCount => students.where((s) => s.existingFee?.status == 'paid').length;
+  
+  int get pendingCount {
+    // Both explicitly pending and virtually pending (null fee)
+    return students.where((s) => 
+      s.existingFee == null || 
+      (s.existingFee!.status == 'pending' && !s.existingFee!.isOverdue)
+    ).length;
+  }
+
+  int get overdueCount => students.where((s) => 
+    s.existingFee != null && (s.existingFee!.status == 'overdue' || s.existingFee!.isOverdue)
+  ).length;
+
+  // Financials
+  double get totalExpectedAmount => totalCollectedAmount + totalPending; // Or sum of batch fees?
+  
+  double get totalCollectedAmount => totalPaid;
 }

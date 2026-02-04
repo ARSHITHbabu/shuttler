@@ -225,6 +225,17 @@ class CoachAttendanceDB(Base):
     status = Column(String, nullable=False)  
     remarks = Column(Text, nullable=True)
 
+class CoachSalaryDB(Base):
+    __tablename__ = "coach_salaries"
+    id = Column(Integer, primary_key=True, index=True)
+    coach_id = Column(Integer, ForeignKey("coaches.id"), nullable=False)
+    amount = Column(Float, nullable=False)
+    payment_date = Column(String, nullable=False)
+    month = Column(String, nullable=False)  # "YYYY-MM"
+    remarks = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    coach = relationship("CoachDB")
+
 class FeeDB(Base):
     __tablename__ = "fees"
     id = Column(Integer, primary_key=True, index=True)
@@ -1193,6 +1204,33 @@ class CoachAttendance(BaseModel):
     date: str
     status: str
     remarks: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+# Coach Salary Models
+class CoachSalaryCreate(BaseModel):
+    coach_id: int
+    amount: float
+    payment_date: str
+    month: str  # "YYYY-MM"
+    remarks: Optional[str] = None
+
+class CoachSalaryUpdate(BaseModel):
+    amount: Optional[float] = None
+    payment_date: Optional[str] = None
+    month: Optional[str] = None
+    remarks: Optional[str] = None
+
+class CoachSalary(BaseModel):
+    id: int
+    coach_id: int
+    coach_name: Optional[str] = None
+    amount: float
+    payment_date: str
+    month: str
+    remarks: Optional[str] = None
+    created_at: Optional[datetime] = None
     
     class Config:
         from_attributes = True
@@ -3686,6 +3724,122 @@ def delete_fee_payment(fee_id: int, payment_id: int):
             db.commit()
         
         return {"message": "Payment deleted successfully"}
+    finally:
+        db.close()
+
+# ==================== Coach Salary Routes ====================
+
+@app.post("/coach-salaries/", response_model=CoachSalary)
+def create_coach_salary(salary: CoachSalaryCreate):
+    """Record a salary payment for a coach"""
+    db = SessionLocal()
+    try:
+        # Check if record already exists for this coach and month
+        # existing = db.query(CoachSalaryDB).filter(
+        #     CoachSalaryDB.coach_id == salary.coach_id,
+        #     CoachSalaryDB.month == salary.month
+        # ).first()
+        # if existing:
+        #     raise HTTPException(status_code=400, detail=f"Salary already recorded for this coach for {salary.month}")
+        
+        db_salary = CoachSalaryDB(**salary.model_dump())
+        db.add(db_salary)
+        db.commit()
+        db.refresh(db_salary)
+        
+        # Enrich with coach name
+        coach = db.query(CoachDB).filter(CoachDB.id == db_salary.coach_id).first()
+        
+        return {
+            "id": db_salary.id,
+            "coach_id": db_salary.coach_id,
+            "coach_name": coach.name if coach else None,
+            "amount": db_salary.amount,
+            "payment_date": db_salary.payment_date,
+            "month": db_salary.month,
+            "remarks": db_salary.remarks,
+            # "created_at": db_salary.created_at
+        }
+    except IntegrityError:
+         db.rollback()
+         raise HTTPException(status_code=400, detail="Database error")
+    finally:
+        db.close()
+
+@app.get("/coach-salaries/", response_model=List[CoachSalary])
+def get_coach_salaries(month: Optional[str] = None, coach_id: Optional[int] = None):
+    """Get coach salaries, optionally filtered by month or coach"""
+    db = SessionLocal()
+    try:
+        query = db.query(CoachSalaryDB)
+        
+        if month:
+            query = query.filter(CoachSalaryDB.month == month)
+        
+        if coach_id:
+            query = query.filter(CoachSalaryDB.coach_id == coach_id)
+            
+        salaries = query.order_by(CoachSalaryDB.payment_date.desc()).all()
+        
+        result = []
+        for s in salaries:
+            coach = db.query(CoachDB).filter(CoachDB.id == s.coach_id).first()
+            result.append({
+                "id": s.id,
+                "coach_id": s.coach_id,
+                "coach_name": coach.name if coach else None,
+                "amount": s.amount,
+                "payment_date": s.payment_date,
+                "month": s.month,
+                "remarks": s.remarks,
+                # "created_at": s.created_at
+            })
+            
+        return result
+    finally:
+        db.close()
+
+@app.put("/coach-salaries/{salary_id}", response_model=CoachSalary)
+def update_coach_salary(salary_id: int, salary_update: CoachSalaryUpdate):
+    """Update a salary record"""
+    db = SessionLocal()
+    try:
+        db_salary = db.query(CoachSalaryDB).filter(CoachSalaryDB.id == salary_id).first()
+        if not db_salary:
+            raise HTTPException(status_code=404, detail="Salary record not found")
+            
+        update_data = salary_update.model_dump(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(db_salary, key, value)
+            
+        db.commit()
+        db.refresh(db_salary)
+        
+        coach = db.query(CoachDB).filter(CoachDB.id == db_salary.coach_id).first()
+        return {
+            "id": db_salary.id,
+            "coach_id": db_salary.coach_id,
+            "coach_name": coach.name if coach else None,
+            "amount": db_salary.amount,
+            "payment_date": db_salary.payment_date,
+            "month": db_salary.month,
+            "remarks": db_salary.remarks,
+        }
+    finally:
+        db.close()
+
+@app.delete("/coach-salaries/{salary_id}")
+def delete_coach_salary(salary_id: int):
+    """Delete a salary record"""
+    db = SessionLocal()
+    try:
+        db_salary = db.query(CoachSalaryDB).filter(CoachSalaryDB.id == salary_id).first()
+        if not db_salary:
+            raise HTTPException(status_code=404, detail="Salary record not found")
+            
+        db.delete(db_salary)
+        db.commit()
+        return {"message": "Salary record deleted"}
     finally:
         db.close()
 

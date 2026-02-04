@@ -19,6 +19,7 @@ class AppColors {
 
   // Accent colors
   static const Color accent = Color(0xFF4a9eff); // Blue accent
+  static const Color primary = accent; // Alias for primary color
   static const Color accentDark = Color(0xFF3a7ecf); // Darker blue
 
   // Status colors
