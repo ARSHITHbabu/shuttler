@@ -5,7 +5,6 @@ import '../../../core/constants/dimensions.dart';
 import '../../../widgets/common/neumorphic_container.dart';
 import '../../../widgets/common/success_snackbar.dart';
 import '../../../widgets/common/confirmation_dialog.dart';
-import '../../../widgets/forms/edit_coach_dialog.dart';
 import '../../../providers/coach_provider.dart';
 import '../../../models/coach.dart';
 import '../../../core/utils/contact_utils.dart';
@@ -199,20 +198,6 @@ class _CoachProfileTabState extends ConsumerState<CoachProfileTab> {
       children: [
         SizedBox(
           width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: () => _editCoach(),
-            icon: const Icon(Icons.edit, size: 18),
-            label: const Text('Edit Coach'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.accent,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingM),
-            ),
-          ),
-        ),
-        const SizedBox(height: AppDimensions.spacingS),
-        SizedBox(
-          width: double.infinity,
           child: OutlinedButton.icon(
             onPressed: () => _toggleStatus(),
             icon: Icon(
@@ -296,29 +281,6 @@ class _CoachProfileTabState extends ConsumerState<CoachProfileTab> {
           if (onTap != null)
             const Icon(Icons.open_in_new, size: 14, color: AppColors.textTertiary),
         ],
-      ),
-    );
-  }
-
-  void _editCoach() {
-    showDialog(
-      context: context,
-      builder: (context) => EditCoachDialog(
-        coach: widget.coach,
-        onSubmit: (coachData) async {
-          try {
-            await ref.read(coachListProvider.notifier).updateCoach(widget.coach.id, coachData);
-            if (mounted) {
-              Navigator.of(context).pop();
-              SuccessSnackbar.show(context, 'Coach updated successfully');
-              widget.onCoachUpdated?.call();
-            }
-          } catch (e) {
-            if (mounted) {
-              SuccessSnackbar.showError(context, 'Failed to update coach: ${e.toString()}');
-            }
-          }
-        },
       ),
     );
   }
