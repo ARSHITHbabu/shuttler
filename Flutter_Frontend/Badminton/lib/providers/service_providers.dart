@@ -21,6 +21,7 @@ import '../core/services/session_service.dart';
 import '../core/services/video_service.dart';
 import '../core/services/leave_request_service.dart';
 import '../core/services/student_registration_request_service.dart';
+import '../core/services/coach_salary_service.dart';
 import '../core/network/connectivity_service.dart';
 import '../core/network/request_queue.dart';
 import 'package:dio/dio.dart';
@@ -211,6 +212,13 @@ RequestQueue requestQueue(RequestQueueRef ref) {
     connectivityService: connectivityService,
     dio: dio,
   );
+}
+
+/// Provider for CoachSalaryService singleton
+@riverpod
+CoachSalaryService coachSalaryService(CoachSalaryServiceRef ref) {
+  final apiService = ref.watch(apiServiceProvider);
+  return CoachSalaryService(apiService);
 }
 
 /// Provider for BatchEnrollmentService

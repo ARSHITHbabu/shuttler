@@ -479,5 +479,26 @@ final requestQueueProvider = AutoDisposeProvider<RequestQueue>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef RequestQueueRef = AutoDisposeProviderRef<RequestQueue>;
+String _$coachSalaryServiceHash() =>
+    r'c88da03b26f0041e0f5b5c8698bf0cc959d0e6a5';
+
+/// Provider for CoachSalaryService singleton
+///
+/// Copied from [coachSalaryService].
+@ProviderFor(coachSalaryService)
+final coachSalaryServiceProvider =
+    AutoDisposeProvider<CoachSalaryService>.internal(
+      coachSalaryService,
+      name: r'coachSalaryServiceProvider',
+      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+          ? null
+          : _$coachSalaryServiceHash,
+      dependencies: null,
+      allTransitiveDependencies: null,
+    );
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef CoachSalaryServiceRef = AutoDisposeProviderRef<CoachSalaryService>;
 // ignore_for_file: type=lint
 // ignore_for_file: subtype_of_sealed_class, invalid_use_of_internal_member, invalid_use_of_visible_for_testing_member, deprecated_member_use_from_same_package

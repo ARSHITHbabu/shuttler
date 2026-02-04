@@ -17,6 +17,8 @@ class StudentWithBatchFee {
     this.existingFee,
   });
 
+  int get batchId => batch.id;
+
   /// Check if fee exists for this student-batch combination
   bool get hasFee => existingFee != null;
 
