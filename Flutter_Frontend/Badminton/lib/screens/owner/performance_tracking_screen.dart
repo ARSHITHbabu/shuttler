@@ -175,6 +175,7 @@ class _PerformanceTrackingScreenState
       final performanceService = ref.read(performanceServiceProvider);
       final records = await performanceService.getPerformanceRecords(
         studentId: _selectedStudentId,
+        batchId: _selectedBatchId,
       );
       if (!mounted) return;
       setState(() {
@@ -312,6 +313,7 @@ class _PerformanceTrackingScreenState
         try {
           final performanceData = {
             'student_id': studentId,
+            'batch_id': _selectedBatchId,
             'date': dateString,
             'serve': data['serve'] ?? 0,
             'smash': data['smash'] ?? 0,
@@ -1016,13 +1018,27 @@ class _PerformanceTrackingScreenState
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                DateFormat('dd MMM, yyyy').format(performance.date),
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    DateFormat('dd MMM, yyyy').format(performance.date),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  if (performance.batchName != null)
+                    Text(
+                      performance.batchName!,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.accent,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                ],
               ),
               Row(
                 children: [
@@ -1168,10 +1184,24 @@ class _PerformanceTrackingScreenState
     final sortedHistory = List<Performance>.from(_performanceHistory)
       ..sort((a, b) => a.date.compareTo(b.date));
 
-    // Prepare data for chart - average rating over time
-    final spots = sortedHistory.asMap().entries.map((entry) {
-      return FlSpot(entry.key.toDouble(), entry.value.averageRating);
-    }).toList();
+    // Prepare data for each skill
+    final serveSpots = <FlSpot>[];
+    final smashSpots = <FlSpot>[];
+    final footworkSpots = <FlSpot>[];
+    final defenseSpots = <FlSpot>[];
+    final staminaSpots = <FlSpot>[];
+    final avgSpots = <FlSpot>[];
+
+    for (int i = 0; i < sortedHistory.length; i++) {
+      final p = sortedHistory[i];
+      final x = i.toDouble();
+      serveSpots.add(FlSpot(x, p.serve.toDouble()));
+      smashSpots.add(FlSpot(x, p.smash.toDouble()));
+      footworkSpots.add(FlSpot(x, p.footwork.toDouble()));
+      defenseSpots.add(FlSpot(x, p.defense.toDouble()));
+      staminaSpots.add(FlSpot(x, p.stamina.toDouble()));
+      avgSpots.add(FlSpot(x, p.averageRating));
+    }
 
     return NeumorphicContainer(
       padding: const EdgeInsets.all(AppDimensions.paddingM),
@@ -1179,14 +1209,40 @@ class _PerformanceTrackingScreenState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Average Performance Over Time',
+            'Skill Performance Trends',
             style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
           ),
           const SizedBox(height: AppDimensions.spacingM),
           SizedBox(
-            height: 200,
+            height: 250,
             child: LineChart(
               LineChartData(
+                lineTouchData: LineTouchData(
+                  touchTooltipData: LineTouchTooltipData(
+                    tooltipBgColor: AppColors.cardBackground.withOpacity(0.9),
+                    getTooltipItems: (touchedSpots) {
+                      return touchedSpots.map((spot) {
+                        String skill = 'Skill';
+                        switch (spot.barIndex) {
+                          case 0: skill = 'Avg'; break;
+                          case 1: skill = 'Serve'; break;
+                          case 2: skill = 'Smash'; break;
+                          case 3: skill = 'Footwork'; break;
+                          case 4: skill = 'Defense'; break;
+                          case 5: skill = 'Stamina'; break;
+                        }
+                        return LineTooltipItem(
+                          '$skill: ${spot.y.toStringAsFixed(1)}',
+                          TextStyle(
+                            color: spot.bar.color ?? AppColors.textPrimary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        );
+                      }).toList();
+                    },
+                  ),
+                ),
                 gridData: FlGridData(
                   show: true,
                   drawVerticalLine: false,
@@ -1232,11 +1288,12 @@ class _PerformanceTrackingScreenState
                   leftTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
-                      reservedSize: 40,
+                      reservedSize: 30,
                       interval: 1,
                       getTitlesWidget: (value, meta) {
+                        if (value == 0 || value > 5) return const Text('');
                         return Text(
-                          value.toStringAsFixed(1),
+                          value.toInt().toString(),
                           style: const TextStyle(
                             color: AppColors.textSecondary,
                             fontSize: 10,
@@ -1256,36 +1313,73 @@ class _PerformanceTrackingScreenState
                 minX: 0,
                 maxX: (sortedHistory.length - 1).toDouble(),
                 minY: 0,
-                maxY: 5,
+                maxY: 5.2,
                 lineBarsData: [
-                  LineChartBarData(
-                    spots: spots,
-                    isCurved: true,
-                    color: AppColors.accent,
-                    barWidth: 3,
-                    isStrokeCapRound: true,
-                    dotData: FlDotData(
-                      show: true,
-                      getDotPainter: (spot, percent, barData, index) {
-                        return FlDotCirclePainter(
-                          radius: 4,
-                          color: AppColors.accent,
-                          strokeWidth: 2,
-                          strokeColor: AppColors.background,
-                        );
-                      },
-                    ),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      color: AppColors.accent.withOpacity(0.1),
-                    ),
-                  ),
+                  // Average Line (Thick)
+                  _createLineData(avgSpots, AppColors.accent, isMain: true),
+                  // Skill Lines (Thin)
+                  _createLineData(serveSpots, Colors.blue),
+                  _createLineData(smashSpots, Colors.red),
+                  _createLineData(footworkSpots, Colors.green),
+                  _createLineData(defenseSpots, Colors.orange),
+                  _createLineData(staminaSpots, Colors.purple),
                 ],
               ),
             ),
           ),
+          const SizedBox(height: AppDimensions.spacingM),
+          // Legend
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              _buildLegendItem('Average', AppColors.accent, isMain: true),
+              _buildLegendItem('Serve', Colors.blue),
+              _buildLegendItem('Smash', Colors.red),
+              _buildLegendItem('Footwork', Colors.green),
+              _buildLegendItem('Defense', Colors.orange),
+              _buildLegendItem('Stamina', Colors.purple),
+            ],
+          ),
         ],
       ),
+    );
+  }
+
+  LineChartBarData _createLineData(List<FlSpot> spots, Color color, {bool isMain = false}) {
+    return LineChartBarData(
+      spots: spots,
+      isCurved: true,
+      color: color,
+      barWidth: isMain ? 4 : 2,
+      isStrokeCapRound: true,
+      dotData: FlDotData(show: isMain),
+      belowBarData: BarAreaData(
+        show: isMain,
+        color: color.withOpacity(0.1),
+      ),
+    );
+  }
+
+  Widget _buildLegendItem(String label, Color color, {bool isMain = false}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 12,
+          height: isMain ? 4 : 2,
+          color: color,
+        ),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            color: AppColors.textSecondary,
+            fontWeight: isMain ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      ],
     );
   }
 }

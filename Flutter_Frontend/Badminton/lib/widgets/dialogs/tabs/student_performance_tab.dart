@@ -40,6 +40,9 @@ class _StudentPerformanceTabState extends ConsumerState<StudentPerformanceTab> {
   };
   bool _isLoading = false;
   int? _editingPerformanceId;
+  int? _selectedBatchId;
+  String? _selectedBatchName;
+  List<dynamic> _studentBatches = [];
 
   final List<Map<String, dynamic>> _skills = [
     {'key': 'serve', 'label': 'Serve', 'icon': Icons.sports_tennis},
@@ -79,7 +82,25 @@ class _StudentPerformanceTabState extends ConsumerState<StudentPerformanceTab> {
                 ),
               ),
               ElevatedButton.icon(
-                onPressed: () => setState(() => _showAddForm = true),
+                onPressed: () async {
+                  // Fetch student batches if not already fetched
+                  if (_studentBatches.isEmpty) {
+                    setState(() => _isLoading = true);
+                    try {
+                      final batchService = ref.read(batchServiceProvider);
+                      _studentBatches = await batchService.getStudentBatches(widget.student.id);
+                      if (_studentBatches.isNotEmpty) {
+                        _selectedBatchId = _studentBatches.first.id;
+                        _selectedBatchName = _studentBatches.first.batchName;
+                      }
+                    } catch (e) {
+                      debugPrint('Error fetching student batches: $e');
+                    } finally {
+                      setState(() => _isLoading = false);
+                    }
+                  }
+                  setState(() => _showAddForm = true);
+                },
                 icon: const Icon(Icons.add, size: 18),
                 label: const Text('Add Record'),
                 style: ElevatedButton.styleFrom(
@@ -132,53 +153,131 @@ class _StudentPerformanceTabState extends ConsumerState<StudentPerformanceTab> {
           );
         }
 
-        // Sort by date descending
-        final sortedRecords = List<Performance>.from(records)
-          ..sort((a, b) => b.date.compareTo(a.date));
+        // Group records by batch for better display
+        final Map<int, List<Performance>> recordsByBatch = {};
+        for (final record in records) {
+          recordsByBatch.putIfAbsent(record.batchId, () => []).add(record);
+        }
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Progress Chart (if 2+ records)
-            if (sortedRecords.length >= 2) ...[
-              _buildProgressChart(sortedRecords),
+            // SINGLE OVERALL GRAPH
+            if (records.length >= 2) ...[
+              _buildProgressChart(records, isOverall: true),
               const SizedBox(height: AppDimensions.spacingL),
             ],
-            
-            // Records List
-            ...sortedRecords.map((performance) => _buildPerformanceCard(performance)),
+
+            // Batch-wise History (List only, no separate graphs)
+            ...recordsByBatch.entries.map((entry) {
+              final batchRecords = entry.value;
+              final batchName = batchRecords.first.batchName ?? 'Batch ${entry.key}';
+              
+              // Sort by date descending for list
+              final sortedRecords = List<Performance>.from(batchRecords)
+                ..sort((a, b) => b.date.compareTo(a.date));
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8.0),
+                    child: Text(
+                      batchName,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.accent,
+                      ),
+                    ),
+                  ),
+                  
+                  // Records List for this batch
+                  ...sortedRecords.map((performance) => _buildPerformanceCard(performance)),
+                  const SizedBox(height: AppDimensions.spacingL),
+                ],
+              );
+            }).toList(),
           ],
         );
       },
     );
   }
 
-  Widget _buildProgressChart(List<Performance> records) {
+  Widget _buildProgressChart(List<Performance> records, {bool isOverall = false}) {
     // Sort by date ascending for chart
     final sortedHistory = List<Performance>.from(records)
       ..sort((a, b) => a.date.compareTo(b.date));
 
-    final spots = sortedHistory.asMap().entries.map((entry) {
-      return FlSpot(entry.key.toDouble(), entry.value.averageRating);
-    }).toList();
+    // Prepare data for each skill
+    final serveSpots = <FlSpot>[];
+    final smashSpots = <FlSpot>[];
+    final footworkSpots = <FlSpot>[];
+    final defenseSpots = <FlSpot>[];
+    final staminaSpots = <FlSpot>[];
+    final avgSpots = <FlSpot>[];
+
+    for (int i = 0; i < sortedHistory.length; i++) {
+      final p = sortedHistory[i];
+      final x = i.toDouble();
+      serveSpots.add(FlSpot(x, p.serve.toDouble()));
+      smashSpots.add(FlSpot(x, p.smash.toDouble()));
+      footworkSpots.add(FlSpot(x, p.footwork.toDouble()));
+      defenseSpots.add(FlSpot(x, p.defense.toDouble()));
+      staminaSpots.add(FlSpot(x, p.stamina.toDouble()));
+      avgSpots.add(FlSpot(x, p.averageRating));
+    }
 
     return NeumorphicContainer(
       padding: const EdgeInsets.all(AppDimensions.paddingM),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Average Performance Over Time',
-            style: TextStyle(
-              fontSize: 14,
-              color: AppColors.textSecondary,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                isOverall ? 'Overall Performance Trends' : 'Skill Trends',
+                style: const TextStyle(fontSize: 14, color: AppColors.textSecondary, fontWeight: FontWeight.bold),
+              ),
+              if (!isOverall && sortedHistory.any((element) => element.batchName != null))
+                Text(
+                  sortedHistory.first.batchName ?? '',
+                  style: const TextStyle(fontSize: 12, color: AppColors.accent, fontWeight: FontWeight.bold),
+                ),
+            ],
           ),
           const SizedBox(height: AppDimensions.spacingM),
           SizedBox(
-            height: 200,
+            height: 220,
             child: LineChart(
               LineChartData(
+                lineTouchData: LineTouchData(
+                  touchTooltipData: LineTouchTooltipData(
+                    tooltipBgColor: AppColors.cardBackground.withOpacity(0.9),
+                    getTooltipItems: (touchedSpots) {
+                      return touchedSpots.map((spot) {
+                        String skill = 'Skill';
+                        switch (spot.barIndex) {
+                          case 0: skill = 'Avg'; break;
+                          case 1: skill = 'Serve'; break;
+                          case 2: skill = 'Smash'; break;
+                          case 3: skill = 'Footwork'; break;
+                          case 4: skill = 'Defense'; break;
+                          case 5: skill = 'Stamina'; break;
+                        }
+                        return LineTooltipItem(
+                          '$skill: ${spot.y.toStringAsFixed(1)}',
+                          TextStyle(
+                            color: spot.bar.color ?? AppColors.textPrimary,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        );
+                      }).toList();
+                    },
+                  ),
+                ),
                 gridData: FlGridData(
                   show: true,
                   drawVerticalLine: false,
@@ -224,11 +323,12 @@ class _StudentPerformanceTabState extends ConsumerState<StudentPerformanceTab> {
                   leftTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
-                      reservedSize: 40,
+                      reservedSize: 30,
                       interval: 1,
                       getTitlesWidget: (value, meta) {
+                        if (value == 0 || value > 5) return const Text('');
                         return Text(
-                          value.toStringAsFixed(1),
+                          value.toInt().toString(),
                           style: const TextStyle(
                             color: AppColors.textSecondary,
                             fontSize: 10,
@@ -248,36 +348,71 @@ class _StudentPerformanceTabState extends ConsumerState<StudentPerformanceTab> {
                 minX: 0,
                 maxX: (sortedHistory.length - 1).toDouble(),
                 minY: 0,
-                maxY: 5,
+                maxY: 5.2,
                 lineBarsData: [
-                  LineChartBarData(
-                    spots: spots,
-                    isCurved: true,
-                    color: AppColors.accent,
-                    barWidth: 3,
-                    isStrokeCapRound: true,
-                    dotData: FlDotData(
-                      show: true,
-                      getDotPainter: (spot, percent, barData, index) {
-                        return FlDotCirclePainter(
-                          radius: 4,
-                          color: AppColors.accent,
-                          strokeWidth: 2,
-                          strokeColor: AppColors.background,
-                        );
-                      },
-                    ),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      color: AppColors.accent.withOpacity(0.1),
-                    ),
-                  ),
+                  _createLineData(avgSpots, AppColors.accent, isMain: true),
+                  _createLineData(serveSpots, Colors.blue),
+                  _createLineData(smashSpots, Colors.red),
+                  _createLineData(footworkSpots, Colors.green),
+                  _createLineData(defenseSpots, Colors.orange),
+                  _createLineData(staminaSpots, Colors.purple),
                 ],
               ),
             ),
           ),
+          const SizedBox(height: AppDimensions.spacingM),
+          // Legend
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              _buildLegendItem('Avg', AppColors.accent, isMain: true),
+              _buildLegendItem('Serve', Colors.blue),
+              _buildLegendItem('Smash', Colors.red),
+              _buildLegendItem('Foot', Colors.green),
+              _buildLegendItem('Def', Colors.orange),
+              _buildLegendItem('Stam', Colors.purple),
+            ],
+          ),
         ],
       ),
+    );
+  }
+
+  LineChartBarData _createLineData(List<FlSpot> spots, Color color, {bool isMain = false}) {
+    return LineChartBarData(
+      spots: spots,
+      isCurved: true,
+      color: color,
+      barWidth: isMain ? 3 : 1.5,
+      isStrokeCapRound: true,
+      dotData: FlDotData(show: isMain),
+      belowBarData: BarAreaData(
+        show: isMain,
+        color: color.withOpacity(0.1),
+      ),
+    );
+  }
+
+  Widget _buildLegendItem(String label, Color color, {bool isMain = false}) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 8,
+          height: isMain ? 3 : 1.5,
+          color: color,
+        ),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 9,
+            color: AppColors.textSecondary,
+            fontWeight: isMain ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      ],
     );
   }
 
@@ -291,13 +426,27 @@ class _StudentPerformanceTabState extends ConsumerState<StudentPerformanceTab> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                DateFormat('dd MMM, yyyy').format(performance.date),
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    DateFormat('dd MMM, yyyy').format(performance.date),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  if (performance.batchName != null)
+                    Text(
+                      performance.batchName!,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.accent,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                ],
               ),
               Row(
                 children: [
@@ -471,7 +620,59 @@ class _StudentPerformanceTabState extends ConsumerState<StudentPerformanceTab> {
           ),
           const SizedBox(height: AppDimensions.spacingL),
           
+          // Batch Selector (if multiple batches)
+          if (_studentBatches.length > 1) ...[
+            const Text(
+              'Select Batch',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: AppDimensions.spacingM),
+            NeumorphicContainer(
+              padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<int>(
+                  value: _selectedBatchId,
+                  isExpanded: true,
+                  dropdownColor: AppColors.cardBackground,
+                  items: _studentBatches.map((batch) {
+                    return DropdownMenuItem<int>(
+                      value: batch.id,
+                      child: Text(
+                        batch.batchName,
+                        style: const TextStyle(color: AppColors.textPrimary),
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() {
+                        _selectedBatchId = value;
+                        _selectedBatchName = _studentBatches
+                            .firstWhere((b) => b.id == value)
+                            .batchName;
+                      });
+                    }
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(height: AppDimensions.spacingL),
+          ],
+
           // Date Picker
+          const Text(
+            'Date',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: AppDimensions.spacingM),
           NeumorphicContainer(
             padding: const EdgeInsets.all(AppDimensions.paddingM),
             child: InkWell(
@@ -606,6 +807,8 @@ class _StudentPerformanceTabState extends ConsumerState<StudentPerformanceTab> {
     setState(() {
       _showAddForm = true;
       _editingPerformanceId = performance.id;
+      _selectedBatchId = performance.batchId;
+      _selectedBatchName = performance.batchName;
       _selectedDate = performance.date;
       _ratings['serve'] = performance.serve;
       _ratings['smash'] = performance.smash;
@@ -631,6 +834,7 @@ class _StudentPerformanceTabState extends ConsumerState<StudentPerformanceTab> {
 
       final performanceData = {
         'student_id': widget.student.id,
+        'batch_id': _selectedBatchId,
         'date': dateString,
         'serve': _ratings['serve'] ?? 0,
         'smash': _ratings['smash'] ?? 0,
