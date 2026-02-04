@@ -8,6 +8,7 @@ class AddSalaryDialog extends StatefulWidget {
   final int coachId;
   final String coachName;
   final String month; // "YYYY-MM"
+  final double? initialAmount;
   final Function(Map<String, dynamic>) onSubmit;
 
   const AddSalaryDialog({
@@ -15,6 +16,7 @@ class AddSalaryDialog extends StatefulWidget {
     required this.coachId,
     required this.coachName,
     required this.month,
+    this.initialAmount,
     required this.onSubmit,
   });
 
@@ -24,7 +26,7 @@ class AddSalaryDialog extends StatefulWidget {
 
 class _AddSalaryDialogState extends State<AddSalaryDialog> {
   final _formKey = GlobalKey<FormState>();
-  final _amountController = TextEditingController();
+  late final TextEditingController _amountController;
   final _remarksController = TextEditingController();
   late DateTime _selectedDate;
   bool _isSubmitting = false;
@@ -32,9 +34,24 @@ class _AddSalaryDialogState extends State<AddSalaryDialog> {
   @override
   void initState() {
     super.initState();
-    // Default date to today, but constrained to the selected month?
-    // Actually, payment date can be any date, but "month" field handles the accounting period.
-    _selectedDate = DateTime.now();
+    _amountController = TextEditingController(
+      text: widget.initialAmount?.toStringAsFixed(2) ?? '',
+    );
+    
+    // Parse the month (YYYY-MM) to get the year and month
+    final parts = widget.month.split('-');
+    if (parts.length == 2) {
+      final year = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+      // Get the last day of that month
+      final lastDay = DateTime(year, month + 1, 0);
+      
+      // If the last day is in the future relative to today, maybe use today?
+      // But the user said "at all times" it should be paid on the last day.
+      _selectedDate = lastDay;
+    } else {
+      _selectedDate = DateTime.now();
+    }
   }
 
   @override
@@ -108,15 +125,26 @@ class _AddSalaryDialogState extends State<AddSalaryDialog> {
                   color: AppColors.textSecondary,
                 ),
               ),
+              if (widget.initialAmount != null && widget.initialAmount! > 0) ...[
+                const SizedBox(height: AppDimensions.spacingS),
+                Text(
+                  'Suggested: \$${widget.initialAmount!.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    color: AppColors.primary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
               const SizedBox(height: AppDimensions.spacingL),
               
               // Amount Field
               CustomTextField(
                 controller: _amountController,
-                label: 'Amount (₹)',
+                label: 'Amount (\$)',
                 hint: 'Enter amount',
                 keyboardType: TextInputType.number,
-                prefixIcon: Icons.currency_rupee,
+                prefixIcon: Icons.attach_money,
                 validator: (value) {
                   if (value == null || value.isEmpty) {
                     return 'Please enter amount';

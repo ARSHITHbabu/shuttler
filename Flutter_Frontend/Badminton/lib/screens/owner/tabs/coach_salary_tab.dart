@@ -34,13 +34,39 @@ class _CoachSalaryTabState extends ConsumerState<CoachSalaryTab> {
   String get _formattedMonth => DateFormat('yyyy-MM').format(_selectedMonth);
   String get _displayMonth => DateFormat('MMMM yyyy').format(_selectedMonth);
 
-  void _showAddSalaryDialog(int coachId, String coachName) {
+  double _calculateSuggestedSalary(CoachSalaryState state) {
+    if (state.coach.monthlySalary == null) return 0.0;
+    if (state.coach.joiningDate == null) return state.coach.monthlySalary!;
+
+    final joiningDate = state.coach.joiningDate!;
+    
+    // If coach joined after the selected month, suggested is 0
+    if (joiningDate.year > _selectedMonth.year || 
+        (joiningDate.year == _selectedMonth.year && joiningDate.month > _selectedMonth.month)) {
+      return 0.0;
+    }
+
+    // If coach joined in the selected month, prorate
+    if (joiningDate.year == _selectedMonth.year && joiningDate.month == _selectedMonth.month) {
+      final daysInMonth = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 0).day;
+      final daysWorked = daysInMonth - joiningDate.day + 1;
+      return (state.coach.monthlySalary! / daysInMonth) * daysWorked;
+    }
+
+    // Otherwise, full salary
+    return state.coach.monthlySalary!;
+  }
+
+  void _showAddSalaryDialog(CoachSalaryState state) {
+    final suggestedAmount = _calculateSuggestedSalary(state);
+    
     showDialog(
       context: context,
       builder: (context) => AddSalaryDialog(
-        coachId: coachId,
-        coachName: coachName,
+        coachId: state.coach.id,
+        coachName: state.coach.name,
         month: _formattedMonth,
+        initialAmount: suggestedAmount,
         onSubmit: (data) async {
           try {
             final service = ref.read(coachSalaryServiceProvider);
@@ -122,7 +148,7 @@ class _CoachSalaryTabState extends ConsumerState<CoachSalaryTab> {
                         Expanded(
                           child: _buildStatCard(
                             'Total Paid',
-                            '₹${totalPaid.toStringAsFixed(0)}',
+                            '\$${totalPaid.toStringAsFixed(0)}',
                             Icons.payments,
                             AppColors.success,
                           ),
@@ -169,7 +195,7 @@ class _CoachSalaryTabState extends ConsumerState<CoachSalaryTab> {
           const SizedBox(height: AppDimensions.spacingM),
           Text(
             value,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.bold,
               color: AppColors.textPrimary,
@@ -191,7 +217,11 @@ class _CoachSalaryTabState extends ConsumerState<CoachSalaryTab> {
 
   Widget _buildCoachCard(CoachSalaryState state) {
     final isPaid = state.status == 'paid';
+    final suggestedAmount = _calculateSuggestedSalary(state);
     
+    // Hide coaches who haven't joined yet
+    if (suggestedAmount == 0 && !isPaid) return const SizedBox.shrink();
+
     return NeumorphicContainer(
       margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
       padding: const EdgeInsets.all(AppDimensions.paddingL),
@@ -227,12 +257,11 @@ class _CoachSalaryTabState extends ConsumerState<CoachSalaryTab> {
                     ),
                   )
                 else
-                  const Text(
-                    'Payment Pending',
-                    style: TextStyle(
+                  Text(
+                    'Base: \$${state.coach.monthlySalary?.toStringAsFixed(0) ?? "0"}',
+                    style: const TextStyle(
                       fontSize: 11,
-                      color: AppColors.warning,
-                      fontWeight: FontWeight.w500,
+                      color: AppColors.textSecondary,
                     ),
                   ),
               ],
@@ -243,7 +272,7 @@ class _CoachSalaryTabState extends ConsumerState<CoachSalaryTab> {
             children: [
               if (isPaid) ...[
                 Text(
-                  '₹${state.salary!.amount.toStringAsFixed(0)}',
+                  '\$${state.salary!.amount.toStringAsFixed(0)}',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     color: AppColors.success,
@@ -254,7 +283,7 @@ class _CoachSalaryTabState extends ConsumerState<CoachSalaryTab> {
                 _buildStatusBadge('PAID', AppColors.success),
               ] else ...[
                 ElevatedButton(
-                  onPressed: () => _showAddSalaryDialog(state.coach.id, state.coach.name),
+                  onPressed: () => _showAddSalaryDialog(state),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,

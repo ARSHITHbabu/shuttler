@@ -110,6 +110,8 @@ class CoachDB(Base):
     specialization = Column(String, nullable=True)
     experience_years = Column(Integer, nullable=True)
     status = Column(String, default="active")  # active, inactive
+    monthly_salary = Column(Float, nullable=True)
+    joining_date = Column(Date, nullable=True)
 
     # NEW COLUMNS for Phase 0 enhancements:
     profile_photo = Column(String(500), nullable=True)  # Profile photo URL/path
@@ -935,6 +937,8 @@ class CoachCreate(BaseModel):
     password: str
     specialization: Optional[str] = None
     experience_years: Optional[int] = None
+    monthly_salary: Optional[float] = None
+    joining_date: Optional[date] = None
 
 class Coach(BaseModel):
     id: int
@@ -945,6 +949,8 @@ class Coach(BaseModel):
     specialization: Optional[str] = None
     experience_years: Optional[int] = None
     status: str = "active"
+    monthly_salary: Optional[float] = None
+    joining_date: Optional[date] = None
     profile_photo: Optional[str] = None
     fcm_token: Optional[str] = None
 
@@ -983,6 +989,8 @@ class CoachUpdate(BaseModel):
     specialization: Optional[str] = None
     experience_years: Optional[int] = None
     status: Optional[str] = None
+    monthly_salary: Optional[float] = None
+    joining_date: Optional[date] = None
     profile_photo: Optional[str] = None
 
 # Owner Models

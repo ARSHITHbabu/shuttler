@@ -8,6 +8,8 @@ import '../../../widgets/common/confirmation_dialog.dart';
 import '../../../providers/coach_provider.dart';
 import '../../../models/coach.dart';
 import '../../../core/utils/contact_utils.dart';
+import '../../forms/edit_coach_dialog.dart';
+import 'package:intl/intl.dart';
 
 /// Profile Tab - Shows coach information and management actions
 class CoachProfileTab extends ConsumerStatefulWidget {
@@ -186,10 +188,48 @@ class _CoachProfileTabState extends ConsumerState<CoachProfileTab> {
                 const Divider(color: AppColors.textSecondary, height: 24),
               if (widget.coach.experienceYears != null)
                 _buildInfoRow(Icons.calendar_today_outlined, 'Experience', '${widget.coach.experienceYears} years'),
+              const Divider(color: AppColors.textSecondary, height: 24),
+              _buildInfoRow(
+                Icons.attach_money, 
+                'Monthly Salary', 
+                widget.coach.monthlySalary != null ? '\$${widget.coach.monthlySalary!.toStringAsFixed(0)}' : 'Not Set',
+                onTap: widget.coach.monthlySalary == null ? () => _showEditDialog() : null,
+              ),
+              const Divider(color: AppColors.textSecondary, height: 24),
+              _buildInfoRow(
+                Icons.date_range, 
+                'Joining Date', 
+                widget.coach.joiningDate != null 
+                    ? DateFormat('dd MMM, yyyy').format(widget.coach.joiningDate!)
+                    : 'Not Set',
+                onTap: widget.coach.joiningDate == null ? () => _showEditDialog() : null,
+              ),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  void _showEditDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => EditCoachDialog(
+        coach: widget.coach,
+        onSubmit: (coachData) async {
+          try {
+            await ref.read(coachListProvider.notifier).updateCoach(widget.coach.id, coachData);
+            if (mounted) {
+              SuccessSnackbar.show(context, 'Coach updated successfully');
+              widget.onCoachUpdated?.call();
+            }
+          } catch (e) {
+            if (mounted) {
+              SuccessSnackbar.showError(context, 'Failed to update coach: ${e.toString()}');
+            }
+          }
+        },
+      ),
     );
   }
 
@@ -279,7 +319,7 @@ class _CoachProfileTabState extends ConsumerState<CoachProfileTab> {
             ),
           ),
           if (onTap != null)
-            const Icon(Icons.open_in_new, size: 14, color: AppColors.textTertiary),
+            Icon(Icons.edit, size: 14, color: AppColors.textTertiary.withOpacity(0.5)),
         ],
       ),
     );

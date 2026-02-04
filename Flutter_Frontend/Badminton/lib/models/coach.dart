@@ -1,4 +1,3 @@
-/// Coach data model matching backend schema
 class Coach {
   final int id;
   final String name;
@@ -7,6 +6,8 @@ class Coach {
   final String? specialization;
   final int? experienceYears;
   final String status;
+  final double? monthlySalary;
+  final DateTime? joiningDate;
   final String? profilePhoto;
   final String? fcmToken;
 
@@ -18,6 +19,8 @@ class Coach {
     this.specialization,
     this.experienceYears,
     required this.status,
+    this.monthlySalary,
+    this.joiningDate,
     this.profilePhoto,
     this.fcmToken,
   });
@@ -32,6 +35,8 @@ class Coach {
       specialization: json['specialization'] as String?,
       experienceYears: json['experience_years'] as int?,
       status: json['status'] as String? ?? 'active',
+      monthlySalary: json['monthly_salary'] != null ? (json['monthly_salary'] as num).toDouble() : null,
+      joiningDate: json['joining_date'] != null ? DateTime.parse(json['joining_date']) : null,
       profilePhoto: json['profile_photo'] as String?,
       fcmToken: json['fcm_token'] as String?,
     );
@@ -47,6 +52,8 @@ class Coach {
       'specialization': specialization,
       'experience_years': experienceYears,
       'status': status,
+      'monthly_salary': monthlySalary,
+      'joining_date': joiningDate?.toIso8601String().split('T')[0],
       'profile_photo': profilePhoto,
       'fcm_token': fcmToken,
     };
@@ -61,6 +68,8 @@ class Coach {
     String? specialization,
     int? experienceYears,
     String? status,
+    double? monthlySalary,
+    DateTime? joiningDate,
     String? profilePhoto,
     String? fcmToken,
   }) {
@@ -72,6 +81,8 @@ class Coach {
       specialization: specialization ?? this.specialization,
       experienceYears: experienceYears ?? this.experienceYears,
       status: status ?? this.status,
+      monthlySalary: monthlySalary ?? this.monthlySalary,
+      joiningDate: joiningDate ?? this.joiningDate,
       profilePhoto: profilePhoto ?? this.profilePhoto,
       fcmToken: fcmToken ?? this.fcmToken,
     );
@@ -81,7 +92,8 @@ class Coach {
   String toString() {
     return 'Coach(id: $id, name: $name, email: $email, phone: $phone, '
         'specialization: $specialization, experienceYears: $experienceYears, '
-        'status: $status, profilePhoto: $profilePhoto, fcmToken: $fcmToken)';
+        'status: $status, monthlySalary: $monthlySalary, joiningDate: $joiningDate, '
+        'profilePhoto: $profilePhoto, fcmToken: $fcmToken)';
   }
 
   @override
@@ -96,6 +108,8 @@ class Coach {
         other.specialization == specialization &&
         other.experienceYears == experienceYears &&
         other.status == status &&
+        other.monthlySalary == monthlySalary &&
+        other.joiningDate == joiningDate &&
         other.profilePhoto == profilePhoto &&
         other.fcmToken == fcmToken;
   }
@@ -110,6 +124,8 @@ class Coach {
       specialization,
       experienceYears,
       status,
+      monthlySalary,
+      joiningDate,
       profilePhoto,
       fcmToken,
     );
