@@ -5,7 +5,6 @@ import '../../../core/constants/dimensions.dart';
 import '../../../widgets/common/neumorphic_container.dart';
 import '../../../widgets/common/success_snackbar.dart';
 import '../../../widgets/common/confirmation_dialog.dart';
-import '../../../widgets/forms/edit_student_dialog.dart';
 import '../../../providers/service_providers.dart';
 import '../../../providers/student_provider.dart';
 import '../../../providers/batch_provider.dart';
@@ -352,20 +351,6 @@ class _StudentProfileTabState extends ConsumerState<StudentProfileTab> {
       children: [
         SizedBox(
           width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: () => _editStudent(),
-            icon: const Icon(Icons.edit, size: 18),
-            label: const Text('Edit Student'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.accent,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingM),
-            ),
-          ),
-        ),
-        const SizedBox(height: AppDimensions.spacingS),
-        SizedBox(
-          width: double.infinity,
           child: OutlinedButton.icon(
             onPressed: () => _manageBatches(),
             icon: const Icon(Icons.group_add, size: 18),
@@ -496,29 +481,6 @@ class _StudentProfileTabState extends ConsumerState<StudentProfileTab> {
       default:
         return AppColors.textSecondary;
     }
-  }
-
-  void _editStudent() {
-    showDialog(
-      context: context,
-      builder: (context) => EditStudentDialog(
-        student: widget.student,
-        onSubmit: (studentData) async {
-          try {
-            await ref.read(studentListProvider.notifier).updateStudent(widget.student.id, studentData);
-            if (mounted) {
-              Navigator.of(context).pop();
-              SuccessSnackbar.show(context, 'Student updated successfully');
-              widget.onStudentUpdated?.call();
-            }
-          } catch (e) {
-            if (mounted) {
-              SuccessSnackbar.showError(context, 'Failed to update student: ${e.toString()}');
-            }
-          }
-        },
-      ),
-    );
   }
 
   void _manageBatches() async {
