@@ -168,11 +168,6 @@ class _ProfileCompletionScreenState
       return;
     }
 
-    if (_profilePhotoUrl == null) {
-      SuccessSnackbar.showError(context, 'Please upload a profile photo');
-      return;
-    }
-
     setState(() => _isLoading = true);
 
     try {
@@ -279,7 +274,7 @@ class _ProfileCompletionScreenState
                       const SizedBox(width: AppDimensions.spacingM),
                       Expanded(
                         child: Text(
-                          'Please complete your profile to continue. All fields are required.',
+                          'Please complete your profile to continue.',
                           style: const TextStyle(
                             color: AppColors.textSecondary,
                             fontSize: 14,
@@ -475,16 +470,6 @@ class _ProfileCompletionScreenState
                     isLoading: _isUploadingImage,
                   ),
                 ),
-                if (_profilePhotoUrl == null)
-                   Padding(
-                     padding: const EdgeInsets.only(top: AppDimensions.spacingS),
-                     child: const Center(
-                       child: Text(
-                         'Profile photo is required *',
-                         style: TextStyle(color: AppColors.error, fontSize: 12),
-                       ),
-                     ),
-                   ),
                 const SizedBox(height: AppDimensions.spacingXl),
 
                 // Submit Button
