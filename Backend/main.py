@@ -6566,8 +6566,8 @@ if __name__ == "__main__":
     
     print("🚀 Starting Badminton Academy Management System API...")
     print("📖 API Documentation (Local): http://127.0.0.1:8000/docs")
-    print("📖 API Documentation (Network): http://192.168.1.7:8000/docs")
+    print("📖 API Documentation (Network): http://192.168.1.4:8000/docs")
     print("📊 Alternative Docs: http://127.0.0.1:8000/redoc")
-    print("📱 Mobile devices can connect to: http://192.168.1.7:8000")
+    print("📱 Mobile devices can connect to: http://192.168.1.4:8000")
     # host="0.0.0.0" allows connections from any device on the network
     uvicorn.run(app, host="0.0.0.0", port=8000)
