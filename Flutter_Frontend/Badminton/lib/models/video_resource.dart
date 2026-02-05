@@ -2,6 +2,8 @@
 class VideoResource {
   final int id;
   final int? studentId; // Keep for backward compatibility
+  final int? batchId;
+  final int? sessionId;
   final String? studentName;
   final String? title;
   final String url;
@@ -15,6 +17,8 @@ class VideoResource {
   VideoResource({
     required this.id,
     this.studentId,
+    this.batchId,
+    this.sessionId,
     this.studentName,
     this.title,
     required this.url,
@@ -31,6 +35,8 @@ class VideoResource {
     return VideoResource(
       id: json['id'] as int,
       studentId: json['student_id'] as int?,
+      batchId: json['batch_id'] as int?,
+      sessionId: json['session_id'] as int?,
       studentName: json['student_name'] as String?,
       title: json['title'] as String?,
       url: json['url'] as String,
@@ -52,6 +58,8 @@ class VideoResource {
     return {
       'id': id,
       'student_id': studentId,
+      'batch_id': batchId,
+      'session_id': sessionId,
       'student_name': studentName,
       'title': title,
       'url': url,
@@ -68,6 +76,8 @@ class VideoResource {
   VideoResource copyWith({
     int? id,
     int? studentId,
+    int? batchId,
+    int? sessionId,
     String? studentName,
     String? title,
     String? url,
@@ -81,6 +91,8 @@ class VideoResource {
     return VideoResource(
       id: id ?? this.id,
       studentId: studentId ?? this.studentId,
+      batchId: batchId ?? this.batchId,
+      sessionId: sessionId ?? this.sessionId,
       studentName: studentName ?? this.studentName,
       title: title ?? this.title,
       url: url ?? this.url,

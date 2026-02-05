@@ -643,6 +643,72 @@ def migrate_database_schema(engine):
                         SELECT tc.constraint_name 
                         FROM information_schema.table_constraints tc
                         JOIN information_schema.key_column_usage kcu 
+                        ON tc.constraint_name = kcu.constraint_name
+                        WHERE tc.table_name = 'calendar_events' 
+                        AND kcu.column_name = 'created_by'
+                        AND tc.constraint_type = 'FOREIGN KEY'
+                    """)
+                    fk_results = conn.execute(fk_check_all).fetchall()
+                    for fk_row in fk_results:
+                        fk_name = fk_row[0]
+                        drop_fk_sql = text(f"ALTER TABLE calendar_events DROP CONSTRAINT IF EXISTS {fk_name}")
+                        conn.execute(drop_fk_sql)
+                        print(f"✅ Dropped foreign key constraint {fk_name} from calendar_events.created_by")
+            except Exception as alter_error:
+                print(f"⚠️  Warning: Could not alter calendar_events.created_by constraint: {alter_error}")
+
+        # Migrate video_resources table - add batch_id and session_id, make student_id nullable
+        if 'video_resources' in tables:
+            check_and_add_column(engine, 'video_resources', 'batch_id', 'INTEGER', nullable=True)
+            check_and_add_column(engine, 'video_resources', 'session_id', 'INTEGER', nullable=True)
+            
+            # Make student_id nullable
+            try:
+                with engine.begin() as conn:
+                    columns = [col['name'] for col in inspector.get_columns('video_resources')]
+                    if 'student_id' in columns:
+                        col_info = next((col for col in inspector.get_columns('video_resources') if col['name'] == 'student_id'), None)
+                        if col_info and not col_info.get('nullable', True):
+                            conn.execute(text("ALTER TABLE video_resources ALTER COLUMN student_id DROP NOT NULL"))
+                            print("✅ Made video_resources.student_id nullable")
+            except Exception as e:
+                print(f"⚠️  Warning: Could not alter video_resources.student_id constraint: {e}")
+            check_and_add_column(engine, 'calendar_events', 'creator_type', 'VARCHAR(20)', nullable=True, default_value="'coach'")
+            # Make created_by nullable and remove foreign key constraint (since it can reference either coaches or owners)
+            try:
+                with engine.begin() as conn:
+                    # Check if created_by is NOT NULL and make it nullable
+                    col_info = next((col for col in inspector.get_columns('calendar_events') if col['name'] == 'created_by'), None)
+                    if col_info and not col_info.get('nullable', True):
+                        conn.execute(text("ALTER TABLE calendar_events ALTER COLUMN created_by DROP NOT NULL"))
+                    
+                    # Drop foreign key constraint if it exists (since created_by can reference either coaches or owners)
+                    fk_constraints = [
+                        'calendar_events_created_by_fkey',
+                        'calendar_events_created_by_coaches_id_fkey',
+                        'fk_calendar_events_created_by'
+                    ]
+                    
+                    for fk_name in fk_constraints:
+                        fk_check = text(f"""
+                            SELECT COUNT(*) 
+                            FROM information_schema.table_constraints 
+                            WHERE table_name = 'calendar_events' 
+                            AND constraint_name = '{fk_name}'
+                        """)
+                        result = conn.execute(fk_check).scalar()
+                        if result > 0:
+                            # Drop the foreign key constraint
+                            drop_fk_sql = text(f"ALTER TABLE calendar_events DROP CONSTRAINT IF EXISTS {fk_name}")
+                            conn.execute(drop_fk_sql)
+                            print(f"✅ Dropped foreign key constraint {fk_name} from calendar_events.created_by")
+                            break
+                    
+                    # Also try to find and drop any foreign key constraint on created_by column
+                    fk_check_all = text("""
+                        SELECT tc.constraint_name 
+                        FROM information_schema.table_constraints tc
+                        JOIN information_schema.key_column_usage kcu 
                             ON tc.constraint_name = kcu.constraint_name
                         WHERE tc.table_name = 'calendar_events' 
                         AND kcu.column_name = 'created_by'

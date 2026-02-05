@@ -11,12 +11,16 @@ class VideoService {
 
   VideoService(this._apiService);
 
-  /// Get all videos for a specific student
-  Future<List<VideoResource>> getVideosForStudent(int studentId) async {
+  Future<List<VideoResource>> getVideos({int? studentId, int? batchId, int? sessionId}) async {
     try {
+      final queryParams = <String, dynamic>{};
+      if (studentId != null) queryParams['student_id'] = studentId;
+      if (batchId != null) queryParams['batch_id'] = batchId;
+      if (sessionId != null) queryParams['session_id'] = sessionId;
+
       final response = await _apiService.get(
         ApiEndpoints.videoResources,
-        queryParameters: {'student_id': studentId},
+        queryParameters: queryParams,
       );
 
       if (response.data is List) {
@@ -28,6 +32,11 @@ class VideoService {
     } catch (e) {
       throw Exception('Failed to fetch videos: ${_apiService.getErrorMessage(e)}');
     }
+  }
+
+  /// Get all videos for a specific student (Legacy wrapper)
+  Future<List<VideoResource>> getVideosForStudent(int studentId) async {
+    return getVideos(studentId: studentId);
   }
 
   /// Get all videos (for owner view)
