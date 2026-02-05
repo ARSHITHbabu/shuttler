@@ -1,26 +1,28 @@
 /// Video resource data model for training videos uploaded for students
 class VideoResource {
   final int id;
-  final int? studentId;
-  final int? batchId;
-  final int? sessionId;
+  final int? studentId; // Keep for backward compatibility
   final String? studentName;
   final String? title;
   final String url;
   final String? remarks;
   final int? uploadedBy;
+  final String? uploaderName; // Added uploader name
+  final String audienceType; // "all", "batch", "student"
+  final List<int> targetIds;
   final DateTime createdAt;
 
   VideoResource({
     required this.id,
     this.studentId,
-    this.batchId,
-    this.sessionId,
     this.studentName,
     this.title,
     required this.url,
     this.remarks,
     this.uploadedBy,
+    this.uploaderName,
+    required this.audienceType,
+    this.targetIds = const [],
     required this.createdAt,
   });
 
@@ -29,13 +31,16 @@ class VideoResource {
     return VideoResource(
       id: json['id'] as int,
       studentId: json['student_id'] as int?,
-      batchId: json['batch_id'] as int?,
-      sessionId: json['session_id'] as int?,
       studentName: json['student_name'] as String?,
       title: json['title'] as String?,
       url: json['url'] as String,
       remarks: json['remarks'] as String?,
       uploadedBy: json['uploaded_by'] as int?,
+      uploaderName: json['uploader_name'] as String?,
+      audienceType: json['audience_type'] as String? ?? 'student',
+      targetIds: json['target_ids'] != null
+          ? List<int>.from(json['target_ids'] as List)
+          : [],
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String)
           : DateTime.now(),
@@ -54,6 +59,9 @@ class VideoResource {
       'url': url,
       'remarks': remarks,
       'uploaded_by': uploadedBy,
+      'uploader_name': uploaderName,
+      'audience_type': audienceType,
+      'target_ids': targetIds,
       'created_at': createdAt.toIso8601String(),
     };
   }
@@ -69,6 +77,9 @@ class VideoResource {
     String? url,
     String? remarks,
     int? uploadedBy,
+    String? uploaderName,
+    String? audienceType,
+    List<int>? targetIds,
     DateTime? createdAt,
   }) {
     return VideoResource(
@@ -81,6 +92,9 @@ class VideoResource {
       url: url ?? this.url,
       remarks: remarks ?? this.remarks,
       uploadedBy: uploadedBy ?? this.uploadedBy,
+      uploaderName: uploaderName ?? this.uploaderName,
+      audienceType: audienceType ?? this.audienceType,
+      targetIds: targetIds ?? this.targetIds,
       createdAt: createdAt ?? this.createdAt,
     );
   }

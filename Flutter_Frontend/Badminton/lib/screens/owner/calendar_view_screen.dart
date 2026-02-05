@@ -285,23 +285,14 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
       ),
       body: Consumer(
         builder: (context, ref, child) {
-          // Get events for the current month
-          final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
-          final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
-          
-          final eventsAsync = ref.watch(calendarEventListProvider(
-            startDate: firstDay,
-            endDate: lastDay,
-          ));
+          // Get events for the current year
+          final eventsAsync = ref.watch(yearlyEventsProvider(_focusedDay.year));
           
           return eventsAsync.when(
-            loading: () => const Center(child: ListSkeleton(itemCount: 3)),
+            loading: () => const Center(child: DashboardSkeleton()),
             error: (error, stack) => ErrorDisplay(
               message: 'Failed to load calendar events: ${error.toString()}',
-              onRetry: () => ref.invalidate(calendarEventListProvider(
-                startDate: firstDay,
-                endDate: lastDay,
-              )),
+              onRetry: () => ref.invalidate(yearlyEventsProvider(_focusedDay.year)),
             ),
             data: (events) {
               final groupedEvents = _groupEventsByDate(events);
@@ -595,7 +586,7 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
           Expanded(
             child: Row(
               children: [
-                const Icon(Icons.flag, size: 20, color: Colors.red),
+                const Icon(Icons.celebration, size: 20, color: Colors.red),
                 const SizedBox(width: AppDimensions.spacingS),
                 Expanded(
                   child: Column(

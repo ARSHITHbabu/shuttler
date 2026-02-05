@@ -65,12 +65,11 @@ class VideoService {
     }
   }
 
-  /// Upload a video for a student
+  /// Upload a video for students/batches/everyone
   /// Supports both file paths (mobile/desktop) and XFile (web)
   Future<VideoResource> uploadVideo({
-    int? studentId,
-    int? batchId,
-    int? sessionId,
+    required String audienceType,
+    required List<int> targetIds,
     required String videoFilePath,
     String? title,
     String? remarks,
@@ -79,9 +78,8 @@ class VideoService {
   }) async {
     try {
       final additionalData = <String, dynamic>{
-        if (studentId != null) 'student_id': studentId,
-        if (batchId != null) 'batch_id': batchId,
-        if (sessionId != null) 'session_id': sessionId,
+        'audience_type': audienceType,
+        'target_ids': targetIds.join(','),
         if (title != null) 'title': title,
         if (remarks != null) 'remarks': remarks,
         if (uploadedBy != null) 'uploaded_by': uploadedBy,
@@ -103,9 +101,8 @@ class VideoService {
 
   /// Upload a video from XFile (supports web and mobile)
   Future<VideoResource> uploadVideoFromFile({
-    int? studentId,
-    int? batchId,
-    int? sessionId,
+    required String audienceType,
+    required List<int> targetIds,
     required XFile videoFile,
     String? title,
     String? remarks,
@@ -114,9 +111,8 @@ class VideoService {
   }) async {
     try {
       final additionalData = <String, dynamic>{
-        if (studentId != null) 'student_id': studentId,
-        if (batchId != null) 'batch_id': batchId,
-        if (sessionId != null) 'session_id': sessionId,
+        'audience_type': audienceType,
+        'target_ids': targetIds.join(','),
         if (title != null) 'title': title,
         if (remarks != null) 'remarks': remarks,
         if (uploadedBy != null) 'uploaded_by': uploadedBy,
@@ -152,11 +148,10 @@ class VideoService {
     }
   }
 
-  /// Upload multiple videos for a student
+  /// Upload multiple videos with flexible targeting
   Future<List<VideoResource>> uploadMultipleVideos({
-    int? studentId,
-    int? batchId,
-    int? sessionId,
+    required String audienceType,
+    required List<int> targetIds,
     required List<String> videoPaths,
     String? remarks,
     int? uploadedBy,
@@ -166,9 +161,8 @@ class VideoService {
 
     for (int i = 0; i < videoPaths.length; i++) {
       final video = await uploadVideo(
-        studentId: studentId,
-        batchId: batchId,
-        sessionId: sessionId,
+        audienceType: audienceType,
+        targetIds: targetIds,
         videoFilePath: videoPaths[i],
         remarks: remarks,
         uploadedBy: uploadedBy,

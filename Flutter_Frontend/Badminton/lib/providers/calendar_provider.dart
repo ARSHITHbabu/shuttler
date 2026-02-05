@@ -1,4 +1,4 @@
-import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:riverpod_annotation/riverpod_annotation.dart'; 
 import '../models/calendar_event.dart';
 import 'service_providers.dart';
 
@@ -17,6 +17,21 @@ Future<List<CalendarEvent>> calendarEvents(
     startDate: startDate,
     endDate: endDate,
     eventType: eventType,
+  );
+}
+
+/// Provider for calendar events for a specific year
+@riverpod
+Future<List<CalendarEvent>> yearlyEvents(
+  YearlyEventsRef ref,
+  int year,
+) async {
+  final calendarService = ref.watch(calendarServiceProvider);
+  final startDate = DateTime(year, 1, 1);
+  final endDate = DateTime(year, 12, 31);
+  return calendarService.getCalendarEvents(
+    startDate: startDate,
+    endDate: endDate,
   );
 }
 
@@ -88,6 +103,7 @@ class CalendarEventList extends _$CalendarEventList {
         try {
           final date = DateTime.parse(eventData['date'].toString());
           ref.invalidate(calendarEventByDateProvider(date));
+          ref.invalidate(yearlyEventsProvider(date.year));
         } catch (e) {
           // Date parsing failed, skip invalidation
         }
@@ -110,6 +126,7 @@ class CalendarEventList extends _$CalendarEventList {
       ref.invalidate(calendarEventByIdProvider(id));
       ref.invalidate(calendarEventByTypeProvider(existing.eventType));
       ref.invalidate(calendarEventByDateProvider(existing.date));
+      ref.invalidate(yearlyEventsProvider(existing.date.year));
       
       // If event type or date changed, invalidate those too
       if (eventData.containsKey('event_type')) {
@@ -119,6 +136,7 @@ class CalendarEventList extends _$CalendarEventList {
         try {
           final date = DateTime.parse(eventData['date'].toString());
           ref.invalidate(calendarEventByDateProvider(date));
+          ref.invalidate(yearlyEventsProvider(date.year));
         } catch (e) {
           // Date parsing failed, skip invalidation
         }
@@ -141,6 +159,7 @@ class CalendarEventList extends _$CalendarEventList {
       ref.invalidate(calendarEventByIdProvider(id));
       ref.invalidate(calendarEventByTypeProvider(existing.eventType));
       ref.invalidate(calendarEventByDateProvider(existing.date));
+      ref.invalidate(yearlyEventsProvider(existing.date.year));
       
       await refresh();
     } catch (e) {

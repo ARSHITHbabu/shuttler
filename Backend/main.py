@@ -2,11 +2,11 @@ from fastapi import FastAPI, HTTPException, File, UploadFile, Query, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, Text, Date, DateTime, ForeignKey, JSON, func, and_, or_
+from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, Text, Date, DateTime, ForeignKey, JSON, func, and_, or_, select
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.exc import IntegrityError
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import List, Optional, Dict, Any, Union
 from datetime import datetime, date, timedelta
 import json
@@ -318,14 +318,21 @@ class TournamentDB(Base):
 class VideoResourceDB(Base):
     __tablename__ = "video_resources"
     id = Column(Integer, primary_key=True, index=True)
+    # Keeping student_id for backward compatibility, but marking as nullable
     student_id = Column(Integer, ForeignKey("students.id"), nullable=True)
-    batch_id = Column(Integer, ForeignKey("batches.id"), nullable=True)
-    session_id = Column(Integer, ForeignKey("sessions.id"), nullable=True)
     title = Column(String, nullable=True)
     url = Column(String, nullable=False)
     remarks = Column(Text, nullable=True)
-    uploaded_by = Column(Integer, nullable=True)  # Owner ID who uploaded
+    uploaded_by = Column(Integer, nullable=True)  # Owner/Coach ID who uploaded
+    audience_type = Column(String(50), default="student") # "all", "batch", "student"
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class VideoTargetDB(Base):
+    """Specific targets for a video (student IDs or batch IDs)"""
+    __tablename__ = "video_targets"
+    id = Column(Integer, primary_key=True, index=True)
+    video_id = Column(Integer, ForeignKey("video_resources.id", ondelete="CASCADE"), nullable=False)
+    target_id = Column(Integer, nullable=False) # can be student_id or batch_id
 
 class InvitationDB(Base):
     __tablename__ = "invitations"
@@ -363,7 +370,7 @@ class AnnouncementDB(Base):
     title = Column(String(255), nullable=False)
     message = Column(Text, nullable=False)
     target_audience = Column(String(50), default="all")  # "all", "students", "coaches"
-    priority = Column(String(20), default="normal")  # "normal", "high", "urgent"
+    priority = Column(String(20), default="General")  # "General", "Important"
     created_by = Column(Integer, nullable=True)  # Can be coach or owner ID
     creator_type = Column(String(20), default="coach")  # "coach" or "owner"
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -911,49 +918,39 @@ def migrate_database_schema(engine):
             video_columns = [col['name'] for col in inspector.get_columns('video_resources')]
             print(f"📹 video_resources table found with columns: {video_columns}")
 
-            # Check if this is the old schema (without student_id)
-            if 'student_id' not in video_columns:
-                print("⚠️  video_resources table has old schema. Migrating...")
-                try:
-                    with engine.begin() as conn:
-                        # Drop old video_resources table (since it has different structure)
-                        # First check if there's any data we should preserve
-                        count_result = conn.execute(text("SELECT COUNT(*) FROM video_resources")).scalar()
-                        if count_result > 0:
-                            print(f"⚠️  Found {count_result} existing videos. Backing up old data...")
-                            # For safety, rename old table instead of dropping
-                            conn.execute(text("ALTER TABLE video_resources RENAME TO video_resources_old_backup"))
-                            print("✅ Renamed old table to video_resources_old_backup")
-                        else:
-                            # No data, safe to drop
-                            conn.execute(text("DROP TABLE IF EXISTS video_resources"))
-                            print("✅ Dropped empty old video_resources table")
+            # Ensure student_id is nullable (for multi-target support)
+            try:
+                with engine.begin() as conn:
+                    col_info = next((col for col in inspector.get_columns('video_resources') if col['name'] == 'student_id'), None)
+                    if col_info and not col_info.get('nullable', True):
+                        conn.execute(text("ALTER TABLE video_resources ALTER COLUMN student_id DROP NOT NULL"))
+                        print("✅ Made video_resources.student_id nullable")
+            except Exception as e:
+                print(f"⚠️  Note: video_resources.student_id nullable migration: {e}")
 
-                        # Create new table with correct schema
-                        conn.execute(text("""
-                            CREATE TABLE video_resources (
-                                id SERIAL PRIMARY KEY,
-                                student_id INTEGER NOT NULL REFERENCES students(id),
-                                title VARCHAR,
-                                url VARCHAR NOT NULL,
-                                remarks TEXT,
-                                uploaded_by INTEGER,
-                                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-                            )
-                        """))
-                        print("✅ Created new video_resources table with student association")
+            # Add new columns
+            check_and_add_column(engine, 'video_resources', 'remarks', 'TEXT', nullable=True)
+            check_and_add_column(engine, 'video_resources', 'uploaded_by', 'INTEGER', nullable=True)
+            check_and_add_column(engine, 'video_resources', 'audience_type', 'VARCHAR(50)', nullable=True, default_value="'student'")
+            check_and_add_column(engine, 'video_resources', 'created_at', 'TIMESTAMP WITH TIME ZONE', nullable=True, default_value='NOW()')
+            print("✅ video_resources table schema verified")
 
-                        # Create index on student_id for faster lookups
-                        conn.execute(text("CREATE INDEX ix_video_resources_student_id ON video_resources (student_id)"))
-                        print("✅ Added index for video_resources.student_id")
-                except Exception as video_migration_error:
-                    print(f"⚠️  Error migrating video_resources table: {video_migration_error}")
-            else:
-                # Table already has student_id, just ensure other columns exist
-                check_and_add_column(engine, 'video_resources', 'remarks', 'TEXT', nullable=True)
-                check_and_add_column(engine, 'video_resources', 'uploaded_by', 'INTEGER', nullable=True)
-                check_and_add_column(engine, 'video_resources', 'created_at', 'TIMESTAMP WITH TIME ZONE', nullable=True, default_value='NOW()')
-                print("✅ video_resources table schema verified")
+        # Migrate video_targets table
+        if 'video_targets' not in tables:
+            print("⚠️  Table 'video_targets' missing. Creating...")
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("""
+                        CREATE TABLE video_targets (
+                            id SERIAL PRIMARY KEY,
+                            video_id INTEGER REFERENCES video_resources(id) ON DELETE CASCADE NOT NULL,
+                            target_id INTEGER NOT NULL
+                        )
+                    """))
+                    conn.execute(text("CREATE INDEX idx_video_targets_video_id ON video_targets(video_id)"))
+                print("✅ Created table 'video_targets'")
+            except Exception as e:
+                print(f"⚠️  Error creating video_targets table: {e}")
         else:
             print("📹 video_resources table will be created by SQLAlchemy")
 
@@ -1744,10 +1741,17 @@ class AnnouncementCreate(BaseModel):
     title: str
     message: str
     target_audience: str = "all"
-    priority: str = "normal"
+    priority: str = "General"
     created_by: int
     creator_type: str = "coach"  # "coach" or "owner"
     scheduled_at: Optional[str] = None
+
+    @field_validator('priority')
+    @classmethod
+    def validate_priority(cls, v):
+        if v not in ["General", "Important"]:
+            raise ValueError('priority must be "General" or "Important"')
+        return v
 
 class Announcement(BaseModel):
     id: int
@@ -5050,20 +5054,30 @@ def delete_tournament(tournament_id: int):
 
 @app.post("/video-resources/upload")
 async def upload_video(
-    student_id: Optional[int] = Form(None),
-    batch_id: Optional[int] = Form(None),
-    session_id: Optional[int] = Form(None),
+    audience_type: str = Form("student"), # "all", "batch", "student"
+    target_ids: Optional[str] = Form(None), # Comma-separated IDs
     title: Optional[str] = Form(None),
     remarks: Optional[str] = Form(None),
     uploaded_by: Optional[int] = Form(None),
     video: UploadFile = File(...)
 ):
-    """Upload a video file for a specific student, batch, or session"""
+    """Upload a video file with flexible targeting (Everyone, Batches, or Students)"""
     db = SessionLocal()
     try:
-        # Validate that at least one target is provided
-        if not student_id and not batch_id and not session_id:
-            raise HTTPException(status_code=400, detail="One of student_id, batch_id, or session_id must be provided")
+        # Validate audience_type
+        if audience_type not in ["all", "batch", "student"]:
+            raise HTTPException(status_code=400, detail="Invalid audience_type")
+
+        # Parse target_ids
+        targets = []
+        if target_ids:
+            try:
+                targets = [int(tid.strip()) for tid in target_ids.split(",") if tid.strip()]
+            except ValueError:
+                raise HTTPException(status_code=400, detail="target_ids must be a comma-separated list of integers")
+
+        if audience_type != "all" and not targets:
+            raise HTTPException(status_code=400, detail="target_ids required for 'batch' or 'student' audience")
 
         # Validate file type
         allowed_extensions = ["mp4", "webm", "mov", "avi", "mkv", "m4v"]
@@ -5075,24 +5089,6 @@ async def upload_video(
                 detail=f"File type not allowed. Allowed types: {', '.join(allowed_extensions)}"
             )
 
-        target_name = None
-        # Verify target exists and get name
-        if student_id:
-            student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
-            if not student:
-                raise HTTPException(status_code=404, detail="Student not found")
-            target_name = student.name
-        elif batch_id:
-            batch = db.query(BatchDB).filter(BatchDB.id == batch_id).first()
-            if not batch:
-                raise HTTPException(status_code=404, detail="Batch not found")
-            target_name = f"Batch: {batch.batch_name}"
-        elif session_id:
-            session = db.query(SessionDB).filter(SessionDB.id == session_id).first()
-            if not session:
-                raise HTTPException(status_code=404, detail="Session not found")
-            target_name = f"Session: {session.name}"
-
         # Generate unique filename
         unique_filename = f"video_{uuid.uuid4()}.{file_extension}"
         file_path = UPLOAD_DIR / unique_filename
@@ -5103,25 +5099,27 @@ async def upload_video(
 
         # Create database record
         db_video = VideoResourceDB(
-            student_id=student_id,
-            batch_id=batch_id,
-            session_id=session_id,
             title=title or video.filename,
             url=f"/uploads/{unique_filename}",
             remarks=remarks,
-            uploaded_by=uploaded_by
+            uploaded_by=uploaded_by,
+            audience_type=audience_type,
+            student_id=targets[0] if audience_type == "student" and len(targets) == 1 else None # Backward compat
         )
         db.add(db_video)
         db.commit()
         db.refresh(db_video)
 
-        # Return with target name
+        # Create target records
+        for target_id in targets:
+            db_target = VideoTargetDB(video_id=db_video.id, target_id=target_id)
+            db.add(db_target)
+        db.commit()
+
         return {
             "id": db_video.id,
-            "student_id": db_video.student_id,
-            "batch_id": db_video.batch_id,
-            "session_id": db_video.session_id,
-            "student_name": target_name,
+            "audience_type": db_video.audience_type,
+            "target_ids": targets,
             "title": db_video.title,
             "url": db_video.url,
             "remarks": db_video.remarks,
@@ -5131,73 +5129,101 @@ async def upload_video(
     except HTTPException:
         raise
     except Exception as e:
+        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
 
 @app.get("/video-resources/")
-def get_video_resources(
-    student_id: Optional[int] = None,
-    batch_id: Optional[int] = None,
-    session_id: Optional[int] = None
-):
-    """Get video resources. If student_id is provided, checks for direct, batch, and session videos."""
+def get_video_resources(student_id: Optional[int] = None):
+    """Get video resources. If student_id provided, returns videos targeted to them directly, via their batches, or to everyone."""
     db = SessionLocal()
     try:
+        if student_id is None:
+            # For owner view - just return all videos
+            videos = db.query(VideoResourceDB).order_by(VideoResourceDB.created_at.desc()).all()
+            result = []
+            for video in videos:
+                # Get targets
+                targets = db.query(VideoTargetDB).filter(VideoTargetDB.video_id == video.id).all()
+                
+                # Resolve uploader name
+                uploader_name = "Unknown"
+                if video.uploaded_by:
+                    owner = db.query(OwnerDB).filter(OwnerDB.id == video.uploaded_by).first()
+                    if owner:
+                        uploader_name = owner.name
+                    else:
+                        coach = db.query(CoachDB).filter(CoachDB.id == video.uploaded_by).first()
+                        if coach:
+                            uploader_name = coach.name
+
+                result.append({
+                    "id": video.id,
+                    "title": video.title,
+                    "url": video.url,
+                    "remarks": video.remarks,
+                    "uploaded_by": video.uploaded_by,
+                    "uploader_name": uploader_name,
+                    "audience_type": video.audience_type,
+                    "target_ids": [t.target_id for t in targets],
+                    "created_at": video.created_at
+                })
+            return result
+
+        # For student view - complex filtering
+        # 1. Direct student targets
+        # 2. Batch targets (if student is in that batch)
+        # 3. 'all' audience
+        
+        # Get student's batches
+        batch_ids = [bs.batch_id for bs in db.query(BatchStudentDB).filter(BatchStudentDB.student_id == student_id).all()]
+
         query = db.query(VideoResourceDB)
+        
+        # Filter: (audience_type='all') OR 
+        #         (audience_type='student' AND video_id in (targets where target_id=student_id)) OR
+        #         (audience_type='batch' AND video_id in (targets where target_id in student_batch_ids))
+        
+        all_condition = VideoResourceDB.audience_type == "all"
+        
+        student_target_video_ids = db.query(VideoTargetDB.video_id).filter(
+            and_(VideoTargetDB.target_id == student_id, VideoResourceDB.audience_type == "student")
+        ).join(VideoResourceDB, VideoTargetDB.video_id == VideoResourceDB.id).scalar_subquery()
+        
+        batch_target_video_ids = db.query(VideoTargetDB.video_id).filter(
+            and_(VideoTargetDB.target_id.in_(batch_ids), VideoResourceDB.audience_type == "batch")
+        ).join(VideoResourceDB, VideoTargetDB.video_id == VideoResourceDB.id).scalar_subquery() if batch_ids else None
 
-        if student_id is not None:
-            # 1. Get student's approved batches
-            batch_ids = [r.batch_id for r in db.query(BatchStudentDB).filter(BatchStudentDB.student_id == student_id, BatchStudentDB.status == "approved").all()]
-             
-            # 2. Get sessions for those batches
-            session_ids = []
-            if batch_ids:
-                sessions = db.query(BatchDB.session_id).filter(BatchDB.id.in_(batch_ids)).distinct().all()
-                session_ids = [s[0] for s in sessions if s[0] is not None]
+        conditions = [all_condition, VideoResourceDB.id.in_(student_target_video_ids)]
+        if batch_target_video_ids is not None:
+            conditions.append(VideoResourceDB.id.in_(batch_target_video_ids))
+            
+        videos = query.filter(or_(*conditions)).order_by(VideoResourceDB.created_at.desc()).all()
 
-            # 3. Filter query
-            query = query.filter(
-                or_(
-                    VideoResourceDB.student_id == student_id,
-                    VideoResourceDB.batch_id.in_(batch_ids) if batch_ids else False,
-                    VideoResourceDB.session_id.in_(session_ids) if session_ids else False
-                )
-            )
-        elif batch_id is not None:
-             query = query.filter(VideoResourceDB.batch_id == batch_id)
-        elif session_id is not None:
-             query = query.filter(VideoResourceDB.session_id == session_id)
-
-        videos = query.order_by(VideoResourceDB.created_at.desc()).all()
-
-        # Enrich with student/batch/session names
         result = []
         for video in videos:
-            target_name = "Unknown"
-            if video.student_id:
-                student = db.query(StudentDB).filter(StudentDB.id == video.student_id).first()
-                target_name = student.name if student else "Unknown Student"
-            elif video.batch_id:
-                batch = db.query(BatchDB).filter(BatchDB.id == video.batch_id).first()
-                target_name = f"Batch: {batch.batch_name}" if batch else "Unknown Batch"
-            elif video.session_id:
-                session = db.query(SessionDB).filter(SessionDB.id == video.session_id).first()
-                target_name = f"Session: {session.name}" if session else "Unknown Session"
+            # Resolve uploader name
+            uploader_name = "Unknown"
+            if video.uploaded_by:
+                owner = db.query(OwnerDB).filter(OwnerDB.id == video.uploaded_by).first()
+                if owner:
+                    uploader_name = owner.name
+                else:
+                    coach = db.query(CoachDB).filter(CoachDB.id == video.uploaded_by).first()
+                    if coach:
+                        uploader_name = coach.name
 
             result.append({
                 "id": video.id,
-                "student_id": video.student_id,
-                "batch_id": video.batch_id,
-                "session_id": video.session_id,
-                "student_name": target_name,
                 "title": video.title,
                 "url": video.url,
                 "remarks": video.remarks,
                 "uploaded_by": video.uploaded_by,
+                "uploader_name": uploader_name,
+                "audience_type": video.audience_type,
                 "created_at": video.created_at
             })
-
         return result
     finally:
         db.close()
@@ -7099,9 +7125,9 @@ if __name__ == "__main__":
         print(f"[Schema Watcher] Could not start: {e}")
     
     print("🚀 Starting Badminton Academy Management System API...")
-    print("📖 API Documentation (Local): http://127.0.0.1:8000/docs")
-    print("📖 API Documentation (Network): http://192.168.1.4:8000/docs")
-    print("📊 Alternative Docs: http://127.0.0.1:8000/redoc")
-    print("📱 Mobile devices can connect to: http://192.168.1.4:8000")
+    print("📖 API Documentation (Local): http://127.0.0.1:8001/docs")
+    print("📖 API Documentation (Network): http://192.168.1.4:8001/docs")
+    print("📊 Alternative Docs: http://127.0.0.1:8001/redoc")
+    print("📱 Mobile devices can connect to: http://192.168.1.4:8001")
     # host="0.0.0.0" allows connections from any device on the network
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8001)

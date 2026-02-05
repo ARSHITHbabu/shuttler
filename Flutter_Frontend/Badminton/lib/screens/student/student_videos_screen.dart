@@ -63,17 +63,36 @@ class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
       final videoService = ref.read(videoServiceProvider);
       final videos = await videoService.getVideosForStudent(authState.userId);
 
-      // Fetch uploader names for videos that have uploadedBy
-      final Map<int, String> uploaderNames = {};
+      // Map to store uploader names (fallback if not provided by backend)
+      final Map<int, String> uploaderNamesMap = {};
       final ownerService = ref.read(ownerServiceProvider);
+      final coachService = ref.read(coachServiceProvider);
       
       for (final video in videos) {
-        if (video.uploadedBy != null && !uploaderNames.containsKey(video.uploadedBy)) {
+        // If backend already provided uploaderName, use it
+        if (video.uploaderName != null && video.uploadedBy != null) {
+          uploaderNamesMap[video.uploadedBy!] = video.uploaderName!;
+          continue;
+        }
+
+        // Fallback: Fetch uploader names for videos that have uploadedBy but no name
+        if (video.uploadedBy != null && !uploaderNamesMap.containsKey(video.uploadedBy)) {
           try {
-            final owner = await ownerService.getOwnerById(video.uploadedBy!);
-            uploaderNames[video.uploadedBy!] = owner.name;
+            // Try to fetch as owner first
+            try {
+              final owner = await ownerService.getOwnerById(video.uploadedBy!);
+              uploaderNamesMap[video.uploadedBy!] = owner.name;
+            } catch (_) {
+              // If not found as owner, try coach
+              try {
+                final coach = await coachService.getCoachById(video.uploadedBy!);
+                uploaderNamesMap[video.uploadedBy!] = coach.name;
+              } catch (_) {
+                uploaderNamesMap[video.uploadedBy!] = 'Unknown';
+              }
+            }
           } catch (e) {
-            uploaderNames[video.uploadedBy!] = 'Unknown';
+            uploaderNamesMap[video.uploadedBy!] = 'Unknown';
           }
         }
       }
@@ -81,7 +100,7 @@ class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
       if (mounted) {
         setState(() {
           _videos = videos;
-          _uploaderNames = uploaderNames;
+          _uploaderNames = uploaderNamesMap;
           _isLoading = false;
         });
         _applyFilters();
