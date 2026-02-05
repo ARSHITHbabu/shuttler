@@ -86,10 +86,7 @@ class NotificationManager extends _$NotificationManager {
       
       // Invalidate related providers
       ref.invalidate(notificationByIdProvider(id));
-      ref.invalidate(unreadCountProvider(
-        state.valueOrNull?.first.userId ?? 0,
-        state.valueOrNull?.first.userType ?? '',
-      ));
+      ref.invalidate(unreadCountProvider(userId, userType));
       
       await refresh();
     } catch (e) {
@@ -104,8 +101,6 @@ class NotificationManager extends _$NotificationManager {
       await notificationService.markAllAsRead(ids);
       
       // Invalidate related providers
-      final userId = state.valueOrNull?.first.userId ?? 0;
-      final userType = state.valueOrNull?.first.userType ?? '';
       ref.invalidate(unreadCountProvider(userId, userType));
       
       await refresh();
@@ -122,8 +117,6 @@ class NotificationManager extends _$NotificationManager {
       
       // Invalidate related providers
       ref.invalidate(notificationByIdProvider(id));
-      final userId = state.valueOrNull?.first.userId ?? 0;
-      final userType = state.valueOrNull?.first.userType ?? '';
       ref.invalidate(unreadCountProvider(userId, userType));
       
       await refresh();
@@ -137,8 +130,6 @@ class NotificationManager extends _$NotificationManager {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
       final notificationService = ref.read(notificationServiceProvider);
-      final userId = state.valueOrNull?.first.userId ?? 0;
-      final userType = state.valueOrNull?.first.userType ?? '';
       return notificationService.getNotifications(
         userId: userId,
         userType: userType,

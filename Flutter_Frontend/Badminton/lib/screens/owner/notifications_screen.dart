@@ -21,7 +21,8 @@ import '../owner/requests_screen.dart';
 
 /// Notifications Screen - View and manage notifications
 class NotificationsScreen extends ConsumerStatefulWidget {
-  const NotificationsScreen({super.key});
+  final VoidCallback? onBack;
+  const NotificationsScreen({super.key, this.onBack});
 
   @override
   ConsumerState<NotificationsScreen> createState() => _NotificationsScreenState();
@@ -55,7 +56,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           elevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () {
+              if (widget.onBack != null) {
+                widget.onBack!();
+              } else {
+                Navigator.of(context).pop();
+              }
+            },
           ),
           title: const Text(
             'Notifications',
@@ -75,7 +82,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           elevation: 0,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () {
+              if (widget.onBack != null) {
+                widget.onBack!();
+              } else {
+                Navigator.of(context).pop();
+              }
+            },
           ),
           title: const Text(
             'Notifications',
@@ -122,7 +135,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () {
+            if (widget.onBack != null) {
+              widget.onBack!();
+            } else {
+              Navigator.of(context).pop();
+            }
+          },
         ),
         title: const Text(
           'Notifications',
