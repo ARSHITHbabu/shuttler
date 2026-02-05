@@ -80,21 +80,20 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           context.go('/student-registration-pending', extra: _emailController.text.trim());
         }
       } else {
-        // For coach, registration with additional data
-        await ref.read(authProvider.notifier).register(
+        // For coaches, create registration request
+        final coachRequestService = ref.read(coachRegistrationRequestServiceProvider);
+        
+        await coachRequestService.createRequest(
           name: _nameController.text.trim(),
           email: _emailController.text.trim(),
           phone: _phoneController.text.trim(),
           password: _passwordController.text,
-          userType: 'coach',
-          additionalData: {
-            'specialization': _specializationController.text.trim(),
-            'experience_years': int.tryParse(_experienceController.text.trim()) ?? 0,
-          },
+          specialization: _specializationController.text.trim(),
+          experienceYears: int.tryParse(_experienceController.text.trim()) ?? 0,
         );
 
         if (mounted) {
-          context.go('/coach-dashboard');
+          context.go('/coach-registration-pending', extra: _emailController.text.trim());
         }
       }
     } catch (e) {

@@ -322,6 +322,25 @@ class _BatchDetailsDialogState extends ConsumerState<BatchDetailsDialog> {
         _DetailItem(label: 'Location', value: batch.location ?? 'Not specified', icon: Icons.location_on),
         _DetailItem(label: 'Start Date', value: batch.startDate, icon: Icons.event),
         
+        // Add Season display
+        Consumer(
+          builder: (context, ref, _) {
+            final sessionsAsync = ref.watch(sessionListProvider());
+            return sessionsAsync.when(
+              data: (sessions) {
+                final season = sessions.where((s) => s.id == batch.sessionId).firstOrNull;
+                return _DetailItem(
+                  label: 'Season', 
+                  value: season?.name ?? 'Not assigned', 
+                  icon: Icons.event_note_outlined
+                );
+              },
+              loading: () => const _DetailItem(label: 'Season', value: 'Loading...', icon: Icons.event_note_outlined),
+              error: (_, __) => const _DetailItem(label: 'Season', value: 'Error loading', icon: Icons.event_note_outlined),
+            );
+          },
+        ),
+        
         const SizedBox(height: AppDimensions.spacingL),
         const Text(
           'Assigned Coaches',
@@ -430,7 +449,7 @@ class _BatchDetailsDialogState extends ConsumerState<BatchDetailsDialog> {
           const SizedBox(height: AppDimensions.spacingS),
           _buildCoachSelector(),
           const SizedBox(height: AppDimensions.spacingL),
-          _buildSessionSelector(),
+          _buildSeasonSelector(),
         ],
       ),
     );
@@ -547,7 +566,7 @@ class _BatchDetailsDialogState extends ConsumerState<BatchDetailsDialog> {
     );
   }
 
-  Widget _buildSessionSelector() {
+  Widget _buildSeasonSelector() {
     final sessionsAsync = ref.watch(activeSessionsProvider);
     return sessionsAsync.when(
       loading: () => const SizedBox.shrink(),
@@ -555,7 +574,7 @@ class _BatchDetailsDialogState extends ConsumerState<BatchDetailsDialog> {
       data: (sessions) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Select Session (Optional)', style: TextStyle(fontSize: 14, color: AppColors.textSecondary)),
+          const Text('Select Season *', style: TextStyle(fontSize: 14, color: AppColors.textSecondary)),
           const SizedBox(height: AppDimensions.spacingS),
           NeumorphicContainer(
             padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
@@ -564,10 +583,11 @@ class _BatchDetailsDialogState extends ConsumerState<BatchDetailsDialog> {
               decoration: const InputDecoration(border: InputBorder.none),
               dropdownColor: AppColors.cardBackground,
               items: [
-                const DropdownMenuItem<int>(value: null, child: Text('No Session')),
+                const DropdownMenuItem<int>(value: null, child: Text('Select Season')),
                 ...sessions.map((s) => DropdownMenuItem<int>(value: s.id, child: Text(s.name))),
               ],
               onChanged: (val) => setState(() => _selectedSessionId = val),
+              validator: (value) => value == null ? 'Season is required' : null,
             ),
           ),
         ],
@@ -671,6 +691,15 @@ class _TabButton extends StatelessWidget {
     );
   }
 }
+
+// Assuming this method belongs to a State class like _SeasonManagementScreenState
+// The original instruction implies this method is being added/fixed in a class
+// that is not fully provided in the context.
+// Placing it here as a standalone function for demonstration, but it should be
+// a method of a State class that has access to `ref`, `mounted`, and `context`.
+// For the purpose of this edit, I'm placing it after the _TabButton class,
+// assuming it's a new top-level function or a method of a class not shown.
+// If this is meant to be a method of a State class, it should be inside that class.
 
 class _DetailItem extends StatelessWidget {
   final String label;

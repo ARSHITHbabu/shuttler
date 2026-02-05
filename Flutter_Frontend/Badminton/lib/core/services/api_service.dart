@@ -260,6 +260,57 @@ class ApiService {
     }
   }
 
+  /// PATCH request
+  Future<Response> patch(
+    String path, {
+    dynamic data,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+    RequestPriority priority = RequestPriority.normal,
+  }) async {
+    try {
+      // Use RequestQueue if available and offline
+      if (_requestQueue != null) {
+        final isConnected = await _connectivityService!.isConnected();
+        if (!isConnected) {
+          // Queue the request for later execution
+          return await _requestQueue!.queueRequest(
+            method: 'PATCH',
+            path: path,
+            data: data,
+            queryParameters: queryParameters,
+            options: options,
+            priority: priority,
+          );
+        }
+      }
+      
+      final response = await _dio.patch(
+        path,
+        data: data,
+        queryParameters: queryParameters,
+        options: options,
+      );
+      return response;
+    } catch (e) {
+      // If request fails and we have RequestQueue, try queuing it
+      if (_requestQueue != null && e is DioException) {
+        if (e.type == DioExceptionType.unknown || 
+            e.type == DioExceptionType.connectionTimeout) {
+          return await _requestQueue!.queueRequest(
+            method: 'PATCH',
+            path: path,
+            data: data,
+            queryParameters: queryParameters,
+            options: options,
+            priority: priority,
+          );
+        }
+      }
+      rethrow;
+    }
+  }
+
   /// DELETE request
   Future<Response> delete(
     String path, {

@@ -151,4 +151,29 @@ class LeaveRequestManager extends _$LeaveRequestManager {
       throw Exception('Failed to delete leave request: $e');
     }
   }
+
+  /// Patch a pending leave request (coaches only)
+  Future<void> patchLeaveRequest({
+    required int requestId,
+    required int coachId,
+    DateTime? startDate,
+    DateTime? endDate,
+    String? leaveType,
+    String? reason,
+  }) async {
+    try {
+      final leaveRequestService = ref.read(leaveRequestServiceProvider);
+      await leaveRequestService.patchLeaveRequest(
+        requestId: requestId,
+        coachId: coachId,
+        startDate: startDate,
+        endDate: endDate,
+        leaveType: leaveType,
+        reason: reason,
+      );
+      await refresh();
+    } catch (e) {
+      throw Exception('Failed to edit leave request: $e');
+    }
+  }
 }

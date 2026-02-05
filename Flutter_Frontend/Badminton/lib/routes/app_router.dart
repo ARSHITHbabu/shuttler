@@ -11,6 +11,7 @@ import '../screens/owner/academy_setup_screen.dart';
 import '../screens/owner/owner_dashboard.dart';
 import '../screens/owner/notifications_screen.dart';
 import '../screens/coach/coach_dashboard.dart';
+import '../screens/coach/coach_registration_pending_screen.dart';
 
 /// App routing configuration with go_router
 class AppRouter {
@@ -58,6 +59,16 @@ class AppRouter {
           path: '/coach-dashboard',
           name: 'coach-dashboard',
           builder: (context, state) => const CoachDashboard(),
+        ),
+
+        // Coach Registration Pending route
+        GoRoute(
+          path: '/coach-registration-pending',
+          name: 'coach-registration-pending',
+          builder: (context, state) {
+            final email = state.extra as String? ?? '';
+            return CoachRegistrationPendingScreen(email: email);
+          },
         ),
 
         // Student Profile Completion route

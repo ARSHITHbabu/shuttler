@@ -29,6 +29,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
   DateTime _selectedEndDate = DateTime.now();
   String _selectedLeaveType = 'sick'; // 'sick', 'personal', 'emergency', 'other'
   bool _isLoading = false;
+  LeaveRequest? _editingRequest;
 
   @override
   void dispose() {
@@ -63,17 +64,29 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
         ).notifier,
       );
 
-      await manager.createLeaveRequest(
-        coachId: authState.userId,
-        coachName: authState.userName,
-        startDate: _selectedStartDate,
-        endDate: _selectedEndDate,
-        leaveType: _selectedLeaveType,
-        reason: _reasonController.text.trim(),
-      );
+      if (_editingRequest != null) {
+        await manager.patchLeaveRequest(
+          requestId: _editingRequest!.id,
+          coachId: authState.userId,
+          startDate: _selectedStartDate,
+          endDate: _selectedEndDate,
+          leaveType: _selectedLeaveType,
+          reason: _reasonController.text.trim(),
+        );
+      } else {
+        await manager.createLeaveRequest(
+          coachId: authState.userId,
+          coachName: authState.userName,
+          startDate: _selectedStartDate,
+          endDate: _selectedEndDate,
+          leaveType: _selectedLeaveType,
+          reason: _reasonController.text.trim(),
+        );
+      }
 
       setState(() {
         _showAddForm = false;
+        _editingRequest = null;
         _reasonController.clear();
         _selectedStartDate = DateTime.now();
         _selectedEndDate = DateTime.now();
@@ -87,9 +100,20 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        SuccessSnackbar.showError(context, 'Failed to submit leave request: ${e.toString()}');
+        SuccessSnackbar.showError(context, 'Failed to save leave request: ${e.toString()}');
       }
     }
+  }
+
+  void _startEditing(LeaveRequest request) {
+    setState(() {
+      _editingRequest = request;
+      _showAddForm = true;
+      _reasonController.text = request.reason;
+      _selectedStartDate = request.startDate;
+      _selectedEndDate = request.endDate;
+      _selectedLeaveType = request.leaveType;
+    });
   }
 
   Future<void> _cancelLeaveRequest(int requestId) async {
@@ -439,15 +463,30 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
             const SizedBox(height: AppDimensions.spacingM),
             Align(
               alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () => _cancelLeaveRequest(request.id),
-                child: Text(
-                  'Cancel Request',
-                  style: TextStyle(
-                    color: AppColors.error,
-                    fontSize: 12,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextButton(
+                    onPressed: () => _startEditing(request),
+                    child: Text(
+                      'Edit',
+                      style: TextStyle(
+                        color: AppColors.accent,
+                        fontSize: 12,
+                      ),
+                    ),
                   ),
-                ),
+                  TextButton(
+                    onPressed: () => _cancelLeaveRequest(request.id),
+                    child: Text(
+                      'Cancel Request',
+                      style: TextStyle(
+                        color: AppColors.error,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -483,10 +522,32 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
                       'Modified: ${DateFormat('dd MMM').format(request.modificationStartDate!)} - ${DateFormat('dd MMM').format(request.modificationEndDate!)}',
                       style: TextStyle(fontSize: 12, color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
                     ),
+                    if (request.modificationReason != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Reason: ${request.modificationReason}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               )
-            else
+            else ...[
+              if (request.originalStartDate != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: Text(
+                    'History: ${DateFormat('dd MMM').format(request.originalStartDate!)} - ${DateFormat('dd MMM').format(request.originalEndDate!)}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton.icon(
@@ -501,6 +562,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
                   ),
                 ),
               ),
+            ],
           ],
         ],
       ),
@@ -572,7 +634,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
           onPressed: () => setState(() => _showAddForm = false),
         ),
         title: Text(
-          'Submit Leave Request',
+          _editingRequest != null ? 'Edit Leave Request' : 'Submit Leave Request',
           style: TextStyle(
             color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
             fontSize: 20,
@@ -739,9 +801,9 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
                           height: 20,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text(
-                          'Submit Request',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      : Text(
+                          _editingRequest != null ? 'Update Request' : 'Submit Request',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                         ),
                 ),
               ),

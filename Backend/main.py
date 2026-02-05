@@ -434,6 +434,11 @@ class LeaveRequestDB(Base):
     modification_end_date = Column(Date, nullable=True)
     modification_reason = Column(Text, nullable=True)
     modification_status = Column(String(20), nullable=True)  # "pending", "approved", "rejected"
+    
+    # History preservation (original approved details)
+    original_start_date = Column(Date, nullable=True)
+    original_end_date = Column(Date, nullable=True)
+    original_reason = Column(Text, nullable=True)
 
 class StudentRegistrationRequestDB(Base):
     """Student registration requests awaiting owner approval"""
@@ -460,6 +465,23 @@ class StudentRegistrationRequestDB(Base):
     # Invitation tracking
     invitation_id = Column(Integer, ForeignKey("invitations.id"), nullable=True)
     invited_by_coach_id = Column(Integer, ForeignKey("coaches.id"), nullable=True)
+
+class CoachRegistrationRequestDB(Base):
+    """Coach registration requests awaiting owner approval"""
+    __tablename__ = "coach_registration_requests"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    email = Column(String, nullable=False, unique=True)
+    phone = Column(String, nullable=False)
+    password = Column(String, nullable=False)  # Hashed password
+    specialization = Column(String, nullable=True)
+    experience_years = Column(Integer, nullable=True)
+    status = Column(String, default="pending")  # "pending", "approved", "rejected"
+    submitted_at = Column(DateTime(timezone=True), server_default=func.now())
+    reviewed_by = Column(Integer, nullable=True)  # Owner ID who reviewed
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    review_notes = Column(Text, nullable=True)
 
 # ==================== Database Migration Functions ====================
 
@@ -736,6 +758,9 @@ def migrate_database_schema(engine):
             check_and_add_column(engine, 'leave_requests', 'modification_end_date', 'DATE', nullable=True)
             check_and_add_column(engine, 'leave_requests', 'modification_reason', 'TEXT', nullable=True)
             check_and_add_column(engine, 'leave_requests', 'modification_status', 'VARCHAR(20)', nullable=True)
+            check_and_add_column(engine, 'leave_requests', 'original_start_date', 'DATE', nullable=True)
+            check_and_add_column(engine, 'leave_requests', 'original_end_date', 'DATE', nullable=True)
+            check_and_add_column(engine, 'leave_requests', 'original_reason', 'TEXT', nullable=True)
 
         
         # Migrate fees table - add payee_student_id column
@@ -975,6 +1000,17 @@ def migrate_database_schema(engine):
                 print(f"❌ Error creating student_registration_requests table: {e}")
         else:
             print("✅ student_registration_requests table exists")
+        
+        # Check if coach_registration_requests table exists
+        if 'coach_registration_requests' not in tables:
+            print("⚠️  coach_registration_requests table not found. Creating...")
+            try:
+                CoachRegistrationRequestDB.__table__.create(bind=engine)
+                print("✅ coach_registration_requests table created!")
+            except Exception as e:
+                print(f"❌ Error creating coach_registration_requests table: {e}")
+        else:
+            print("✅ coach_registration_requests table exists")
         
         # Migrate calendar_events table - add end_date and related_leave_request_id columns
         if 'calendar_events' in tables:
@@ -1669,12 +1705,23 @@ class LeaveRequest(BaseModel):
     modification_reason: Optional[str] = None
     modification_status: Optional[str] = None
 
+    # History fields
+    original_start_date: Optional[str] = None
+    original_end_date: Optional[str] = None
+    original_reason: Optional[str] = None
+
     class Config:
         from_attributes = True
 
 class LeaveRequestUpdate(BaseModel):
     status: str  # "approved" or "rejected"
     review_notes: Optional[str] = None
+
+class LeaveRequestUpdateCoach(BaseModel):
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    leave_type: Optional[str] = None
+    reason: Optional[str] = None
 
 class LeaveRequestModificationCreate(BaseModel):
     start_date: str
@@ -1726,6 +1773,35 @@ class StudentRegistrationRequest(BaseModel):
         from_attributes = True
 
 class StudentRegistrationRequestUpdate(BaseModel):
+    status: str  # "approved" or "rejected"
+    review_notes: Optional[str] = None
+
+# Coach Registration Request Models
+class CoachRegistrationRequestCreate(BaseModel):
+    name: str
+    email: str
+    phone: str
+    password: str
+    specialization: Optional[str] = None
+    experience_years: Optional[int] = None
+
+class CoachRegistrationRequest(BaseModel):
+    id: int
+    name: str
+    email: str
+    phone: str
+    specialization: Optional[str] = None
+    experience_years: Optional[int] = None
+    status: str  # "pending", "approved", "rejected"
+    submitted_at: str
+    reviewed_by: Optional[int] = None
+    reviewed_at: Optional[str] = None
+    review_notes: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+class CoachRegistrationRequestUpdate(BaseModel):
     status: str  # "approved" or "rejected"
     review_notes: Optional[str] = None
 
@@ -6284,7 +6360,14 @@ def get_leave_requests(
                 submitted_at=req.submitted_at.isoformat() if req.submitted_at else "",
                 reviewed_by=req.reviewed_by,
                 reviewed_at=req.reviewed_at.isoformat() if req.reviewed_at else None,
-                review_notes=req.review_notes
+                review_notes=req.review_notes,
+                modification_start_date=req.modification_start_date.strftime("%Y-%m-%d") if req.modification_start_date else None,
+                modification_end_date=req.modification_end_date.strftime("%Y-%m-%d") if req.modification_end_date else None,
+                modification_reason=req.modification_reason,
+                modification_status=req.modification_status,
+                original_start_date=req.original_start_date.strftime("%Y-%m-%d") if req.original_start_date else None,
+                original_end_date=req.original_end_date.strftime("%Y-%m-%d") if req.original_end_date else None,
+                original_reason=req.original_reason
             ))
         
         # #region agent log
@@ -6344,9 +6427,16 @@ def get_leave_request(request_id: int):
             status=request.status,
             submitted_at=request.submitted_at.isoformat() if request.submitted_at else "",
             reviewed_by=request.reviewed_by,
-            reviewed_at=request.reviewed_at.isoformat() if request.reviewed_at else None,
-            review_notes=request.review_notes
-        )
+                reviewed_at=request.reviewed_at.isoformat() if request.reviewed_at else None,
+                review_notes=request.review_notes,
+                modification_start_date=request.modification_start_date.strftime("%Y-%m-%d") if request.modification_start_date else None,
+                modification_end_date=request.modification_end_date.strftime("%Y-%m-%d") if request.modification_end_date else None,
+                modification_reason=request.modification_reason,
+                modification_status=request.modification_status,
+                original_start_date=request.original_start_date.strftime("%Y-%m-%d") if request.original_start_date else None,
+                original_end_date=request.original_end_date.strftime("%Y-%m-%d") if request.original_end_date else None,
+                original_reason=request.original_reason
+            )
     finally:
         db.close()
 
@@ -6361,8 +6451,20 @@ def update_leave_request(request_id: int, update: LeaveRequestUpdate, owner_id: 
             raise HTTPException(status_code=404, detail="Owner not found")
         
         # Get leave request
+        db_request = db.query(LeaveRequestDB).filter(LeaveRequestDB.id == request_id).first()
+        if not db_request:
+            raise HTTPException(status_code=404, detail="Leave request not found")
+
+        db_request.status = update.status
+        db_request.reviewed_by = owner_id
         db_request.reviewed_at = datetime.now()
         db_request.review_notes = update.review_notes
+        
+        # Capture initial history if it's being approved for the first time
+        if update.status == "approved" and db_request.original_start_date is None:
+            db_request.original_start_date = db_request.start_date
+            db_request.original_end_date = db_request.end_date
+            db_request.original_reason = db_request.reason
         
         # If approved, create calendar event(s) for the leave period
         if update.status == "approved":
@@ -6430,7 +6532,14 @@ def update_leave_request(request_id: int, update: LeaveRequestUpdate, owner_id: 
             submitted_at=db_request.submitted_at.isoformat() if db_request.submitted_at else "",
             reviewed_by=db_request.reviewed_by,
             reviewed_at=db_request.reviewed_at.isoformat() if db_request.reviewed_at else None,
-            review_notes=db_request.review_notes
+            review_notes=db_request.review_notes,
+            modification_start_date=db_request.modification_start_date.strftime("%Y-%m-%d") if db_request.modification_start_date else None,
+            modification_end_date=db_request.modification_end_date.strftime("%Y-%m-%d") if db_request.modification_end_date else None,
+            modification_reason=db_request.modification_reason,
+            modification_status=db_request.modification_status,
+            original_start_date=db_request.original_start_date.strftime("%Y-%m-%d") if db_request.original_start_date else None,
+            original_end_date=db_request.original_end_date.strftime("%Y-%m-%d") if db_request.original_end_date else None,
+            original_reason=db_request.original_reason
         )
     except HTTPException:
         db.rollback()
@@ -6438,6 +6547,66 @@ def update_leave_request(request_id: int, update: LeaveRequestUpdate, owner_id: 
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error updating leave request: {str(e)}")
+    finally:
+        db.close()
+
+@app.patch("/leave-requests/{request_id}", response_model=LeaveRequest)
+def patch_leave_request(request_id: int, update: LeaveRequestUpdateCoach, coach_id: int):
+    """Edit a pending leave request (coaches only)"""
+    db = SessionLocal()
+    try:
+        db_request = db.query(LeaveRequestDB).filter(LeaveRequestDB.id == request_id).first()
+        if not db_request:
+            raise HTTPException(status_code=404, detail="Leave request not found")
+        
+        # Verify coach owns this request
+        if db_request.coach_id != coach_id:
+            raise HTTPException(status_code=403, detail="You can only edit your own leave requests")
+        
+        # Only allow editing if status is pending
+        if db_request.status != "pending":
+            raise HTTPException(status_code=400, detail="Can only edit pending leave requests")
+        
+        # Update fields if provided
+        if update.start_date:
+            db_request.start_date = datetime.strptime(update.start_date, "%Y-%m-%d").date()
+        if update.end_date:
+            db_request.end_date = datetime.strptime(update.end_date, "%Y-%m-%d").date()
+        if update.leave_type:
+            db_request.leave_type = update.leave_type
+        if update.reason:
+            db_request.reason = update.reason
+            
+        db.commit()
+        db.refresh(db_request)
+        
+        return LeaveRequest(
+            id=db_request.id,
+            coach_id=db_request.coach_id,
+            coach_name=db_request.coach_name,
+            start_date=db_request.start_date.strftime("%Y-%m-%d"),
+            end_date=db_request.end_date.strftime("%Y-%m-%d"),
+            leave_type=db_request.leave_type,
+            reason=db_request.reason,
+            status=db_request.status,
+            submitted_at=db_request.submitted_at.isoformat() if db_request.submitted_at else "",
+            reviewed_by=db_request.reviewed_by,
+            reviewed_at=db_request.reviewed_at.isoformat() if db_request.reviewed_at else None,
+            review_notes=db_request.review_notes,
+            modification_start_date=db_request.modification_start_date.strftime("%Y-%m-%d") if db_request.modification_start_date else None,
+            modification_end_date=db_request.modification_end_date.strftime("%Y-%m-%d") if db_request.modification_end_date else None,
+            modification_reason=db_request.modification_reason,
+            modification_status=db_request.modification_status,
+            original_start_date=db_request.original_start_date.strftime("%Y-%m-%d") if db_request.original_start_date else None,
+            original_end_date=db_request.original_end_date.strftime("%Y-%m-%d") if db_request.original_end_date else None,
+            original_reason=db_request.original_reason
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error patching leave request: {str(e)}")
     finally:
         db.close()
 
@@ -6501,6 +6670,12 @@ def submit_leave_modification(request_id: int, modification: LeaveRequestModific
         db_request.modification_reason = modification.reason
         db_request.modification_status = "pending"
         
+        # Capture initial history if not already present
+        if db_request.original_start_date is None:
+            db_request.original_start_date = db_request.start_date
+            db_request.original_end_date = db_request.end_date
+            db_request.original_reason = db_request.reason
+        
         db.commit()
         db.refresh(db_request)
         
@@ -6524,7 +6699,10 @@ def submit_leave_modification(request_id: int, modification: LeaveRequestModific
             modification_start_date=mod_start,
             modification_end_date=mod_end,
             modification_reason=db_request.modification_reason,
-            modification_status=db_request.modification_status
+            modification_status=db_request.modification_status,
+            original_start_date=db_request.original_start_date.strftime("%Y-%m-%d") if db_request.original_start_date else None,
+            original_end_date=db_request.original_end_date.strftime("%Y-%m-%d") if db_request.original_end_date else None,
+            original_reason=db_request.original_reason
         )
     except HTTPException:
         db.rollback()
@@ -6621,7 +6799,10 @@ def review_modification_request(request_id: int, review: LeaveRequestModificatio
             modification_start_date=mod_start,
             modification_end_date=mod_end,
             modification_reason=db_request.modification_reason,
-            modification_status=db_request.modification_status
+            modification_status=db_request.modification_status,
+            original_start_date=db_request.original_start_date.strftime("%Y-%m-%d") if db_request.original_start_date else None,
+            original_end_date=db_request.original_end_date.strftime("%Y-%m-%d") if db_request.original_end_date else None,
+            original_reason=db_request.original_reason
         )
         
     except HTTPException:
@@ -6910,6 +7091,235 @@ def check_registration_status(email: str):
         request = db.query(StudentRegistrationRequestDB).filter(
             StudentRegistrationRequestDB.email == email
         ).order_by(StudentRegistrationRequestDB.submitted_at.desc()).first()
+        
+        if not request:
+            return {"exists": False}
+        
+        return {
+            "exists": True,
+            "status": request.status,
+            "submitted_at": request.submitted_at.isoformat() if request.submitted_at else None,
+            "reviewed_at": request.reviewed_at.isoformat() if request.reviewed_at else None,
+            "review_notes": request.review_notes
+        }
+    finally:
+        db.close()
+
+# ==================== Coach Registration Request Routes ====================
+
+@app.post("/coaches/registration-request", response_model=CoachRegistrationRequest)
+def create_coach_registration_request(request: CoachRegistrationRequestCreate):
+    """Create a coach registration request - requires owner approval"""
+    db = SessionLocal()
+    try:
+        # Check if email already exists in coaches table
+        existing_coach = db.query(CoachDB).filter(CoachDB.email == request.email).first()
+        if existing_coach:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        
+        # Check if email already exists in pending requests
+        existing_request = db.query(CoachRegistrationRequestDB).filter(
+            CoachRegistrationRequestDB.email == request.email
+        ).first()
+        if existing_request:
+            raise HTTPException(status_code=400, detail="Registration request already exists for this email")
+        
+        # Hash password
+        hashed_password = hash_password(request.password)
+        
+        # Create registration request
+        db_request = CoachRegistrationRequestDB(
+            name=request.name,
+            email=request.email,
+            phone=request.phone,
+            password=hashed_password,
+            specialization=request.specialization,
+            experience_years=request.experience_years,
+            status="pending"
+        )
+        db.add(db_request)
+        db.commit()
+        db.refresh(db_request)
+        
+        # Notify Owners
+        try:
+            owners = db.query(OwnerDB).filter(OwnerDB.role == "owner").all()
+            for owner in owners:
+                create_notification(
+                    db=db,
+                    user_id=owner.id,
+                    user_type="owner",
+                    title="Coach Registration Request",
+                    body=f"New coach registration request from {db_request.name}",
+                    type="general",
+                    data={"coach_registration_request_id": db_request.id}
+                )
+        except Exception as e:
+            print(f"Error sending registration notification: {e}")
+        
+        # Convert to response model
+        return CoachRegistrationRequest(
+            id=db_request.id,
+            name=db_request.name,
+            email=db_request.email,
+            phone=db_request.phone,
+            specialization=db_request.specialization,
+            experience_years=db_request.experience_years,
+            status=db_request.status,
+            submitted_at=db_request.submitted_at.isoformat() if db_request.submitted_at else "",
+            reviewed_by=db_request.reviewed_by,
+            reviewed_at=db_request.reviewed_at.isoformat() if db_request.reviewed_at else None,
+            review_notes=db_request.review_notes
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error creating coach registration request: {str(e)}")
+    finally:
+        db.close()
+
+@app.get("/coach-registration-requests/", response_model=List[CoachRegistrationRequest])
+def get_coach_registration_requests(
+    status: Optional[str] = Query(None, description="Filter by status: pending, approved, rejected")
+):
+    """Get all coach registration requests - owner only"""
+    db = SessionLocal()
+    try:
+        query = db.query(CoachRegistrationRequestDB)
+        if status:
+            query = query.filter(CoachRegistrationRequestDB.status == status)
+        requests = query.order_by(CoachRegistrationRequestDB.submitted_at.desc()).all()
+        
+        # Convert to response models
+        return [
+            CoachRegistrationRequest(
+                id=req.id,
+                name=req.name,
+                email=req.email,
+                phone=req.phone,
+                specialization=req.specialization,
+                experience_years=req.experience_years,
+                status=req.status,
+                submitted_at=req.submitted_at.isoformat() if req.submitted_at else "",
+                reviewed_by=req.reviewed_by,
+                reviewed_at=req.reviewed_at.isoformat() if req.reviewed_at else None,
+                review_notes=req.review_notes
+            )
+            for req in requests
+        ]
+    finally:
+        db.close()
+
+@app.get("/coach-registration-requests/{request_id}", response_model=CoachRegistrationRequest)
+def get_coach_registration_request(request_id: int):
+    """Get a specific coach registration request"""
+    db = SessionLocal()
+    try:
+        request = db.query(CoachRegistrationRequestDB).filter(
+            CoachRegistrationRequestDB.id == request_id
+        ).first()
+        if not request:
+            raise HTTPException(status_code=404, detail="Registration request not found")
+        
+        return CoachRegistrationRequest(
+            id=request.id,
+            name=request.name,
+            email=request.email,
+            phone=request.phone,
+            specialization=request.specialization,
+            experience_years=request.experience_years,
+            status=request.status,
+            submitted_at=request.submitted_at.isoformat() if request.submitted_at else "",
+            reviewed_by=request.reviewed_by,
+            reviewed_at=request.reviewed_at.isoformat() if request.reviewed_at else None,
+            review_notes=request.review_notes
+        )
+    finally:
+        db.close()
+
+@app.put("/coach-registration-requests/{request_id}", response_model=CoachRegistrationRequest)
+def update_coach_registration_request_status(
+    request_id: int,
+    update: CoachRegistrationRequestUpdate,
+    owner_id: int = Query(..., description="Owner ID reviewing the request")
+):
+    """Approve or reject a coach registration request"""
+    db = SessionLocal()
+    try:
+        request = db.query(CoachRegistrationRequestDB).filter(
+            CoachRegistrationRequestDB.id == request_id
+        ).first()
+        
+        if not request:
+            raise HTTPException(status_code=404, detail="Registration request not found")
+        
+        if request.status != "pending":
+            raise HTTPException(status_code=400, detail="Request has already been reviewed")
+        
+        # Update request status
+        request.status = update.status
+        request.reviewed_by = owner_id
+        request.reviewed_at = datetime.now()
+        request.review_notes = update.review_notes
+        
+        # If approved, create the coach account
+        if update.status == "approved":
+            # Check if coach already exists (race condition check)
+            existing_coach = db.query(CoachDB).filter(
+                CoachDB.email == request.email
+            ).first()
+            
+            if existing_coach:
+                raise HTTPException(status_code=400, detail="Coach with this email already exists")
+            
+            # Create coach account
+            db_coach = CoachDB(
+                name=request.name,
+                email=request.email,
+                phone=request.phone,
+                password=request.password,  # Already hashed
+                specialization=request.specialization,
+                experience_years=request.experience_years,
+                status="active"  # Active after approval
+            )
+            db.add(db_coach)
+        
+        db.commit()
+        db.refresh(request)
+        
+        # Convert to response model
+        return CoachRegistrationRequest(
+            id=request.id,
+            name=request.name,
+            email=request.email,
+            phone=request.phone,
+            specialization=request.specialization,
+            experience_years=request.experience_years,
+            status=request.status,
+            submitted_at=request.submitted_at.isoformat() if request.submitted_at else "",
+            reviewed_by=request.reviewed_by,
+            reviewed_at=request.reviewed_at.isoformat() if request.reviewed_at else None,
+            review_notes=request.review_notes
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error updating registration request: {str(e)}")
+    finally:
+        db.close()
+
+@app.get("/coaches/check-registration-status/{email}")
+def check_coach_registration_status(email: str):
+    """Check if a coach registration request exists for an email"""
+    db = SessionLocal()
+    try:
+        request = db.query(CoachRegistrationRequestDB).filter(
+            CoachRegistrationRequestDB.email == email
+        ).order_by(CoachRegistrationRequestDB.submitted_at.desc()).first()
         
         if not request:
             return {"exists": False}

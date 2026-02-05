@@ -19,6 +19,11 @@ class LeaveRequest {
   final String? modificationReason;
   final String? modificationStatus; // "pending", "approved", "rejected"
 
+  // History preservation
+  final DateTime? originalStartDate;
+  final DateTime? originalEndDate;
+  final String? originalReason;
+
   LeaveRequest({
     required this.id,
     required this.coachId,
@@ -36,6 +41,9 @@ class LeaveRequest {
     this.modificationEndDate,
     this.modificationReason,
     this.modificationStatus,
+    this.originalStartDate,
+    this.originalEndDate,
+    this.originalReason,
   });
 
   /// Create LeaveRequest instance from JSON
@@ -63,6 +71,13 @@ class LeaveRequest {
           : null,
       modificationReason: json['modification_reason'] as String?,
       modificationStatus: json['modification_status'] as String?,
+      originalStartDate: json['original_start_date'] != null
+          ? DateTime.parse(json['original_start_date'] as String)
+          : null,
+      originalEndDate: json['original_end_date'] != null
+          ? DateTime.parse(json['original_end_date'] as String)
+          : null,
+      originalReason: json['original_reason'] as String?,
     );
   }
 
@@ -87,6 +102,9 @@ class LeaveRequest {
           modificationEndDate?.toIso8601String().split('T')[0],
       'modification_reason': modificationReason,
       'modification_status': modificationStatus,
+      'original_start_date': originalStartDate?.toIso8601String().split('T')[0],
+      'original_end_date': originalEndDate?.toIso8601String().split('T')[0],
+      'original_reason': originalReason,
     };
   }
 
@@ -108,6 +126,9 @@ class LeaveRequest {
     DateTime? modificationEndDate,
     String? modificationReason,
     String? modificationStatus,
+    DateTime? originalStartDate,
+    DateTime? originalEndDate,
+    String? originalReason,
   }) {
     return LeaveRequest(
       id: id ?? this.id,
@@ -127,6 +148,9 @@ class LeaveRequest {
       modificationEndDate: modificationEndDate ?? this.modificationEndDate,
       modificationReason: modificationReason ?? this.modificationReason,
       modificationStatus: modificationStatus ?? this.modificationStatus,
+      originalStartDate: originalStartDate ?? this.originalStartDate,
+      originalEndDate: originalEndDate ?? this.originalEndDate,
+      originalReason: originalReason ?? this.originalReason,
     );
   }
 

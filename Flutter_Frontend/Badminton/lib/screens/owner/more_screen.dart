@@ -173,7 +173,7 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
             _MenuItem(
               icon: Icons.event_note_outlined,
               title: 'Season Management',
-              subtitle: 'Manage seasons and sessions',
+              subtitle: 'Manage academy seasons',
               isDark: isDark,
               onTap: () {
                 Navigator.of(context).push(

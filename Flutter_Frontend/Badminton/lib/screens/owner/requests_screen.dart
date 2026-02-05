@@ -12,11 +12,13 @@ import '../../widgets/common/confirmation_dialog.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../providers/leave_request_provider.dart';
 import '../../providers/student_registration_request_provider.dart';
+import '../../providers/coach_registration_request_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/pending_invitations_provider.dart';
 import '../../models/leave_request.dart';
 import '../../models/student_registration_request.dart';
+import '../../models/coach_registration_request.dart';
 import '../../widgets/common/custom_text_field.dart';
 
 /// Requests Screen - View and manage leave requests and student registration requests
@@ -438,6 +440,19 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
             ),
           ],
 
+          // History Section
+          if (request.originalStartDate != null) ...[
+            const SizedBox(height: AppDimensions.spacingS),
+            Text(
+              'Original: ${DateFormat('dd MMM').format(request.originalStartDate!)} - ${DateFormat('dd MMM').format(request.originalEndDate!)}',
+              style: TextStyle(
+                fontSize: 11,
+                color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+
           // Modification Request Section
           if (request.hasPendingModification) ...[
             const SizedBox(height: AppDimensions.spacingM),
@@ -466,53 +481,52 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
                     ],
                   ),
                   const SizedBox(height: AppDimensions.spacingM),
-                  Row(
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "Original Dates",
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-                              ),
+                      Row(
+                        children: [
+                          Icon(Icons.history, size: 14, color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary),
+                          const SizedBox(width: 4),
+                          Text(
+                            "Original Dates",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${DateFormat('dd MMM').format(request.startDate)} - ${DateFormat('dd MMM').format(request.endDate)}',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                                decoration: TextDecoration.lineThrough,
-                              ),
-                            ),
-                          ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${DateFormat('dd MMM, yyyy').format(request.startDate)} - ${DateFormat('dd MMM, yyyy').format(request.endDate)}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                          decoration: TextDecoration.lineThrough,
                         ),
                       ),
-                      Icon(Icons.arrow_forward, size: 16, color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              "New Dates",
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-                              ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Icon(Icons.event_available, size: 14, color: AppColors.success),
+                          const SizedBox(width: 4),
+                          Text(
+                            "New Dates",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${DateFormat('dd MMM').format(request.modificationStartDate!)} - ${DateFormat('dd MMM').format(request.modificationEndDate!)}',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                              ),
-                            ),
-                          ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${DateFormat('dd MMM, yyyy').format(request.modificationStartDate!)} - ${DateFormat('dd MMM, yyyy').format(request.modificationEndDate!)}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                         ),
                       ),
                     ],
@@ -534,38 +548,49 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
                       color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                     ),
                   ),
-                  const SizedBox(height: AppDimensions.spacingM),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      NeumorphicButton(
-                        onPressed: () => _reviewModification(request, 'reject_modification'),
-                        text: 'Reject Mod',
-                        isOutlined: true,
-                        color: AppColors.warning,
-                        textColor: AppColors.warning,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      ),
-                      const SizedBox(width: 8),
-                      NeumorphicButton(
-                        onPressed: () => _reviewModification(request, 'approve'),
-                        text: 'Approve Mod',
-                        color: AppColors.success,
-                        textColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      ),
-                    ],
-                  ),
+                  const SizedBox(height: AppDimensions.spacingL),
                   Align(
                     alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () => _reviewModification(request, 'reject_all'),
-                      child: Text(
-                        "Reject Entire Leave", 
-                        style: TextStyle(color: AppColors.error, fontSize: 12),
-                      ),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      alignment: WrapAlignment.end,
+                      children: [
+                        NeumorphicButton(
+                          onPressed: () => _reviewModification(request, 'reject_all'),
+                          text: 'Reject All',
+                          isOutlined: true,
+                          color: AppColors.error,
+                          textColor: AppColors.error,
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          fontSize: 11,
+                          height: 30,
+                          width: 100,
+                        ),
+                        NeumorphicButton(
+                          onPressed: () => _reviewModification(request, 'reject_modification'),
+                          text: 'Reject Mod',
+                          isOutlined: true,
+                          color: AppColors.warning,
+                          textColor: AppColors.warning,
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          fontSize: 11,
+                          height: 30,
+                          width: 100,
+                        ),
+                        NeumorphicButton(
+                          onPressed: () => _reviewModification(request, 'approve'),
+                          text: 'Approve Mod',
+                          color: AppColors.success,
+                          textColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          fontSize: 11,
+                          height: 30,
+                          width: 100,
+                        ),
+                      ],
                     ),
-                  )
+                  ),
                 ],
               ),
             ),
@@ -705,7 +730,7 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
     );
 
     if (confirmed == true && mounted) {
-      await _showReviewNotesDialog(request, isApproval: true);
+      await _performLeaveRequestAction(request, isApproval: true);
     }
   }
 
@@ -773,47 +798,53 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
     );
 
     if (result == true && mounted) {
-      try {
-        final authState = await ref.read(authProvider.future);
-        if (authState is Authenticated && authState.userType == 'owner') {
-          final manager = ref.read(
-            leaveRequestManagerProvider(
-              coachId: null,
-              status: _selectedFilter == 'all' ? null : _selectedFilter,
-            ).notifier,
-          );
+      await _performLeaveRequestAction(
+        request, 
+        isApproval: isApproval,
+        reviewNotes: _reviewNotesController.text.trim().isEmpty ? null : _reviewNotesController.text.trim(),
+      );
+    }
+  }
 
-          await manager.updateLeaveRequestStatus(
-            requestId: request.id,
-            ownerId: authState.userId,
-            status: isApproval ? 'approved' : 'rejected',
-            reviewNotes: _reviewNotesController.text.trim().isEmpty
-                ? null
-                : _reviewNotesController.text.trim(),
-          );
+  Future<void> _performLeaveRequestAction(LeaveRequest request, {required bool isApproval, String? reviewNotes}) async {
+    try {
+      final authState = await ref.read(authProvider.future);
+      if (authState is Authenticated && authState.userType == 'owner') {
+        final manager = ref.read(
+          leaveRequestManagerProvider(
+            coachId: null,
+            status: _selectedFilter == 'all' ? null : _selectedFilter,
+          ).notifier,
+        );
 
-          // Invalidate to refresh the list
-          ref.invalidate(
-            leaveRequestManagerProvider(
-              coachId: null,
-              status: _selectedFilter == 'all' ? null : _selectedFilter,
-            ),
-          );
+        await manager.updateLeaveRequestStatus(
+          requestId: request.id,
+          ownerId: authState.userId,
+          status: isApproval ? 'approved' : 'rejected',
+          reviewNotes: reviewNotes,
+        );
 
-          if (mounted) {
-            SuccessSnackbar.show(
-              context,
-              'Leave request ${isApproval ? 'approved' : 'rejected'} successfully',
-            );
-          }
-        }
-      } catch (e) {
+        // Invalidate to refresh the list
+        ref.invalidate(
+          leaveRequestManagerProvider(
+            coachId: null,
+            status: _selectedFilter == 'all' ? null : _selectedFilter,
+          ),
+        );
+
         if (mounted) {
-          SuccessSnackbar.showError(
+          SuccessSnackbar.show(
             context,
-            'Failed to ${isApproval ? 'approve' : 'reject'} leave request: ${e.toString()}',
+            'Leave request ${isApproval ? 'approved' : 'rejected'} successfully',
           );
         }
+      }
+    } catch (e) {
+      if (mounted) {
+        SuccessSnackbar.showError(
+          context,
+          'Failed to ${isApproval ? 'approve' : 'reject'} leave request: ${e.toString()}',
+        );
       }
     }
   }
@@ -886,8 +917,12 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
     // Only show pending invites if filter allows
     final showPendingInvites = statusFilter == null || statusFilter == 'all' || statusFilter == 'pending';
     
-    final registrationRequestsAsync = ref.watch(
+    final studentRegistrationRequestsAsync = ref.watch(
       studentRegistrationRequestManagerProvider(status: statusFilter),
+    );
+    
+    final coachRegistrationRequestsAsync = ref.watch(
+      coachRegistrationRequestManagerProvider(status: statusFilter),
     );
     
     final pendingInvitationsAsync = showPendingInvites
@@ -908,20 +943,32 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
                 ref.invalidate(pendingInvitationsProvider);
               }
             },
-            child: registrationRequestsAsync.when(
+            child: studentRegistrationRequestsAsync.when(
               loading: () => const ListSkeleton(itemCount: 5),
               error: (error, stack) => ErrorDisplay(
                 message: 'Failed to load requests: ${error.toString()}',
                 onRetry: () {
                    ref.invalidate(studentRegistrationRequestManagerProvider(status: statusFilter));
+                   ref.invalidate(coachRegistrationRequestManagerProvider(status: statusFilter));
                    ref.invalidate(pendingInvitationsProvider);
                 },
               ),
-              data: (requests) {
-                return pendingInvitationsAsync.when(
+              data: (studentRequests) {
+                return coachRegistrationRequestsAsync.when(
                   loading: () => const ListSkeleton(itemCount: 2),
-                  error: (_, __) => _buildRequestsList(requests, [], isDark), // Fallback to just requests on invite error
-                  data: (invitations) => _buildRequestsList(requests, invitations, isDark),
+                  error: (error, stack) => ErrorDisplay(
+                    message: 'Failed to load coach requests: ${error.toString()}',
+                    onRetry: () {
+                      ref.invalidate(coachRegistrationRequestManagerProvider(status: statusFilter));
+                    },
+                  ),
+                  data: (coachRequests) {
+                    return pendingInvitationsAsync.when(
+                      loading: () => const ListSkeleton(itemCount: 2),
+                      error: (_, __) => _buildRequestsList(studentRequests, coachRequests, [], isDark),
+                      data: (invitations) => _buildRequestsList(studentRequests, coachRequests, invitations, isDark),
+                    );
+                  },
                 );
               },
             ),
@@ -932,16 +979,25 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
   }
 
   Widget _buildRequestsList(
-    List<StudentRegistrationRequest> requests, 
+    List<StudentRegistrationRequest> studentRequests, 
+    List<CoachRegistrationRequest> coachRequests,
     List<Map<String, dynamic>> invitations, 
     bool isDark
   ) {
-    if (requests.isEmpty && invitations.isEmpty) {
+    if (studentRequests.isEmpty && coachRequests.isEmpty && invitations.isEmpty) {
       return _buildEmptyRegistrationState(isDark);
     }
     
-    // Sort requests
-    final sortedRequests = List<StudentRegistrationRequest>.from(requests)
+    // Sort student requests
+    final sortedStudentRequests = List<StudentRegistrationRequest>.from(studentRequests)
+      ..sort((a, b) {
+        if (a.isPending && !b.isPending) return -1;
+        if (!a.isPending && b.isPending) return 1;
+        return b.submittedAt.compareTo(a.submittedAt);
+      });
+
+    // Sort coach requests
+    final sortedCoachRequests = List<CoachRegistrationRequest>.from(coachRequests)
       ..sort((a, b) {
         if (a.isPending && !b.isPending) return -1;
         if (!a.isPending && b.isPending) return 1;
@@ -952,15 +1008,20 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
       padding: const EdgeInsets.all(AppDimensions.paddingL),
       children: [
         if (invitations.isNotEmpty) ...[
-          _buildSectionHeader('PENDING INVITES (WAITING FOR REGISTRATION)', isDark),
+          _buildSectionHeader('PENDING STUDENT INVITES', isDark),
           ...invitations.map((inv) => _buildPendingInvitationCard(inv, isDark)),
           const SizedBox(height: AppDimensions.spacingL),
         ],
         
-        if (sortedRequests.isNotEmpty) ...[
-          if (invitations.isNotEmpty) 
-            _buildSectionHeader('REGISTRATION REQUESTS', isDark),
-          ...sortedRequests.map((req) => _buildRegistrationRequestCard(req, isDark)),
+        if (sortedCoachRequests.isNotEmpty) ...[
+          _buildSectionHeader('COACH REGISTRATION REQUESTS', isDark),
+          ...sortedCoachRequests.map((req) => _buildCoachRegistrationRequestCard(req, isDark)),
+          const SizedBox(height: AppDimensions.spacingL),
+        ],
+
+        if (sortedStudentRequests.isNotEmpty) ...[
+          _buildSectionHeader('STUDENT REGISTRATION REQUESTS', isDark),
+          ...sortedStudentRequests.map((req) => _buildRegistrationRequestCard(req, isDark)),
         ],
       ],
     );
@@ -1367,7 +1428,7 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
     );
 
     if (confirmed == true && mounted) {
-      await _showRegistrationReviewNotesDialog(request, isApproval: true);
+      await _performStudentRegistrationAction(request, isApproval: true);
     }
   }
 
@@ -1435,41 +1496,319 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
     );
 
     if (result == true && mounted) {
-      try {
-        final authState = await ref.read(authProvider.future);
-        if (authState is Authenticated && authState.userType == 'owner') {
-          final service = ref.read(studentRegistrationRequestServiceProvider);
-          
-          await service.updateRequestStatus(
-            requestId: request.id,
-            ownerId: authState.userId,
-            status: isApproval ? 'approved' : 'rejected',
-            reviewNotes: _registrationReviewNotesController.text.trim().isEmpty
-                ? null
-                : _registrationReviewNotesController.text.trim(),
-          );
+      await _performStudentRegistrationAction(
+        request,
+        isApproval: isApproval,
+        reviewNotes: _registrationReviewNotesController.text.trim().isEmpty ? null : _registrationReviewNotesController.text.trim(),
+      );
+    }
+  }
 
-          // Invalidate to refresh the list
-          ref.invalidate(
-            studentRegistrationRequestManagerProvider(
-              status: _selectedFilter == 'all' ? null : _selectedFilter,
-            ),
-          );
+  Future<void> _performStudentRegistrationAction(StudentRegistrationRequest request, {required bool isApproval, String? reviewNotes}) async {
+    try {
+      final authState = await ref.read(authProvider.future);
+      if (authState is Authenticated && authState.userType == 'owner') {
+        final service = ref.read(studentRegistrationRequestServiceProvider);
+        
+        await service.updateRequestStatus(
+          requestId: request.id,
+          ownerId: authState.userId,
+          status: isApproval ? 'approved' : 'rejected',
+          reviewNotes: reviewNotes,
+        );
 
-          if (mounted) {
-            SuccessSnackbar.show(
-              context,
-              'Registration request ${isApproval ? 'approved' : 'rejected'} successfully',
-            );
-          }
-        }
-      } catch (e) {
+        // Invalidate to refresh the list
+        ref.invalidate(
+          studentRegistrationRequestManagerProvider(
+            status: _selectedFilter == 'all' ? null : _selectedFilter,
+          ),
+        );
+
         if (mounted) {
-          SuccessSnackbar.showError(
+          SuccessSnackbar.show(
             context,
-            'Failed to ${isApproval ? 'approve' : 'reject'} registration request: ${e.toString()}',
+            'Registration request ${isApproval ? 'approved' : 'rejected'} successfully',
           );
         }
+      }
+    } catch (e) {
+      if (mounted) {
+        SuccessSnackbar.showError(
+          context,
+          'Failed to ${isApproval ? 'approve' : 'reject'} registration request: ${e.toString()}',
+        );
+      }
+    }
+  }
+
+  Widget _buildCoachRegistrationRequestCard(CoachRegistrationRequest request, bool isDark) {
+    final statusColor = _getStatusColor(request.status, isDark);
+    final statusBgColor = statusColor.withValues(alpha: 0.1);
+
+    return NeumorphicContainer(
+      padding: const EdgeInsets.all(AppDimensions.paddingM),
+      margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header: Coach name and status
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      request.name,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      request.email,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppDimensions.spacingM,
+                  vertical: AppDimensions.spacingS,
+                ),
+                decoration: BoxDecoration(
+                  color: statusBgColor,
+                  borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                ),
+                child: Text(
+                  request.status.toUpperCase(),
+                  style: TextStyle(
+                    color: statusColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppDimensions.spacingM),
+
+          // Coach Details
+          _buildDetailRow(Icons.phone, request.phone, isDark),
+          if (request.specialization != null)
+            _buildDetailRow(Icons.star_outline, 'Specialization: ${request.specialization}', isDark),
+          if (request.experienceYears != null)
+            _buildDetailRow(Icons.history, 'Experience: ${request.experienceYears} years', isDark),
+
+          // Review notes (if reviewed)
+          if (request.reviewNotes != null && request.reviewNotes!.isNotEmpty) ...[
+            const SizedBox(height: AppDimensions.spacingM),
+            Container(
+              padding: const EdgeInsets.all(AppDimensions.paddingS),
+              decoration: BoxDecoration(
+                color: isDark
+                    ? AppColors.cardBackground.withValues(alpha: 0.5)
+                    : AppColorsLight.cardBackground.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Review Notes:',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    request.reviewNotes!,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // Submitted date
+          const SizedBox(height: AppDimensions.spacingM),
+          Text(
+            'Submitted: ${DateFormat('MMM dd, yyyy • hh:mm a').format(request.submittedAt)}',
+            style: TextStyle(
+              fontSize: 12,
+              color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
+            ),
+          ),
+
+          // Action buttons (only for pending requests)
+          if (request.isPending) ...[
+            const SizedBox(height: AppDimensions.spacingM),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                NeumorphicButton(
+                  text: 'Reject',
+                  icon: Icons.close,
+                  onPressed: () => _rejectCoachRegistrationRequest(request),
+                  isOutlined: true,
+                  color: AppColors.error,
+                  textColor: AppColors.error,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppDimensions.paddingM,
+                    vertical: AppDimensions.paddingS,
+                  ),
+                ),
+                const SizedBox(width: AppDimensions.spacingM),
+                NeumorphicButton(
+                  text: 'Approve',
+                  icon: Icons.check,
+                  onPressed: () => _approveCoachRegistrationRequest(request),
+                  color: AppColors.success,
+                  textColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppDimensions.paddingM,
+                    vertical: AppDimensions.paddingS,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _approveCoachRegistrationRequest(CoachRegistrationRequest request) async {
+    final confirmed = await ConfirmationDialog.show(
+      context,
+      'Approve Coach',
+      'Are you sure you want to approve this coach registration?',
+      confirmText: 'Approve',
+      cancelText: 'Cancel',
+      icon: Icons.check_circle_outline,
+    );
+
+    if (confirmed == true && mounted) {
+      await _performCoachRegistrationAction(request, isApproval: true);
+    }
+  }
+
+  Future<void> _rejectCoachRegistrationRequest(CoachRegistrationRequest request) async {
+    final confirmed = await ConfirmationDialog.show(
+      context,
+      'Reject Coach',
+      'Are you sure you want to reject this coach registration?',
+      confirmText: 'Reject',
+      cancelText: 'Cancel',
+      icon: Icons.cancel_outlined,
+      isDestructive: true,
+    );
+
+    if (confirmed == true && mounted) {
+      await _showCoachRegistrationReviewNotesDialog(request, isApproval: false);
+    }
+  }
+
+  Future<void> _showCoachRegistrationReviewNotesDialog(CoachRegistrationRequest request, {required bool isApproval}) async {
+    _registrationReviewNotesController.clear();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Theme.of(context).brightness == Brightness.dark
+            ? AppColors.cardBackground
+            : AppColorsLight.cardBackground,
+        title: Text(
+          isApproval ? 'Approve Coach' : 'Reject Coach',
+          style: TextStyle(
+            color: Theme.of(context).brightness == Brightness.dark
+                ? AppColors.textPrimary
+                : AppColorsLight.textPrimary,
+          ),
+        ),
+        content: CustomTextField(
+          controller: _registrationReviewNotesController,
+          label: 'Review Notes (Optional)',
+          hint: 'Add any notes about this decision...',
+          maxLines: 3,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(
+              'Cancel',
+              style: TextStyle(
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? AppColors.textSecondary
+                    : AppColorsLight.textSecondary,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isApproval ? AppColors.success : AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            child: Text(isApproval ? 'Approve' : 'Reject'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true && mounted) {
+      await _performCoachRegistrationAction(
+        request,
+        isApproval: isApproval,
+        reviewNotes: _registrationReviewNotesController.text.trim().isEmpty ? null : _registrationReviewNotesController.text.trim(),
+      );
+    }
+  }
+
+  Future<void> _performCoachRegistrationAction(CoachRegistrationRequest request, {required bool isApproval, String? reviewNotes}) async {
+    try {
+      final authState = await ref.read(authProvider.future);
+      if (authState is Authenticated && authState.userType == 'owner') {
+        final service = ref.read(coachRegistrationRequestServiceProvider);
+        
+        await service.updateRequestStatus(
+          requestId: request.id,
+          ownerId: authState.userId,
+          status: isApproval ? 'approved' : 'rejected',
+          reviewNotes: reviewNotes,
+        );
+
+        // Invalidate to refresh the list
+        ref.invalidate(
+          coachRegistrationRequestManagerProvider(
+            status: _selectedFilter == 'all' ? null : _selectedFilter,
+          ),
+        );
+
+        if (mounted) {
+          SuccessSnackbar.show(
+            context,
+            'Coach registration request ${isApproval ? 'approved' : 'rejected'} successfully',
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        SuccessSnackbar.showError(
+          context,
+          'Failed to ${isApproval ? 'approve' : 'reject'} coach registration request: ${e.toString()}',
+        );
       }
     }
   }

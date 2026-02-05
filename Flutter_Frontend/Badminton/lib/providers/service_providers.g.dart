@@ -438,6 +438,28 @@ final studentRegistrationRequestServiceProvider =
 // ignore: unused_element
 typedef StudentRegistrationRequestServiceRef =
     AutoDisposeProviderRef<StudentRegistrationRequestService>;
+String _$coachRegistrationRequestServiceHash() =>
+    r'9d3fa3c7e2eaa5001e55b9a140934726ad06f3d7';
+
+/// Provider for CoachRegistrationRequestService singleton
+///
+/// Copied from [coachRegistrationRequestService].
+@ProviderFor(coachRegistrationRequestService)
+final coachRegistrationRequestServiceProvider =
+    AutoDisposeProvider<CoachRegistrationRequestService>.internal(
+      coachRegistrationRequestService,
+      name: r'coachRegistrationRequestServiceProvider',
+      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+          ? null
+          : _$coachRegistrationRequestServiceHash,
+      dependencies: null,
+      allTransitiveDependencies: null,
+    );
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef CoachRegistrationRequestServiceRef =
+    AutoDisposeProviderRef<CoachRegistrationRequestService>;
 String _$connectivityServiceHash() =>
     r'2514faa3d7f3227d473e300af7d0188339855ef3';
 
