@@ -22,6 +22,7 @@ import '../../utils/path_helper.dart';
 import '../../models/video_resource.dart';
 import '../../models/student.dart';
 import '../../models/batch.dart';
+import '../../models/session.dart';
 
 /// Video Management Screen - Upload and manage training videos for students, batches, or seasons
 class VideoManagementScreen extends ConsumerStatefulWidget {
@@ -38,6 +39,7 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
   String _audienceType = 'student'; // 'all', 'batch', 'student'
   List<Student> _batchStudents = [];
   List<Batch> _batches = [];
+  List<Session> _sessions = [];
   List<VideoResource> _videos = [];
   Map<int, String> _uploaderNames = {}; 
   bool _loadingStudents = false;
@@ -134,11 +136,15 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
       });
       
       // Load batches for selection
-      final batchService = ref.read(batchServiceProvider);
       final batches = await ref.read(batchListProvider.future);
+      
+      // Load sessions for selection
+      final sessions = await ref.read(activeSessionsProvider.future);
+
       if (mounted) {
         setState(() {
             _batches = batches;
+            _sessions = sessions;
         });
       }
     } catch (e) {
@@ -234,14 +240,6 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
 
     if (_audienceType != 'all' && _selectedTargetIds.isEmpty) {
       SuccessSnackbar.showError(context, 'Please select at least one ${_audienceType}');
-      return;
-    }
-    if (_targetType == 'batch' && _selectedBatchId == null) {
-      SuccessSnackbar.showError(context, 'Please select a batch first');
-      return;
-    }
-    if (_targetType == 'session' && _selectedSessionId == null) {
-      SuccessSnackbar.showError(context, 'Please select a session first');
       return;
     }
 
@@ -488,6 +486,8 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
           children: [
             _buildAudienceChip('Everyone', 'all'),
             const SizedBox(width: AppDimensions.spacingS),
+            _buildAudienceChip('Sessions', 'session'),
+            const SizedBox(width: AppDimensions.spacingS),
             _buildAudienceChip('Batches', 'batch'),
             const SizedBox(width: AppDimensions.spacingS),
             _buildAudienceChip('Individuals', 'student'),
@@ -496,6 +496,7 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
         const SizedBox(height: AppDimensions.spacingM),
 
         // Specific Target Selection
+        if (_audienceType == 'session') _buildSessionMultiSelect(),
         if (_audienceType == 'batch') _buildBatchMultiSelect(),
         if (_audienceType == 'student') _buildStudentMultiSelect(),
 
@@ -688,6 +689,38 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
                     _selectedTargetIds.add(batch.id);
                   } else {
                     _selectedTargetIds.remove(batch.id);
+                  }
+                });
+              },
+              selectedColor: AppColors.accent.withOpacity(0.2),
+              checkmarkColor: AppColors.accent,
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSessionMultiSelect() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Select Sessions:', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: _sessions.map((session) {
+            final isSelected = _selectedTargetIds.contains(session.id);
+            return FilterChip(
+              label: Text(session.name),
+              selected: isSelected,
+              onSelected: (selected) {
+                setState(() {
+                  if (selected) {
+                    _selectedTargetIds.add(session.id!);
+                  } else {
+                    _selectedTargetIds.remove(session.id!);
                   }
                 });
               },
