@@ -6979,9 +6979,9 @@ if __name__ == "__main__":
         print(f"[Schema Watcher] Could not start: {e}")
     
     print("🚀 Starting Badminton Academy Management System API...")
-    print("📖 API Documentation (Local): http://127.0.0.1:8000/docs")
-    print("📖 API Documentation (Network): http://192.168.1.4:8000/docs")
-    print("📊 Alternative Docs: http://127.0.0.1:8000/redoc")
-    print("📱 Mobile devices can connect to: http://192.168.1.4:8000")
+    print("📖 API Documentation (Local): http://127.0.0.1:8001/docs")
+    print("📖 API Documentation (Network): http://192.168.1.4:8001/docs")
+    print("📊 Alternative Docs: http://127.0.0.1:8001/redoc")
+    print("📱 Mobile devices can connect to: http://192.168.1.4:8001")
     # host="0.0.0.0" allows connections from any device on the network
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8001)

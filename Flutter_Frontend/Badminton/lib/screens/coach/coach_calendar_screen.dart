@@ -76,30 +76,19 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
   }
 
   Widget _buildCalendarBody(bool isDark) {
-    final firstDay = DateTime(_focusedDay.year, _focusedDay.month, 1);
-    final lastDay = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
-    final eventsAsync = ref.watch(calendarEventsProvider(
-      startDate: firstDay,
-      endDate: lastDay,
-    ));
+    final eventsAsync = ref.watch(yearlyEventsProvider(_focusedDay.year));
 
     return RefreshIndicator(
       onRefresh: () async {
-        ref.invalidate(calendarEventsProvider(
-          startDate: firstDay,
-          endDate: lastDay,
-        ));
+        ref.invalidate(yearlyEventsProvider(_focusedDay.year));
       },
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         child: eventsAsync.when(
-          loading: () => const Center(child: ListSkeleton(itemCount: 5)),
+          loading: () => const Center(child: DashboardSkeleton()),
           error: (error, stack) => ErrorDisplay(
             message: 'Failed to load calendar events: ${error.toString()}',
-            onRetry: () => ref.invalidate(calendarEventsProvider(
-              startDate: firstDay,
-              endDate: lastDay,
-            )),
+            onRetry: () => ref.invalidate(yearlyEventsProvider(_focusedDay.year)),
           ),
           data: (events) {
             final groupedEvents = _groupEventsByDate(events);

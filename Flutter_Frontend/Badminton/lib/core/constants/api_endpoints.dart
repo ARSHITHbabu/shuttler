@@ -6,12 +6,12 @@ class ApiEndpoints {
   // IMPORTANT: Change this IP to your computer's local IP address (run ipconfig on Windows)
   static String get baseUrl {
     if (kIsWeb) {
-      return 'http://localhost:8000';
+      return 'http://localhost:8001';
     }
     // Use your computer's local network IP address
     // Run get_local_ip.ps1 to find your current IP address
     // Current IP: 192.168.1.4 (updated automatically)
-    return 'http://192.168.1.4:8000';
+    return 'http://192.168.1.4:8001';
   }
 
   // Authentication
