@@ -203,6 +203,139 @@ class _CalendarEventsProviderElement
   String? get eventType => (origin as CalendarEventsProvider).eventType;
 }
 
+String _$yearlyEventsHash() => r'778db72269d93b045cad3615b5d3a1ad7d71fbed';
+
+/// Provider for calendar events for a specific year
+///
+/// Copied from [yearlyEvents].
+@ProviderFor(yearlyEvents)
+const yearlyEventsProvider = YearlyEventsFamily();
+
+/// Provider for calendar events for a specific year
+///
+/// Copied from [yearlyEvents].
+class YearlyEventsFamily extends Family<AsyncValue<List<CalendarEvent>>> {
+  /// Provider for calendar events for a specific year
+  ///
+  /// Copied from [yearlyEvents].
+  const YearlyEventsFamily();
+
+  /// Provider for calendar events for a specific year
+  ///
+  /// Copied from [yearlyEvents].
+  YearlyEventsProvider call(int year) {
+    return YearlyEventsProvider(year);
+  }
+
+  @override
+  YearlyEventsProvider getProviderOverride(
+    covariant YearlyEventsProvider provider,
+  ) {
+    return call(provider.year);
+  }
+
+  static const Iterable<ProviderOrFamily>? _dependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get dependencies => _dependencies;
+
+  static const Iterable<ProviderOrFamily>? _allTransitiveDependencies = null;
+
+  @override
+  Iterable<ProviderOrFamily>? get allTransitiveDependencies =>
+      _allTransitiveDependencies;
+
+  @override
+  String? get name => r'yearlyEventsProvider';
+}
+
+/// Provider for calendar events for a specific year
+///
+/// Copied from [yearlyEvents].
+class YearlyEventsProvider
+    extends AutoDisposeFutureProvider<List<CalendarEvent>> {
+  /// Provider for calendar events for a specific year
+  ///
+  /// Copied from [yearlyEvents].
+  YearlyEventsProvider(int year)
+    : this._internal(
+        (ref) => yearlyEvents(ref as YearlyEventsRef, year),
+        from: yearlyEventsProvider,
+        name: r'yearlyEventsProvider',
+        debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+            ? null
+            : _$yearlyEventsHash,
+        dependencies: YearlyEventsFamily._dependencies,
+        allTransitiveDependencies:
+            YearlyEventsFamily._allTransitiveDependencies,
+        year: year,
+      );
+
+  YearlyEventsProvider._internal(
+    super._createNotifier, {
+    required super.name,
+    required super.dependencies,
+    required super.allTransitiveDependencies,
+    required super.debugGetCreateSourceHash,
+    required super.from,
+    required this.year,
+  }) : super.internal();
+
+  final int year;
+
+  @override
+  Override overrideWith(
+    FutureOr<List<CalendarEvent>> Function(YearlyEventsRef provider) create,
+  ) {
+    return ProviderOverride(
+      origin: this,
+      override: YearlyEventsProvider._internal(
+        (ref) => create(ref as YearlyEventsRef),
+        from: from,
+        name: null,
+        dependencies: null,
+        allTransitiveDependencies: null,
+        debugGetCreateSourceHash: null,
+        year: year,
+      ),
+    );
+  }
+
+  @override
+  AutoDisposeFutureProviderElement<List<CalendarEvent>> createElement() {
+    return _YearlyEventsProviderElement(this);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is YearlyEventsProvider && other.year == year;
+  }
+
+  @override
+  int get hashCode {
+    var hash = _SystemHash.combine(0, runtimeType.hashCode);
+    hash = _SystemHash.combine(hash, year.hashCode);
+
+    return _SystemHash.finish(hash);
+  }
+}
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+mixin YearlyEventsRef on AutoDisposeFutureProviderRef<List<CalendarEvent>> {
+  /// The parameter `year` of this provider.
+  int get year;
+}
+
+class _YearlyEventsProviderElement
+    extends AutoDisposeFutureProviderElement<List<CalendarEvent>>
+    with YearlyEventsRef {
+  _YearlyEventsProviderElement(super.provider);
+
+  @override
+  int get year => (origin as YearlyEventsProvider).year;
+}
+
 String _$calendarEventByDateHash() =>
     r'9fea6c08569c7da2f914c694144ba337ab874ed0';
 
@@ -610,7 +743,7 @@ class _CalendarEventByIdProviderElement
   int get id => (origin as CalendarEventByIdProvider).id;
 }
 
-String _$calendarEventListHash() => r'ef1c26452f9264f5c7733bdd195ed865092b3322';
+String _$calendarEventListHash() => r'2666982d74898e6cdddb37a9906d2be011e23cbd';
 
 abstract class _$CalendarEventList
     extends BuildlessAutoDisposeAsyncNotifier<List<CalendarEvent>> {
