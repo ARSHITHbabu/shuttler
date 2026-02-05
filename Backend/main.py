@@ -466,6 +466,23 @@ class StudentRegistrationRequestDB(Base):
     invitation_id = Column(Integer, ForeignKey("invitations.id"), nullable=True)
     invited_by_coach_id = Column(Integer, ForeignKey("coaches.id"), nullable=True)
 
+class CoachRegistrationRequestDB(Base):
+    """Coach registration requests awaiting owner approval"""
+    __tablename__ = "coach_registration_requests"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    email = Column(String, nullable=False, unique=True)
+    phone = Column(String, nullable=False)
+    password = Column(String, nullable=False)  # Hashed password
+    specialization = Column(String, nullable=True)
+    experience_years = Column(Integer, nullable=True)
+    status = Column(String, default="pending")  # "pending", "approved", "rejected"
+    submitted_at = Column(DateTime(timezone=True), server_default=func.now())
+    reviewed_by = Column(Integer, nullable=True)  # Owner ID who reviewed
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    review_notes = Column(Text, nullable=True)
+
 # ==================== Database Migration Functions ====================
 
 def check_and_add_column(engine, table_name: str, column_name: str, column_type: str, nullable: bool = True, default_value: str = None):
@@ -983,6 +1000,17 @@ def migrate_database_schema(engine):
                 print(f"❌ Error creating student_registration_requests table: {e}")
         else:
             print("✅ student_registration_requests table exists")
+        
+        # Check if coach_registration_requests table exists
+        if 'coach_registration_requests' not in tables:
+            print("⚠️  coach_registration_requests table not found. Creating...")
+            try:
+                CoachRegistrationRequestDB.__table__.create(bind=engine)
+                print("✅ coach_registration_requests table created!")
+            except Exception as e:
+                print(f"❌ Error creating coach_registration_requests table: {e}")
+        else:
+            print("✅ coach_registration_requests table exists")
         
         # Migrate calendar_events table - add end_date and related_leave_request_id columns
         if 'calendar_events' in tables:
@@ -1745,6 +1773,35 @@ class StudentRegistrationRequest(BaseModel):
         from_attributes = True
 
 class StudentRegistrationRequestUpdate(BaseModel):
+    status: str  # "approved" or "rejected"
+    review_notes: Optional[str] = None
+
+# Coach Registration Request Models
+class CoachRegistrationRequestCreate(BaseModel):
+    name: str
+    email: str
+    phone: str
+    password: str
+    specialization: Optional[str] = None
+    experience_years: Optional[int] = None
+
+class CoachRegistrationRequest(BaseModel):
+    id: int
+    name: str
+    email: str
+    phone: str
+    specialization: Optional[str] = None
+    experience_years: Optional[int] = None
+    status: str  # "pending", "approved", "rejected"
+    submitted_at: str
+    reviewed_by: Optional[int] = None
+    reviewed_at: Optional[str] = None
+    review_notes: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+class CoachRegistrationRequestUpdate(BaseModel):
     status: str  # "approved" or "rejected"
     review_notes: Optional[str] = None
 
@@ -7034,6 +7091,235 @@ def check_registration_status(email: str):
         request = db.query(StudentRegistrationRequestDB).filter(
             StudentRegistrationRequestDB.email == email
         ).order_by(StudentRegistrationRequestDB.submitted_at.desc()).first()
+        
+        if not request:
+            return {"exists": False}
+        
+        return {
+            "exists": True,
+            "status": request.status,
+            "submitted_at": request.submitted_at.isoformat() if request.submitted_at else None,
+            "reviewed_at": request.reviewed_at.isoformat() if request.reviewed_at else None,
+            "review_notes": request.review_notes
+        }
+    finally:
+        db.close()
+
+# ==================== Coach Registration Request Routes ====================
+
+@app.post("/coaches/registration-request", response_model=CoachRegistrationRequest)
+def create_coach_registration_request(request: CoachRegistrationRequestCreate):
+    """Create a coach registration request - requires owner approval"""
+    db = SessionLocal()
+    try:
+        # Check if email already exists in coaches table
+        existing_coach = db.query(CoachDB).filter(CoachDB.email == request.email).first()
+        if existing_coach:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        
+        # Check if email already exists in pending requests
+        existing_request = db.query(CoachRegistrationRequestDB).filter(
+            CoachRegistrationRequestDB.email == request.email
+        ).first()
+        if existing_request:
+            raise HTTPException(status_code=400, detail="Registration request already exists for this email")
+        
+        # Hash password
+        hashed_password = hash_password(request.password)
+        
+        # Create registration request
+        db_request = CoachRegistrationRequestDB(
+            name=request.name,
+            email=request.email,
+            phone=request.phone,
+            password=hashed_password,
+            specialization=request.specialization,
+            experience_years=request.experience_years,
+            status="pending"
+        )
+        db.add(db_request)
+        db.commit()
+        db.refresh(db_request)
+        
+        # Notify Owners
+        try:
+            owners = db.query(OwnerDB).filter(OwnerDB.role == "owner").all()
+            for owner in owners:
+                create_notification(
+                    db=db,
+                    user_id=owner.id,
+                    user_type="owner",
+                    title="Coach Registration Request",
+                    body=f"New coach registration request from {db_request.name}",
+                    type="general",
+                    data={"coach_registration_request_id": db_request.id}
+                )
+        except Exception as e:
+            print(f"Error sending registration notification: {e}")
+        
+        # Convert to response model
+        return CoachRegistrationRequest(
+            id=db_request.id,
+            name=db_request.name,
+            email=db_request.email,
+            phone=db_request.phone,
+            specialization=db_request.specialization,
+            experience_years=db_request.experience_years,
+            status=db_request.status,
+            submitted_at=db_request.submitted_at.isoformat() if db_request.submitted_at else "",
+            reviewed_by=db_request.reviewed_by,
+            reviewed_at=db_request.reviewed_at.isoformat() if db_request.reviewed_at else None,
+            review_notes=db_request.review_notes
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error creating coach registration request: {str(e)}")
+    finally:
+        db.close()
+
+@app.get("/coach-registration-requests/", response_model=List[CoachRegistrationRequest])
+def get_coach_registration_requests(
+    status: Optional[str] = Query(None, description="Filter by status: pending, approved, rejected")
+):
+    """Get all coach registration requests - owner only"""
+    db = SessionLocal()
+    try:
+        query = db.query(CoachRegistrationRequestDB)
+        if status:
+            query = query.filter(CoachRegistrationRequestDB.status == status)
+        requests = query.order_by(CoachRegistrationRequestDB.submitted_at.desc()).all()
+        
+        # Convert to response models
+        return [
+            CoachRegistrationRequest(
+                id=req.id,
+                name=req.name,
+                email=req.email,
+                phone=req.phone,
+                specialization=req.specialization,
+                experience_years=req.experience_years,
+                status=req.status,
+                submitted_at=req.submitted_at.isoformat() if req.submitted_at else "",
+                reviewed_by=req.reviewed_by,
+                reviewed_at=req.reviewed_at.isoformat() if req.reviewed_at else None,
+                review_notes=req.review_notes
+            )
+            for req in requests
+        ]
+    finally:
+        db.close()
+
+@app.get("/coach-registration-requests/{request_id}", response_model=CoachRegistrationRequest)
+def get_coach_registration_request(request_id: int):
+    """Get a specific coach registration request"""
+    db = SessionLocal()
+    try:
+        request = db.query(CoachRegistrationRequestDB).filter(
+            CoachRegistrationRequestDB.id == request_id
+        ).first()
+        if not request:
+            raise HTTPException(status_code=404, detail="Registration request not found")
+        
+        return CoachRegistrationRequest(
+            id=request.id,
+            name=request.name,
+            email=request.email,
+            phone=request.phone,
+            specialization=request.specialization,
+            experience_years=request.experience_years,
+            status=request.status,
+            submitted_at=request.submitted_at.isoformat() if request.submitted_at else "",
+            reviewed_by=request.reviewed_by,
+            reviewed_at=request.reviewed_at.isoformat() if request.reviewed_at else None,
+            review_notes=request.review_notes
+        )
+    finally:
+        db.close()
+
+@app.put("/coach-registration-requests/{request_id}", response_model=CoachRegistrationRequest)
+def update_coach_registration_request_status(
+    request_id: int,
+    update: CoachRegistrationRequestUpdate,
+    owner_id: int = Query(..., description="Owner ID reviewing the request")
+):
+    """Approve or reject a coach registration request"""
+    db = SessionLocal()
+    try:
+        request = db.query(CoachRegistrationRequestDB).filter(
+            CoachRegistrationRequestDB.id == request_id
+        ).first()
+        
+        if not request:
+            raise HTTPException(status_code=404, detail="Registration request not found")
+        
+        if request.status != "pending":
+            raise HTTPException(status_code=400, detail="Request has already been reviewed")
+        
+        # Update request status
+        request.status = update.status
+        request.reviewed_by = owner_id
+        request.reviewed_at = datetime.now()
+        request.review_notes = update.review_notes
+        
+        # If approved, create the coach account
+        if update.status == "approved":
+            # Check if coach already exists (race condition check)
+            existing_coach = db.query(CoachDB).filter(
+                CoachDB.email == request.email
+            ).first()
+            
+            if existing_coach:
+                raise HTTPException(status_code=400, detail="Coach with this email already exists")
+            
+            # Create coach account
+            db_coach = CoachDB(
+                name=request.name,
+                email=request.email,
+                phone=request.phone,
+                password=request.password,  # Already hashed
+                specialization=request.specialization,
+                experience_years=request.experience_years,
+                status="active"  # Active after approval
+            )
+            db.add(db_coach)
+        
+        db.commit()
+        db.refresh(request)
+        
+        # Convert to response model
+        return CoachRegistrationRequest(
+            id=request.id,
+            name=request.name,
+            email=request.email,
+            phone=request.phone,
+            specialization=request.specialization,
+            experience_years=request.experience_years,
+            status=request.status,
+            submitted_at=request.submitted_at.isoformat() if request.submitted_at else "",
+            reviewed_by=request.reviewed_by,
+            reviewed_at=request.reviewed_at.isoformat() if request.reviewed_at else None,
+            review_notes=request.review_notes
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error updating registration request: {str(e)}")
+    finally:
+        db.close()
+
+@app.get("/coaches/check-registration-status/{email}")
+def check_coach_registration_status(email: str):
+    """Check if a coach registration request exists for an email"""
+    db = SessionLocal()
+    try:
+        request = db.query(CoachRegistrationRequestDB).filter(
+            CoachRegistrationRequestDB.email == email
+        ).order_by(CoachRegistrationRequestDB.submitted_at.desc()).first()
         
         if not request:
             return {"exists": False}
