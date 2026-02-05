@@ -382,7 +382,7 @@ class _StudentCalendarScreenState extends ConsumerState<StudentCalendarScreen> {
           Expanded(
             child: Row(
               children: [
-                const Icon(Icons.flag, size: 20, color: Colors.red),
+                const Icon(Icons.celebration, size: 20, color: Colors.red),
                 const SizedBox(width: AppDimensions.spacingS),
                 Expanded(
                   child: Column(

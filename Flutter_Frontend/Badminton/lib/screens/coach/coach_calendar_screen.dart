@@ -370,7 +370,7 @@ class _CoachCalendarScreenState extends ConsumerState<CoachCalendarScreen> {
           Expanded(
             child: Row(
               children: [
-                const Icon(Icons.flag, size: 20, color: Colors.red),
+                const Icon(Icons.celebration, size: 20, color: Colors.red),
                 const SizedBox(width: AppDimensions.spacingS),
                 Expanded(
                   child: Column(
