@@ -496,6 +496,8 @@ def migrate_database_schema(engine):
         if 'coaches' in tables:
             check_and_add_column(engine, 'coaches', 'profile_photo', 'VARCHAR(500)', nullable=True)
             check_and_add_column(engine, 'coaches', 'fcm_token', 'VARCHAR(500)', nullable=True)
+            check_and_add_column(engine, 'coaches', 'monthly_salary', 'FLOAT', nullable=True)
+            check_and_add_column(engine, 'coaches', 'joining_date', 'DATE', nullable=True)
         
         # Migrate owners table
         if 'owners' in tables:
