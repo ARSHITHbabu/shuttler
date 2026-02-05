@@ -14,7 +14,7 @@ import '../../providers/batch_provider.dart';
 import '../../models/session.dart';
 import '../../models/batch.dart';
 
-/// Session/Season Management Screen - Manage sessions that group batches
+/// Season Management Screen - Manage seasons that group batches
 /// Separate from SessionManagementScreen which manages practice/tournament/camp sessions
 class SessionSeasonManagementScreen extends ConsumerStatefulWidget {
   const SessionSeasonManagementScreen({super.key});
@@ -64,7 +64,7 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
 
   Future<void> _saveSession() async {
     if (_nameController.text.trim().isEmpty) {
-      SuccessSnackbar.showError(context, 'Please enter session name');
+      SuccessSnackbar.showError(context, 'Please enter season name');
       return;
     }
 
@@ -98,12 +98,12 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
       if (_editingSession != null) {
         await sessionManager.updateSession(_editingSession!.id, sessionData);
         if (mounted) {
-          SuccessSnackbar.show(context, 'Session updated successfully');
+          SuccessSnackbar.show(context, 'Season updated successfully');
         }
       } else {
         await sessionManager.createSession(sessionData);
         if (mounted) {
-          SuccessSnackbar.show(context, 'Session created successfully');
+          SuccessSnackbar.show(context, 'Season created successfully');
         }
       }
 
@@ -129,7 +129,7 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
   Future<void> _deleteSession(int id) async {
     final confirmed = await ConfirmationDialog.showDelete(
       context,
-      'Session',
+      'Season',
     );
 
     if (confirmed == true && mounted) {
@@ -141,7 +141,7 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
         }
       } catch (e) {
         if (mounted) {
-          SuccessSnackbar.showError(context, 'Failed to delete session: ${e.toString()}');
+          SuccessSnackbar.showError(context, 'Failed to delete season: ${e.toString()}');
         }
       }
     }
@@ -163,7 +163,7 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: const Text(
-          'Session Management',
+          'Season Management',
           style: TextStyle(
             color: AppColors.textPrimary,
             fontSize: 20,
@@ -201,7 +201,7 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
           },
         ),
         title: Text(
-          _editingSession != null ? 'Edit Session' : 'Create Session',
+          _editingSession != null ? 'Edit Season' : 'Create Season',
           style: const TextStyle(
             color: AppColors.textPrimary,
             fontSize: 20,
@@ -216,11 +216,11 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
           children: [
             CustomTextField(
               controller: _nameController,
-              label: 'Session Name',
+              label: 'Season Name',
               hint: 'e.g., Fall 2026, Winter 2026',
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
-                  return 'Please enter session name';
+                  return 'Please enter season name';
                 }
                 return null;
               },
@@ -346,7 +346,7 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
                       ),
                     )
                   : Text(
-                      _editingSession != null ? 'Update Session' : 'Create Session',
+                      _editingSession != null ? 'Update Season' : 'Create Season',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 16,
@@ -425,7 +425,7 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
                           ),
                           const SizedBox(height: AppDimensions.spacingM),
                           Text(
-                            'No $_selectedTab sessions',
+                            'No $_selectedTab seasons',
                             style: const TextStyle(
                               fontSize: 16,
                               color: AppColors.textSecondary,
@@ -444,11 +444,11 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
                     final session = sessions[index];
                     return Padding(
                       padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
-                      child: _SessionCard(
+                      child: _SeasonCard(
                         session: session,
                         onEdit: () => _openEditForm(session),
                         onDelete: () => _deleteSession(session.id),
-                        onViewBatches: () => _viewSessionBatches(session),
+                        onViewBatches: () => _viewSeasonBatches(session),
                       ),
                     );
                   },
@@ -461,12 +461,15 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
     );
   }
 
-  void _viewSessionBatches(Session session) async {
+  void _viewSeasonBatches(Session session) async {
     // Navigate to batches screen filtered by session
     // For now, show a dialog with batch count
-    final batchesAsync = ref.read(batchListProvider);
-    batchesAsync.whenData((batches) {
-      final sessionBatches = batches.where((b) => b.sessionId == session.id).toList();
+    try {
+      final batches = await ref.read(batchListProvider.future);
+      final seasonBatches = batches.where((b) => b.sessionId == session.id).toList();
+      
+      if (!mounted) return;
+      
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -475,9 +478,45 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
             'Batches in ${session.name}',
             style: const TextStyle(color: AppColors.textPrimary),
           ),
-          content: Text(
-            '${sessionBatches.length} batch${sessionBatches.length == 1 ? '' : 'es'} assigned to this session.',
-            style: const TextStyle(color: AppColors.textSecondary),
+          content: Container(
+            width: double.maxFinite,
+            child: seasonBatches.isEmpty
+                ? const Text(
+                    'No batches assigned to this season.',
+                    style: TextStyle(color: AppColors.textSecondary),
+                  )
+                : SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${seasonBatches.length} batch${seasonBatches.length == 1 ? '' : 'es'} assigned:',
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        ...seasonBatches.map((b) => Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.circle, size: 8, color: AppColors.accent),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  b.batchName,
+                                  style: const TextStyle(color: AppColors.textPrimary),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )),
+                      ],
+                    ),
+                  ),
           ),
           actions: [
             TextButton(
@@ -487,7 +526,11 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
           ],
         ),
       );
-    });
+    } catch (e) {
+      if (mounted) {
+        SuccessSnackbar.showError(context, 'Failed to load batches: ${e.toString()}');
+      }
+    }
   }
 }
 
@@ -568,13 +611,13 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
-class _SessionCard extends StatelessWidget {
+class _SeasonCard extends StatelessWidget {
   final Session session;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
   final VoidCallback onViewBatches;
 
-  const _SessionCard({
+  const _SeasonCard({
     required this.session,
     required this.onEdit,
     required this.onDelete,
