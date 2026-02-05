@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'api_service.dart';
 import '../../models/student_registration_request.dart';
 
@@ -19,22 +20,38 @@ class StudentRegistrationRequestService {
     String? address,
     String? tShirtSize,
   }) async {
-    final response = await _apiService.post(
-      '/students/registration-request',
-      data: {
-        'name': name,
-        'email': email,
-        'phone': phone,
-        'password': password,
-        'guardian_name': guardianName,
-        'guardian_phone': guardianPhone,
-        'date_of_birth': dateOfBirth,
-        'address': address,
-        't_shirt_size': tShirtSize,
-      },
-    );
+    try {
+      final response = await _apiService.post(
+        '/students/registration-request',
+        data: {
+          'name': name,
+          'email': email,
+          'phone': phone,
+          'password': password,
+          'guardian_name': guardianName,
+          'guardian_phone': guardianPhone,
+          'date_of_birth': dateOfBirth,
+          'address': address,
+          't_shirt_size': tShirtSize,
+        },
+      );
 
-    return StudentRegistrationRequest.fromJson(response.data);
+      return StudentRegistrationRequest.fromJson(response.data);
+    } on DioException catch (e) {
+      if (e.response != null && e.response!.data != null) {
+        final data = e.response!.data;
+        if (data is Map<String, dynamic>) {
+          if (data.containsKey('detail')) {
+            throw Exception(data['detail']);
+          } else if (data.containsKey('message')) {
+            throw Exception(data['message']);
+          }
+        }
+      }
+      throw Exception('Failed to create registration request: ${e.message}');
+    } catch (e) {
+      rethrow;
+    }
   }
 
   /// Get all registration requests (owner only)

@@ -14,6 +14,7 @@ import 'student_profile_screen.dart';
 import 'student_settings_screen.dart';
 import 'student_videos_screen.dart';
 import '../common/academy_info_screen.dart';
+import '../owner/notifications_screen.dart';
 
 /// Student More Screen - Navigation hub for additional features
 /// All features are READ-ONLY for students
@@ -62,6 +63,14 @@ class _StudentMoreScreenState extends ConsumerState<StudentMoreScreen> {
               subtitle: 'View academy announcements',
               isDark: isDark,
               onTap: () => setState(() => _currentView = 'announcements'),
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.notifications_none_outlined,
+              title: 'Notifications',
+              subtitle: 'View your alerts and updates',
+              isDark: isDark,
+              onTap: () => setState(() => _currentView = 'notifications'),
             ),
             const SizedBox(height: AppDimensions.spacingS),
             _MenuItem(
@@ -159,6 +168,8 @@ class _StudentMoreScreenState extends ConsumerState<StudentMoreScreen> {
         return StudentAnnouncementsScreen(
           onBack: () => setState(() => _currentView = null),
         );
+      case 'notifications':
+        return const NotificationsScreen();
       case 'academy':
         return AcademyInfoScreen(
           onBack: () => setState(() => _currentView = null),
