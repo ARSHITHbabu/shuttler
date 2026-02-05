@@ -26,11 +26,11 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
   bool _showAddForm = false;
   bool _isLoading = false;
   Announcement? _editingAnnouncement; // Track if we're editing
-  String _selectedFilter = 'all'; // 'all', 'urgent', 'high', 'normal'
+  String _selectedFilter = 'all'; // 'all', 'Important', 'General'
 
   final _titleController = TextEditingController();
   final _messageController = TextEditingController();
-  String _selectedPriority = 'normal'; // 'normal', 'high', 'urgent'
+  String _selectedPriority = 'General'; // 'General', 'Important'
   String _selectedTargetAudience = 'all'; // 'all', 'students', 'coaches'
   DateTime? _scheduledAt;
 
@@ -121,7 +121,7 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
           _showAddForm = false;
           _titleController.clear();
           _messageController.clear();
-          _selectedPriority = 'normal';
+          _selectedPriority = 'General';
           _selectedTargetAudience = 'all';
           _scheduledAt = null;
           _editingAnnouncement = null;
@@ -203,23 +203,16 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
                   ),
                   const SizedBox(width: AppDimensions.spacingS),
                   _FilterChip(
-                    label: 'Urgent',
-                    isSelected: _selectedFilter == 'urgent',
-                    onTap: () => setState(() => _selectedFilter = 'urgent'),
-                    color: AppColors.error,
-                  ),
-                  const SizedBox(width: AppDimensions.spacingS),
-                  _FilterChip(
-                    label: 'High',
-                    isSelected: _selectedFilter == 'high',
-                    onTap: () => setState(() => _selectedFilter = 'high'),
+                    label: 'Important',
+                    isSelected: _selectedFilter == 'Important',
+                    onTap: () => setState(() => _selectedFilter = 'Important'),
                     color: AppColors.warning,
                   ),
                   const SizedBox(width: AppDimensions.spacingS),
                   _FilterChip(
-                    label: 'Normal',
-                    isSelected: _selectedFilter == 'normal',
-                    onTap: () => setState(() => _selectedFilter = 'normal'),
+                    label: 'General',
+                    isSelected: _selectedFilter == 'General',
+                    onTap: () => setState(() => _selectedFilter = 'General'),
                     color: AppColors.success,
                   ),
                 ],
@@ -331,28 +324,19 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
                 children: [
                   Expanded(
                     child: _PriorityButton(
-                      label: 'Low',
-                      value: 'normal',
+                      label: 'General',
+                      value: 'General',
                       selected: _selectedPriority,
-                      onTap: () => setState(() => _selectedPriority = 'normal'),
+                      onTap: () => setState(() => _selectedPriority = 'General'),
                     ),
                   ),
                   const SizedBox(width: AppDimensions.spacingS),
                   Expanded(
                     child: _PriorityButton(
-                      label: 'Medium',
-                      value: 'high',
+                      label: 'Important',
+                      value: 'Important',
                       selected: _selectedPriority,
-                      onTap: () => setState(() => _selectedPriority = 'high'),
-                    ),
-                  ),
-                  const SizedBox(width: AppDimensions.spacingS),
-                  Expanded(
-                    child: _PriorityButton(
-                      label: 'High',
-                      value: 'urgent',
-                      selected: _selectedPriority,
-                      onTap: () => setState(() => _selectedPriority = 'urgent'),
+                      onTap: () => setState(() => _selectedPriority = 'Important'),
                     ),
                   ),
                 ],
@@ -492,11 +476,11 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
                   children: [
                     Row(
                       children: [
-                        if (announcement.priority == 'urgent' || announcement.priority == 'high')
+                        if (announcement.priority == 'Important')
                           const Icon(
                             Icons.priority_high,
                             size: 16,
-                            color: AppColors.error,
+                            color: AppColors.warning,
                           ),
                         const SizedBox(width: 4),
                         Expanded(

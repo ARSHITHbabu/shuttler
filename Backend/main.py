@@ -6,7 +6,7 @@ from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, T
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.exc import IntegrityError
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import List, Optional, Dict, Any, Union
 from datetime import datetime, date, timedelta
 import json
@@ -361,7 +361,7 @@ class AnnouncementDB(Base):
     title = Column(String(255), nullable=False)
     message = Column(Text, nullable=False)
     target_audience = Column(String(50), default="all")  # "all", "students", "coaches"
-    priority = Column(String(20), default="normal")  # "normal", "high", "urgent"
+    priority = Column(String(20), default="General")  # "General", "Important"
     created_by = Column(Integer, nullable=True)  # Can be coach or owner ID
     creator_type = Column(String(20), default="coach")  # "coach" or "owner"
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -1676,10 +1676,17 @@ class AnnouncementCreate(BaseModel):
     title: str
     message: str
     target_audience: str = "all"
-    priority: str = "normal"
+    priority: str = "General"
     created_by: int
     creator_type: str = "coach"  # "coach" or "owner"
     scheduled_at: Optional[str] = None
+
+    @field_validator('priority')
+    @classmethod
+    def validate_priority(cls, v):
+        if v not in ["General", "Important"]:
+            raise ValueError('priority must be "General" or "Important"')
+        return v
 
 class Announcement(BaseModel):
     id: int
