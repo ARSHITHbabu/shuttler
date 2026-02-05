@@ -438,6 +438,19 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
             ),
           ],
 
+          // History Section
+          if (request.originalStartDate != null) ...[
+            const SizedBox(height: AppDimensions.spacingS),
+            Text(
+              'Original: ${DateFormat('dd MMM').format(request.originalStartDate!)} - ${DateFormat('dd MMM').format(request.originalEndDate!)}',
+              style: TextStyle(
+                fontSize: 11,
+                color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+
           // Modification Request Section
           if (request.hasPendingModification) ...[
             const SizedBox(height: AppDimensions.spacingM),
@@ -466,53 +479,52 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
                     ],
                   ),
                   const SizedBox(height: AppDimensions.spacingM),
-                  Row(
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "Original Dates",
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-                              ),
+                      Row(
+                        children: [
+                          Icon(Icons.history, size: 14, color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary),
+                          const SizedBox(width: 4),
+                          Text(
+                            "Original Dates",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${DateFormat('dd MMM').format(request.startDate)} - ${DateFormat('dd MMM').format(request.endDate)}',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                                decoration: TextDecoration.lineThrough,
-                              ),
-                            ),
-                          ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${DateFormat('dd MMM, yyyy').format(request.startDate)} - ${DateFormat('dd MMM, yyyy').format(request.endDate)}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                          decoration: TextDecoration.lineThrough,
                         ),
                       ),
-                      Icon(Icons.arrow_forward, size: 16, color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              "New Dates",
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-                              ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Icon(Icons.event_available, size: 14, color: AppColors.success),
+                          const SizedBox(width: 4),
+                          Text(
+                            "New Dates",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${DateFormat('dd MMM').format(request.modificationStartDate!)} - ${DateFormat('dd MMM').format(request.modificationEndDate!)}',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                              ),
-                            ),
-                          ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${DateFormat('dd MMM, yyyy').format(request.modificationStartDate!)} - ${DateFormat('dd MMM, yyyy').format(request.modificationEndDate!)}',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                         ),
                       ),
                     ],
@@ -534,38 +546,49 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
                       color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                     ),
                   ),
-                  const SizedBox(height: AppDimensions.spacingM),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      NeumorphicButton(
-                        onPressed: () => _reviewModification(request, 'reject_modification'),
-                        text: 'Reject Mod',
-                        isOutlined: true,
-                        color: AppColors.warning,
-                        textColor: AppColors.warning,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      ),
-                      const SizedBox(width: 8),
-                      NeumorphicButton(
-                        onPressed: () => _reviewModification(request, 'approve'),
-                        text: 'Approve Mod',
-                        color: AppColors.success,
-                        textColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      ),
-                    ],
-                  ),
+                  const SizedBox(height: AppDimensions.spacingL),
                   Align(
                     alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () => _reviewModification(request, 'reject_all'),
-                      child: Text(
-                        "Reject Entire Leave", 
-                        style: TextStyle(color: AppColors.error, fontSize: 12),
-                      ),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      alignment: WrapAlignment.end,
+                      children: [
+                        NeumorphicButton(
+                          onPressed: () => _reviewModification(request, 'reject_all'),
+                          text: 'Reject All',
+                          isOutlined: true,
+                          color: AppColors.error,
+                          textColor: AppColors.error,
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          fontSize: 11,
+                          height: 30,
+                          width: 100,
+                        ),
+                        NeumorphicButton(
+                          onPressed: () => _reviewModification(request, 'reject_modification'),
+                          text: 'Reject Mod',
+                          isOutlined: true,
+                          color: AppColors.warning,
+                          textColor: AppColors.warning,
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          fontSize: 11,
+                          height: 30,
+                          width: 100,
+                        ),
+                        NeumorphicButton(
+                          onPressed: () => _reviewModification(request, 'approve'),
+                          text: 'Approve Mod',
+                          color: AppColors.success,
+                          textColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          fontSize: 11,
+                          height: 30,
+                          width: 100,
+                        ),
+                      ],
                     ),
-                  )
+                  ),
                 ],
               ),
             ),
