@@ -11,6 +11,13 @@ import '../../widgets/common/confirmation_dialog.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../models/notification.dart';
+import '../student/student_announcements_screen.dart';
+import '../coach/coach_announcements_screen.dart';
+import '../owner/announcement_management_screen.dart';
+import '../student/student_fees_screen.dart';
+import '../student/student_schedule_screen.dart';
+import '../coach/leave_request_screen.dart';
+import '../owner/requests_screen.dart';
 
 /// Notifications Screen - View and manage notifications
 class NotificationsScreen extends ConsumerStatefulWidget {
@@ -172,7 +179,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                       final notification = notifications[index];
                       return _NotificationCard(
                         notification: notification,
-                        onTap: () => _markAsRead(notification),
+                        onTap: () => _handleNotificationTap(notification, authState),
                         onDelete: () => _deleteNotification(notification),
                       );
                     },
@@ -269,27 +276,78 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     );
   }
 
-  Future<void> _markAsRead(Notification notification) async {
-    if (notification.isRead) return;
-
-    try {
-      final authState = await ref.read(authProvider.future);
-      if (authState is Authenticated) {
+  Future<void> _handleNotificationTap(Notification notification, Authenticated authState) async {
+    // 1. Mark as read
+    if (!notification.isRead) {
+      try {
         final notificationManager = ref.read(notificationManagerProvider(
           userId: authState.userId,
           userType: authState.userType,
         ).notifier);
         
         await notificationManager.markAsRead(notification.id);
-        
-        if (mounted) {
-          SuccessSnackbar.showInfo(context, 'Notification marked as read');
-        }
+      } catch (e) {
+        // Silently fail marking as read, still navigate
+        debugPrint('Failed to mark as read: $e');
       }
-    } catch (e) {
-      if (mounted) {
-        SuccessSnackbar.showError(context, 'Failed to mark notification as read: ${e.toString()}');
+    }
+
+    if (!mounted) return;
+
+    // 2. Navigate based on type and user role
+    final data = notification.data ?? {};
+    
+    // Announcement Navigation
+    if (notification.type == 'announcement') {
+      if (authState.userType == 'student') {
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => const StudentAnnouncementsScreen(),
+        ));
+      } else if (authState.userType == 'coach') {
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => const CoachAnnouncementsScreen(),
+        ));
+      } else if (authState.userType == 'owner') {
+        // Owner view (using existing management screen)
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => const AnnouncementManagementScreen(),
+        ));
       }
+    }
+    // Fee Due Navigation
+    else if (notification.type == 'fee_due') {
+      if (authState.userType == 'student') {
+         Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => const StudentFeesScreen(),
+        ));
+      }
+    }
+    // Attendance/Schedule Navigation
+    else if (notification.type == 'attendance' || data.containsKey('batch_id')) {
+      if (authState.userType == 'student') {
+         Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => const StudentScheduleScreen(),
+        ));
+      }
+    }
+    // Leave Requests Navigation
+    else if (data.containsKey('leave_request_id')) {
+      if (authState.userType == 'coach') {
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => const LeaveRequestScreen(),
+        ));
+      } else if (authState.userType == 'owner') {
+         // Assuming RequestsScreen handles tabs for leave requests
+         Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => const RequestsScreen(),
+        ));
+      }
+    }
+    // Registration Request Navigation (Owner)
+    else if (data.containsKey('registration_request_id') && authState.userType == 'owner') {
+       Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => const RequestsScreen(),
+       ));
     }
   }
 
