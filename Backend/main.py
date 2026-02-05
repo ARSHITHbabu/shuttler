@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, File, UploadFile, Query, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, Text, Date, DateTime, ForeignKey, JSON, func, and_
+from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, Text, Date, DateTime, ForeignKey, JSON, func, and_, or_
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.exc import IntegrityError
@@ -318,7 +318,9 @@ class TournamentDB(Base):
 class VideoResourceDB(Base):
     __tablename__ = "video_resources"
     id = Column(Integer, primary_key=True, index=True)
-    student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=True)
+    batch_id = Column(Integer, ForeignKey("batches.id"), nullable=True)
+    session_id = Column(Integer, ForeignKey("sessions.id"), nullable=True)
     title = Column(String, nullable=True)
     url = Column(String, nullable=False)
     remarks = Column(Text, nullable=True)
@@ -598,6 +600,72 @@ def migrate_database_schema(engine):
         
         # Migrate calendar_events table - add creator_type and make created_by nullable
         if 'calendar_events' in tables:
+            check_and_add_column(engine, 'calendar_events', 'creator_type', 'VARCHAR(20)', nullable=True, default_value="'coach'")
+            # Make created_by nullable and remove foreign key constraint (since it can reference either coaches or owners)
+            try:
+                with engine.begin() as conn:
+                    # Check if created_by is NOT NULL and make it nullable
+                    col_info = next((col for col in inspector.get_columns('calendar_events') if col['name'] == 'created_by'), None)
+                    if col_info and not col_info.get('nullable', True):
+                        conn.execute(text("ALTER TABLE calendar_events ALTER COLUMN created_by DROP NOT NULL"))
+                    
+                    # Drop foreign key constraint if it exists (since created_by can reference either coaches or owners)
+                    fk_constraints = [
+                        'calendar_events_created_by_fkey',
+                        'calendar_events_created_by_coaches_id_fkey',
+                        'fk_calendar_events_created_by'
+                    ]
+                    
+                    for fk_name in fk_constraints:
+                        fk_check = text(f"""
+                            SELECT COUNT(*) 
+                            FROM information_schema.table_constraints 
+                            WHERE table_name = 'calendar_events' 
+                            AND constraint_name = '{fk_name}'
+                        """)
+                        result = conn.execute(fk_check).scalar()
+                        if result > 0:
+                            # Drop the foreign key constraint
+                            drop_fk_sql = text(f"ALTER TABLE calendar_events DROP CONSTRAINT IF EXISTS {fk_name}")
+                            conn.execute(drop_fk_sql)
+                            print(f"✅ Dropped foreign key constraint {fk_name} from calendar_events.created_by")
+                            break
+                    
+                    # Also try to find and drop any foreign key constraint on created_by column
+                    fk_check_all = text("""
+                        SELECT tc.constraint_name 
+                        FROM information_schema.table_constraints tc
+                        JOIN information_schema.key_column_usage kcu 
+                        ON tc.constraint_name = kcu.constraint_name
+                        WHERE tc.table_name = 'calendar_events' 
+                        AND kcu.column_name = 'created_by'
+                        AND tc.constraint_type = 'FOREIGN KEY'
+                    """)
+                    fk_results = conn.execute(fk_check_all).fetchall()
+                    for fk_row in fk_results:
+                        fk_name = fk_row[0]
+                        drop_fk_sql = text(f"ALTER TABLE calendar_events DROP CONSTRAINT IF EXISTS {fk_name}")
+                        conn.execute(drop_fk_sql)
+                        print(f"✅ Dropped foreign key constraint {fk_name} from calendar_events.created_by")
+            except Exception as alter_error:
+                print(f"⚠️  Warning: Could not alter calendar_events.created_by constraint: {alter_error}")
+
+        # Migrate video_resources table - add batch_id and session_id, make student_id nullable
+        if 'video_resources' in tables:
+            check_and_add_column(engine, 'video_resources', 'batch_id', 'INTEGER', nullable=True)
+            check_and_add_column(engine, 'video_resources', 'session_id', 'INTEGER', nullable=True)
+            
+            # Make student_id nullable
+            try:
+                with engine.begin() as conn:
+                    columns = [col['name'] for col in inspector.get_columns('video_resources')]
+                    if 'student_id' in columns:
+                        col_info = next((col for col in inspector.get_columns('video_resources') if col['name'] == 'student_id'), None)
+                        if col_info and not col_info.get('nullable', True):
+                            conn.execute(text("ALTER TABLE video_resources ALTER COLUMN student_id DROP NOT NULL"))
+                            print("✅ Made video_resources.student_id nullable")
+            except Exception as e:
+                print(f"⚠️  Warning: Could not alter video_resources.student_id constraint: {e}")
             check_and_add_column(engine, 'calendar_events', 'creator_type', 'VARCHAR(20)', nullable=True, default_value="'coach'")
             # Make created_by nullable and remove foreign key constraint (since it can reference either coaches or owners)
             try:
@@ -4982,15 +5050,21 @@ def delete_tournament(tournament_id: int):
 
 @app.post("/video-resources/upload")
 async def upload_video(
-    student_id: int = Form(...),
+    student_id: Optional[int] = Form(None),
+    batch_id: Optional[int] = Form(None),
+    session_id: Optional[int] = Form(None),
     title: Optional[str] = Form(None),
     remarks: Optional[str] = Form(None),
     uploaded_by: Optional[int] = Form(None),
     video: UploadFile = File(...)
 ):
-    """Upload a video file for a specific student"""
+    """Upload a video file for a specific student, batch, or session"""
     db = SessionLocal()
     try:
+        # Validate that at least one target is provided
+        if not student_id and not batch_id and not session_id:
+            raise HTTPException(status_code=400, detail="One of student_id, batch_id, or session_id must be provided")
+
         # Validate file type
         allowed_extensions = ["mp4", "webm", "mov", "avi", "mkv", "m4v"]
         file_extension = video.filename.split(".")[-1].lower() if video.filename else ""
@@ -5001,10 +5075,23 @@ async def upload_video(
                 detail=f"File type not allowed. Allowed types: {', '.join(allowed_extensions)}"
             )
 
-        # Verify student exists
-        student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
-        if not student:
-            raise HTTPException(status_code=404, detail="Student not found")
+        target_name = None
+        # Verify target exists and get name
+        if student_id:
+            student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
+            if not student:
+                raise HTTPException(status_code=404, detail="Student not found")
+            target_name = student.name
+        elif batch_id:
+            batch = db.query(BatchDB).filter(BatchDB.id == batch_id).first()
+            if not batch:
+                raise HTTPException(status_code=404, detail="Batch not found")
+            target_name = f"Batch: {batch.batch_name}"
+        elif session_id:
+            session = db.query(SessionDB).filter(SessionDB.id == session_id).first()
+            if not session:
+                raise HTTPException(status_code=404, detail="Session not found")
+            target_name = f"Session: {session.name}"
 
         # Generate unique filename
         unique_filename = f"video_{uuid.uuid4()}.{file_extension}"
@@ -5017,6 +5104,8 @@ async def upload_video(
         # Create database record
         db_video = VideoResourceDB(
             student_id=student_id,
+            batch_id=batch_id,
+            session_id=session_id,
             title=title or video.filename,
             url=f"/uploads/{unique_filename}",
             remarks=remarks,
@@ -5026,11 +5115,13 @@ async def upload_video(
         db.commit()
         db.refresh(db_video)
 
-        # Return with student name
+        # Return with target name
         return {
             "id": db_video.id,
             "student_id": db_video.student_id,
-            "student_name": student.name,
+            "batch_id": db_video.batch_id,
+            "session_id": db_video.session_id,
+            "student_name": target_name,
             "title": db_video.title,
             "url": db_video.url,
             "remarks": db_video.remarks,
@@ -5045,25 +5136,61 @@ async def upload_video(
         db.close()
 
 @app.get("/video-resources/")
-def get_video_resources(student_id: Optional[int] = None):
-    """Get all video resources, optionally filtered by student_id"""
+def get_video_resources(
+    student_id: Optional[int] = None,
+    batch_id: Optional[int] = None,
+    session_id: Optional[int] = None
+):
+    """Get video resources. If student_id is provided, checks for direct, batch, and session videos."""
     db = SessionLocal()
     try:
         query = db.query(VideoResourceDB)
 
         if student_id is not None:
-            query = query.filter(VideoResourceDB.student_id == student_id)
+            # 1. Get student's approved batches
+            batch_ids = [r.batch_id for r in db.query(BatchStudentDB).filter(BatchStudentDB.student_id == student_id, BatchStudentDB.status == "approved").all()]
+             
+            # 2. Get sessions for those batches
+            session_ids = []
+            if batch_ids:
+                sessions = db.query(BatchDB.session_id).filter(BatchDB.id.in_(batch_ids)).distinct().all()
+                session_ids = [s[0] for s in sessions if s[0] is not None]
+
+            # 3. Filter query
+            query = query.filter(
+                or_(
+                    VideoResourceDB.student_id == student_id,
+                    VideoResourceDB.batch_id.in_(batch_ids) if batch_ids else False,
+                    VideoResourceDB.session_id.in_(session_ids) if session_ids else False
+                )
+            )
+        elif batch_id is not None:
+             query = query.filter(VideoResourceDB.batch_id == batch_id)
+        elif session_id is not None:
+             query = query.filter(VideoResourceDB.session_id == session_id)
 
         videos = query.order_by(VideoResourceDB.created_at.desc()).all()
 
-        # Enrich with student names
+        # Enrich with student/batch/session names
         result = []
         for video in videos:
-            student = db.query(StudentDB).filter(StudentDB.id == video.student_id).first()
+            target_name = "Unknown"
+            if video.student_id:
+                student = db.query(StudentDB).filter(StudentDB.id == video.student_id).first()
+                target_name = student.name if student else "Unknown Student"
+            elif video.batch_id:
+                batch = db.query(BatchDB).filter(BatchDB.id == video.batch_id).first()
+                target_name = f"Batch: {batch.batch_name}" if batch else "Unknown Batch"
+            elif video.session_id:
+                session = db.query(SessionDB).filter(SessionDB.id == video.session_id).first()
+                target_name = f"Session: {session.name}" if session else "Unknown Session"
+
             result.append({
                 "id": video.id,
                 "student_id": video.student_id,
-                "student_name": student.name if student else None,
+                "batch_id": video.batch_id,
+                "session_id": video.session_id,
+                "student_name": target_name,
                 "title": video.title,
                 "url": video.url,
                 "remarks": video.remarks,

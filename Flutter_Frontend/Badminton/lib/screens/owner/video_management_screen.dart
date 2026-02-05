@@ -8,11 +8,13 @@ import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/batch_provider.dart';
+import '../../providers/session_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/video_resource.dart';
 import '../../models/student.dart';
+import '../../models/session.dart';
 
-/// Video Management Screen - Upload and manage training videos for students
+/// Video Management Screen - Upload and manage training videos for students, batches, or seasons
 class VideoManagementScreen extends ConsumerStatefulWidget {
   const VideoManagementScreen({super.key});
 
@@ -21,11 +23,15 @@ class VideoManagementScreen extends ConsumerStatefulWidget {
 }
 
 class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
+  String _targetType = 'student'; // 'student', 'batch', 'session'
   int? _selectedBatchId;
   int? _selectedStudentId;
+  int? _selectedSessionId;
+  
   List<Student> _batchStudents = [];
   List<VideoResource> _videos = [];
   Map<int, String> _uploaderNames = {}; // Map of uploadedBy ID to name
+  
   bool _loadingStudents = false;
   bool _loadingVideos = false;
   bool _showUploadForm = false;
@@ -47,7 +53,7 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
       setState(() {
         _batchStudents = [];
         _selectedStudentId = null;
-        _videos = [];
+        if (_targetType == 'student') _videos = [];
       });
       return;
     }
@@ -61,8 +67,13 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
         _batchStudents = students;
         _loadingStudents = false;
         _selectedStudentId = null;
-        _videos = [];
+        if (_targetType == 'student') _videos = [];
       });
+      
+      // If in batch mode, load videos for batch immediately
+      if (_targetType == 'batch') {
+        _loadVideos();
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _loadingStudents = false);
@@ -73,18 +84,32 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
   }
 
   Future<void> _loadVideos() async {
-    if (_selectedStudentId == null) {
-      setState(() {
-        _videos = [];
-        _uploaderNames = {};
-      });
+    // Validation based on target type
+    if (_targetType == 'student' && _selectedStudentId == null) {
+      setState(() => _videos = []);
+      return;
+    }
+    if (_targetType == 'batch' && _selectedBatchId == null) {
+      setState(() => _videos = []);
+      return;
+    }
+    if (_targetType == 'session' && _selectedSessionId == null) {
+      setState(() => _videos = []);
       return;
     }
 
     setState(() => _loadingVideos = true);
     try {
       final videoService = ref.read(videoServiceProvider);
-      final videos = await videoService.getVideosForStudent(_selectedStudentId!);
+      List<VideoResource> videos = [];
+      
+      if (_targetType == 'student') {
+        videos = await videoService.getVideos(studentId: _selectedStudentId);
+      } else if (_targetType == 'batch') {
+        videos = await videoService.getVideos(batchId: _selectedBatchId);
+      } else if (_targetType == 'session') {
+        videos = await videoService.getVideos(sessionId: _selectedSessionId);
+      }
       
       // Fetch uploader names for videos that have uploadedBy
       final Map<int, String> uploaderNames = {};
@@ -130,7 +155,6 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
 
   Future<void> _pickVideos() async {
     try {
-      // Use pickVideo which is specifically for video selection
       final XFile? video = await _picker.pickVideo(source: ImageSource.gallery);
       if (video != null) {
         setState(() {
@@ -156,8 +180,16 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
       return;
     }
 
-    if (_selectedStudentId == null) {
+    if (_targetType == 'student' && _selectedStudentId == null) {
       SuccessSnackbar.showError(context, 'Please select a student first');
+      return;
+    }
+    if (_targetType == 'batch' && _selectedBatchId == null) {
+      SuccessSnackbar.showError(context, 'Please select a batch first');
+      return;
+    }
+    if (_targetType == 'session' && _selectedSessionId == null) {
+      SuccessSnackbar.showError(context, 'Please select a session first');
       return;
     }
 
@@ -178,7 +210,9 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
       int completed = 0;
       for (final video in _selectedVideos) {
         await videoService.uploadVideoFromFile(
-          studentId: _selectedStudentId!,
+          studentId: _targetType == 'student' ? _selectedStudentId : null,
+          batchId: _targetType == 'batch' ? _selectedBatchId : null,
+          sessionId: _targetType == 'session' ? _selectedSessionId : null,
           videoFile: video,
           title: video.name,
           remarks: remarks,
@@ -240,8 +274,6 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final batchesAsync = ref.watch(batchListProvider);
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Video Management'),
@@ -249,7 +281,7 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
         elevation: 0,
       ),
       backgroundColor: AppColors.background,
-      floatingActionButton: _selectedStudentId != null && !_showUploadForm
+      floatingActionButton: _canUpload() && !_showUploadForm
           ? FloatingActionButton(
               onPressed: () => setState(() => _showUploadForm = true),
               backgroundColor: AppColors.accent,
@@ -261,94 +293,15 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Batch Selector
-            const Text(
-              'Select Batch',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            batchesAsync.when(
-              loading: () => const LinearProgressIndicator(),
-              error: (e, _) => Text('Error: $e', style: const TextStyle(color: AppColors.error)),
-              data: (batches) => NeumorphicContainer(
-                padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
-                child: DropdownButtonFormField<int>(
-                  value: _selectedBatchId,
-                  decoration: const InputDecoration(
-                    border: InputBorder.none,
-                    hintText: 'Select a batch',
-                    hintStyle: TextStyle(color: AppColors.textHint),
-                  ),
-                  dropdownColor: AppColors.cardBackground,
-                  style: const TextStyle(color: AppColors.textPrimary),
-                  items: batches.map((batch) {
-                    return DropdownMenuItem<int>(
-                      value: batch.id,
-                      child: Text(batch.name),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setState(() => _selectedBatchId = value);
-                    _loadBatchStudents();
-                  },
-                ),
-              ),
-            ),
-
+            _buildTargetSelector(),
             const SizedBox(height: AppDimensions.spacingL),
-
-            // Student Selector
-            if (_selectedBatchId != null) ...[
-              const Text(
-                'Select Student',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: AppDimensions.spacingS),
-              if (_loadingStudents)
-                const LinearProgressIndicator()
-              else
-                NeumorphicContainer(
-                  padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
-                  child: DropdownButtonFormField<int>(
-                    value: _selectedStudentId,
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      hintText: 'Select a student',
-                      hintStyle: TextStyle(color: AppColors.textHint),
-                    ),
-                    dropdownColor: AppColors.cardBackground,
-                    style: const TextStyle(color: AppColors.textPrimary),
-                    items: _batchStudents.map((student) {
-                      return DropdownMenuItem<int>(
-                        value: student.id,
-                        child: Text(student.name),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedStudentId = value;
-                        _showUploadForm = false;
-                      });
-                      _loadVideos();
-                    },
-                  ),
-                ),
-            ],
-
+            _buildSelectors(),
             const SizedBox(height: AppDimensions.spacingL),
-
+            
             // Upload Form
-            if (_showUploadForm && _selectedStudentId != null) ...[
+            if (_showUploadForm && _canUpload()) ...[
               _buildUploadForm(),
-            ] else if (_selectedStudentId != null) ...[
+            ] else if (_canUpload()) ...[
               // Video List
               _buildVideoList(),
             ],
@@ -358,11 +311,251 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
     );
   }
 
-  Widget _buildUploadForm() {
-    final selectedStudent = _batchStudents.firstWhere(
-      (s) => s.id == _selectedStudentId,
-      orElse: () => Student(id: 0, name: 'Unknown', phone: '', email: '', status: 'active'),
+  bool _canUpload() {
+    if (_targetType == 'student') return _selectedStudentId != null;
+    if (_targetType == 'batch') return _selectedBatchId != null;
+    if (_targetType == 'session') return _selectedSessionId != null;
+    return false;
+  }
+
+  Widget _buildTargetSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Target Audience',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: AppDimensions.spacingS),
+        Row(
+          children: [
+            _buildChip('Individual Student', 'student'),
+            const SizedBox(width: AppDimensions.spacingM),
+            _buildChip('Whole Batch', 'batch'),
+            const SizedBox(width: AppDimensions.spacingM),
+            _buildChip('Whole Season', 'session'),
+          ],
+        ),
+      ],
     );
+  }
+
+  Widget _buildChip(String label, String value) {
+    final isSelected = _targetType == value;
+    return GestureDetector(
+      onTap: () {
+        if (_targetType != value) {
+          setState(() {
+            _targetType = value;
+            // Clear downstream selections but keep batch if switching between student/batch
+            if (value == 'session') {
+              _selectedBatchId = null;
+              _selectedStudentId = null;
+            } else if (value == 'batch') {
+              _selectedStudentId = null;
+            }
+            _showUploadForm = false;
+            _videos = [];
+          });
+          // Reload videos if switching to batch and batch is already selected
+          if (value == 'batch' && _selectedBatchId != null) {
+            _loadVideos();
+          }
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.accent : AppColors.cardBackground,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: AppColors.accent.withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  )
+                ]
+              : null,
+          border: isSelected ? null : Border.all(color: AppColors.elementBorder),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : AppColors.textSecondary,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            fontSize: 14,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSelectors() {
+    final batchesAsync = ref.watch(batchListProvider);
+    final sessionsAsync = ref.watch(sessionListProvider);
+
+    return Column(
+      children: [
+        // Session Dropdown (only for session target)
+        if (_targetType == 'session')
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Select Season/Session',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: AppDimensions.spacingS),
+              sessionsAsync.when(
+                loading: () => const LinearProgressIndicator(),
+                error: (e, _) => Text('Error: $e', style: const TextStyle(color: AppColors.error)),
+                data: (sessions) => NeumorphicContainer(
+                  padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
+                  child: DropdownButtonFormField<int>(
+                    value: _selectedSessionId,
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      hintText: 'Select a season',
+                      hintStyle: TextStyle(color: AppColors.textHint),
+                    ),
+                    dropdownColor: AppColors.cardBackground,
+                    style: const TextStyle(color: AppColors.textPrimary),
+                    items: sessions.where((s) => s.status == 'active').map((session) { // Only active by default? Or all? Let's show all but maybe sort active first.
+                      return DropdownMenuItem<int>(
+                        value: session.id,
+                        child: Text(session.name),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedSessionId = value;
+                        _showUploadForm = false;
+                      });
+                      _loadVideos();
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+        // Batch Dropdown (for student and batch targets)
+        if (_targetType == 'student' || _targetType == 'batch')
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Select Batch',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: AppDimensions.spacingS),
+              batchesAsync.when(
+                loading: () => const LinearProgressIndicator(),
+                error: (e, _) => Text('Error: $e', style: const TextStyle(color: AppColors.error)),
+                data: (batches) => NeumorphicContainer(
+                  padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
+                  child: DropdownButtonFormField<int>(
+                    value: _selectedBatchId,
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      hintText: 'Select a batch',
+                      hintStyle: TextStyle(color: AppColors.textHint),
+                    ),
+                    dropdownColor: AppColors.cardBackground,
+                    style: const TextStyle(color: AppColors.textPrimary),
+                    items: batches.map((batch) {
+                      return DropdownMenuItem<int>(
+                        value: batch.id,
+                        child: Text(batch.name),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedBatchId = value;
+                        _selectedStudentId = null;
+                        _showUploadForm = false;
+                      });
+                      _loadBatchStudents();
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+        const SizedBox(height: AppDimensions.spacingL),
+
+        // Student Dropdown (only for student target and when batch selected)
+        if (_targetType == 'student' && _selectedBatchId != null) ...[
+          const Text(
+            'Select Student',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: AppDimensions.spacingS),
+          if (_loadingStudents)
+            const LinearProgressIndicator()
+          else
+            NeumorphicContainer(
+              padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
+              child: DropdownButtonFormField<int>(
+                value: _selectedStudentId,
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  hintText: 'Select a student',
+                  hintStyle: TextStyle(color: AppColors.textHint),
+                ),
+                dropdownColor: AppColors.cardBackground,
+                style: const TextStyle(color: AppColors.textPrimary),
+                items: _batchStudents.map((student) {
+                  return DropdownMenuItem<int>(
+                    value: student.id,
+                    child: Text(student.name),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  setState(() {
+                    _selectedStudentId = value;
+                    _showUploadForm = false;
+                  });
+                  _loadVideos();
+                },
+              ),
+            ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildUploadForm() {
+    String targetName = 'Unknown';
+    if (_targetType == 'student' && _selectedStudentId != null) {
+      final student = _batchStudents.firstWhere(
+        (s) => s.id == _selectedStudentId,
+        orElse: () => Student(id: 0, name: 'Unknown', phone: '', email: '', status: 'active'),
+      );
+      targetName = student.name;
+    } else if (_targetType == 'batch') {
+      targetName = 'Whole Batch';
+    } else if (_targetType == 'session') {
+      targetName = 'Entire Season';
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -390,15 +583,18 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
         ),
         const SizedBox(height: AppDimensions.spacingM),
 
-        // Student Info
+        // Target Info
         NeumorphicContainer(
           padding: const EdgeInsets.all(AppDimensions.paddingM),
           child: Row(
             children: [
-              const Icon(Icons.person_outline, color: AppColors.accent),
+              Icon(
+                _targetType == 'student' ? Icons.person_outline : (_targetType == 'batch' ? Icons.group_outlined : Icons.calendar_today_outlined),
+                color: AppColors.accent
+              ),
               const SizedBox(width: AppDimensions.spacingM),
               Text(
-                'Uploading for: ${selectedStudent.name}',
+                'Uploading for: $targetName',
                 style: const TextStyle(
                   fontSize: 16,
                   color: AppColors.textPrimary,
@@ -573,7 +769,7 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
             ),
             const SizedBox(height: AppDimensions.spacingM),
             const Text(
-              'No videos yet',
+              'No videos found',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
@@ -582,7 +778,7 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
             ),
             const SizedBox(height: AppDimensions.spacingS),
             const Text(
-              'Tap + to upload training videos',
+              'Select a target and tap + to upload',
               style: TextStyle(
                 fontSize: 14,
                 color: AppColors.textHint,

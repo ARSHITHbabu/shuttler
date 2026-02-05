@@ -11,12 +11,16 @@ class VideoService {
 
   VideoService(this._apiService);
 
-  /// Get all videos for a specific student
-  Future<List<VideoResource>> getVideosForStudent(int studentId) async {
+  Future<List<VideoResource>> getVideos({int? studentId, int? batchId, int? sessionId}) async {
     try {
+      final queryParams = <String, dynamic>{};
+      if (studentId != null) queryParams['student_id'] = studentId;
+      if (batchId != null) queryParams['batch_id'] = batchId;
+      if (sessionId != null) queryParams['session_id'] = sessionId;
+
       final response = await _apiService.get(
         ApiEndpoints.videoResources,
-        queryParameters: {'student_id': studentId},
+        queryParameters: queryParams,
       );
 
       if (response.data is List) {
@@ -28,6 +32,11 @@ class VideoService {
     } catch (e) {
       throw Exception('Failed to fetch videos: ${_apiService.getErrorMessage(e)}');
     }
+  }
+
+  /// Get all videos for a specific student (Legacy wrapper)
+  Future<List<VideoResource>> getVideosForStudent(int studentId) async {
+    return getVideos(studentId: studentId);
   }
 
   /// Get all videos (for owner view)
@@ -59,7 +68,9 @@ class VideoService {
   /// Upload a video for a student
   /// Supports both file paths (mobile/desktop) and XFile (web)
   Future<VideoResource> uploadVideo({
-    required int studentId,
+    int? studentId,
+    int? batchId,
+    int? sessionId,
     required String videoFilePath,
     String? title,
     String? remarks,
@@ -68,7 +79,9 @@ class VideoService {
   }) async {
     try {
       final additionalData = <String, dynamic>{
-        'student_id': studentId,
+        if (studentId != null) 'student_id': studentId,
+        if (batchId != null) 'batch_id': batchId,
+        if (sessionId != null) 'session_id': sessionId,
         if (title != null) 'title': title,
         if (remarks != null) 'remarks': remarks,
         if (uploadedBy != null) 'uploaded_by': uploadedBy,
@@ -90,7 +103,9 @@ class VideoService {
 
   /// Upload a video from XFile (supports web and mobile)
   Future<VideoResource> uploadVideoFromFile({
-    required int studentId,
+    int? studentId,
+    int? batchId,
+    int? sessionId,
     required XFile videoFile,
     String? title,
     String? remarks,
@@ -99,7 +114,9 @@ class VideoService {
   }) async {
     try {
       final additionalData = <String, dynamic>{
-        'student_id': studentId,
+        if (studentId != null) 'student_id': studentId,
+        if (batchId != null) 'batch_id': batchId,
+        if (sessionId != null) 'session_id': sessionId,
         if (title != null) 'title': title,
         if (remarks != null) 'remarks': remarks,
         if (uploadedBy != null) 'uploaded_by': uploadedBy,
@@ -137,7 +154,9 @@ class VideoService {
 
   /// Upload multiple videos for a student
   Future<List<VideoResource>> uploadMultipleVideos({
-    required int studentId,
+    int? studentId,
+    int? batchId,
+    int? sessionId,
     required List<String> videoPaths,
     String? remarks,
     int? uploadedBy,
@@ -148,6 +167,8 @@ class VideoService {
     for (int i = 0; i < videoPaths.length; i++) {
       final video = await uploadVideo(
         studentId: studentId,
+        batchId: batchId,
+        sessionId: sessionId,
         videoFilePath: videoPaths[i],
         remarks: remarks,
         uploadedBy: uploadedBy,
