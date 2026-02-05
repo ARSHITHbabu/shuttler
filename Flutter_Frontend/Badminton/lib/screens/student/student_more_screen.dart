@@ -169,7 +169,9 @@ class _StudentMoreScreenState extends ConsumerState<StudentMoreScreen> {
           onBack: () => setState(() => _currentView = null),
         );
       case 'notifications':
-        return const NotificationsScreen();
+        return NotificationsScreen(
+          onBack: () => setState(() => _currentView = null),
+        );
       case 'academy':
         return AcademyInfoScreen(
           onBack: () => setState(() => _currentView = null),
