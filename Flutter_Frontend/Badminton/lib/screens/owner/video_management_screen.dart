@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -9,8 +10,17 @@ import '../../widgets/common/confirmation_dialog.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/batch_provider.dart';
 import '../../providers/auth_provider.dart';
+import 'dart:io' if (dart.library.html) '../../utils/dart_io_stub.dart';
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import '../../core/constants/api_endpoints.dart';
+import '../../widgets/video/video_player_dialog.dart';
+import '../../utils/file_download_helper_stub.dart'
+    if (dart.library.html) '../../utils/file_download_helper_web.dart';
+import '../../utils/path_helper.dart';
 import '../../models/video_resource.dart';
 import '../../models/student.dart';
+import '../../models/batch.dart';
 
 /// Video Management Screen - Upload and manage training videos for students
 class VideoManagementScreen extends ConsumerStatefulWidget {
@@ -22,15 +32,20 @@ class VideoManagementScreen extends ConsumerStatefulWidget {
 
 class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
   int? _selectedBatchId;
-  int? _selectedStudentId;
+  List<int> _selectedTargetIds = [];
+  String _audienceType = 'student'; // 'all', 'batch', 'student'
   List<Student> _batchStudents = [];
+  List<Batch> _batches = [];
   List<VideoResource> _videos = [];
-  Map<int, String> _uploaderNames = {}; // Map of uploadedBy ID to name
+  Map<int, String> _uploaderNames = {}; 
   bool _loadingStudents = false;
   bool _loadingVideos = false;
   bool _showUploadForm = false;
   bool _isUploading = false;
+  bool _isDownloading = false;
+  int? _downloadingVideoId;
   double _uploadProgress = 0;
+  double _downloadProgress = 0;
 
   final List<XFile> _selectedVideos = [];
   final TextEditingController _remarksController = TextEditingController();
@@ -44,11 +59,11 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
 
   Future<void> _loadBatchStudents() async {
     if (_selectedBatchId == null) {
-      setState(() {
-        _batchStudents = [];
-        _selectedStudentId = null;
-        _videos = [];
-      });
+      if (mounted) {
+        setState(() {
+          _batchStudents = [];
+        });
+      }
       return;
     }
 
@@ -60,46 +75,37 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
       setState(() {
         _batchStudents = students;
         _loadingStudents = false;
-        _selectedStudentId = null;
-        _videos = [];
       });
     } catch (e) {
       if (!mounted) return;
       setState(() => _loadingStudents = false);
-      if (mounted) {
-        SuccessSnackbar.showError(context, 'Failed to load students: ${e.toString()}');
-      }
+      SuccessSnackbar.showError(context, 'Failed to load students: ${e.toString()}');
     }
   }
 
-  Future<void> _loadVideos() async {
-    if (_selectedStudentId == null) {
-      setState(() {
-        _videos = [];
-        _uploaderNames = {};
-      });
-      return;
-    }
-
+  Future<void> _loadInitialData() async {
     setState(() => _loadingVideos = true);
     try {
+      // Load all videos for management
       final videoService = ref.read(videoServiceProvider);
-      final videos = await videoService.getVideosForStudent(_selectedStudentId!);
-      
-      // Fetch uploader names for videos that have uploadedBy
+      final videos = await videoService.getAllVideos();
+      // Resolve uploader names
       final Map<int, String> uploaderNames = {};
       final ownerService = ref.read(ownerServiceProvider);
       final coachService = ref.read(coachServiceProvider);
       
       for (final video in videos) {
+        if (video.uploaderName != null && video.uploadedBy != null) {
+          uploaderNames[video.uploadedBy!] = video.uploaderName!;
+          continue;
+        }
+
         if (video.uploadedBy != null && !uploaderNames.containsKey(video.uploadedBy)) {
           try {
-            // Try to fetch as owner first
             try {
               final owner = await ownerService.getOwnerById(video.uploadedBy!);
               uploaderNames[video.uploadedBy!] = owner.name;
             } catch (_) {
-              // If not found as owner, try coach
               try {
                 final coach = await coachService.getCoachById(video.uploadedBy!);
                 uploaderNames[video.uploadedBy!] = coach.name;
@@ -107,7 +113,7 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
                 uploaderNames[video.uploadedBy!] = 'Unknown';
               }
             }
-          } catch (e) {
+          } catch (_) {
             uploaderNames[video.uploadedBy!] = 'Unknown';
           }
         }
@@ -119,11 +125,75 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
         _uploaderNames = uploaderNames;
         _loadingVideos = false;
       });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _loadingVideos = false);
+      
+      // Load batches for selection
+      final batchService = ref.read(batchServiceProvider);
+      final batches = await ref.read(batchListProvider.future);
       if (mounted) {
-        SuccessSnackbar.showError(context, 'Failed to load videos: ${e.toString()}');
+        setState(() {
+            _batches = batches;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingVideos = false);
+        SuccessSnackbar.showError(context, 'Failed to load initial data: ${e.toString()}');
+      }
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInitialData();
+  }
+
+  Future<void> _loadVideos() async {
+    setState(() => _loadingVideos = true);
+    try {
+      final videoService = ref.read(videoServiceProvider);
+      final videos = await videoService.getAllVideos();
+      
+      // Resolve uploader names
+      final Map<int, String> uploaderNames = {};
+      final ownerService = ref.read(ownerServiceProvider);
+      final coachService = ref.read(coachServiceProvider);
+      
+      for (final video in videos) {
+        if (video.uploaderName != null && video.uploadedBy != null) {
+          uploaderNames[video.uploadedBy!] = video.uploaderName!;
+          continue;
+        }
+
+        if (video.uploadedBy != null && !uploaderNames.containsKey(video.uploadedBy)) {
+          try {
+            try {
+              final owner = await ownerService.getOwnerById(video.uploadedBy!);
+              uploaderNames[video.uploadedBy!] = owner.name;
+            } catch (_) {
+              try {
+                final coach = await coachService.getCoachById(video.uploadedBy!);
+                uploaderNames[video.uploadedBy!] = coach.name;
+              } catch (_) {
+                uploaderNames[video.uploadedBy!] = 'Unknown';
+              }
+            }
+          } catch (_) {
+            uploaderNames[video.uploadedBy!] = 'Unknown';
+          }
+        }
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _videos = videos;
+        _uploaderNames = uploaderNames;
+        _loadingVideos = false;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingVideos = false);
+        SuccessSnackbar.showError(context, 'Failed to reload videos: ${e.toString()}');
       }
     }
   }
@@ -156,8 +226,8 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
       return;
     }
 
-    if (_selectedStudentId == null) {
-      SuccessSnackbar.showError(context, 'Please select a student first');
+    if (_audienceType != 'all' && _selectedTargetIds.isEmpty) {
+      SuccessSnackbar.showError(context, 'Please select at least one ${_audienceType}');
       return;
     }
 
@@ -178,7 +248,8 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
       int completed = 0;
       for (final video in _selectedVideos) {
         await videoService.uploadVideoFromFile(
-          studentId: _selectedStudentId!,
+          audienceType: _audienceType,
+          targetIds: _selectedTargetIds,
           videoFile: video,
           title: video.name,
           remarks: remarks,
@@ -205,6 +276,7 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
           _showUploadForm = false;
           _selectedVideos.clear();
           _remarksController.clear();
+          _selectedTargetIds = [];
         });
         SuccessSnackbar.show(context, 'Videos uploaded successfully');
         _loadVideos();
@@ -213,6 +285,96 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
       if (mounted) {
         setState(() => _isUploading = false);
         SuccessSnackbar.showError(context, 'Failed to upload videos: ${e.toString()}');
+      }
+    }
+  }
+
+  void _playVideo(VideoResource video) {
+    final fullUrl = '${ApiEndpoints.baseUrl}${video.url}';
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => VideoPlayerDialog(
+        videoUrl: fullUrl,
+        title: video.displayTitle,
+        remarks: video.remarks,
+      ),
+    );
+  }
+
+  Future<void> _downloadVideo(VideoResource video) async {
+    setState(() {
+      _isDownloading = true;
+      _downloadProgress = 0;
+      _downloadingVideoId = video.id;
+    });
+
+    try {
+      final dio = Dio();
+      final fullUrl = '${ApiEndpoints.baseUrl}${video.url}';
+      final fileName = video.title ?? 'video_${video.id}.mp4';
+
+      if (kIsWeb) {
+        final response = await dio.get<Uint8List>(
+          fullUrl,
+          options: Options(responseType: ResponseType.bytes),
+          onReceiveProgress: (received, total) {
+            if (total != -1 && mounted) {
+              setState(() => _downloadProgress = received / total);
+            }
+          },
+        );
+
+        if (response.data != null && mounted) {
+          downloadFileWeb(response.data!, fileName, 'video/mp4');
+          setState(() {
+            _isDownloading = false;
+            _downloadingVideoId = null;
+          });
+          SuccessSnackbar.show(context, 'Video download started');
+        }
+      } else {
+        final directoryPath = await getApplicationDocumentsPath();
+        if (directoryPath == null) {
+            if (mounted) {
+            setState(() {
+              _isDownloading = false;
+              _downloadingVideoId = null;
+            });
+            SuccessSnackbar.showError(context, 'Download directory not available');
+          }
+          return;
+        }
+
+        final directory = Directory(directoryPath);
+        if (!await directory.exists()) await directory.create(recursive: true);
+        final filePath = '${directory.path}/$fileName';
+
+        await dio.download(
+          fullUrl,
+          filePath,
+          onReceiveProgress: (received, total) {
+            if (total != -1 && mounted) {
+              setState(() => _downloadProgress = received / total);
+            }
+          },
+        );
+
+        if (mounted) {
+          setState(() {
+            _isDownloading = false;
+            _downloadingVideoId = null;
+          });
+          SuccessSnackbar.show(context, 'Video downloaded to $directoryPath');
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isDownloading = false;
+          _downloadingVideoId = null;
+        });
+        SuccessSnackbar.showError(context, 'Failed to download video: ${e.toString()}');
       }
     }
   }
@@ -240,8 +402,6 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final batchesAsync = ref.watch(batchListProvider);
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Video Management'),
@@ -249,7 +409,7 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
         elevation: 0,
       ),
       backgroundColor: AppColors.background,
-      floatingActionButton: _selectedStudentId != null && !_showUploadForm
+      floatingActionButton: !_showUploadForm
           ? FloatingActionButton(
               onPressed: () => setState(() => _showUploadForm = true),
               backgroundColor: AppColors.accent,
@@ -261,95 +421,9 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Batch Selector
-            const Text(
-              'Select Batch',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            batchesAsync.when(
-              loading: () => const LinearProgressIndicator(),
-              error: (e, _) => Text('Error: $e', style: const TextStyle(color: AppColors.error)),
-              data: (batches) => NeumorphicContainer(
-                padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
-                child: DropdownButtonFormField<int>(
-                  value: _selectedBatchId,
-                  decoration: const InputDecoration(
-                    border: InputBorder.none,
-                    hintText: 'Select a batch',
-                    hintStyle: TextStyle(color: AppColors.textHint),
-                  ),
-                  dropdownColor: AppColors.cardBackground,
-                  style: const TextStyle(color: AppColors.textPrimary),
-                  items: batches.map((batch) {
-                    return DropdownMenuItem<int>(
-                      value: batch.id,
-                      child: Text(batch.name),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setState(() => _selectedBatchId = value);
-                    _loadBatchStudents();
-                  },
-                ),
-              ),
-            ),
-
-            const SizedBox(height: AppDimensions.spacingL),
-
-            // Student Selector
-            if (_selectedBatchId != null) ...[
-              const Text(
-                'Select Student',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: AppDimensions.spacingS),
-              if (_loadingStudents)
-                const LinearProgressIndicator()
-              else
-                NeumorphicContainer(
-                  padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
-                  child: DropdownButtonFormField<int>(
-                    value: _selectedStudentId,
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      hintText: 'Select a student',
-                      hintStyle: TextStyle(color: AppColors.textHint),
-                    ),
-                    dropdownColor: AppColors.cardBackground,
-                    style: const TextStyle(color: AppColors.textPrimary),
-                    items: _batchStudents.map((student) {
-                      return DropdownMenuItem<int>(
-                        value: student.id,
-                        child: Text(student.name),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedStudentId = value;
-                        _showUploadForm = false;
-                      });
-                      _loadVideos();
-                    },
-                  ),
-                ),
-            ],
-
-            const SizedBox(height: AppDimensions.spacingL),
-
-            // Upload Form
-            if (_showUploadForm && _selectedStudentId != null) ...[
+            if (_showUploadForm) ...[
               _buildUploadForm(),
-            ] else if (_selectedStudentId != null) ...[
-              // Video List
+            ] else ...[
               _buildVideoList(),
             ],
           ],
@@ -359,11 +433,6 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
   }
 
   Widget _buildUploadForm() {
-    final selectedStudent = _batchStudents.firstWhere(
-      (s) => s.id == _selectedStudentId,
-      orElse: () => Student(id: 0, name: 'Unknown', phone: '', email: '', status: 'active'),
-    );
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -383,6 +452,7 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
                 _showUploadForm = false;
                 _selectedVideos.clear();
                 _remarksController.clear();
+                _selectedTargetIds = [];
               }),
               icon: const Icon(Icons.close, color: AppColors.textSecondary),
             ),
@@ -390,24 +460,32 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
         ),
         const SizedBox(height: AppDimensions.spacingM),
 
-        // Student Info
-        NeumorphicContainer(
-          padding: const EdgeInsets.all(AppDimensions.paddingM),
-          child: Row(
-            children: [
-              const Icon(Icons.person_outline, color: AppColors.accent),
-              const SizedBox(width: AppDimensions.spacingM),
-              Text(
-                'Uploading for: ${selectedStudent.name}',
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-            ],
+        // Audience Type Selector
+        const Text(
+          'Target Audience',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+            color: AppColors.textSecondary,
           ),
         ),
+        const SizedBox(height: AppDimensions.spacingS),
+        Row(
+          children: [
+            _buildAudienceChip('Everyone', 'all'),
+            const SizedBox(width: AppDimensions.spacingS),
+            _buildAudienceChip('Batches', 'batch'),
+            const SizedBox(width: AppDimensions.spacingS),
+            _buildAudienceChip('Individuals', 'student'),
+          ],
+        ),
         const SizedBox(height: AppDimensions.spacingM),
+
+        // Specific Target Selection
+        if (_audienceType == 'batch') _buildBatchMultiSelect(),
+        if (_audienceType == 'student') _buildStudentMultiSelect(),
+
+        const SizedBox(height: AppDimensions.spacingL),
 
         // Video Picker
         NeumorphicContainer(
@@ -556,6 +634,132 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
     );
   }
 
+  Widget _buildAudienceChip(String label, String type) {
+    final isSelected = _audienceType == type;
+    return GestureDetector(
+      onTap: () => setState(() {
+        _audienceType = type;
+        _selectedTargetIds = [];
+      }),
+      child: NeumorphicContainer(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? AppColors.accent : AppColors.textSecondary,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBatchMultiSelect() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Select Batches:', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: _batches.map((batch) {
+            final isSelected = _selectedTargetIds.contains(batch.id);
+            return FilterChip(
+              label: Text(batch.name),
+              selected: isSelected,
+              onSelected: (selected) {
+                setState(() {
+                  if (selected) {
+                    _selectedTargetIds.add(batch.id);
+                  } else {
+                    _selectedTargetIds.remove(batch.id);
+                  }
+                });
+              },
+              selectedColor: AppColors.accent.withOpacity(0.2),
+              checkmarkColor: AppColors.accent,
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStudentMultiSelect() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Select Batch First:', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        const SizedBox(height: 8),
+        NeumorphicContainer(
+          padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
+          child: DropdownButtonFormField<int>(
+            value: _selectedBatchId,
+            decoration: const InputDecoration(border: InputBorder.none, hintText: 'Select a batch'),
+            dropdownColor: AppColors.cardBackground,
+            items: _batches.map((batch) => DropdownMenuItem(value: batch.id, child: Text(batch.name))).toList(),
+            onChanged: (value) {
+              setState(() {
+                _selectedBatchId = value;
+                _selectedTargetIds = [];
+              });
+              _loadBatchStudents();
+            },
+          ),
+        ),
+        if (_selectedBatchId != null) ...[
+          const SizedBox(height: 16),
+          _loadingStudents 
+            ? const Center(child: CircularProgressIndicator())
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                        const Text('Select Students:', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                        TextButton(
+                            onPressed: () {
+                                setState(() {
+                                    if (_selectedTargetIds.length == _batchStudents.length) {
+                                        _selectedTargetIds = [];
+                                    } else {
+                                        _selectedTargetIds = _batchStudents.map((s) => s.id).toList();
+                                    }
+                                });
+                            },
+                            child: Text(_selectedTargetIds.length == _batchStudents.length ? 'Deselect All' : 'Select All'),
+                        ),
+                    ],
+                  ),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _batchStudents.map((student) {
+                      final isSelected = _selectedTargetIds.contains(student.id);
+                      return FilterChip(
+                        label: Text(student.name),
+                        selected: isSelected,
+                        onSelected: (selected) {
+                          setState(() {
+                            if (selected) {
+                              _selectedTargetIds.add(student.id);
+                            } else {
+                              _selectedTargetIds.remove(student.id);
+                            }
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildVideoList() {
     if (_loadingVideos) {
       return const Center(child: CircularProgressIndicator());
@@ -566,28 +770,9 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Icons.video_library_outlined,
-              size: 64,
-              color: AppColors.textHint,
-            ),
+            const Icon(Icons.video_library_outlined, size: 64, color: AppColors.textHint),
             const SizedBox(height: AppDimensions.spacingM),
-            const Text(
-              'No videos yet',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            const Text(
-              'Tap + to upload training videos',
-              style: TextStyle(
-                fontSize: 14,
-                color: AppColors.textHint,
-              ),
-            ),
+            const Text('No videos yet', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
           ],
         ),
       );
@@ -597,12 +782,8 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Videos (${_videos.length})',
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
-          ),
+          'Manage Videos (${_videos.length})',
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
         ),
         const SizedBox(height: AppDimensions.spacingM),
         ...List.generate(_videos.length, (index) {
@@ -617,6 +798,8 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
   }
 
   Widget _buildVideoCard(VideoResource video) {
+    final isDownloading = _isDownloading && _downloadingVideoId == video.id;
+
     return NeumorphicContainer(
       padding: const EdgeInsets.all(AppDimensions.paddingM),
       child: Column(
@@ -624,17 +807,16 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
         children: [
           Row(
             children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: AppColors.accent.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-                ),
-                child: const Icon(
-                  Icons.play_circle_outline,
-                  color: AppColors.accent,
-                  size: 30,
+              GestureDetector(
+                onTap: () => _playVideo(video),
+                child: Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    color: AppColors.accent.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                  ),
+                  child: const Icon(Icons.play_circle_outline, color: AppColors.accent, size: 30),
                 ),
               ),
               const SizedBox(width: AppDimensions.spacingM),
@@ -644,38 +826,23 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
                   children: [
                     Text(
                       video.displayTitle,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                      ),
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 4),
                     Text(
-                      video.formattedDate,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
-                      ),
+                      '${video.formattedDate} • ${video.audienceType.toUpperCase()}',
+                      style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                     ),
                     if (video.uploadedBy != null && _uploaderNames.containsKey(video.uploadedBy)) ...[
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 2),
                       Row(
                         children: [
-                          const Icon(
-                            Icons.person_outline,
-                            size: 14,
-                            color: AppColors.textSecondary,
-                          ),
+                          const Icon(Icons.person_outline, size: 12, color: AppColors.textSecondary),
                           const SizedBox(width: 4),
                           Text(
-                            'Uploaded by: ${_uploaderNames[video.uploadedBy]}',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: AppColors.textSecondary,
-                            ),
+                            'By: ${_uploaderNames[video.uploadedBy]}',
+                            style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
                           ),
                         ],
                       ),
@@ -683,9 +850,20 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
                   ],
                 ),
               ),
-              IconButton(
-                onPressed: () => _deleteVideo(video),
-                icon: const Icon(Icons.delete_outline, color: AppColors.error),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                   IconButton(
+                    onPressed: isDownloading ? null : () => _downloadVideo(video),
+                    icon: isDownloading
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.download_outlined, color: AppColors.accent),
+                  ),
+                  IconButton(
+                    onPressed: () => _deleteVideo(video),
+                    icon: const Icon(Icons.delete_outline, color: AppColors.error),
+                  ),
+                ],
               ),
             ],
           ),
