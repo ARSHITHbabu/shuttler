@@ -115,7 +115,7 @@ class CalendarEvent {
   IconData get eventIcon {
     switch (eventType.toLowerCase()) {
       case 'holiday':
-        return Icons.beach_access;
+        return Icons.celebration;
       case 'leave':
         return Icons.airplane_ticket;
       case 'tournament':
