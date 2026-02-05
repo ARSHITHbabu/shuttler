@@ -7,7 +7,7 @@ from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict, Any, Union
 from datetime import datetime, date, timedelta
 import json
 import os
@@ -496,6 +496,8 @@ def migrate_database_schema(engine):
         if 'coaches' in tables:
             check_and_add_column(engine, 'coaches', 'profile_photo', 'VARCHAR(500)', nullable=True)
             check_and_add_column(engine, 'coaches', 'fcm_token', 'VARCHAR(500)', nullable=True)
+            check_and_add_column(engine, 'coaches', 'monthly_salary', 'FLOAT', nullable=True)
+            check_and_add_column(engine, 'coaches', 'joining_date', 'DATE', nullable=True)
         
         # Migrate owners table
         if 'owners' in tables:
@@ -1411,6 +1413,48 @@ class Enquiry(BaseModel):
     
     class Config:
         from_attributes = True
+
+# Notification Models
+class Notification(BaseModel):
+    id: int
+    user_id: int
+    user_type: str
+    title: str
+    body: str
+    type: str
+    is_read: bool
+    created_at: Optional[str] = None # Return as ISO string
+    data: Optional[Dict[str, Any]] = None
+
+    class Config:
+        from_attributes = True
+
+# ==================== Helper Functions ====================
+
+def create_notification(db, user_id: int, user_type: str, title: str, body: str, type: str = "general", data: Optional[Dict[str, Any]] = None):
+    """Helper to create a notification for a user"""
+    try:
+        # Debug check
+        print(f"Creating notification for {user_type} {user_id}: {title}")
+        
+        notification = NotificationDB(
+            user_id=user_id,
+            user_type=user_type,
+            title=title,
+            body=body,
+            type=type,
+            data=data,
+            is_read=False
+        )
+        db.add(notification)
+        db.commit()
+        db.refresh(notification)
+        return notification
+    except Exception as e:
+        print(f"❌ Error creating notification: {e}")
+        traceback.print_exc()
+        return None
+
 
 class EnquiryUpdate(BaseModel):
     status: Optional[str] = None
@@ -2936,6 +2980,23 @@ def assign_student_to_batch(batch_id: int, student_id: int):
         db.add(db_assignment)
         db.commit()
         
+        db.commit()
+        
+        # Notify Student
+        try:
+            batch = db.query(BatchDB).filter(BatchDB.id == batch_id).first()
+            create_notification(
+                db=db,
+                user_id=student_id,
+                user_type="student",
+                title="Added to Batch",
+                body=f"You have been added to batch: {batch.batch_name}",
+                type="general",
+                data={"batch_id": batch_id}
+            )
+        except Exception as e:
+            print(f"Error sending batch notification: {e}")
+
         return {"message": "Student assigned successfully"}
     finally:
         db.close()
@@ -3338,12 +3399,42 @@ def mark_attendance(attendance: AttendanceCreate):
                 setattr(existing, key, value)
             db.commit()
             db.refresh(existing)
+            
+            # Notify Student on Update
+            try:
+                create_notification(
+                    db=db,
+                    user_id=existing.student_id,
+                    user_type="student",
+                    title="Attendance Updated",
+                    body=f"Your attendance for {existing.date} has been updated to: {existing.status}",
+                    type="attendance",
+                    data={"attendance_id": existing.id}
+                )
+            except Exception as e:
+                print(f"Error sending attendance update notification: {e}")
+                
             return existing
         else:
             db_attendance = AttendanceDB(**attendance.model_dump())
             db.add(db_attendance)
             db.commit()
             db.refresh(db_attendance)
+            
+            # Notify Student on Creation
+            try:
+                create_notification(
+                    db=db,
+                    user_id=db_attendance.student_id,
+                    user_type="student",
+                    title="Attendance Marked",
+                    body=f"Your attendance for {db_attendance.date} has been marked as: {db_attendance.status}",
+                    type="attendance",
+                    data={"attendance_id": db_attendance.id}
+                )
+            except Exception as e:
+                print(f"Error sending attendance notification: {e}")
+                
             return db_attendance
     finally:
         db.close()
@@ -5544,6 +5635,31 @@ def create_announcement(announcement: AnnouncementCreate):
         db.add(db_announcement)
         db.commit()
         db.refresh(db_announcement)
+        
+        # Notify Target Audience
+        try:
+            target_users = []
+            if db_announcement.target_audience == "all":
+                target_users.extend([(s.id, "student") for s in db.query(StudentDB).filter(StudentDB.status == "active").all()])
+                target_users.extend([(c.id, "coach") for c in db.query(CoachDB).filter(CoachDB.status == "active").all()])
+            elif db_announcement.target_audience == "students":
+                target_users.extend([(s.id, "student") for s in db.query(StudentDB).filter(StudentDB.status == "active").all()])
+            elif db_announcement.target_audience == "coaches":
+                target_users.extend([(c.id, "coach") for c in db.query(CoachDB).filter(CoachDB.status == "active").all()])
+            
+            for uid, utype in target_users:
+                create_notification(
+                    db=db, 
+                    user_id=uid, 
+                    user_type=utype, 
+                    title=f"New Announcement: {db_announcement.title}", 
+                    body=db_announcement.message, 
+                    type="announcement",
+                    data={"announcement_id": db_announcement.id}
+                )
+        except Exception as e:
+            print(f"Error sending announcement notifications: {e}")
+
         return _db_announcement_to_pydantic(db_announcement)
     except HTTPException:
         db.rollback()
@@ -5629,78 +5745,6 @@ def delete_announcement(announcement_id: int):
         db.delete(db_announcement)
         db.commit()
         return {"message": "Announcement deleted successfully"}
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        db.close()
-
-# ==================== Notification Endpoints ====================
-
-@app.post("/api/notifications/", response_model=Notification)
-def create_notification(notification: NotificationCreate):
-    """Create a new notification"""
-    db = SessionLocal()
-    try:
-        db_notification = NotificationDB(**notification.dict())
-        db.add(db_notification)
-        db.commit()
-        db.refresh(db_notification)
-
-        # TODO: Send push notification via FCM here (optional for Phase 0)
-        # if fcm_token exists for user, send push notification
-
-        return db_notification
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        db.close()
-
-@app.get("/api/notifications/{user_id}", response_model=List[Notification])
-def get_user_notifications(user_id: int, user_type: str):
-    """Get all notifications for a specific user"""
-    db = SessionLocal()
-    try:
-        notifications = db.query(NotificationDB).filter(
-            NotificationDB.user_id == user_id,
-            NotificationDB.user_type == user_type
-        ).order_by(NotificationDB.created_at.desc()).all()
-        return notifications
-    finally:
-        db.close()
-
-@app.put("/api/notifications/{notification_id}/read", response_model=Notification)
-def mark_notification_read(notification_id: int):
-    """Mark a notification as read"""
-    db = SessionLocal()
-    try:
-        db_notification = db.query(NotificationDB).filter(NotificationDB.id == notification_id).first()
-        if not db_notification:
-            raise HTTPException(status_code=404, detail="Notification not found")
-
-        db_notification.is_read = True
-        db.commit()
-        db.refresh(db_notification)
-        return db_notification
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        db.close()
-
-@app.delete("/api/notifications/{notification_id}")
-def delete_notification(notification_id: int):
-    """Delete a notification"""
-    db = SessionLocal()
-    try:
-        db_notification = db.query(NotificationDB).filter(NotificationDB.id == notification_id).first()
-        if not db_notification:
-            raise HTTPException(status_code=404, detail="Notification not found")
-
-        db.delete(db_notification)
-        db.commit()
-        return {"message": "Notification deleted successfully"}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
@@ -5955,6 +5999,22 @@ def create_leave_request(request: LeaveRequestCreate):
         db.commit()
         db.refresh(db_request)
         
+        # Notify Owners
+        try:
+            owners = db.query(OwnerDB).filter(OwnerDB.role == "owner").all()
+            for owner in owners:
+                create_notification(
+                    db=db,
+                    user_id=owner.id,
+                    user_type="owner",
+                    title="New Leave Request",
+                    body=f"Coach {db_request.coach_name} has requested {db_request.leave_type} leave from {db_request.start_date} to {db_request.end_date}",
+                    type="general",
+                    data={"leave_request_id": db_request.id}
+                )
+        except Exception as e:
+            print(f"Error sending leave notifications: {e}")
+        
         # Convert to response model
         return LeaveRequest(
             id=db_request.id,
@@ -6148,18 +6208,6 @@ def update_leave_request(request_id: int, update: LeaveRequestUpdate, owner_id: 
             raise HTTPException(status_code=404, detail="Owner not found")
         
         # Get leave request
-        db_request = db.query(LeaveRequestDB).filter(LeaveRequestDB.id == request_id).first()
-        if not db_request:
-            raise HTTPException(status_code=404, detail="Leave request not found")
-        
-        # Validate status
-        if update.status not in ["approved", "rejected"]:
-            raise HTTPException(status_code=400, detail="Status must be 'approved' or 'rejected'")
-        
-        # Update request
-        from datetime import datetime, timedelta
-        db_request.status = update.status
-        db_request.reviewed_by = owner_id
         db_request.reviewed_at = datetime.now()
         db_request.review_notes = update.review_notes
         
@@ -6200,6 +6248,21 @@ def update_leave_request(request_id: int, update: LeaveRequestUpdate, owner_id: 
         
         db.commit()
         db.refresh(db_request)
+        
+        # Notify Coach
+        try:
+            notif_title = "Leave Request Approved" if update.status == "approved" else "Leave Request Rejected"
+            create_notification(
+                db=db,
+                user_id=db_request.coach_id,
+                user_type="coach", 
+                title=notif_title,
+                body=f"Your {db_request.leave_type} leave request has been {update.status}.",
+                type="general",
+                data={"leave_request_id": db_request.id, "status": update.status}
+            )
+        except Exception as e:
+            print(f"Error sending leave update notification: {e}")
         
         # Convert to response model
         return LeaveRequest(
@@ -6471,6 +6534,28 @@ def create_student_registration_request(request: StudentRegistrationRequestCreat
         db.commit()
         db.refresh(db_request)
         
+        # Notify Owners
+        try:
+            owners = db.query(OwnerDB).filter(OwnerDB.role == "owner").all()
+            for owner in owners:
+                notif_body = f"New registration request from {db_request.name}"
+                if invited_by_coach_id:
+                     coach = db.query(CoachDB).filter(CoachDB.id == invited_by_coach_id).first()
+                     if coach:
+                         notif_body += f" (invited by {coach.name})"
+                         
+                create_notification(
+                    db=db,
+                    user_id=owner.id,
+                    user_type="owner",
+                    title="Student Registration Request",
+                    body=notif_body,
+                    type="general",
+                    data={"registration_request_id": db_request.id}
+                )
+        except Exception as e:
+            print(f"Error sending registration notification: {e}")
+        
         # Get coach name if invited
         invited_by_coach_name = None
         if invited_by_coach_id:
@@ -6722,6 +6807,153 @@ async def get_uploaded_image(filename: str):
         raise HTTPException(status_code=404, detail="Image not found")
 
     return FileResponse(file_path)
+
+# ==================== Notification Routes ====================
+
+def check_and_create_fee_notifications(db, user_id: int, user_type: str):
+    """
+    Check for overdue fees and create notifications if they don't exist.
+    Run this lazily when fetching notifications.
+    """
+    if user_type != 'student':
+        return
+
+    try:
+        today_str = date.today().strftime("%Y-%m-%d")
+        
+        # Find overdue fees for this student
+        overdue_fees = db.query(FeeDB).filter(
+            FeeDB.student_id == user_id,
+            FeeDB.status == "pending",
+            FeeDB.due_date < today_str
+        ).all()
+        
+        # Check if we already notified about these fees
+        # Get all fee_due notifications for this user
+        existing_notifs = db.query(NotificationDB).filter(
+            NotificationDB.user_id == user_id,
+            NotificationDB.user_type == user_type,
+            NotificationDB.type == "fee_due"
+        ).all()
+        
+        notified_fee_ids = set()
+        for n in existing_notifs:
+            if n.data and isinstance(n.data, dict) and 'fee_id' in n.data:
+                notified_fee_ids.add(n.data['fee_id'])
+        
+        # Create notifications for un-notified overdue fees
+        for fee in overdue_fees:
+            if fee.id not in notified_fee_ids:
+                # Also check batch name for context
+                batch = db.query(BatchDB).filter(BatchDB.id == fee.batch_id).first()
+                batch_name = batch.batch_name if batch else "Batch"
+                
+                create_notification(
+                    db=db,
+                    user_id=user_id,
+                    user_type=user_type,
+                    title="Fee Payment Overdue",
+                    body=f"Your fee payment of {fee.amount} for {batch_name} was due on {fee.due_date}. Please pay immediately.",
+                    type="fee_due",
+                    data={"fee_id": fee.id, "batch_id": fee.batch_id}
+                )
+    except Exception as e:
+        print(f"Error checking fee notifications: {e}")
+
+@app.get("/api/notifications/{user_id}", response_model=List[Notification])
+def get_user_notifications(
+    user_id: int, 
+    user_type: str = Query(..., regex="^(student|coach|owner)$"),
+    type: Optional[str] = None,
+    is_read: Optional[bool] = None
+):
+    """Get notifications for a user with optional filters"""
+    db = SessionLocal()
+    try:
+        # Lazy check for fees
+        if user_type == 'student':
+            check_and_create_fee_notifications(db, user_id, user_type)
+        
+        query = db.query(NotificationDB).filter(
+            NotificationDB.user_id == user_id,
+            NotificationDB.user_type == user_type
+        )
+        
+        if type and type != 'all':
+            query = query.filter(NotificationDB.type == type)
+            
+        if is_read is not None:
+            query = query.filter(NotificationDB.is_read == is_read)
+            
+        # Order by newest first
+        notifications = query.order_by(NotificationDB.created_at.desc()).all()
+        
+        # Convert to Pydantic models
+        return [
+            Notification(
+                id=n.id,
+                user_id=n.user_id,
+                user_type=n.user_type,
+                title=n.title,
+                body=n.body,
+                type=n.type,
+                is_read=n.is_read,
+                created_at=n.created_at.isoformat() if n.created_at else "",
+                data=n.data
+            ) for n in notifications
+        ]
+    finally:
+        db.close()
+
+@app.put("/api/notifications/{notification_id}/read")
+def mark_notification_read(notification_id: int):
+    """Mark a notification as read"""
+    db = SessionLocal()
+    try:
+        notif = db.query(NotificationDB).filter(NotificationDB.id == notification_id).first()
+        if not notif:
+            raise HTTPException(status_code=404, detail="Notification not found")
+            
+        notif.is_read = True
+        db.commit()
+        return {"success": True}
+    finally:
+        db.close()
+
+@app.put("/api/notifications/read-all")
+def mark_all_notifications_read(request: Dict[str, Any]):
+    """Mark multiple notifications as read"""
+    # Expects {"ids": [1, 2, 3]}
+    ids = request.get("ids", [])
+    if not ids:
+        return {"success": True, "count": 0}
+        
+    db = SessionLocal()
+    try:
+        db.query(NotificationDB).filter(
+            NotificationDB.id.in_(ids)
+        ).update({"is_read": True}, synchronize_session=False)
+        
+        db.commit()
+        return {"success": True, "count": len(ids)}
+    finally:
+        db.close()
+
+@app.delete("/api/notifications/{notification_id}")
+def delete_notification(notification_id: int):
+    """Delete a notification"""
+    db = SessionLocal()
+    try:
+        notif = db.query(NotificationDB).filter(NotificationDB.id == notification_id).first()
+        if not notif:
+            raise HTTPException(status_code=404, detail="Notification not found")
+            
+        db.delete(notif)
+        db.commit()
+        return {"success": True}
+    finally:
+        db.close()
+
 
 # ==================== Server ====================
 
