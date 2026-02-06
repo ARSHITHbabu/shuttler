@@ -3,22 +3,26 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
+
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
-import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../providers/service_providers.dart';
+import '../../models/session.dart';
+import '../../models/batch.dart';
 
-// Conditional imports for web file download
+// Placeholder for web download helper
 import '../../utils/file_download_helper_stub.dart'
     if (dart.library.html) '../../utils/file_download_helper_web.dart';
 
-/// Reports Screen - Generate and view reports
-/// Matches React reference: ReportsScreen.tsx
+enum ReportType { attendance, fee, performance }
+enum FilterType { season, year, month }
+
 class ReportsScreen extends ConsumerStatefulWidget {
   const ReportsScreen({super.key});
 
@@ -27,1206 +31,258 @@ class ReportsScreen extends ConsumerStatefulWidget {
 }
 
 class _ReportsScreenState extends ConsumerState<ReportsScreen> {
-  String? _selectedType; // 'attendance', 'fee', 'performance'
-  DateTime? _startDate;
-  DateTime? _endDate;
-  int? _selectedBatchId;
-  int? _selectedStudentId;
-  String? _selectedStatus;
-  bool _isGenerating = false;
-  Map<String, dynamic>? _generatedReport;
+  ReportType _reportType = ReportType.attendance;
+  FilterType _filterType = FilterType.season;
+  
+  // Selections
+  String? _selectedSeasonId; // Session ID
+  int _selectedYear = DateTime.now().year;
+  DateTime _selectedMonth = DateTime.now();
+  String _selectedBatchId = 'all';
 
-  final List<Map<String, dynamic>> _reportTypes = [
-    {
-      'id': 'attendance',
-      'icon': Icons.people_outline,
-      'title': 'Attendance Report',
-      'description': 'Student attendance summary',
-    },
-    {
-      'id': 'fee',
-      'icon': Icons.attach_money_outlined,
-      'title': 'Fee Report',
-      'description': 'Fee collection & pending',
-    },
-    {
-      'id': 'performance',
-      'icon': Icons.trending_up,
-      'title': 'Performance Report',
-      'description': 'Student skill progress',
-    },
-  ];
+  // Data
+  List<dynamic> _seasons = []; // Use dynamic or Session model
+  List<dynamic> _allBatches = [];
+  List<dynamic> _filteredBatches = [];
+  
+  Map<String, dynamic>? _reportData;
+  bool _isLoading = false;
+  bool _isInitializing = true;
 
-  Future<void> _generateReport() async {
-    if (_startDate == null || _endDate == null) {
-      SuccessSnackbar.showError(context, 'Please select start and end dates');
-      return;
-    }
+  @override
+  void initState() {
+    super.initState();
+    _loadInitialData();
+  }
 
-    setState(() {
-      _isGenerating = true;
-      _generatedReport = null;
-    });
-
+  Future<void> _loadInitialData() async {
     try {
-      if (_selectedType == 'attendance') {
-        final attendanceService = ref.read(attendanceServiceProvider);
-        final attendance = await attendanceService.getAttendance(
-          startDate: _startDate!,
-          endDate: _endDate!,
-          batchId: _selectedBatchId,
-        );
-
-        final totalDays = _endDate!.difference(_startDate!).inDays + 1;
-        final presentCount = attendance.where((a) => a.status == 'present').length;
-        final absentCount = attendance.where((a) => a.status == 'absent').length;
-        final attendanceRate = attendance.isEmpty
-            ? 0.0
-            : (presentCount / attendance.length) * 100;
-
-        setState(() {
-          _generatedReport = {
-            'type': 'Attendance Report',
-            'period': '${_startDate!.day}/${_startDate!.month}/${_startDate!.year} - ${_endDate!.day}/${_endDate!.month}/${_endDate!.year}',
-            'generatedOn': DateTime.now().toIso8601String().split('T')[0],
-            'data': {
-              'totalDays': totalDays,
-              'totalRecords': attendance.length,
-              'presentCount': presentCount,
-              'absentCount': absentCount,
-              'attendanceRate': attendanceRate,
-              'attendance': attendance,
-            },
-          };
-        });
-      } else if (_selectedType == 'fee') {
-        final feeService = ref.read(feeServiceProvider);
-        final fees = await feeService.getFees(
-          startDate: _startDate!,
-          endDate: _endDate!,
-          status: _selectedStatus,
-          studentId: _selectedStudentId,
-        );
-
-        double totalAmount = 0.0;
-        double paidAmount = 0.0;
-        double pendingAmount = 0.0;
-        
-        for (final fee in fees) {
-          totalAmount += fee.amount;
-          if (fee.status == 'paid') {
-            paidAmount += fee.amount;
-          } else if (fee.status == 'pending') {
-            pendingAmount += fee.amount;
-          }
-        }
-
-        setState(() {
-          _generatedReport = {
-            'type': 'Fee Report',
-            'period': '${_startDate!.day}/${_startDate!.month}/${_startDate!.year} - ${_endDate!.day}/${_endDate!.month}/${_endDate!.year}',
-            'generatedOn': DateTime.now().toIso8601String().split('T')[0],
-            'data': {
-              'totalFees': fees.length,
-              'totalAmount': totalAmount,
-              'paidAmount': paidAmount,
-              'pendingAmount': pendingAmount,
-              'fees': fees,
-            },
-          };
-        });
-      } else if (_selectedType == 'performance') {
-        // Performance reports would need a performance service
-        // For now, show a placeholder
-        setState(() {
-          _generatedReport = {
-            'type': 'Performance Report',
-            'period': '${_startDate!.day}/${_startDate!.month}/${_startDate!.year} - ${_endDate!.day}/${_endDate!.month}/${_endDate!.year}',
-            'generatedOn': DateTime.now().toIso8601String().split('T')[0],
-            'data': {
-              'message': 'Performance report generation coming soon',
-            },
-          };
-        });
-      }
-
+      final sessionService = ref.read(sessionServiceProvider);
+      final batchService = ref.read(batchServiceProvider);
+      
+      // Fetch seasons and batches
+      final seasons = await sessionService.getSessions();
+      final batches = await batchService.getBatches();
+      
       if (mounted) {
-        SuccessSnackbar.show(context, 'Report generated successfully');
+        setState(() {
+          _seasons = seasons;
+          _allBatches = batches;
+          // Set default season if available
+          if (_seasons.isNotEmpty) {
+             // Find active season or first
+             _selectedSeasonId = _seasons.last.id.toString(); 
+          }
+          _filterBatches();
+          _isInitializing = false;
+        });
       }
     } catch (e) {
       if (mounted) {
-        SuccessSnackbar.showError(context, 'Error generating report: ${e.toString()}');
+        SuccessSnackbar.showError(context, 'Error loading data: $e');
+        setState(() => _isInitializing = false);
       }
-    } finally {
+    }
+  }
+
+  void _filterBatches() {
+    // Filter batches based on current selection
+    // In strict mode, we should filter by season only when Season is selected
+    if (_filterType == FilterType.season && _selectedSeasonId != null) {
+      _filteredBatches = _allBatches.where((b) {
+         try {
+           return b.sessionId.toString() == _selectedSeasonId;
+         } catch (e) {
+           return false;
+         }
+      }).toList();
+    } else {
+      _filteredBatches = List.from(_allBatches);
+    }
+    
+    // Reset batch selection if invalid
+    if (_selectedBatchId != 'all') {
+      bool exists = _filteredBatches.any((b) => b.id.toString() == _selectedBatchId);
+      if (!exists) {
+        _selectedBatchId = 'all';
+      }
+    }
+  }
+
+  Future<void> _generateReport() async {
+    setState(() {
+      _isLoading = true;
+      _reportData = null;
+    });
+
+    try {
+      final reportService = ref.read(reportServiceProvider);
+      
+      String filterValue = "";
+      if (_filterType == FilterType.season) {
+        if (_selectedSeasonId == null) throw Exception("Please select a season");
+        filterValue = _selectedSeasonId!;
+      } else if (_filterType == FilterType.year) {
+        filterValue = _selectedYear.toString();
+      } else {
+        filterValue = DateFormat('yyyy-MM').format(_selectedMonth);
+      }
+
+      final data = await reportService.generateReport(
+        type: _reportType.name,
+        filterType: _filterType.name,
+        filterValue: filterValue,
+        batchId: _selectedBatchId,
+      );
+
       setState(() {
-        _isGenerating = false;
+        _reportData = data;
       });
+    } catch (e) {
+      SuccessSnackbar.showError(context, 'Failed to generate report: $e');
+    } finally {
+      setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_selectedType != null) {
-      return _buildReportConfig();
+    if (_isInitializing) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
     }
-
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
+        title: const Text('Reports', style: TextStyle(color: AppColors.textPrimary)),
         backgroundColor: AppColors.background,
         elevation: 0,
-        leading: IconButton(
-          icon: Icon(
-            Icons.arrow_back,
-            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-          ),
-          onPressed: () {
-            // Check if we can pop, otherwise navigate to home
-            if (Navigator.of(context).canPop()) {
-              Navigator.of(context).pop();
-            }
-          },
-        ),
-        title: Text(
-          'Reports',
-          style: TextStyle(
-            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        leading: const BackButton(color: AppColors.textPrimary),
       ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.backgroundGradient,
-        ),
-        child: SafeArea(
-          top: false,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              return SingleChildScrollView(
-                physics: const ClampingScrollPhysics(),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                  child: Padding(
-                    padding: const EdgeInsets.all(AppDimensions.paddingL),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Report Type Selection
-                        Column(
-                          children: _reportTypes.map((type) {
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
-                              child: NeumorphicContainer(
-                                padding: const EdgeInsets.all(AppDimensions.paddingL),
-                                onTap: () {
-                                  setState(() {
-                                    _selectedType = type['id'];
-                                  });
-                                },
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 48,
-                                      height: 48,
-                                      decoration: BoxDecoration(
-                                        color: AppColors.background,
-                                        borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-                                        boxShadow: NeumorphicStyles.getInsetShadow(),
-                                      ),
-                                      child: Icon(
-                                        type['icon'],
-                                        color: AppColors.iconPrimary,
-                                        size: 24,
-                                      ),
-                                    ),
-                                    const SizedBox(width: AppDimensions.spacingM),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            type['title'],
-                                            style: const TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w600,
-                                              color: AppColors.textPrimary,
-                                            ),
-                                          ),
-                                          Text(
-                                            type['description'],
-                                            style: const TextStyle(
-                                              fontSize: 12,
-                                              color: AppColors.textSecondary,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const Icon(
-                                      Icons.chevron_right,
-                                      color: AppColors.textTertiary,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-
-                        const SizedBox(height: AppDimensions.spacingXl),
-
-                        // Previously Generated Reports (if any)
-                        if (_generatedReport != null) ...[
-                          const SizedBox(height: AppDimensions.spacingXl),
-                          const Text(
-                            'Generated Report',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: AppDimensions.spacingM),
-                        ],
-
-                        const SizedBox(height: 100), // Space for bottom nav
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildReportConfig() {
-    final reportType = _reportTypes.firstWhere((r) => r['id'] == _selectedType);
-
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.backgroundGradient,
-        ),
-        child: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              return SingleChildScrollView(
-                physics: const ClampingScrollPhysics(),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                  child: Padding(
-                    padding: const EdgeInsets.all(AppDimensions.paddingL),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Back Button
-                        TextButton(
-                          onPressed: () {
-                            setState(() {
-                              _selectedType = null;
-                              _startDate = null;
-                              _endDate = null;
-                            });
-                          },
-                          child: const Text(
-                            '← Back',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: AppDimensions.spacingM),
-
-                        // Header
-                        Text(
-                          reportType['title'],
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text(
-                          'Configure and generate report',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                        const SizedBox(height: AppDimensions.spacingL),
-
-                        // Date Range
-                        NeumorphicContainer(
-                          padding: const EdgeInsets.all(AppDimensions.paddingM),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Select Date Range',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                              const SizedBox(height: AppDimensions.spacingM),
-                              _DatePickerField(
-                                label: 'Start Date',
-                                date: _startDate,
-                                onDateSelected: (date) {
-                                  setState(() {
-                                    _startDate = date;
-                                  });
-                                },
-                              ),
-                              const SizedBox(height: AppDimensions.spacingM),
-                              _DatePickerField(
-                                label: 'End Date',
-                                date: _endDate,
-                                onDateSelected: (date) {
-                                  setState(() {
-                                    _endDate = date;
-                                  });
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        const SizedBox(height: AppDimensions.spacingM),
-
-                        // Filters (based on report type)
-                        if (_selectedType == 'attendance')
-                          NeumorphicContainer(
-                            padding: const EdgeInsets.all(AppDimensions.paddingM),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Select Batch',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                                const SizedBox(height: AppDimensions.spacingS),
-                                NeumorphicInsetContainer(
-                                  padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
-                                  child: DropdownButton<String>(
-                                    value: 'all',
-                                    isExpanded: true,
-                                    underline: const SizedBox(),
-                                    dropdownColor: AppColors.cardBackground,
-                                    style: const TextStyle(color: AppColors.textPrimary),
-                                    items: const [
-                                      DropdownMenuItem(value: 'all', child: Text('All Batches')),
-                                      DropdownMenuItem(value: '1', child: Text('Morning Batch A')),
-                                      DropdownMenuItem(value: '2', child: Text('Evening Batch B')),
-                                      DropdownMenuItem(value: '3', child: Text('Weekend Batch')),
-                                    ],
-                                    onChanged: (value) {},
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-
-                        if (_selectedType == 'fee')
-                          NeumorphicContainer(
-                            padding: const EdgeInsets.all(AppDimensions.paddingM),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Status Filter',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                                const SizedBox(height: AppDimensions.spacingS),
-                                ...['All', 'Paid', 'Pending', 'Overdue'].map((status) {
-                                  final statusValue = status == 'All' ? null : status.toLowerCase();
-                                  final isSelected = _selectedStatus == statusValue;
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: AppDimensions.spacingS),
-                                    child: NeumorphicInsetContainer(
-                                      padding: const EdgeInsets.all(AppDimensions.spacingM),
-                                      child: Row(
-                                        children: [
-                                          Checkbox(
-                                            value: isSelected,
-                                            onChanged: (value) {
-                                              setState(() {
-                                                _selectedStatus = value ?? false ? statusValue : null;
-                                              });
-                                            },
-                                            activeColor: AppColors.accent,
-                                          ),
-                                          Expanded(
-                                            child: GestureDetector(
-                                              onTap: () {
-                                                setState(() {
-                                                  _selectedStatus = isSelected ? null : statusValue;
-                                                });
-                                              },
-                                              child: Text(
-                                                status,
-                                                style: TextStyle(
-                                                  fontSize: 14,
-                                                  color: AppColors.textPrimary,
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                }),
-                              ],
-                            ),
-                          ),
-
-                        const SizedBox(height: AppDimensions.spacingL),
-
-                        // Generate Button
-                        NeumorphicContainer(
-                          padding: const EdgeInsets.all(AppDimensions.paddingM),
-                          onTap: _isGenerating ? null : _generateReport,
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              if (_isGenerating)
-                                const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                )
-                              else
-                                const Icon(
-                                  Icons.description_outlined,
-                                  color: AppColors.iconActive,
-                                  size: 20,
-                                ),
-                              const SizedBox(width: AppDimensions.spacingS),
-                              Text(
-                                _isGenerating ? 'Generating...' : 'Generate Report',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: _isGenerating
-                                      ? AppColors.textSecondary
-                                      : AppColors.textPrimary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        // Generated Report Display
-                        if (_generatedReport != null) ...[
-                          const SizedBox(height: AppDimensions.spacingL),
-                          NeumorphicContainer(
-                            padding: const EdgeInsets.all(AppDimensions.paddingL),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      _generatedReport!['type'] as String,
-                                      style: const TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.textPrimary,
-                                      ),
-                                    ),
-                                    PopupMenuButton<String>(
-                                      icon: const Icon(
-                                        Icons.download_outlined,
-                                        color: AppColors.iconPrimary,
-                                      ),
-                                      itemBuilder: (context) => [
-                                        const PopupMenuItem(
-                                          value: 'csv',
-                                          child: Row(
-                                            children: [
-                                              Icon(Icons.table_chart, size: 18),
-                                              SizedBox(width: 8),
-                                              Text('Export as CSV'),
-                                            ],
-                                          ),
-                                        ),
-                                        const PopupMenuItem(
-                                          value: 'pdf',
-                                          child: Row(
-                                            children: [
-                                              Icon(Icons.picture_as_pdf, size: 18),
-                                              SizedBox(width: 8),
-                                              Text('Export as PDF'),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                      onSelected: (value) {
-                                        if (value == 'csv') {
-                                          _exportToCSV();
-                                        } else if (value == 'pdf') {
-                                          _exportToPDF();
-                                        }
-                                      },
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: AppDimensions.spacingM),
-                                Text(
-                                  'Period: ${_generatedReport!['period']}',
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                                const SizedBox(height: AppDimensions.spacingM),
-                                _buildReportSummary(_generatedReport!['data'] as Map<String, dynamic>),
-                              ],
-                            ),
-                          ),
-                        ],
-
-                        const SizedBox(height: 100), // Space for bottom nav
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildReportSummary(Map<String, dynamic> data) {
-    if (_selectedType == 'attendance') {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SummaryRow(
-            label: 'Total Days',
-            value: data['totalDays'].toString(),
-          ),
-          _SummaryRow(
-            label: 'Total Records',
-            value: data['totalRecords'].toString(),
-          ),
-          _SummaryRow(
-            label: 'Present',
-            value: data['presentCount'].toString(),
-            color: AppColors.success,
-          ),
-          _SummaryRow(
-            label: 'Absent',
-            value: data['absentCount'].toString(),
-            color: AppColors.error,
-          ),
-          _SummaryRow(
-            label: 'Attendance Rate',
-            value: '${((data['attendanceRate'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(1)}%',
-            color: AppColors.iconPrimary,
-          ),
-        ],
-      );
-    } else if (_selectedType == 'fee') {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SummaryRow(
-            label: 'Total Fees',
-            value: data['totalFees'].toString(),
-          ),
-          _SummaryRow(
-            label: 'Total Amount',
-            value: '\$${_formatCurrency((data['totalAmount'] as num?)?.toDouble() ?? 0.0)}',
-          ),
-          _SummaryRow(
-            label: 'Paid Amount',
-            value: '\$${_formatCurrency((data['paidAmount'] as num?)?.toDouble() ?? 0.0)}',
-            color: AppColors.success,
-          ),
-          _SummaryRow(
-            label: 'Pending Amount',
-            value: '\$${_formatCurrency((data['pendingAmount'] as num?)?.toDouble() ?? 0.0)}',
-            color: AppColors.error,
-          ),
-        ],
-      );
-    } else {
-      return Text(
-        data['message'] ?? 'No data available',
-        style: const TextStyle(
-          color: AppColors.textSecondary,
-        ),
-      );
-    }
-  }
-
-  String _formatCurrency(double amount) {
-    if (amount >= 100000) {
-      return '${(amount / 100000).toStringAsFixed(1)}L';
-    } else if (amount >= 1000) {
-      return '${(amount / 1000).toStringAsFixed(1)}K';
-    }
-    return amount.toStringAsFixed(0);
-  }
-
-  Future<void> _exportToCSV() async {
-    if (_generatedReport == null) {
-      SuccessSnackbar.showError(context, 'Please generate a report first');
-      return;
-    }
-
-    try {
-      // Get academy details
-      final storageService = ref.read(storageServiceProvider);
-      final academyName = storageService.getAcademyName() ?? 'Badminton Academy';
-      final academyAddress = storageService.getAcademyAddress() ?? '';
-      final academyContact = storageService.getAcademyContact() ?? '';
-      final academyEmail = storageService.getAcademyEmail() ?? '';
-
-      final reportType = _generatedReport!['type'] as String;
-      final data = _generatedReport!['data'] as Map<String, dynamic>;
-      final period = _generatedReport!['period'] as String;
-      
-      String csvContent = '';
-      
-      // CSV Header with Academy Details
-      csvContent += '═══════════════════════════════════════════════════════════\n';
-      csvContent += '                    SHUTTLER\n';
-      csvContent += '          Badminton Academy Management System\n';
-      csvContent += '═══════════════════════════════════════════════════════════\n\n';
-      csvContent += 'ACADEMY DETAILS\n';
-      csvContent += '───────────────────────────────────────────────────────────\n';
-      csvContent += 'Academy Name: $academyName\n';
-      if (academyAddress.isNotEmpty) csvContent += 'Address: $academyAddress\n';
-      if (academyContact.isNotEmpty) csvContent += 'Contact: $academyContact\n';
-      if (academyEmail.isNotEmpty) csvContent += 'Email: $academyEmail\n';
-      csvContent += '───────────────────────────────────────────────────────────\n\n';
-      csvContent += 'REPORT INFORMATION\n';
-      csvContent += '───────────────────────────────────────────────────────────\n';
-      csvContent += 'Report Type: $reportType\n';
-      csvContent += 'Period: $period\n';
-      csvContent += 'Generated On: ${_generatedReport!['generatedOn']}\n';
-      csvContent += '───────────────────────────────────────────────────────────\n\n';
-      
-      if (_selectedType == 'attendance') {
-        // Attendance CSV
-        csvContent += 'ATTENDANCE DATA\n';
-        csvContent += '───────────────────────────────────────────────────────────\n';
-        csvContent += 'Date,Student Name,Student ID,Batch,Status\n';
-        final attendance = data['attendance'] as List<dynamic>;
-        for (var att in attendance) {
-          final date = att.date?.toString() ?? 'N/A';
-          final studentName = att.studentName?.toString() ?? 'N/A';
-          final studentId = att.studentId?.toString() ?? 'N/A';
-          final batchName = att.batchName?.toString() ?? 'N/A';
-          final status = att.status?.toString() ?? 'N/A';
-          csvContent += '$date,$studentName,$studentId,$batchName,$status\n';
-        }
-        csvContent += '\n';
-        csvContent += 'SUMMARY STATISTICS\n';
-        csvContent += '───────────────────────────────────────────────────────────\n';
-        csvContent += 'Metric,Value\n';
-        csvContent += 'Total Days,${data['totalDays']}\n';
-        csvContent += 'Total Records,${data['totalRecords']}\n';
-        csvContent += 'Present,${data['presentCount']}\n';
-        csvContent += 'Absent,${data['absentCount']}\n';
-        csvContent += 'Attendance Rate,${((data['attendanceRate'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(1)}%\n';
-        csvContent += '═══════════════════════════════════════════════════════════\n';
-      } else if (_selectedType == 'fee') {
-        // Fee CSV
-        csvContent += 'FEE DATA\n';
-        csvContent += '───────────────────────────────────────────────────────────\n';
-        csvContent += 'Student Name,Student ID,Amount,Status,Due Date,Paid Date\n';
-        final fees = data['fees'] as List<dynamic>;
-        for (var fee in fees) {
-          final studentName = fee.studentName?.toString() ?? 'N/A';
-          final studentId = fee.studentId?.toString() ?? 'N/A';
-          final amount = fee.amount?.toString() ?? '0';
-          final status = fee.status?.toString() ?? 'N/A';
-          final dueDate = fee.dueDate?.toString() ?? 'N/A';
-          // Get paidDate from first payment if available
-          String paidDate = 'N/A';
-          if (fee.payments != null && fee.payments is List && (fee.payments as List).isNotEmpty) {
-            final firstPayment = (fee.payments as List).first;
-            if (firstPayment.paidDate != null) {
-              paidDate = firstPayment.paidDate.toString();
-            }
-          }
-          csvContent += '$studentName,$studentId,$amount,$status,$dueDate,$paidDate\n';
-        }
-        csvContent += '\n';
-        csvContent += 'SUMMARY STATISTICS\n';
-        csvContent += '───────────────────────────────────────────────────────────\n';
-        csvContent += 'Metric,Value\n';
-        csvContent += 'Total Fees,${data['totalFees']}\n';
-        csvContent += 'Total Amount,\$${((data['totalAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}\n';
-        csvContent += 'Paid Amount,\$${((data['paidAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}\n';
-        csvContent += 'Pending Amount,\$${((data['pendingAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}\n';
-        csvContent += '═══════════════════════════════════════════════════════════\n';
-      }
-      
-      // Save CSV to file
-      final fileName = 'report_${DateTime.now().millisecondsSinceEpoch}.csv';
-      
-      if (kIsWeb) {
-        // Web: Download file using browser download
-        final bytes = Uint8List.fromList(csvContent.codeUnits);
-        downloadFileWeb(bytes, fileName, 'text/csv');
-        
-        if (mounted) {
-          SuccessSnackbar.show(
-            context,
-            'CSV exported successfully',
-          );
-        }
-      } else {
-        // Mobile/Desktop: Save to file system
-        final directory = await getApplicationDocumentsDirectory();
-        final file = File('${directory.path}/$fileName');
-        await file.writeAsString(csvContent);
-
-        if (mounted) {
-          SuccessSnackbar.show(
-            context,
-            'CSV exported successfully to: ${file.path}',
-          );
-        }
-      }
-      
-    } catch (e) {
-      SuccessSnackbar.showError(context, 'Failed to export CSV: ${e.toString()}');
-    }
-  }
-
-  Future<void> _exportToPDF() async {
-    if (_generatedReport == null) {
-      SuccessSnackbar.showError(context, 'Please generate a report first');
-      return;
-    }
-
-    try {
-      // Get academy details
-      final storageService = ref.read(storageServiceProvider);
-      final academyName = storageService.getAcademyName() ?? 'Badminton Academy';
-      final academyAddress = storageService.getAcademyAddress() ?? '';
-      final academyContact = storageService.getAcademyContact() ?? '';
-      final academyEmail = storageService.getAcademyEmail() ?? '';
-
-      final pdf = pw.Document();
-      final reportType = _generatedReport!['type'] as String;
-      final period = _generatedReport!['period'] as String;
-      final generatedOn = _generatedReport!['generatedOn'] as String;
-      final data = _generatedReport!['data'] as Map<String, dynamic>;
-
-      // Helper function to build PDF header
-      List<pw.Widget> _buildPDFHeader() {
-        return [
-          // Academy Header with Logo
-          pw.Container(
-            padding: const pw.EdgeInsets.all(20),
-            decoration: pw.BoxDecoration(
-              color: PdfColors.blueGrey900,
-              borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
-            ),
-            child: pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Expanded(
-                  child: pw.Column(
-                    crossAxisAlignment: pw.CrossAxisAlignment.start,
-                    children: [
-                      pw.Text(
-                        academyName,
-                        style: pw.TextStyle(
-                          fontSize: 24,
-                          fontWeight: pw.FontWeight.bold,
-                          color: PdfColors.white,
-                        ),
-                      ),
-                      if (academyAddress.isNotEmpty) ...[
-                        pw.SizedBox(height: 4),
-                        pw.Text(
-                          academyAddress,
-                          style: pw.TextStyle(
-                            fontSize: 10,
-                            color: PdfColors.grey300,
-                          ),
-                        ),
-                      ],
-                      if (academyContact.isNotEmpty || academyEmail.isNotEmpty) ...[
-                        pw.SizedBox(height: 4),
-                        pw.Row(
-                          children: [
-                            if (academyContact.isNotEmpty)
-                              pw.Text(
-                                'Phone: $academyContact',
-                                style: pw.TextStyle(
-                                  fontSize: 10,
-                                  color: PdfColors.grey300,
-                                ),
-                              ),
-                            if (academyContact.isNotEmpty && academyEmail.isNotEmpty)
-                              pw.Text(' | ', style: pw.TextStyle(fontSize: 10, color: PdfColors.grey300)),
-                            if (academyEmail.isNotEmpty)
-                              pw.Text(
-                                'Email: $academyEmail',
-                                style: pw.TextStyle(
-                                  fontSize: 10,
-                                  color: PdfColors.grey300,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                // Logo placeholder (using text icon)
-                pw.Container(
-                  width: 60,
-                  height: 60,
-                  decoration: pw.BoxDecoration(
-                    color: PdfColors.blue700,
-                    borderRadius: const pw.BorderRadius.all(pw.Radius.circular(8)),
-                  ),
-                  child: pw.Center(
-                    child: pw.Text(
-                      '🏸',
-                      style: pw.TextStyle(fontSize: 32),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          pw.SizedBox(height: 20),
-          
-          // Report Title
-          pw.Text(
-            reportType,
-            style: pw.TextStyle(
-              fontSize: 22,
-              fontWeight: pw.FontWeight.bold,
-            ),
-          ),
-          pw.SizedBox(height: 10),
-          
-          // Report Info
-          pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(AppDimensions.paddingL),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              pw.Text('Period: $period', style: pw.TextStyle(fontSize: 11)),
-              pw.Text('Generated: $generatedOn', style: pw.TextStyle(fontSize: 11)),
+              _buildReportTypeSelector(),
+              const SizedBox(height: AppDimensions.spacingL),
+              _buildFilters(),
+              const SizedBox(height: AppDimensions.spacingL),
+              _buildGenerateButton(),
+              const SizedBox(height: AppDimensions.spacingL),
+              if (_reportData != null) _buildReportPreview(),
             ],
           ),
-          pw.SizedBox(height: 20),
-        ];
-      }
-
-      // Build PDF content based on report type
-      if (reportType == 'Attendance Report') {
-        pdf.addPage(
-          pw.MultiPage(
-            pageFormat: PdfPageFormat.a4,
-            margin: const pw.EdgeInsets.all(40),
-            build: (pw.Context context) {
-              return [
-                ..._buildPDFHeader(),
-                
-                // Summary Statistics
-                pw.Text(
-                  'Summary',
-                  style: pw.TextStyle(
-                    fontSize: 18,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
-                pw.SizedBox(height: 10),
-                pw.Table(
-                  border: pw.TableBorder.all(),
-                  children: [
-                    pw.TableRow(
-                      children: [
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('Total Days'),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('${data['totalDays']}'),
-                        ),
-                      ],
-                    ),
-                    pw.TableRow(
-                      children: [
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('Total Records'),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('${data['totalRecords']}'),
-                        ),
-                      ],
-                    ),
-                    pw.TableRow(
-                      children: [
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('Present'),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('${data['presentCount']}'),
-                        ),
-                      ],
-                    ),
-                    pw.TableRow(
-                      children: [
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('Absent'),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('${data['absentCount']}'),
-                        ),
-                      ],
-                    ),
-                    pw.TableRow(
-                      children: [
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('Attendance Rate'),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('${(data['attendanceRate'] as num).toStringAsFixed(1)}%'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ];
-            },
-          ),
-        );
-      } else if (reportType == 'Fee Report') {
-        pdf.addPage(
-          pw.MultiPage(
-            pageFormat: PdfPageFormat.a4,
-            margin: const pw.EdgeInsets.all(40),
-            build: (pw.Context context) {
-              return [
-                ..._buildPDFHeader(),
-                
-                // Summary Statistics
-                pw.Text(
-                  'Summary',
-                  style: pw.TextStyle(
-                    fontSize: 18,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
-                pw.SizedBox(height: 10),
-                pw.Table(
-                  border: pw.TableBorder.all(),
-                  children: [
-                    pw.TableRow(
-                      children: [
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('Total Amount'),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('\$ ${((data['totalAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}'),
-                        ),
-                      ],
-                    ),
-                    pw.TableRow(
-                      children: [
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('Paid Amount'),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('\$ ${((data['paidAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}'),
-                        ),
-                      ],
-                    ),
-                    pw.TableRow(
-                      children: [
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('Pending Amount'),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('\$ ${((data['pendingAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}'),
-                        ),
-                      ],
-                    ),
-                    pw.TableRow(
-                      children: [
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('Overdue Amount'),
-                        ),
-                        pw.Padding(
-                          padding: const pw.EdgeInsets.all(8),
-                          child: pw.Text('\$ ${((data['overdueAmount'] as num?)?.toDouble() ?? 0.0).toStringAsFixed(2)}'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ];
-            },
-          ),
-        );
-      } else if (reportType == 'Performance Report') {
-        pdf.addPage(
-          pw.MultiPage(
-            pageFormat: PdfPageFormat.a4,
-            margin: const pw.EdgeInsets.all(40),
-            build: (pw.Context context) {
-              return [
-                ..._buildPDFHeader(),
-                
-                // Summary
-                pw.Text(
-                  'Performance Summary',
-                  style: pw.TextStyle(
-                    fontSize: 18,
-                    fontWeight: pw.FontWeight.bold,
-                  ),
-                ),
-                pw.SizedBox(height: 10),
-                pw.Text('Total Students: ${data['totalStudents']}'),
-                pw.SizedBox(height: 10),
-                pw.Text('Average Performance: ${(data['averagePerformance'] as num).toStringAsFixed(1)}'),
-              ];
-            },
-          ),
-        );
-      }
-
-      // Save PDF to file
-      final bytes = await pdf.save();
-      final fileName = 'report_${DateTime.now().millisecondsSinceEpoch}.pdf';
-      
-      if (kIsWeb) {
-        // Web: Download file using browser download
-        downloadFileWeb(bytes, fileName, 'application/pdf');
-        
-        if (mounted) {
-          SuccessSnackbar.show(
-            context,
-            'PDF exported successfully',
-          );
-        }
-      } else {
-        // Mobile/Desktop: Save to file system
-        final directory = await getApplicationDocumentsDirectory();
-        final file = File('${directory.path}/$fileName');
-        await file.writeAsBytes(bytes);
-
-        if (mounted) {
-          SuccessSnackbar.show(
-            context,
-            'PDF exported successfully to: ${file.path}',
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        SuccessSnackbar.showError(context, 'Failed to export PDF: ${e.toString()}');
-      }
-    }
+        ),
+      ),
+    );
   }
-}
 
-class _DatePickerField extends StatelessWidget {
-  final String label;
-  final DateTime? date;
-  final ValueChanged<DateTime> onDateSelected;
+  Widget _buildReportTypeSelector() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: ReportType.values.map((type) {
+           bool isSelected = _reportType == type;
+           return Padding(
+             padding: const EdgeInsets.only(right: 8.0),
+             child: ChoiceChip(
+               label: Text(type.name.toUpperCase()),
+               selected: isSelected,
+               onSelected: (val) {
+                 if (val) setState(() => _reportType = type);
+               },
+               selectedColor: AppColors.accent,
+               labelStyle: TextStyle(color: isSelected ? Colors.white : AppColors.textPrimary),
+             ),
+           );
+        }).toList(),
+      ),
+    );
+  }
 
-  const _DatePickerField({
-    required this.label,
-    required this.date,
-    required this.onDateSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return NeumorphicInsetContainer(
+  Widget _buildFilters() {
+    return NeumorphicContainer(
       padding: const EdgeInsets.all(AppDimensions.paddingM),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              color: AppColors.textSecondary,
+          // Filter Type Toggle
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.border),
             ),
-          ),
-          const SizedBox(height: AppDimensions.spacingS),
-          GestureDetector(
-            onTap: () async {
-              final selectedDate = await showDatePicker(
-                context: context,
-                initialDate: date ?? DateTime.now(),
-                firstDate: DateTime(2020),
-                lastDate: DateTime(2030),
-                builder: (context, child) {
-                  return Theme(
-                    data: Theme.of(context).copyWith(
-                      colorScheme: const ColorScheme.dark(
-                        primary: AppColors.accent,
-                        surface: AppColors.cardBackground,
+            child: Row(
+              children: FilterType.values.map((type) {
+                bool isSelected = _filterType == type;
+                return Expanded(
+                  child: InkWell(
+                    onTap: () {
+                      setState(() {
+                        _filterType = type;
+                        _filterBatches(); // Re-filter batches logic
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isSelected ? AppColors.accent : Colors.transparent,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        type.name.substring(0, 1).toUpperCase() + type.name.substring(1),
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : AppColors.textPrimary,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
-                    child: child!,
-                  );
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: AppDimensions.spacingM),
+          
+          if (_filterType == FilterType.season)
+             _buildSeasonDropdown(),
+          if (_filterType == FilterType.year)
+             _buildYearSelector(),
+          if (_filterType == FilterType.month)
+             _buildMonthSelector(),
+             
+          const SizedBox(height: AppDimensions.spacingM),
+          
+          Text("Batch", style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              border: Border.all(color: AppColors.border),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _selectedBatchId,
+                isExpanded: true,
+                items: [
+                  const DropdownMenuItem(value: "all", child: Text("All Batches")),
+                  ..._filteredBatches.map((b) => DropdownMenuItem(
+                    value: b.id.toString(),
+                    child: Text(b.batchName ?? "Batch ${b.id}"), // Adapt to model
+                  )),
+                ],
+                onChanged: (val) {
+                  if (val != null) setState(() => _selectedBatchId = val);
                 },
-              );
-              if (selectedDate != null) {
-                onDateSelected(selectedDate);
-              }
-            },
-            child: Text(
-              date != null
-                  ? '${date!.day}/${date!.month}/${date!.year}'
-                  : 'Select date',
-              style: TextStyle(
-                color: date != null ? AppColors.textPrimary : AppColors.textHint,
-                fontSize: 14,
               ),
             ),
           ),
@@ -1234,43 +290,347 @@ class _DatePickerField extends StatelessWidget {
       ),
     );
   }
-}
 
-class _SummaryRow extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color? color;
+  Widget _buildSeasonDropdown() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text("Select Season", style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+        const SizedBox(height: 4),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.border),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _selectedSeasonId,
+              isExpanded: true,
+              hint: const Text("Choose Season"),
+              items: _seasons.map<DropdownMenuItem<String>>((s) { 
+                return DropdownMenuItem(
+                  value: s.id.toString(),
+                  child: Text(s.name ?? "Season ${s.id}"),
+                );
+              }).toList(),
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() {
+                    _selectedSeasonId = val;
+                    _filterBatches();
+                  });
+                }
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 
-  const _SummaryRow({
-    required this.label,
-    required this.value,
-    this.color,
-  });
+  Widget _buildYearSelector() {
+    int current = DateTime.now().year;
+    List<int> years = List.generate(10, (i) => current - 5 + i);
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text("Select Year", style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+        const SizedBox(height: 4),
+        Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              border: Border.all(color: AppColors.border),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                value: _selectedYear,
+                isExpanded: true,
+                items: years.map((y) => DropdownMenuItem(value: y, child: Text(y.toString()))).toList(),
+                onChanged: (val) => setState(() => _selectedYear = val!),
+              ),
+            ),
+        ),
+      ],
+    );
+  }
+  
+  Widget _buildMonthSelector() {
+     return InkWell(
+        onTap: () async {
+          final d = await showDatePicker(
+            context: context,
+            initialDate: _selectedMonth,
+            firstDate: DateTime(2020),
+            lastDate: DateTime(2030),
+            initialDatePickerMode: DatePickerMode.year,
+          );
+          if (d != null) {
+            setState(() => _selectedMonth = d);
+          }
+        },
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.border),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(DateFormat('MMMM yyyy').format(_selectedMonth)),
+              const Icon(Icons.calendar_today, size: 16),
+            ],
+          ),
+        ),
+     );
+  }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildGenerateButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.accent,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        onPressed: _isLoading ? null : _generateReport,
+        child: _isLoading 
+          ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+          : const Text("Generate Report", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+
+  Widget _buildReportPreview() {
+    final overview = _reportData!['overview'];
+    final breakdown = _reportData!['breakdown'] as List;
+    final details = _reportData!['student_details'] as List?;
+    final filterSummary = _reportData!['filter_summary'];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text("Report Preview", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf, color: Colors.red),
+              onPressed: _exportPDF,
+              tooltip: "Download PDF",
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(filterSummary ?? "", style: const TextStyle(fontWeight: FontWeight.w500)),
+        const Divider(),
+        
+        NeumorphicContainer(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text("Overview", style: TextStyle(color: AppColors.textSecondary)),
+              const SizedBox(height: 8),
+              if (_reportType == ReportType.attendance) ...[
+                 _statRow("Total Students", "${overview['total_students']}"),
+                 _statRow("Classes Conducted", "${overview['total_conducted']}"),
+                 _statRow("Present", "${overview['present_count']}", color: Colors.green),
+                 _statRow("Absent", "${overview['absent_count']}", color: Colors.red),
+                 _statRow("Attendance Rate", "${overview['attendance_rate']}%", isBold: true),
+              ] else if (_reportType == ReportType.fee) ...[
+                 _statRow("Total Students", "${overview['total_students']}"),
+                 _statRow("Expected Revenue", "₹${overview['total_expected']}"),
+                 _statRow("Collected", "₹${overview['total_collected']}", color: Colors.green),
+                 _statRow("Pending", "₹${overview['pending_amount']}", color: Colors.orange),
+                 _statRow("Overdue Amount", "₹${overview['overdue_amount']}", color: Colors.red),
+              ]
+            ],
+          ),
+        ),
+        
+        const SizedBox(height: 16),
+        
+        if (details != null && details.isNotEmpty) ...[
+          const Text("Student Details", style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              columns: _reportType == ReportType.attendance 
+                  ? const [DataColumn(label: Text("Name")), DataColumn(label: Text("Attended")), DataColumn(label: Text("%"))]
+                  : const [DataColumn(label: Text("Name")), DataColumn(label: Text("Paid")), DataColumn(label: Text("Status"))],
+              rows: details.map<DataRow>((s) {
+                if (_reportType == ReportType.attendance) {
+                   return DataRow(cells: [
+                     DataCell(Text(s['name'])),
+                     DataCell(Text("${s['classes_attended']}/${s['classes_assigned']}")),
+                     DataCell(Text("${s['attendance_percentage']}%")),
+                   ]);
+                } else {
+                   return DataRow(cells: [
+                     DataCell(Text(s['name'])),
+                     DataCell(Text("₹${s['amount_paid']}")),
+                     DataCell(Text(s['payment_status'], style: TextStyle(
+                       color: s['payment_status'] == 'Paid' ? Colors.green : Colors.red
+                     ))),
+                   ]);
+                }
+              }).toList(),
+            ),
+          )
+        ] else ...[
+          const Text("Breakdown", style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: breakdown.length,
+            itemBuilder: (ctx, i) {
+               final item = breakdown[i];
+               return Card(
+                 child: ListTile(
+                   title: Text(item['name']),
+                   subtitle: Text(_reportType == ReportType.attendance 
+                       ? "Att: ${item['attendance_rate']}%" 
+                       : "Collected: ₹${item['collected']}"),
+                   trailing: Text(_reportType == ReportType.attendance 
+                       ? "${item['total_students']} Students" 
+                       : "Pending: ${item['pending_count']}"),
+                 ),
+               );
+            },
+          ),
+        ]
+      ],
+    );
+  }
+
+  Widget _statRow(String label, String value, {Color? color, bool isBold = false}) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppDimensions.spacingS),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 14,
-              color: AppColors.textSecondary,
-            ),
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: color ?? AppColors.textPrimary,
-            ),
-          ),
+          Text(label),
+          Text(value, style: TextStyle(
+            color: color ?? AppColors.textPrimary,
+            fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+          )),
         ],
       ),
+    );
+  }
+
+  Future<void> _exportPDF() async {
+    if (_reportData == null) return;
+    
+    try {
+      final pdf = pw.Document();
+      // Use standard fonts
+      
+      final academyName = "Badminton Academy";
+      final address = "123 Sports Ave";
+      
+      pdf.addPage(
+        pw.MultiPage(
+          header: (ctx) => _buildPdfHeader(ctx, academyName, address),
+          footer: (ctx) => _buildPdfFooter(ctx, academyName),
+          build: (ctx) => [
+             _buildPdfContent(ctx),
+          ],
+        ),
+      );
+      
+      final name = "Report_${DateTime.now().millisecondsSinceEpoch}.pdf";
+      final bytes = await pdf.save();
+      
+      if (kIsWeb) {
+        downloadFileWeb(bytes, name, 'application/pdf');
+      } else {
+        final dir = await getApplicationDocumentsDirectory();
+        final file = File('${dir.path}/$name');
+        await file.writeAsBytes(bytes);
+        if (mounted) {
+           SuccessSnackbar.show(context, 'Report saved to ${file.path}');
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+         SuccessSnackbar.showError(context, 'Error generating PDF: $e');
+      }
+    }
+  }
+  
+  pw.Widget _buildPdfHeader(pw.Context context, String academyName, String address) {
+      return pw.Column(
+         crossAxisAlignment: pw.CrossAxisAlignment.start,
+         children: [
+            pw.Text(academyName, style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+            pw.Text(address, style: const pw.TextStyle(fontSize: 10)),
+            pw.SizedBox(height: 10),
+            pw.Row(
+               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+               children: [
+                 pw.Text("Report: ${_reportType.name.toUpperCase()}", style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                 pw.Text("Generated: ${DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now())}"),
+               ]
+            ),
+            pw.Text("Period: ${_reportData!['filter_summary']}"),
+            pw.Divider(),
+            pw.SizedBox(height: 10),
+         ]
+      );
+  }
+  
+  pw.Widget _buildPdfFooter(pw.Context context, String academyName) {
+      return pw.Column(
+        children: [
+           pw.Divider(),
+           pw.Row(
+             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+             children: [
+               pw.Text(academyName, style: const pw.TextStyle(fontSize: 8)),
+               pw.Text("Page ${context.pageNumber} of ${context.pagesCount}", style: const pw.TextStyle(fontSize: 8)),
+             ]
+           )
+        ]
+      );
+  }
+  
+  pw.Widget _buildPdfContent(pw.Context context) {
+    final overview = _reportData!['overview'];
+    
+    return pw.Column(
+       crossAxisAlignment: pw.CrossAxisAlignment.start,
+       children: [
+          pw.Text("Overview", style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 5),
+          pw.Text("Total Students: ${overview['total_students']}"),
+          if (_reportType == ReportType.attendance) ...[
+             pw.Text("Present: ${overview['present_count']}"),
+             pw.Text("Absent: ${overview['absent_count']}"),
+             pw.Text("Rate: ${overview['attendance_rate']}%"),
+          ] else ...[
+             pw.Text("Expected: ${overview['total_expected']}"),
+             pw.Text("Collected: ${overview['total_collected']}"),
+             pw.Text("Pending: ${overview['pending_amount']}"),
+          ],
+          
+          pw.SizedBox(height: 20),
+          pw.Text("Details", style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 10),
+          pw.Text(
+            _reportData!['student_details'] != null 
+              ? "See attached table for student details." 
+              : "Summary Breakdown attached."
+          ),
+       ]
     );
   }
 }
