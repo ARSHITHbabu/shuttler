@@ -39,6 +39,8 @@ class Batch {
   final String? location;
   final String createdBy;
   final int? sessionId; // Link to session/season
+  final String status;
+  final String? inactiveAt;
 
   Batch({
     required this.id,
@@ -55,6 +57,8 @@ class Batch {
     this.location,
     required this.createdBy,
     this.sessionId,
+    this.status = 'active',
+    this.inactiveAt,
   })  : assignedCoachIds = assignedCoachIds ?? [],
         assignedCoaches = assignedCoaches ?? [];
 
@@ -96,6 +100,8 @@ class Batch {
       location: json['location'] as String?,
       createdBy: json['created_by'] as String,
       sessionId: json['session_id'] as int?,
+      status: json['status'] as String? ?? 'active',
+      inactiveAt: json['inactive_at'] as String?,
     );
   }
 
@@ -115,6 +121,8 @@ class Batch {
       'location': location,
       'created_by': createdBy,
       'session_id': sessionId,
+      'status': status,
+      'inactive_at': inactiveAt,
     };
   }
 
@@ -134,6 +142,8 @@ class Batch {
     String? location,
     String? createdBy,
     int? sessionId,
+    String? status,
+    String? inactiveAt,
   }) {
     return Batch(
       id: id ?? this.id,
@@ -150,6 +160,8 @@ class Batch {
       location: location ?? this.location,
       createdBy: createdBy ?? this.createdBy,
       sessionId: sessionId ?? this.sessionId,
+      status: status ?? this.status,
+      inactiveAt: inactiveAt ?? this.inactiveAt,
     );
   }
 

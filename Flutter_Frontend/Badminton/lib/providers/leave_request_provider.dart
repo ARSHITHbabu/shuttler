@@ -43,39 +43,8 @@ Future<LeaveRequest> leaveRequestById(LeaveRequestByIdRef ref, int id) async {
 class LeaveRequestManager extends _$LeaveRequestManager {
   @override
   Future<List<LeaveRequest>> build({int? coachId, String? status}) async {
-    // #region agent log
-    try {
-      final logData = {
-        "location": "leave_request_provider.dart:43",
-        "message": "LeaveRequestManager build called",
-        "data": {"coachId": coachId, "status": status},
-        "timestamp": DateTime.now().millisecondsSinceEpoch,
-        "sessionId": "debug-session",
-        "runId": "run1",
-        "hypothesisId": "D"
-      };
-      final logFile = File(r"c:\Users\morch\Documents\Code\RallyOn\shuttler\.cursor\debug.log");
-      await logFile.writeAsString("${jsonEncode(logData)}\n", mode: FileMode.append);
-    } catch (_) {}
-    // #endregion
     final leaveRequestService = ref.watch(leaveRequestServiceProvider);
-    final result = await leaveRequestService.getLeaveRequests(coachId: coachId, status: status);
-    // #region agent log
-    try {
-      final logData2 = {
-        "location": "leave_request_provider.dart:46",
-        "message": "LeaveRequestManager build completed",
-        "data": {"result_count": result.length},
-        "timestamp": DateTime.now().millisecondsSinceEpoch,
-        "sessionId": "debug-session",
-        "runId": "run1",
-        "hypothesisId": "D"
-      };
-      final logFile = File(r"c:\Users\morch\Documents\Code\RallyOn\shuttler\.cursor\debug.log");
-      await logFile.writeAsString("${jsonEncode(logData2)}\n", mode: FileMode.append);
-    } catch (_) {}
-    // #endregion
-    return result;
+    return await leaveRequestService.getLeaveRequests(coachId: coachId, status: status);
   }
 
   /// Refresh leave requests

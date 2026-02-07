@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, File, UploadFile, Query, Form
 from fastapi.staticfiles import StaticFiles
+from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, Text, Date, DateTime, ForeignKey, JSON, func, and_, or_, select
@@ -98,6 +99,53 @@ else:
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+def cleanup_inactive_records():
+    """Background task to delete records inactive for > 2 years"""
+    db = SessionLocal()
+    try:
+        two_years_ago = datetime.now() - timedelta(days=730)
+        
+        # 1. Cleanup Students
+        inactive_students = db.query(StudentDB).filter(
+            StudentDB.status == "inactive",
+            StudentDB.inactive_at <= two_years_ago
+        ).all()
+        
+        for student in inactive_students:
+            print(f"[Cleanup] Deleting student {student.id} (inactive since {student.inactive_at})")
+            # Reuse the hard delete logic
+            db.query(AttendanceDB).filter(AttendanceDB.student_id == student.id).delete()
+            db.query(FeeDB).filter(FeeDB.student_id == student.id).delete()
+            db.query(PerformanceDB).filter(PerformanceDB.student_id == student.id).delete()
+            db.query(BatchStudentDB).filter(BatchStudentDB.student_id == student.id).delete()
+            db.query(BMIDB).filter(BMIDB.student_id == student.id).delete()
+            db.query(VideoResourceDB).filter(VideoResourceDB.student_id == student.id).delete()
+            db.query(NotificationDB).filter(NotificationDB.user_id == student.id, NotificationDB.user_type == "student").delete()
+            db.delete(student)
+            
+        # 2. Cleanup Batches
+        inactive_batches = db.query(BatchDB).filter(
+            BatchDB.status == "inactive",
+            BatchDB.inactive_at <= two_years_ago
+        ).all()
+        
+        for batch in inactive_batches:
+            print(f"[Cleanup] Deleting batch {batch.id} (inactive since {batch.inactive_at})")
+            db.query(AttendanceDB).filter(AttendanceDB.batch_id == batch.id).delete()
+            db.query(FeeDB).filter(FeeDB.batch_id == batch.id).delete()
+            db.query(PerformanceDB).filter(PerformanceDB.batch_id == batch.id).delete()
+            db.query(BatchStudentDB).filter(BatchStudentDB.batch_id == batch.id).delete()
+            db.query(BatchCoachDB).filter(BatchCoachDB.batch_id == batch.id).delete()
+            db.query(ScheduleDB).filter(ScheduleDB.batch_id == batch.id).delete()
+            db.delete(batch)
+            
+        db.commit()
+    except Exception as e:
+        print(f"[Cleanup Error] {e}")
+        db.rollback()
+    finally:
+        db.close()
+
 # ==================== Database Models ====================
 
 class CoachDB(Base):
@@ -174,6 +222,8 @@ class BatchDB(Base):
     assigned_coach_id = Column(Integer, nullable=True)
     assigned_coach_name = Column(String, nullable=True)
     session_id = Column(Integer, ForeignKey("sessions.id"), nullable=True)  # Link to session
+    status = Column(String, default="active")  # active, inactive
+    inactive_at = Column(DateTime(timezone=True), nullable=True)
 
 class StudentDB(Base):
     __tablename__ = "students"
@@ -187,7 +237,9 @@ class StudentDB(Base):
     added_by = Column(String, nullable=True)  # Optional for signup
     date_of_birth = Column(String, nullable=True)  # Required for profile completion
     address = Column(Text, nullable=True)  # Required for profile completion
-    status = Column(String, default="active")
+    status = Column(String, default="active") # active, inactive
+    inactive_at = Column(DateTime(timezone=True), nullable=True)
+    rejoin_request_pending = Column(Boolean, default=False)
     t_shirt_size = Column(String, nullable=True)  # Required for profile completion
     blood_group = Column(String, nullable=True)
 
@@ -539,6 +591,11 @@ def migrate_database_schema(engine):
             check_and_add_column(engine, 'owners', 'role', 'VARCHAR(20)', nullable=True, default_value="'owner'")
             check_and_add_column(engine, 'owners', 'must_change_password', 'BOOLEAN', nullable=True, default_value="FALSE")
         
+        # Migrate batches table
+        if 'batches' in tables:
+            check_and_add_column(engine, 'batches', 'status', 'VARCHAR(20)', nullable=True, default_value="'active'")
+            check_and_add_column(engine, 'batches', 'inactive_at', 'TIMESTAMP WITH TIME ZONE', nullable=True)
+
         # Migrate students table
         if 'students' in tables:
             # Check existing columns
@@ -549,6 +606,8 @@ def migrate_database_schema(engine):
             check_and_add_column(engine, 'students', 'fcm_token', 'VARCHAR(500)', nullable=True)
             check_and_add_column(engine, 'students', 't_shirt_size', 'VARCHAR', nullable=True)
             check_and_add_column(engine, 'students', 'blood_group', 'VARCHAR(20)', nullable=True)
+            check_and_add_column(engine, 'students', 'inactive_at', 'TIMESTAMP WITH TIME ZONE', nullable=True)
+            check_and_add_column(engine, 'students', 'rejoin_request_pending', 'BOOLEAN', nullable=True, default_value="FALSE")
             
             # Make existing columns nullable if they aren't already
             try:
@@ -1213,6 +1272,8 @@ class Batch(BaseModel):
     assigned_coach_ids: Optional[List[int]] = None  # New: list of coach IDs
     assigned_coaches: Optional[List[CoachInfo]] = None  # New: list of coach info objects
     session_id: Optional[int] = None
+    status: str = "active"
+    inactive_at: Optional[datetime] = None
     
     class Config:
         from_attributes = True
@@ -1229,6 +1290,8 @@ class BatchUpdate(BaseModel):
     assigned_coach_name: Optional[str] = None  # Deprecated: kept for backward compatibility
     assigned_coach_ids: Optional[List[int]] = None  # New: supports multiple coaches
     session_id: Optional[int] = None
+    status: Optional[str] = None
+    inactive_at: Optional[datetime] = None
 
 # Student Models
 class StudentCreate(BaseModel):
@@ -1260,6 +1323,8 @@ class Student(BaseModel):
     blood_group: Optional[str] = None
     profile_photo: Optional[str] = None
     fcm_token: Optional[str] = None
+    inactive_at: Optional[datetime] = None
+    rejoin_request_pending: bool = False
 
     class Config:
         from_attributes = True
@@ -1281,6 +1346,8 @@ class StudentUpdate(BaseModel):
     blood_group: Optional[str] = None
     status: Optional[str] = None
     profile_photo: Optional[str] = None
+    inactive_at: Optional[datetime] = None
+    rejoin_request_pending: Optional[bool] = None
 
 # Attendance Models
 class AttendanceCreate(BaseModel):
@@ -2151,6 +2218,15 @@ def unified_login(login_data: UnifiedLoginRequest):
                 }
                 profile_complete = all(v is not None and str(v).strip() != '' for v in required_profile_fields.values())
                 
+                if student.status == "inactive":
+                    return {
+                        "success": False,
+                        "message": "Your account is currently inactive.",
+                        "account_inactive": True,
+                        "rejoin_request_pending": student.rejoin_request_pending,
+                        "student_id": student.id
+                    }
+                
                 return {
                     "success": True,
                     "userType": "student",
@@ -2747,7 +2823,7 @@ def get_batches():
     try:
         # Try normal query first
         try:
-            batches_db = db.query(BatchDB).all()
+            batches_db = db.query(BatchDB).filter(BatchDB.status == "active").all()
             batches = []
             for batch_db in batches_db:
                 # Get coaches from junction table
@@ -2812,6 +2888,40 @@ def get_batches():
             else:
                 # Re-raise if it's a different error
                 raise
+    finally:
+        db.close()
+
+@app.get("/batches/inactive/", response_model=List[Batch])
+def get_inactive_batches():
+    """Get all deactivated batches"""
+    db = SessionLocal()
+    try:
+        batches_db = db.query(BatchDB).filter(BatchDB.status == "inactive").all()
+        batches = []
+        for batch_db in batches_db:
+            coaches = _get_batch_coaches(db, batch_db.id)
+            coach_ids_list = [c.id for c in coaches]
+            
+            batch = Batch(
+                id=batch_db.id,
+                batch_name=batch_db.batch_name,
+                capacity=batch_db.capacity,
+                fees=batch_db.fees,
+                start_date=batch_db.start_date,
+                timing=batch_db.timing,
+                period=batch_db.period,
+                location=batch_db.location,
+                created_by=batch_db.created_by,
+                assigned_coach_id=coach_ids_list[0] if coach_ids_list else None,
+                assigned_coach_name=coaches[0].name if coaches else None,
+                assigned_coach_ids=coach_ids_list,
+                assigned_coaches=coaches,
+                session_id=batch_db.session_id,
+                status=batch_db.status,
+                inactive_at=batch_db.inactive_at
+            )
+            batches.append(batch)
+        return batches
     finally:
         db.close()
 
@@ -3083,6 +3193,46 @@ def delete_batch(batch_id: int):
     finally:
         db.close()
 
+@app.post("/batches/{batch_id}/deactivate")
+def deactivate_batch(batch_id: int):
+    """Soft delete a batch - moves to inactive list, keeps data for 2 years"""
+    db = SessionLocal()
+    try:
+        batch = db.query(BatchDB).filter(BatchDB.id == batch_id).first()
+        if not batch:
+            raise HTTPException(status_code=404, detail="Batch not found")
+        
+        batch.status = "inactive"
+        batch.inactive_at = datetime.now()
+        db.commit()
+        return {"message": "Batch deactivated successfully"}
+    finally:
+        db.close()
+
+@app.delete("/batches/{batch_id}/remove")
+def remove_batch_permanently(batch_id: int):
+    """Hard delete a batch and all related records (cascading)"""
+    db = SessionLocal()
+    try:
+        batch = db.query(BatchDB).filter(BatchDB.id == batch_id).first()
+        if not batch:
+            raise HTTPException(status_code=404, detail="Batch not found")
+            
+        # Manually delete related records if not handled by SQL CASCADE
+        # Note: Some models might not have batch_id as an FK with CASCADE
+        db.query(AttendanceDB).filter(AttendanceDB.batch_id == batch_id).delete()
+        db.query(FeeDB).filter(FeeDB.batch_id == batch_id).delete()
+        db.query(PerformanceDB).filter(PerformanceDB.batch_id == batch_id).delete()
+        db.query(BatchStudentDB).filter(BatchStudentDB.batch_id == batch_id).delete()
+        db.query(BatchCoachDB).filter(BatchCoachDB.batch_id == batch_id).delete()
+        db.query(ScheduleDB).filter(ScheduleDB.batch_id == batch_id).delete()
+        
+        db.delete(batch)
+        db.commit()
+        return {"message": "Batch and all related records deleted permanently"}
+    finally:
+        db.close()
+
 @app.get("/batches/{batch_id}/available-students")
 def get_available_students_for_batch(batch_id: int):
     """Get students not yet assigned to this batch"""
@@ -3202,7 +3352,7 @@ def get_students(include_deleted: bool = Query(False, description="Include delet
     try:
         query = db.query(StudentDB)
         if not include_deleted:
-            query = query.filter(StudentDB.status != "deleted")
+            query = query.filter(StudentDB.status == "active")
         students = query.all()
         return students
     finally:
@@ -3242,19 +3392,125 @@ def delete_student(student_id: int):
     """Soft delete a student (mark as deleted)"""
     db = SessionLocal()
     try:
+        # Move to inactive instead of hard deleting by default
+        student.status = "inactive"
+        student.inactive_at = datetime.now()
+        
+        db.commit()
+        return {"message": "Student marked as inactive"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.get("/students/inactive/", response_model=List[Student])
+def get_inactive_students():
+    """Get all deactivated students"""
+    db = SessionLocal()
+    try:
+        query = db.query(StudentDB).filter(StudentDB.status == "inactive")
+        return query.all()
+    finally:
+        db.close()
+
+@app.get("/students/rejoin-requests/", response_model=List[Student])
+def get_rejoin_requests():
+    """Get students who have requested to rejoin"""
+    db = SessionLocal()
+    try:
+        query = db.query(StudentDB).filter(StudentDB.rejoin_request_pending == True)
+        return query.all()
+    finally:
+        db.close()
+
+@app.post("/students/{student_id}/deactivate")
+def deactivate_student(student_id: int):
+    """Soft delete a student - moves to inactive list, keeps data for 2 years"""
+    db = SessionLocal()
+    try:
         student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
         if not student:
             raise HTTPException(status_code=404, detail="Student not found")
         
-        # Soft delete instead of hard delete to preserve history
-        student.status = "deleted"
-        
-        # Also remove from current batches to stop active participation
-        # Note: We keep the history in batch_students, just change status there too if needed
-        # For now, let's just mark the student record as deleted
-        
+        student.status = "inactive"
+        student.inactive_at = datetime.now()
+        student.rejoin_request_pending = False # Reset if it was pending
         db.commit()
-        return {"message": "Student account deleted (history preserved)"}
+        return {"message": "Student deactivated successfully"}
+    finally:
+        db.close()
+
+@app.post("/students/{student_id}/request-rejoin")
+def request_rejoin(student_id: int):
+    """Student requests to rejoin after being inactive"""
+    db = SessionLocal()
+    try:
+        student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found")
+        
+        if student.status != "inactive":
+            raise HTTPException(status_code=400, detail="Only inactive students can request to rejoin")
+            
+        student.rejoin_request_pending = True
+        db.commit()
+        
+        # Notify Owner
+        # In a real app, you'd find the owner(s) and send them a notification
+        return {"message": "Rejoin request sent to owner"}
+    finally:
+        db.close()
+
+@app.post("/students/{student_id}/approve-rejoin")
+def approve_rejoin(student_id: int):
+    """Owner approves a rejoin request"""
+    db = SessionLocal()
+    try:
+        student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found")
+            
+        student.status = "active"
+        student.inactive_at = None
+        student.rejoin_request_pending = False
+        db.commit()
+        
+        # Notify Student
+        create_notification(
+            db=db,
+            user_id=student.id,
+            user_type="student",
+            title="Rejoin Request Approved",
+            body="Your request to rejoin has been approved. Welcome back!",
+            type="general"
+        )
+        
+        return {"message": "Rejoin request approved"}
+    finally:
+        db.close()
+
+@app.delete("/students/{student_id}/remove")
+def remove_student_permanently(student_id: int):
+    """Hard delete a student and all related records (cascading)"""
+    db = SessionLocal()
+    try:
+        student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found")
+            
+        # Manually delete related records if not handled by SQL CASCADE
+        db.query(AttendanceDB).filter(AttendanceDB.student_id == student_id).delete()
+        db.query(FeeDB).filter(FeeDB.student_id == student_id).delete()
+        db.query(PerformanceDB).filter(PerformanceDB.student_id == student_id).delete()
+        db.query(BatchStudentDB).filter(BatchStudentDB.student_id == student_id).delete()
+        db.query(BMIDB).filter(BMIDB.student_id == student_id).delete()
+        db.query(VideoResourceDB).filter(VideoResourceDB.student_id == student_id).delete()
+        db.query(NotificationDB).filter(NotificationDB.user_id == student_id, NotificationDB.user_type == "student").delete()
+        
+        db.delete(student)
+        db.commit()
+        return {"message": "Student and all related records deleted permanently"}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -3323,6 +3579,15 @@ def login_student(login_data: StudentLogin):
                     student.password = hash_password(login_data.password)
                     db.commit()
             
+                if student.status == "inactive":
+                    return {
+                        "success": False,
+                        "message": "Your account is currently inactive.",
+                        "account_inactive": True,
+                        "rejoin_request_pending": student.rejoin_request_pending,
+                        "student_id": student.id
+                    }
+                
             if not password_valid:
                 return {
                     "success": False,
@@ -3364,6 +3629,8 @@ def login_student(login_data: StudentLogin):
                     "t_shirt_size": student.t_shirt_size,
                     "status": student.status,
                     "profile_photo": student.profile_photo,
+                    "rejoin_request_pending": student.rejoin_request_pending,
+                    "inactive_at": student.inactive_at,
                     "is_linked": len(approved_batches) > 0
                 },
                 "profile_complete": profile_complete
@@ -7927,4 +8194,11 @@ if __name__ == "__main__":
     print("📊 Alternative Docs: http://127.0.0.1:8001/redoc")
     print("📱 Mobile devices can connect to: http://192.168.1.4:8001")
     # host="0.0.0.0" allows connections from any device on the network
+    
+    # Start background cleanup scheduler
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(cleanup_inactive_records, 'interval', days=1)
+    scheduler.start()
+    print("⏰ Background cleanup scheduler started (Daily).")
+    
     uvicorn.run(app, host="0.0.0.0", port=8001)

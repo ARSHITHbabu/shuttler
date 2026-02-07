@@ -20,6 +20,8 @@ import '../../models/leave_request.dart';
 import '../../models/student_registration_request.dart';
 import '../../models/coach_registration_request.dart';
 import '../../widgets/common/custom_text_field.dart';
+import '../../models/student.dart';
+import '../../providers/student_provider.dart';
 
 /// Requests Screen - View and manage leave requests and student registration requests
 class RequestsScreen extends ConsumerStatefulWidget {
@@ -38,7 +40,7 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
       setState(() {}); // Update UI when tab changes
     });
@@ -116,12 +118,26 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
                 Expanded(
                   child: _buildNeumorphicTab(
                     isDark: isDark,
-                    label: 'Registration Requests',
+                    label: 'Registrations',
                     icon: Icons.person_add_outlined,
                     isSelected: _tabController.index == 1,
                     onTap: () {
                       if (_tabController.index != 1) {
                         _tabController.animateTo(1);
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: AppDimensions.spacingM),
+                Expanded(
+                  child: _buildNeumorphicTab(
+                    isDark: isDark,
+                    label: 'Rejoin Requests',
+                    icon: Icons.person_pin_outlined,
+                    isSelected: _tabController.index == 2,
+                    onTap: () {
+                      if (_tabController.index != 2) {
+                        _tabController.animateTo(2);
                       }
                     },
                   ),
@@ -136,6 +152,7 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
         children: [
           _buildLeaveRequestsTab(isDark, statusFilter),
           _buildRegistrationRequestsTab(isDark, statusFilter),
+          _buildRejoinRequestsTab(isDark),
         ],
       ),
     );
@@ -1809,6 +1826,163 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
           context,
           'Failed to ${isApproval ? 'approve' : 'reject'} coach registration request: ${e.toString()}',
         );
+      }
+    }
+  }
+
+  Widget _buildRejoinRequestsTab(bool isDark) {
+    final studentsAsync = ref.watch(studentListProvider);
+
+    return studentsAsync.when(
+      data: (students) {
+        final rejoinRequests = students.where((s) => s.rejoinRequestPending).toList();
+
+        if (rejoinRequests.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.person_pin_outlined,
+                  size: 64,
+                  color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
+                ),
+                const SizedBox(height: AppDimensions.spacingM),
+                Text(
+                  'No Rejoin Requests',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: AppDimensions.spacingS),
+                Text(
+                  'Students who were marked inactive will appear here if they request to rejoin.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(AppDimensions.paddingL),
+          itemCount: rejoinRequests.length,
+          itemBuilder: (context, index) {
+            final student = rejoinRequests[index];
+            return _buildRejoinRequestCard(student, isDark);
+          },
+        );
+      },
+      loading: () => const ListSkeleton(itemCount: 3),
+      error: (error, _) => ErrorDisplay(
+        message: 'Failed to load rejoin requests',
+        onRetry: () => ref.refresh(studentListProvider),
+      ),
+    );
+  }
+
+  Widget _buildRejoinRequestCard(Student student, bool isDark) {
+    return NeumorphicContainer(
+      padding: const EdgeInsets.all(AppDimensions.paddingM),
+      margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: AppColors.accent.withValues(alpha: 0.1),
+                child: const Icon(Icons.person, color: AppColors.accent),
+              ),
+              const SizedBox(width: AppDimensions.spacingM),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      student.name,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      student.email,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'PENDING',
+                  style: TextStyle(color: AppColors.warning, fontSize: 10, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppDimensions.spacingM),
+          Text(
+            'This student has requested to rejoin the academy. Approving will mark their account as "Active" again.',
+            style: TextStyle(
+              fontSize: 13,
+              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+            ),
+          ),
+          const SizedBox(height: AppDimensions.spacingM),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              NeumorphicButton(
+                text: 'Approve Rejoin',
+                icon: Icons.check,
+                onPressed: () => _approveRejoin(student),
+                color: AppColors.success,
+                textColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _approveRejoin(Student student) async {
+    final confirmed = await ConfirmationDialog.show(
+      context,
+      'Approve Rejoin',
+      'Are you sure you want to approve ${student.name}\'s request to rejoin?',
+      confirmText: 'Approve',
+      icon: Icons.check_circle_outline,
+    );
+
+    if (confirmed == true && mounted) {
+      try {
+        await ref.read(studentListProvider.notifier).approveRejoin(student.id);
+        if (mounted) {
+          SuccessSnackbar.show(context, 'Rejoin request approved for ${student.name}');
+        }
+      } catch (e) {
+        if (mounted) {
+          SuccessSnackbar.showError(context, 'Failed to approve: ${e.toString()}');
+        }
       }
     }
   }
