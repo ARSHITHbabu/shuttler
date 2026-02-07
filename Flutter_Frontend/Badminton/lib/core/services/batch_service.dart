@@ -175,12 +175,30 @@ class BatchService {
     }
   }
 
-  /// Delete a batch
+  /// Delete a batch (Soft delete - logic varies, we use deactivate for soft delete)
   Future<void> deleteBatch(int id) async {
     try {
       await _apiService.delete(ApiEndpoints.batchById(id));
     } catch (e) {
       throw Exception('Failed to delete batch: ${_apiService.getErrorMessage(e)}');
+    }
+  }
+
+  /// Deactivate a batch (Soft delete)
+  Future<void> deactivateBatch(int id) async {
+    try {
+      await _apiService.post(ApiEndpoints.deactivateBatch(id));
+    } catch (e) {
+      throw Exception('Failed to deactivate batch: ${_apiService.getErrorMessage(e)}');
+    }
+  }
+
+  /// Remove a batch permanently (Hard delete)
+  Future<void> removeBatchPermanently(int id) async {
+    try {
+      await _apiService.delete(ApiEndpoints.removeBatch(id));
+    } catch (e) {
+      throw Exception('Failed to remove batch permanently: ${_apiService.getErrorMessage(e)}');
     }
   }
 

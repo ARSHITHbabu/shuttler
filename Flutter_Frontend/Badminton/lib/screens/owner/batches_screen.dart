@@ -47,24 +47,85 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
 
 
   Future<void> _deleteBatch(Batch batch) async {
-    final widgetRef = ref;
-    final isMounted = mounted;
-    
-    ConfirmationDialog.showDelete(
-      context,
-      batch.name,
-      onConfirm: () async {
-        try {
-          await widgetRef.read(batchListProvider.notifier).deleteBatch(batch.id);
-          if (isMounted && mounted) {
-            SuccessSnackbar.show(context, 'Batch deleted successfully');
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.cardBackground,
+        title: const Text('Delete Batch', style: TextStyle(color: AppColors.textPrimary)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Choose how you want to remove ${batch.name}:',
+                style: const TextStyle(color: AppColors.textPrimary)),
+            const SizedBox(height: 16),
+            _DeleteOption(
+              title: 'Deactivate (Soft Delete)',
+              description: 'Hide batch from UI but keep historical data for reports.',
+              icon: Icons.pause_circle_outline,
+              color: AppColors.warning,
+              onTap: () {
+                Navigator.pop(context);
+                _handleDeactivateBatch(batch);
+              },
+            ),
+            const SizedBox(height: 12),
+            _DeleteOption(
+              title: 'Delete Permanently (Hard Delete)',
+              description: 'Immediately wipe all batch data and student associations.',
+              icon: Icons.delete_forever,
+              color: AppColors.error,
+              onTap: () {
+                Navigator.pop(context);
+                _handleRemoveBatchPermanently(batch);
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handleDeactivateBatch(Batch batch) async {
+    try {
+      await ref.read(batchListProvider.notifier).deactivateBatch(batch.id);
+      if (mounted) {
+        SuccessSnackbar.show(context, 'Batch deactivated successfully');
+      }
+    } catch (e) {
+      if (mounted) {
+        SuccessSnackbar.showError(context, 'Failed to deactivate batch: ${e.toString()}');
+      }
+    }
+  }
+
+  void _handleRemoveBatchPermanently(Batch batch) async {
+    showDialog(
+      context: context,
+      builder: (context) => ConfirmationDialog(
+        title: 'Permanent Deletion',
+        message: 'This action CANNOT be undone. All data for ${batch.name} will be permanently destroyed. Are you absolutely sure?',
+        confirmLabel: 'Delete Forever',
+        isDangerous: true,
+        onConfirm: () async {
+          try {
+            await ref.read(batchListProvider.notifier).removeBatchPermanently(batch.id);
+            if (mounted) {
+              SuccessSnackbar.show(context, 'Batch deleted permanently');
+            }
+          } catch (e) {
+            if (mounted) {
+              SuccessSnackbar.showError(context, 'Failed to delete batch: ${e.toString()}');
+            }
           }
-        } catch (e) {
-          if (isMounted && mounted) {
-            SuccessSnackbar.showError(context, 'Error: ${e.toString()}');
-          }
-        }
-      },
+        },
+      ),
     );
   }
 
@@ -213,13 +274,29 @@ class _BatchCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      batch.name,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary,
-                      ),
+                    Row(
+                      children: [
+                        Text(
+                          batch.name,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: batch.status == 'active' ? AppColors.success : AppColors.error,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            batch.status.toUpperCase(),
+                            style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Row(
@@ -300,6 +377,52 @@ class _InfoChip extends StatelessWidget {
             style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
           ),
         ],
+      ),
+  }
+}
+
+class _DeleteOption extends StatelessWidget {
+  final String title;
+  final String description;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _DeleteOption({
+    required this.title,
+    required this.description,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          border: Border.all(color: color.withOpacity(0.3)),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 14)),
+                  const SizedBox(height: 4),
+                  Text(description, style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

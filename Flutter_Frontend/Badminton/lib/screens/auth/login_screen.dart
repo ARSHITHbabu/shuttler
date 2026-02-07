@@ -48,6 +48,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           );
 
       if (mounted) {
+        // Check for inactive account (NEW)
+        if (result['account_inactive'] == true) {
+          final rejoinPending = result['rejoin_request_pending'] ?? false;
+          final studentId = result['student_id'];
+          _showInactiveAccountDialog(context, studentId, rejoinPending);
+          return;
+        }
+
         final userType = result['userType'];
         
         // Check profile completeness for students
@@ -279,5 +287,67 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ),
       ),
     );
+  }
+
+  void _showInactiveAccountDialog(BuildContext context, int studentId, bool isPending) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.cardBackground,
+        title: const Text('Account Inactive', style: TextStyle(color: AppColors.textPrimary)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Your account has been marked as inactive.',
+              style: TextStyle(color: AppColors.textPrimary),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              isPending
+                  ? 'Your rejoin request is currently pending owner approval. We will notify you once it\'s approved.'
+                  : 'You can request to rejoin the academy. Once requested, the owner will review and approve your reactivation.',
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+          if (!isPending)
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _handleRequestRejoin(studentId);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent),
+              child: const Text('Request to Rejoin'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleRequestRejoin(int studentId) async {
+    setState(() => _isLoading = true);
+    try {
+      final studentService = ref.read(studentServiceProvider);
+      await studentService.requestRejoin(studentId);
+      if (mounted) {
+        SuccessSnackbar.show(context, 'Rejoin request sent successfully! Please wait for owner approval.');
+      }
+    } catch (e) {
+      if (mounted) {
+        SuccessSnackbar.showError(context, 'Failed to request rejoin: ${e.toString()}');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 }

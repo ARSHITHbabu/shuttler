@@ -32,9 +32,11 @@ class ApiEndpoints {
 
   // Students
   static const String students = '/students/';
-  static String studentById(int id) => '/students/$id';
-  static String studentAttendance(int id) => '/students/$id/attendance';
   static String studentPerformance(int id) => '/students/$id/performance';
+  static String deactivateStudent(int id) => '/students/$id/deactivate';
+  static String removeStudent(int id) => '/students/$id/remove';
+  static String requestRejoin(int id) => '/students/$id/request-rejoin';
+  static String approveRejoin(int id) => '/students/$id/approve-rejoin';
 
   // Sessions (Seasons)
   static const String sessions = '/sessions/';
@@ -45,6 +47,8 @@ class ApiEndpoints {
   static const String batches = '/batches/';
   static String batchById(int id) => '/batches/$id';
   static String batchStudentsList(int id) => '/batches/$id/students';
+  static String deactivateBatch(int id) => '/batches/$id/deactivate';
+  static String removeBatch(int id) => '/batches/$id/remove';
 
   // Batch Students (enrollment)
   static const String batchStudents = '/batch-students/';

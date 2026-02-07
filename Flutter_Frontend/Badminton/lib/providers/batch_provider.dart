@@ -46,7 +46,7 @@ class BatchList extends _$BatchList {
     }
   }
 
-  /// Delete a batch
+  /// Delete a batch (Soft delete - logic varies, we use deactivate for soft delete)
   Future<void> deleteBatch(int id) async {
     try {
       final batchService = ref.read(batchServiceProvider);
@@ -54,6 +54,47 @@ class BatchList extends _$BatchList {
       await refresh();
     } catch (e) {
       throw Exception('Failed to delete batch: $e');
+    }
+  }
+
+  /// Deactivate a batch (Soft delete)
+  Future<void> deactivateBatch(int id) async {
+    try {
+      final batchService = ref.read(batchServiceProvider);
+      await batchService.deactivateBatch(id);
+      
+      ref.invalidate(dashboardStatsProvider);
+      await refresh();
+    } catch (e) {
+      throw Exception('Failed to deactivate batch: $e');
+    }
+  }
+
+  /// Remove a batch permanently (Hard delete)
+  Future<void> removeStudentPermanently(int id) async {
+    // Note: I named it removeStudentPermanently in frontend for students, 
+    // it should be removeBatchPermanently here for consistency with the backend service.
+    try {
+      final batchService = ref.read(batchServiceProvider);
+      await batchService.removeBatchPermanently(id);
+      
+      ref.invalidate(dashboardStatsProvider);
+      await refresh();
+    } catch (e) {
+      throw Exception('Failed to remove batch permanently: $e');
+    }
+  }
+
+  /// Remove a batch permanently (Hard delete) - Correct name
+  Future<void> removeBatchPermanently(int id) async {
+    try {
+      final batchService = ref.read(batchServiceProvider);
+      await batchService.removeBatchPermanently(id);
+      
+      ref.invalidate(dashboardStatsProvider);
+      await refresh();
+    } catch (e) {
+      throw Exception('Failed to remove batch permanently: $e');
     }
   }
 
