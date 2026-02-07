@@ -9,6 +9,7 @@ import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/service_providers.dart';
 
 /// Login screen for user authentication
 class LoginScreen extends ConsumerStatefulWidget {

@@ -32,6 +32,7 @@ class ApiEndpoints {
 
   // Students
   static const String students = '/students/';
+  static String studentById(int id) => '/students/$id';
   static String studentPerformance(int id) => '/students/$id/performance';
   static String deactivateStudent(int id) => '/students/$id/deactivate';
   static String removeStudent(int id) => '/students/$id/remove';

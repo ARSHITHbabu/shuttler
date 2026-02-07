@@ -111,8 +111,8 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
       builder: (context) => ConfirmationDialog(
         title: 'Permanent Deletion',
         message: 'This action CANNOT be undone. All data for ${batch.name} will be permanently destroyed. Are you absolutely sure?',
-        confirmLabel: 'Delete Forever',
-        isDangerous: true,
+        confirmText: 'Delete Forever',
+        isDestructive: true,
         onConfirm: () async {
           try {
             await ref.read(batchListProvider.notifier).removeBatchPermanently(batch.id);
@@ -208,15 +208,11 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                     return Padding(
                       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
                       child: Column(
-                        children: filteredBatches.map((batch) => Padding(
-                          padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
-                          child: _BatchCard(
-                            batch: batch,
-                            onTap: () => _openEditForm(batch),
-                            onEdit: () => _openEditForm(batch),
-                            onDelete: () => _deleteBatch(batch),
-                            onViewStudents: () => BatchStudentsSheet.show(context, batch),
-                          ),
+                        children: filteredBatches.map((batch) => _BatchCard(
+                          batch: batch,
+                          onEdit: () => _openEditForm(batch),
+                          onDeactivate: () => _handleDeactivateBatch(batch),
+                          onDelete: () => _handleRemoveBatchPermanently(batch),
                         )).toList(),
                       ),
                     );
@@ -246,24 +242,25 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
 
 class _BatchCard extends StatelessWidget {
   final Batch batch;
-  final VoidCallback onTap;
-  final VoidCallback onEdit;
   final VoidCallback onDelete;
-  final VoidCallback onViewStudents;
+  final VoidCallback onDeactivate;
+  final VoidCallback onEdit;
 
   const _BatchCard({
     required this.batch,
-    required this.onTap,
-    required this.onEdit,
     required this.onDelete,
-    required this.onViewStudents,
+    required this.onDeactivate,
+    required this.onEdit,
   });
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return NeumorphicContainer(
+      margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
       padding: const EdgeInsets.all(AppDimensions.paddingL),
-      onTap: onTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -274,73 +271,117 @@ class _BatchCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Text(
-                          batch.name,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: batch.status == 'active' ? AppColors.success : AppColors.error,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            batch.status.toUpperCase(),
-                            style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ],
+                    Text(
+                      batch.name,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
                     ),
                     const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        const Icon(Icons.access_time, size: 14, color: AppColors.textSecondary),
-                        const SizedBox(width: 4),
-                        Text(batch.timeRange, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
-                      ],
-                    ),
+                    _StatusBadge(status: batch.status),
                   ],
                 ),
               ),
-              PopupMenuButton(
+              PopupMenuButton<String>(
                 icon: const Icon(Icons.more_vert, color: AppColors.textSecondary),
-                color: AppColors.cardBackground,
                 onSelected: (value) {
-                  if (value == 'edit') onEdit();
-                  else if (value == 'delete') onDelete();
-                  else if (value == 'students') onViewStudents();
+                  if (value == 'edit') {
+                    onEdit();
+                  } else if (value == 'deactivate') {
+                    onDeactivate();
+                  } else if (value == 'delete') {
+                    onDelete();
+                  }
                 },
                 itemBuilder: (context) => [
-                  const PopupMenuItem(value: 'edit', child: Text('Edit', style: TextStyle(color: AppColors.textPrimary))),
-                  const PopupMenuItem(value: 'students', child: Text('View Students', style: TextStyle(color: AppColors.textPrimary))),
-                  const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: AppColors.error))),
+                  const PopupMenuItem(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_outlined, size: 20),
+                        SizedBox(width: 8),
+                        Text('Edit'),
+                      ],
+                    ),
+                  ),
+                  if (batch.status == 'active')
+                    const PopupMenuItem(
+                      value: 'deactivate',
+                      child: Row(
+                        children: [
+                          Icon(Icons.archive_outlined, size: 20),
+                          SizedBox(width: 8),
+                          Text('Deactivate'),
+                        ],
+                      ),
+                    ),
+                  const PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete_outline, size: 20, color: AppColors.error),
+                        SizedBox(width: 8),
+                        Text('Delete', style: TextStyle(color: AppColors.error)),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ],
           ),
           const SizedBox(height: AppDimensions.spacingM),
-          _InfoChip(icon: Icons.calendar_today_outlined, label: batch.daysString),
-          if (batch.assignedCoachIds.isNotEmpty || batch.assignedCoachId != null) ...[
-            const SizedBox(height: AppDimensions.spacingS),
-            _InfoChip(
-              icon: Icons.person_outline,
-              label: batch.coachNamesString.isNotEmpty ? batch.coachNamesString : (batch.coachName ?? 'Coach'),
-            ),
-          ],
-          if (batch.location != null) ...[
-            const SizedBox(height: AppDimensions.spacingS),
-            _InfoChip(icon: Icons.location_on_outlined, label: batch.location!),
-          ],
-          const SizedBox(height: AppDimensions.spacingS),
-          Text('Capacity: ${batch.capacity}', style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          Wrap(
+            spacing: AppDimensions.spacingS,
+            runSpacing: AppDimensions.spacingXs,
+            children: [
+              _InfoChip(
+                icon: Icons.people_outline,
+                label: '${batch.capacity} capacity',
+              ),
+              _InfoChip(
+                icon: Icons.currency_rupee,
+                label: '${batch.fees}/month',
+              ),
+              if (batch.timing != null)
+                _InfoChip(
+                  icon: Icons.access_time,
+                  label: batch.timing!,
+                ),
+            ],
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  final String status;
+
+  const _StatusBadge({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final isActive = status == 'active';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: isActive ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: isActive ? Colors.green : Colors.orange,
+          width: 0.5,
+        ),
+      ),
+      child: Text(
+        status.toUpperCase(),
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          color: isActive ? Colors.green : Colors.orange,
+        ),
       ),
     );
   }
@@ -378,6 +419,7 @@ class _InfoChip extends StatelessWidget {
           ),
         ],
       ),
+    );
   }
 }
 

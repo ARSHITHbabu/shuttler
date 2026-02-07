@@ -20,6 +20,8 @@ import '../../models/leave_request.dart';
 import '../../models/student_registration_request.dart';
 import '../../models/coach_registration_request.dart';
 import '../../widgets/common/custom_text_field.dart';
+import '../../models/student.dart';
+import '../../providers/student_provider.dart';
 
 /// Requests Screen - View and manage leave requests and student registration requests
 class RequestsScreen extends ConsumerStatefulWidget {
@@ -1826,6 +1828,8 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
         );
       }
     }
+  }
+
   Widget _buildRejoinRequestsTab(bool isDark) {
     final studentsAsync = ref.watch(studentListProvider);
 

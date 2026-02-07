@@ -833,9 +833,6 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
 
 
   void _toggleStudentStatus(BuildContext context, Student student) async {
-    try {
-      final newStatus = student.status == 'active' ? 'inactive' : 'active';
-      await ref.read(studentListProvider.notifier).updateStudent(student.id, {'status': newStatus});
     final newStatus = student.status == 'active' ? 'inactive' : 'active';
     final actionName = newStatus == 'active' ? 'activate' : 'deactivate';
 
@@ -844,8 +841,8 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
       builder: (context) => ConfirmationDialog(
         title: '${actionName.capitalize()} Student',
         message: 'Are you sure you want to $actionName ${student.name}?',
-        confirmLabel: actionName.capitalize(),
-        isDangerous: newStatus == 'inactive',
+        confirmText: actionName.capitalize(),
+        isDestructive: newStatus == 'inactive',
         onConfirm: () async {
           try {
             if (newStatus == 'inactive') {
@@ -872,7 +869,7 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
       builder: (context) => ConfirmationDialog(
         title: 'Approve Rejoin Request',
         message: '${student.name} has requested to rejoin. Do you want to approve this request?',
-        confirmLabel: 'Approve',
+        confirmText: 'Approve',
         onConfirm: () async {
           try {
             await ref.read(studentListProvider.notifier).approveRejoin(student.id);
@@ -954,8 +951,8 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
       builder: (context) => ConfirmationDialog(
         title: 'Permanent Deletion',
         message: 'This action CANNOT be undone. All data for ${student.name} will be permanently destroyed. Are you absolutely sure?',
-        confirmLabel: 'Delete Forever',
-        isDangerous: true,
+        confirmText: 'Delete Forever',
+        isDestructive: true,
         onConfirm: () async {
           try {
             await ref.read(studentListProvider.notifier).removeStudentPermanently(student.id);

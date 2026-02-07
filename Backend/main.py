@@ -2885,12 +2885,11 @@ def get_batches():
                     )
                     batches.append(batch)
                 return batches
-                return batches
             else:
                 # Re-raise if it's a different error
                 raise
-        finally:
-            db.close()
+    finally:
+        db.close()
 
 @app.get("/batches/inactive/", response_model=List[Batch])
 def get_inactive_batches():
