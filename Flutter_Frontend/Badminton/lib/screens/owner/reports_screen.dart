@@ -13,7 +13,9 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../providers/service_providers.dart';
+import '../../providers/auth_provider.dart';
 import '../../models/session.dart';
+import 'package:fl_chart/fl_chart.dart';
 import '../../models/batch.dart';
 
 // Placeholder for web download helper
@@ -128,11 +130,24 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         filterValue = DateFormat('yyyy-MM').format(_selectedMonth);
       }
 
+      final authState = ref.read(authProvider);
+      String userName = "Admin";
+      String userRole = "Owner";
+      
+      authState.whenData((state) {
+        if (state is Authenticated) {
+          userName = state.userName;
+          userRole = state.userType;
+        }
+      });
+
       final data = await reportService.generateReport(
         type: _reportType.name,
         filterType: _filterType.name,
         filterValue: filterValue,
         batchId: _selectedBatchId,
+        generatedByName: userName,
+        generatedByRole: userRole,
       );
 
       setState(() {
@@ -192,13 +207,21 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
              child: ChoiceChip(
                label: Text(type.name.toUpperCase()),
                selected: isSelected,
-               onSelected: (val) {
-                 if (val) setState(() => _reportType = type);
-               },
-               selectedColor: AppColors.accent,
-               labelStyle: TextStyle(color: isSelected ? Colors.white : AppColors.textPrimary),
-             ),
-           );
+                onSelected: (val) {
+                  if (val) {
+                    setState(() {
+                      _reportType = type;
+                      _reportData = null; // Clear previous report data
+                    });
+                  }
+                },
+                selectedColor: AppColors.accent,
+                labelStyle: TextStyle(
+                  color: isSelected ? Colors.white : AppColors.textPrimary,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+            );
         }).toList(),
       ),
     );
@@ -407,107 +430,165 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   }
 
   Widget _buildReportPreview() {
-    final overview = _reportData!['overview'];
-    final breakdown = _reportData!['breakdown'] as List;
-    final details = _reportData!['student_details'] as List?;
     final filterSummary = _reportData!['filter_summary'];
+    final generatedBy = _reportData!['generated_by'] ?? "Unknown";
+    final generatedOn = _reportData!['generated_on'] ?? "N/A";
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text("Report Preview", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            IconButton(
-              icon: const Icon(Icons.picture_as_pdf, color: Colors.red),
-              onPressed: _exportPDF,
-              tooltip: "Download PDF",
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Text(filterSummary ?? "", style: const TextStyle(fontWeight: FontWeight.w500)),
-        const Divider(),
-        
+        const Text("Generated Report", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
         NeumorphicContainer(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text("Overview", style: TextStyle(color: AppColors.textSecondary)),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      _reportType == ReportType.attendance 
+                        ? Icons.fact_check 
+                        : _reportType == ReportType.fee 
+                          ? Icons.payments 
+                          : Icons.insights,
+                      color: AppColors.accent,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "${_reportType.name.toUpperCase()} REPORT",
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          filterSummary ?? "",
+                          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.picture_as_pdf, color: Colors.red, size: 28),
+                    onPressed: _exportPDF,
+                    tooltip: "Download PDF",
+                  ),
+                ],
+              ),
+              const Divider(height: 32),
+              _infoRow(Icons.person_outline, "Generated By", generatedBy),
               const SizedBox(height: 8),
-              if (_reportType == ReportType.attendance) ...[
-                 _statRow("Total Students", "${overview['total_students']}"),
-                 _statRow("Classes Conducted", "${overview['total_conducted']}"),
-                 _statRow("Present", "${overview['present_count']}", color: Colors.green),
-                 _statRow("Absent", "${overview['absent_count']}", color: Colors.red),
-                 _statRow("Attendance Rate", "${overview['attendance_rate']}%", isBold: true),
-              ] else if (_reportType == ReportType.fee) ...[
-                 _statRow("Total Students", "${overview['total_students']}"),
-                 _statRow("Expected Revenue", "₹${overview['total_expected']}"),
-                 _statRow("Collected", "₹${overview['total_collected']}", color: Colors.green),
-                 _statRow("Pending", "₹${overview['pending_amount']}", color: Colors.orange),
-                 _statRow("Overdue Amount", "₹${overview['overdue_amount']}", color: Colors.red),
-              ]
+              _infoRow(Icons.calendar_today_outlined, "Generated On", generatedOn),
+              const SizedBox(height: 20),
+              
+              // Analytics Preview
+              const Text("Visual Analytics", style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 180,
+                child: _buildChart(),
+              ),
+              const SizedBox(height: 16),
+              
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _exportPDF,
+                  icon: const Icon(Icons.download, size: 18),
+                  label: const Text("Download Full PDF Report"),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.accent,
+                    side: const BorderSide(color: AppColors.accent),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
-        
-        const SizedBox(height: 16),
-        
-        if (details != null && details.isNotEmpty) ...[
-          const Text("Student Details", style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: DataTable(
-              columns: _reportType == ReportType.attendance 
-                  ? const [DataColumn(label: Text("Name")), DataColumn(label: Text("Attended")), DataColumn(label: Text("%"))]
-                  : const [DataColumn(label: Text("Name")), DataColumn(label: Text("Paid")), DataColumn(label: Text("Status"))],
-              rows: details.map<DataRow>((s) {
-                if (_reportType == ReportType.attendance) {
-                   return DataRow(cells: [
-                     DataCell(Text(s['name'])),
-                     DataCell(Text("${s['classes_attended']}/${s['classes_assigned']}")),
-                     DataCell(Text("${s['attendance_percentage']}%")),
-                   ]);
-                } else {
-                   return DataRow(cells: [
-                     DataCell(Text(s['name'])),
-                     DataCell(Text("₹${s['amount_paid']}")),
-                     DataCell(Text(s['payment_status'], style: TextStyle(
-                       color: s['payment_status'] == 'Paid' ? Colors.green : Colors.red
-                     ))),
-                   ]);
-                }
-              }).toList(),
-            ),
-          )
-        ] else ...[
-          const Text("Breakdown", style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: breakdown.length,
-            itemBuilder: (ctx, i) {
-               final item = breakdown[i];
-               return Card(
-                 child: ListTile(
-                   title: Text(item['name']),
-                   subtitle: Text(_reportType == ReportType.attendance 
-                       ? "Att: ${item['attendance_rate']}%" 
-                       : "Collected: ₹${item['collected']}"),
-                   trailing: Text(_reportType == ReportType.attendance 
-                       ? "${item['total_students']} Students" 
-                       : "Pending: ${item['pending_count']}"),
-                 ),
-               );
-            },
-          ),
-        ]
       ],
+    );
+  }
+
+  Widget _infoRow(IconData icon, String label, String value) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: AppColors.textSecondary),
+        const SizedBox(width: 8),
+        Text("$label: ", style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
+      ],
+    );
+  }
+
+  Widget _buildChart() {
+    final chartData = _reportData!['chart_data'];
+    if (chartData == null || (chartData['labels'] as List).isEmpty) {
+      return const Center(child: Text("No data for chart"));
+    }
+
+    final List<String> labels = List<String>.from(chartData['labels']);
+    final List<double> values = (chartData['values'] as List).map((e) => (e as num).toDouble()).toList();
+
+    return BarChart(
+      BarChartData(
+        alignment: BarChartAlignment.spaceAround,
+        maxY: values.isEmpty ? 100 : (values.reduce((a, b) => a > b ? a : b) * 1.2).clamp(10, double.infinity),
+        barTouchData: BarTouchData(enabled: true),
+        titlesData: FlTitlesData(
+          show: true,
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              getTitlesWidget: (value, meta) {
+                if (value.toInt() >= 0 && value.toInt() < labels.length) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: Text(
+                      labels[value.toInt()].length > 8 
+                        ? labels[value.toInt()].substring(0, 6) + '..' 
+                        : labels[value.toInt()],
+                      style: const TextStyle(fontSize: 10),
+                    ),
+                  );
+                }
+                return const SizedBox();
+              },
+              reservedSize: 30,
+            ),
+          ),
+          leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        ),
+        gridData: const FlGridData(show: false),
+        borderData: FlBorderData(show: false),
+        barGroups: values.asMap().entries.map((entry) {
+          return BarChartGroupData(
+            x: entry.key,
+            barRods: [
+              BarChartRodData(
+                toY: entry.value,
+                color: AppColors.accent,
+                width: 16,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+              ),
+            ],
+          );
+        }).toList(),
+      ),
     );
   }
 
@@ -538,13 +619,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             pw.Row(
                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                children: [
-                 pw.Column(
-                   crossAxisAlignment: pw.CrossAxisAlignment.start,
-                   children: [
-                     pw.Text("Report Type: ${_reportType.name.toUpperCase()}", style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                     pw.Text("Generated By: Owner/Coach (Admin)"), // TODO: Get actual user name
-                   ]
-                 ),
+                  pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text("Report Type: ${_reportType.name.toUpperCase()}", style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+                      pw.Text("Generated By: ${_reportData!['generated_by'] ?? 'Admin'}"),
+                    ]
+                  ),
                  pw.Column(
                    crossAxisAlignment: pw.CrossAxisAlignment.end,
                    children: [
@@ -653,26 +734,40 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
        return pw.Table.fromTextArray(
          headers: ['Metric', 'Value'],
          data: [
+            ['Total Students', '${overview['total_students']}'],
+            ['Classes Conducted', '${overview['total_conducted']}'],
+            ['Present Count', '${overview['present_count']}'],
+            ['Absent Count', '${overview['absent_count']}'],
+            ['Attendance Rate', '${overview['attendance_rate']}%'],
+          ],
+          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+          cellAlignment: pw.Alignment.centerLeft,
+          headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+        );
+    } else if (_reportType == ReportType.fee) {
+       // Fee
+       return pw.Table.fromTextArray(
+         headers: ['Metric', 'Value'],
+         data: [
            ['Total Students', '${overview['total_students']}'],
-           ['Classes Conducted', '${overview['total_conducted']}'],
-           ['Present Count', '${overview['present_count']}'],
-           ['Absent Count', '${overview['absent_count']}'],
-           ['Attendance Rate', '${overview['attendance_rate']}%'],
+           ['Expected Revenue', '${overview['total_expected']}'], 
+           ['Collected Revenue', '${overview['total_collected']}'],
+           ['Pending Amount', '${overview['pending_amount']}'],
+           ['Overdue Amount', '${overview['overdue_amount']}'],
          ],
          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
          cellAlignment: pw.Alignment.centerLeft,
          headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
        );
     } else {
-       // Fee
+       // Performance
        return pw.Table.fromTextArray(
          headers: ['Metric', 'Value'],
          data: [
            ['Total Students', '${overview['total_students']}'],
-           ['Expected Revenue', '${overview['total_expected']}'], // Using simple format for now
-           ['Collected Revenue', '${overview['total_collected']}'],
-           ['Pending Amount', '${overview['pending_amount']}'],
-           ['Overdue Amount', '${overview['overdue_amount']}'],
+           ['Total Reviews', '${overview['reviews_count']}'],
+           ['Students Reviewed', '${overview['students_reviewed']}'],
+           ['Average Rating', '${overview['average_rating']} / 5.0'],
          ],
          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
          cellAlignment: pw.Alignment.centerLeft,
@@ -694,7 +789,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
         headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
       );
-    } else {
+    } else if (_reportType == ReportType.fee) {
       return pw.Table.fromTextArray(
         headers: ['Batch Name', 'Students', 'Expected', 'Collected', 'Pending Ct'],
         data: breakdown.map((b) => [
@@ -703,6 +798,18 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           '${b['expected']}',
           '${b['collected']}',
           '${b['pending_count']}'
+        ]).toList(),
+        headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+        headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+      );
+    } else {
+      return pw.Table.fromTextArray(
+        headers: ['Batch Name', 'Students', 'Reviews', 'Avg Rating'],
+        data: breakdown.map((b) => [
+          b['name'],
+          '${b['total_students']}',
+          '${b['reviews_count']}',
+          '${b['average_rating']}'
         ]).toList(),
         headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
         headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
@@ -730,7 +837,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         cellStyle: const pw.TextStyle(fontSize: 9),
         headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
       );
-    } else {
+    } else if (_reportType == ReportType.fee) {
       return pw.Table.fromTextArray(
         headers: ['Name', 'Phone', 'Total Fee', 'Paid', 'Pending', 'Status'],
         columnWidths: {
@@ -744,6 +851,25 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           '${s['amount_paid']}',
           '${s['pending_amount']}',
           s['payment_status']
+        ]).toList(),
+        headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9),
+        cellStyle: const pw.TextStyle(fontSize: 9),
+        headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
+      );
+    } else {
+      return pw.Table.fromTextArray(
+        headers: ['Name', 'Phone', 'Reviews', 'Avg Rating', 'Last Review'],
+        columnWidths: {
+          0: const pw.FlexColumnWidth(2), 
+          1: const pw.FlexColumnWidth(1.5),
+        },
+        data: details.map((s) => [
+          s['name'],
+          s['phone'] ?? '-',
+          '${s['reviews_count']}',
+          '${s['average_rating']}',
+          '${s['last_review']}',
+          'Reviewed'
         ]).toList(),
         headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9),
         cellStyle: const pw.TextStyle(fontSize: 9),

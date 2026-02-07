@@ -7535,10 +7535,12 @@ def delete_notification(notification_id: int):
 # ==================== Report Models & Endpoints ====================
 
 class ReportFilter(BaseModel):
-    type: str # 'attendance' or 'fee'
-    filter_type: str # 'season', 'year', 'month'
-    filter_value: str # session_id (as str), "2025", "2025-01"
-    batch_id: Optional[Union[str, int]] = "all" # "all" or specific batch ID
+    type: str  # attendance, fee, performance
+    filter_type: str  # season, year, month
+    filter_value: str  # season_id, year, or YYYY-MM
+    batch_id: str  # batch_id or 'all'
+    generated_by_name: Optional[str] = "Admin"
+    generated_by_role: Optional[str] = "Owner"
 
 @app.post("/api/reports/generate")
 def generate_report(filter: ReportFilter):
@@ -7628,7 +7630,7 @@ def generate_report(filter: ReportFilter):
             
             student_count_query = db.query(BatchStudentDB).filter(
                 BatchStudentDB.batch_id.in_(target_batch_ids),
-                BatchStudentDB.status == 'approved' 
+                BatchStudentDB.status.in_(['approved', 'active'])
             )
             total_students = student_count_query.count()
             
@@ -7647,7 +7649,7 @@ def generate_report(filter: ReportFilter):
                 b_total = len(b_recs)
                 b_stud_count = db.query(BatchStudentDB).filter(
                     BatchStudentDB.batch_id == b_id,
-                    BatchStudentDB.status == 'approved'
+                    BatchStudentDB.status.in_(['approved', 'active'])
                 ).count()
                 
                 breakdown.append({
@@ -7699,7 +7701,7 @@ def generate_report(filter: ReportFilter):
             
             student_count_query = db.query(BatchStudentDB).filter(
                 BatchStudentDB.batch_id.in_(target_batch_ids),
-                BatchStudentDB.status == 'approved'
+                BatchStudentDB.status.in_(['approved', 'active'])
             )
             total_students = student_count_query.count()
 
@@ -7723,7 +7725,7 @@ def generate_report(filter: ReportFilter):
                 
                 b_stud_count = db.query(BatchStudentDB).filter(
                     BatchStudentDB.batch_id == b_id,
-                    BatchStudentDB.status == 'approved'
+                    BatchStudentDB.status.in_(['approved', 'active'])
                 ).count()
 
                 breakdown.append({
@@ -7765,13 +7767,88 @@ def generate_report(filter: ReportFilter):
                         "payment_status": s_status
                     })
 
+        elif filter.type == 'performance':
+            # PERFORMANCE LOGIC
+            from sqlalchemy import func
+            query = db.query(PerformanceDB).filter(
+                PerformanceDB.date >= start_date,
+                PerformanceDB.date <= end_date,
+                PerformanceDB.batch_id.in_(target_batch_ids)
+            )
+            reviews = query.all()
+            
+            student_count_query = db.query(BatchStudentDB).filter(
+                BatchStudentDB.batch_id.in_(target_batch_ids),
+                BatchStudentDB.status.in_(['approved', 'active'])
+            )
+            total_students = student_count_query.count()
+            
+            # Average Ratings
+            avg_overall = db.query(func.avg(PerformanceDB.rating)).filter(
+                PerformanceDB.date >= start_date,
+                PerformanceDB.date <= end_date,
+                PerformanceDB.batch_id.in_(target_batch_ids)
+            ).scalar() or 0
+            
+            overview = {
+                "total_students": total_students,
+                "reviews_count": len(reviews),
+                "average_rating": round(float(avg_overall), 1),
+                "students_reviewed": len(set(r.student_id for r in reviews))
+            }
+            
+            # Breakdown by Batch
+            for b_id in target_batch_ids:
+                b_recs = [r for r in reviews if r.batch_id == b_id]
+                b_avg = sum(r.rating for r in b_recs) / len(b_recs) if b_recs else 0
+                b_stud_count = db.query(BatchStudentDB).filter(
+                    BatchStudentDB.batch_id == b_id,
+                    BatchStudentDB.status.in_(['approved', 'active'])
+                ).count()
+                
+                breakdown.append({
+                    "name": batch_map.get(b_id, "Unknown"),
+                    "total_students": b_stud_count,
+                    "reviews_count": len(b_recs),
+                    "average_rating": round(b_avg, 1)
+                })
+
+            # Student Details
+            if str(filter.batch_id).lower() != 'all':
+                students = db.query(
+                    StudentDB.name, StudentDB.phone, StudentDB.email, StudentDB.id
+                ).join(BatchStudentDB, BatchStudentDB.student_id == StudentDB.id)\
+                 .filter(BatchStudentDB.batch_id == int(filter.batch_id)).all()
+                 
+                for s in students:
+                    s_recs = [r for r in reviews if r.student_id == s.id]
+                    s_avg = sum(r.rating for r in s_recs) / len(s_recs) if s_recs else 0
+                    
+                    student_details.append({
+                        "name": s.name,
+                        "phone": s.phone,
+                        "email": s.email,
+                        "reviews_count": len(s_recs),
+                        "average_rating": round(s_avg, 1),
+                        "last_review": s_recs[-1].date if s_recs else "N/A"
+                    })
+
+        # 4. Final Response Construction
+        generated_by = f"{filter.generated_by_name} ({filter.generated_by_role})"
+        
         return {
             "period": filter_summary,
-            "generated_on": datetime.now().isoformat(),
+            "generated_on": datetime.now().strftime("%d %b %Y, %I:%M %p"),
+            "generated_by": generated_by,
             "filter_summary": filter_summary,
             "overview": overview,
             "breakdown": breakdown,
-            "student_details": student_details
+            "student_details": student_details,
+            "report_type": filter.type,
+            "chart_data": {
+                "labels": [b['name'] for b in breakdown],
+                "values": [b.get('attendance_rate') or b.get('collected') or b.get('average_rating') or 0 for b in breakdown]
+            }
         }
 
     except Exception as e:
