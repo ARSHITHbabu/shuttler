@@ -3197,10 +3197,13 @@ def create_student(student: StudentCreate):
         db.close()
 
 @app.get("/students/", response_model=List[Student])
-def get_students():
+def get_students(include_deleted: bool = Query(False, description="Include deleted students")):
     db = SessionLocal()
     try:
-        students = db.query(StudentDB).all()
+        query = db.query(StudentDB)
+        if not include_deleted:
+            query = query.filter(StudentDB.status != "deleted")
+        students = query.all()
         return students
     finally:
         db.close()
@@ -3236,14 +3239,25 @@ def update_student(student_id: int, student_update: StudentUpdate):
 
 @app.delete("/students/{student_id}")
 def delete_student(student_id: int):
+    """Soft delete a student (mark as deleted)"""
     db = SessionLocal()
     try:
         student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
         if not student:
             raise HTTPException(status_code=404, detail="Student not found")
-        db.delete(student)
+        
+        # Soft delete instead of hard delete to preserve history
+        student.status = "deleted"
+        
+        # Also remove from current batches to stop active participation
+        # Note: We keep the history in batch_students, just change status there too if needed
+        # For now, let's just mark the student record as deleted
+        
         db.commit()
-        return {"message": "Student deleted"}
+        return {"message": "Student account deleted (history preserved)"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
 
