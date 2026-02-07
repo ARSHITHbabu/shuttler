@@ -15,6 +15,8 @@ import '../../common/error_widget.dart';
 import '../../common/skeleton_screen.dart';
 import '../../../core/utils/contact_utils.dart';
 
+import '../../../providers/auth_provider.dart';
+
 /// Profile Tab - Shows student information and management actions
 class StudentProfileTab extends ConsumerStatefulWidget {
   final Student student;
@@ -58,8 +60,8 @@ class _StudentProfileTabState extends ConsumerState<StudentProfileTab> {
           
           const SizedBox(height: AppDimensions.spacingL),
           
-          // Action Buttons
-          _buildActionButtons(),
+          // Action Buttons - Only for Owners
+          _buildActionButtons(ref),
         ],
       ),
     );
@@ -346,7 +348,18 @@ class _StudentProfileTabState extends ConsumerState<StudentProfileTab> {
     );
   }
 
-  Widget _buildActionButtons() {
+  Widget _buildActionButtons(WidgetRef ref) {
+    // Check if user is owner
+    final authState = ref.watch(authProvider);
+    final isOwner = authState.maybeWhen(
+      data: (state) => state is Authenticated && state.userType == 'owner',
+      orElse: () => false,
+    );
+
+    if (!isOwner) {
+      return const SizedBox.shrink();
+    }
+
     return Column(
       children: [
         SizedBox(

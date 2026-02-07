@@ -3197,10 +3197,13 @@ def create_student(student: StudentCreate):
         db.close()
 
 @app.get("/students/", response_model=List[Student])
-def get_students():
+def get_students(include_deleted: bool = Query(False, description="Include deleted students")):
     db = SessionLocal()
     try:
-        students = db.query(StudentDB).all()
+        query = db.query(StudentDB)
+        if not include_deleted:
+            query = query.filter(StudentDB.status != "deleted")
+        students = query.all()
         return students
     finally:
         db.close()
@@ -3236,14 +3239,25 @@ def update_student(student_id: int, student_update: StudentUpdate):
 
 @app.delete("/students/{student_id}")
 def delete_student(student_id: int):
+    """Soft delete a student (mark as deleted)"""
     db = SessionLocal()
     try:
         student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
         if not student:
             raise HTTPException(status_code=404, detail="Student not found")
-        db.delete(student)
+        
+        # Soft delete instead of hard delete to preserve history
+        student.status = "deleted"
+        
+        # Also remove from current batches to stop active participation
+        # Note: We keep the history in batch_students, just change status there too if needed
+        # For now, let's just mark the student record as deleted
+        
         db.commit()
-        return {"message": "Student deleted"}
+        return {"message": "Student account deleted (history preserved)"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
 
@@ -7514,6 +7528,379 @@ def delete_notification(notification_id: int):
         db.delete(notif)
         db.commit()
         return {"success": True}
+    finally:
+        db.close()
+
+
+# ==================== Report Models & Endpoints ====================
+
+class ReportFilter(BaseModel):
+    type: str  # attendance, fee, performance
+    filter_type: str  # season, year, month
+    filter_value: str  # season_id, year, or YYYY-MM
+    batch_id: str  # batch_id or 'all'
+    generated_by_name: Optional[str] = "Admin"
+    generated_by_role: Optional[str] = "Owner"
+
+@app.post("/api/reports/generate")
+def generate_report(filter: ReportFilter):
+    """Generate standardized reports for Attendance and Fees"""
+    db = SessionLocal()
+    try:
+        # 1. Determine Date Range & Context
+        start_date = None
+        end_date = None
+        filter_summary = ""
+        season_ids = [] # List of season IDs relevant to the filter
+        
+        if filter.filter_type == 'season':
+            session = db.query(SessionDB).filter(SessionDB.id == int(filter.filter_value)).first()
+            if not session:
+                raise HTTPException(status_code=404, detail="Season not found")
+            start_date = session.start_date
+            end_date = session.end_date
+            season_ids = [session.id]
+            filter_summary = f"Season: {session.name}"
+            
+        elif filter.filter_type == 'year':
+            year = filter.filter_value
+            start_date = f"{year}-01-01"
+            end_date = f"{year}-12-31"
+            # Find seasons in this year
+            sessions = db.query(SessionDB).filter(
+                or_(
+                    SessionDB.start_date.like(f"{year}%"),
+                    SessionDB.end_date.like(f"{year}%")
+                )
+            ).all()
+            season_ids = [s.id for s in sessions]
+            filter_summary = f"Year: {year}"
+            
+        elif filter.filter_type == 'month':
+            # invalid format handling needed in prod, assuming YYYY-MM
+            y, m = filter.filter_value.split('-')
+            import calendar
+            last_day = calendar.monthrange(int(y), int(m))[1]
+            start_date = f"{filter.filter_value}-01"
+            end_date = f"{filter.filter_value}-{last_day}"
+            filter_summary = f"Month: {filter.filter_value}"
+            # Find active seasons overlap (optional)
+            
+        # 2. Determine Batches
+        target_batch_ids = []
+        batch_map = {} # id -> name
+        
+        if str(filter.batch_id).lower() == 'all':
+            query = db.query(BatchDB)
+            if filter.filter_type == 'season':
+                query = query.filter(BatchDB.session_id == int(filter.filter_value))
+            # For year/month, filter by seasons if found
+            if season_ids and filter.filter_type == 'year':
+                query = query.filter(BatchDB.session_id.in_(season_ids))
+            
+            batches = query.all()
+            target_batch_ids = [b.id for b in batches]
+            batch_map = {b.id: b.batch_name for b in batches}
+            filter_summary += " | All Batches"
+        else:
+            b_id = int(filter.batch_id)
+            batch = db.query(BatchDB).filter(BatchDB.id == b_id).first()
+            if batch:
+                target_batch_ids = [b_id]
+                batch_map = {b_id: batch.batch_name}
+                filter_summary += f" | Batch: {batch.batch_name}"
+
+        # 3. Generate Data
+        overview = {}
+        breakdown = []
+        student_details = []
+
+        if filter.type == 'attendance':
+            # ATTENDANCE LOGIC
+            query = db.query(AttendanceDB).filter(
+                AttendanceDB.date >= start_date,
+                AttendanceDB.date <= end_date,
+                AttendanceDB.batch_id.in_(target_batch_ids)
+            )
+            records = query.all()
+            
+            total_recs = len(records)
+            present = sum(1 for r in records if r.status.lower() == 'present')
+            absent = sum(1 for r in records if r.status.lower() == 'absent')
+            
+            student_count_query = db.query(BatchStudentDB).filter(
+                BatchStudentDB.batch_id.in_(target_batch_ids),
+                BatchStudentDB.status.in_(['approved', 'active'])
+            )
+            total_students = student_count_query.count()
+            
+            overview = {
+                "total_students": total_students,
+                "total_conducted": len(set(r.date + str(r.batch_id) for r in records)), 
+                "present_count": present,
+                "absent_count": absent,
+                "attendance_rate": round((present / total_recs * 100) if total_recs > 0 else 0, 1)
+            }
+            
+            # Breakdown by Batch
+            for b_id in target_batch_ids:
+                b_recs = [r for r in records if r.batch_id == b_id]
+                b_present = sum(1 for r in b_recs if r.status.lower() == 'present')
+                b_total = len(b_recs)
+                b_stud_count = db.query(BatchStudentDB).filter(
+                    BatchStudentDB.batch_id == b_id,
+                    BatchStudentDB.status.in_(['approved', 'active'])
+                ).count()
+                
+                breakdown.append({
+                    "name": batch_map.get(b_id, "Unknown"),
+                    "total_students": b_stud_count,
+                    "classes_conducted": len(set(r.date for r in b_recs)),
+                    "attendance_rate": round((b_present / b_total * 100) if b_total > 0 else 0, 1)
+                })
+                
+            # Student Details (Only if specific batch)
+            if str(filter.batch_id).lower() != 'all':
+                students = db.query(
+                    StudentDB.name, StudentDB.phone, StudentDB.email, StudentDB.id
+                ).join(BatchStudentDB, BatchStudentDB.student_id == StudentDB.id)\
+                 .filter(BatchStudentDB.batch_id == int(filter.batch_id)).all()
+                 
+                for s in students:
+                    s_recs = [r for r in records if r.student_id == s.id]
+                    s_present = sum(1 for r in s_recs if r.status.lower() == 'present')
+                    s_total = len(s_recs)
+                    student_details.append({
+                        "name": s.name,
+                        "phone": s.phone,
+                        "email": s.email,
+                        "classes_assigned": s_total, 
+                        "classes_attended": s_present,
+                        "classes_absent": s_total - s_present,
+                        "attendance_percentage": round((s_present / s_total * 100) if s_total > 0 else 0, 1)
+                    })
+
+        elif filter.type == 'fee':
+            # FEE LOGIC
+            query = db.query(FeeDB).filter(
+                FeeDB.due_date >= start_date,
+                FeeDB.due_date <= end_date,
+                FeeDB.batch_id.in_(target_batch_ids)
+            )
+            fees = query.all()
+            
+            total_expected = sum(f.amount for f in fees)
+            fee_ids = [f.id for f in fees]
+            payments = db.query(FeePaymentDB).filter(FeePaymentDB.fee_id.in_(fee_ids)).all()
+            total_collected = sum(p.amount for p in payments)
+            
+            pending_amount = total_expected - total_collected
+            if pending_amount < 0: pending_amount = 0
+            
+            overdue_amt = sum(f.amount for f in fees if f.status == 'overdue') 
+            
+            student_count_query = db.query(BatchStudentDB).filter(
+                BatchStudentDB.batch_id.in_(target_batch_ids),
+                BatchStudentDB.status.in_(['approved', 'active'])
+            )
+            total_students = student_count_query.count()
+
+            overview = {
+                "total_students": total_students,
+                "total_expected": total_expected,
+                "total_collected": total_collected,
+                "pending_amount": pending_amount,
+                "overdue_amount": overdue_amt
+            }
+            
+            # Breakdown by Batch
+            for b_id in target_batch_ids:
+                b_fees = [f for f in fees if f.batch_id == b_id]
+                b_fee_ids = [f.id for f in b_fees]
+                b_payments = [p for p in payments if p.fee_id in b_fee_ids]
+                
+                b_expected = sum(f.amount for f in b_fees)
+                b_collected = sum(p.amount for p in b_payments)
+                b_pending_count = sum(1 for f in b_fees if f.status != 'paid')
+                
+                b_stud_count = db.query(BatchStudentDB).filter(
+                    BatchStudentDB.batch_id == b_id,
+                    BatchStudentDB.status.in_(['approved', 'active'])
+                ).count()
+
+                breakdown.append({
+                    "name": batch_map.get(b_id, "Unknown"),
+                    "total_students": b_stud_count,
+                    "expected": b_expected,
+                    "collected": b_collected,
+                    "pending_count": b_pending_count
+                })
+
+            # Student Details
+            if str(filter.batch_id).lower() != 'all':
+                students = db.query(
+                    StudentDB.name, StudentDB.phone, StudentDB.email, StudentDB.id
+                ).join(BatchStudentDB, BatchStudentDB.student_id == StudentDB.id)\
+                 .filter(BatchStudentDB.batch_id == int(filter.batch_id)).all()
+                 
+                for s in students:
+                    s_fees = [f for f in fees if f.student_id == s.id]
+                    s_expected = sum(f.amount for f in s_fees)
+                    s_collected_ids = [f.id for f in s_fees]
+                    s_collected = sum(p.amount for p in payments if p.fee_id in s_collected_ids)
+                    
+                    s_status = "Paid"
+                    if s_collected < s_expected:
+                        s_status = "Pending"
+                        if any(f.status == 'overdue' for f in s_fees):
+                             s_status = "Overdue"
+                    if s_expected == 0:
+                        s_status = "N/A"
+
+                    student_details.append({
+                        "name": s.name,
+                        "phone": s.phone,
+                        "email": s.email,
+                        "total_fee": s_expected,
+                        "amount_paid": s_collected,
+                        "pending_amount": max(0, s_expected - s_collected),
+                        "payment_status": s_status
+                    })
+
+        elif filter.type == 'performance':
+            # PERFORMANCE LOGIC
+            from sqlalchemy import func
+            query = db.query(PerformanceDB).filter(
+                PerformanceDB.date >= start_date,
+                PerformanceDB.date <= end_date,
+                PerformanceDB.batch_id.in_(target_batch_ids)
+            )
+            reviews = query.all()
+            
+            student_count_query = db.query(BatchStudentDB).filter(
+                BatchStudentDB.batch_id.in_(target_batch_ids),
+                BatchStudentDB.status.in_(['approved', 'active'])
+            )
+            total_students = student_count_query.count()
+            
+            # Average Ratings
+            avg_overall = db.query(func.avg(PerformanceDB.rating)).filter(
+                PerformanceDB.date >= start_date,
+                PerformanceDB.date <= end_date,
+                PerformanceDB.batch_id.in_(target_batch_ids)
+            ).scalar() or 0
+            
+            overview = {
+                "total_students": total_students,
+                "reviews_count": len(reviews),
+                "average_rating": round(float(avg_overall), 1),
+                "students_reviewed": len(set(r.student_id for r in reviews))
+            }
+            
+            # Breakdown by Batch
+            for b_id in target_batch_ids:
+                b_recs = [r for r in reviews if r.batch_id == b_id]
+                b_avg = sum(r.rating for r in b_recs) / len(b_recs) if b_recs else 0
+                b_stud_count = db.query(BatchStudentDB).filter(
+                    BatchStudentDB.batch_id == b_id,
+                    BatchStudentDB.status.in_(['approved', 'active'])
+                ).count()
+                
+                breakdown.append({
+                    "name": batch_map.get(b_id, "Unknown"),
+                    "total_students": b_stud_count,
+                    "reviews_count": len(b_recs),
+                    "average_rating": round(b_avg, 1)
+                })
+
+            # Student Details
+            if str(filter.batch_id).lower() != 'all':
+                students = db.query(
+                    StudentDB.name, StudentDB.phone, StudentDB.email, StudentDB.id
+                ).join(BatchStudentDB, BatchStudentDB.student_id == StudentDB.id)\
+                 .filter(BatchStudentDB.batch_id == int(filter.batch_id)).all()
+                 
+                for s in students:
+                    s_recs = [r for r in reviews if r.student_id == s.id]
+                    s_avg = sum(r.rating for r in s_recs) / len(s_recs) if s_recs else 0
+                    
+                    student_details.append({
+                        "name": s.name,
+                        "phone": s.phone,
+                        "email": s.email,
+                        "reviews_count": len(s_recs),
+                        "average_rating": round(s_avg, 1),
+                        "last_review": s_recs[-1].date if s_recs else "N/A"
+                    })
+
+        # 4. Generate Trend Data (Time Series for Line Chart)
+        trend_data = {"labels": [], "values": []}
+        if filter.filter_type in ['year', 'season']:
+            monthly_groups = {} # YYYY-MM -> stats
+            
+            if filter.type == 'attendance':
+                for r in records:
+                    m = r.date[:7]
+                    if m not in monthly_groups: monthly_groups[m] = {"p": 0, "t": 0}
+                    monthly_groups[m]["t"] += 1
+                    if r.status.lower() == 'present': monthly_groups[m]["p"] += 1
+                
+                sorted_months = sorted(monthly_groups.keys())
+                trend_data = {
+                    "labels": sorted_months,
+                    "values": [round((monthly_groups[m]["p"] / monthly_groups[m]["t"] * 100), 1) for m in sorted_months]
+                }
+            elif filter.type == 'fee':
+                for f in fees:
+                    m = f.due_date[:7]
+                    if m not in monthly_groups: monthly_groups[m] = {"c": 0}
+                    # Get payments for this fee and check their dates? 
+                    # For simplicity, we use fee due date month and aggregate its collected amount
+                    f_payments = [p.amount for p in payments if p.fee_id == f.id]
+                    monthly_groups[m]["c"] += sum(f_payments)
+                
+                sorted_months = sorted(monthly_groups.keys())
+                trend_data = {
+                    "labels": sorted_months,
+                    "values": [monthly_groups[m]["c"] for m in sorted_months]
+                }
+            elif filter.type == 'performance':
+                for r in reviews:
+                    m = r.date[:7]
+                    if m not in monthly_groups: monthly_groups[m] = {"r": 0, "c": 0}
+                    monthly_groups[m]["r"] += r.rating
+                    monthly_groups[m]["c"] += 1
+                
+                sorted_months = sorted(monthly_groups.keys())
+                trend_data = {
+                    "labels": sorted_months,
+                    "values": [round(monthly_groups[m]["r"] / monthly_groups[m]["c"], 1) for m in sorted_months]
+                }
+
+        # 5. Final Response Construction
+        generated_by = f"{filter.generated_by_name} ({filter.generated_by_role})"
+        
+        return {
+            "period": filter_summary,
+            "generated_on": datetime.now().strftime("%d %b %Y, %I:%M %p"),
+            "generated_by": generated_by,
+            "filter_summary": filter_summary,
+            "overview": overview,
+            "breakdown": breakdown,
+            "student_details": student_details,
+            "report_type": filter.type,
+            "chart_data": {
+                "labels": [b['name'] for b in breakdown],
+                "values": [b.get('attendance_rate') or b.get('collected') or b.get('average_rating') or 0 for b in breakdown]
+            },
+            "trend_data": trend_data
+        }
+
+    except Exception as e:
+        print(f"Error generating report: {e}")
+        data = traceback.format_exc()
+        print(data)
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
 
