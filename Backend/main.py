@@ -7833,7 +7833,51 @@ def generate_report(filter: ReportFilter):
                         "last_review": s_recs[-1].date if s_recs else "N/A"
                     })
 
-        # 4. Final Response Construction
+        # 4. Generate Trend Data (Time Series for Line Chart)
+        trend_data = {"labels": [], "values": []}
+        if filter.filter_type in ['year', 'season']:
+            monthly_groups = {} # YYYY-MM -> stats
+            
+            if filter.type == 'attendance':
+                for r in records:
+                    m = r.date[:7]
+                    if m not in monthly_groups: monthly_groups[m] = {"p": 0, "t": 0}
+                    monthly_groups[m]["t"] += 1
+                    if r.status.lower() == 'present': monthly_groups[m]["p"] += 1
+                
+                sorted_months = sorted(monthly_groups.keys())
+                trend_data = {
+                    "labels": sorted_months,
+                    "values": [round((monthly_groups[m]["p"] / monthly_groups[m]["t"] * 100), 1) for m in sorted_months]
+                }
+            elif filter.type == 'fee':
+                for f in fees:
+                    m = f.due_date[:7]
+                    if m not in monthly_groups: monthly_groups[m] = {"c": 0}
+                    # Get payments for this fee and check their dates? 
+                    # For simplicity, we use fee due date month and aggregate its collected amount
+                    f_payments = [p.amount for p in payments if p.fee_id == f.id]
+                    monthly_groups[m]["c"] += sum(f_payments)
+                
+                sorted_months = sorted(monthly_groups.keys())
+                trend_data = {
+                    "labels": sorted_months,
+                    "values": [monthly_groups[m]["c"] for m in sorted_months]
+                }
+            elif filter.type == 'performance':
+                for r in reviews:
+                    m = r.date[:7]
+                    if m not in monthly_groups: monthly_groups[m] = {"r": 0, "c": 0}
+                    monthly_groups[m]["r"] += r.rating
+                    monthly_groups[m]["c"] += 1
+                
+                sorted_months = sorted(monthly_groups.keys())
+                trend_data = {
+                    "labels": sorted_months,
+                    "values": [round(monthly_groups[m]["r"] / monthly_groups[m]["c"], 1) for m in sorted_months]
+                }
+
+        # 5. Final Response Construction
         generated_by = f"{filter.generated_by_name} ({filter.generated_by_role})"
         
         return {
@@ -7848,7 +7892,8 @@ def generate_report(filter: ReportFilter):
             "chart_data": {
                 "labels": [b['name'] for b in breakdown],
                 "values": [b.get('attendance_rate') or b.get('collected') or b.get('average_rating') or 0 for b in breakdown]
-            }
+            },
+            "trend_data": trend_data
         }
 
     except Exception as e:

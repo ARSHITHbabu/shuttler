@@ -493,13 +493,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               _infoRow(Icons.calendar_today_outlined, "Generated On", generatedOn),
               const SizedBox(height: 20),
               
-              // Analytics Preview
-              const Text("Visual Analytics", style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 16),
-              SizedBox(
-                height: 180,
-                child: _buildChart(),
-              ),
               const SizedBox(height: 16),
               
               SizedBox(
@@ -646,7 +640,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 children: [
                   pw.Text("Coverage Summary", style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
                   pw.SizedBox(height: 4),
-                  pw.Text("Coverage: ${_filterType.name.substring(0,1).toUpperCase()}${_filterType.name.substring(1)} (${_reportData!['period']?.replaceAll('Period: ', '') ?? ''}) • ${_selectedBatchId == 'all' ? 'All Batches' : 'Specific Batch'}"),
+                  pw.Text("Coverage: ${_filterType.name.substring(0,1).toUpperCase()}${_filterType.name.substring(1)} (${_reportData!['period']?.replaceAll('Period: ', '') ?? ''}) | ${_selectedBatchId == 'all' ? 'All Batches' : 'Specific Batch'}"),
                 ]
               )
             ),
@@ -671,7 +665,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       );
   }
   
-  pw.Widget _buildPdfContent(pw.Context context) {
+  List<pw.Widget> _buildPdfContent(pw.Context context) {
     // Determine context: All Batches vs Specific Batch, Year vs Season
     final bool isAllBatches = _selectedBatchId == 'all';
     
@@ -682,41 +676,45 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     }
   }
 
-  pw.Widget _buildAllBatchesContent() {
+  List<pw.Widget> _buildAllBatchesContent() {
     final overview = _reportData!['overview'];
     final breakdown = _reportData!['breakdown'] as List;
     
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
+    return [
          // Page 1: Overview
          pw.Text(
-           _filterType == FilterType.year ? "Year Overview (Executive Summary)" : "Season Overview",
+           _filterType == FilterType.year ? "Year Overview (Executive Summary)" : 
+           _filterType == FilterType.month ? "Month Overview" : "Season Overview",
            style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)
          ),
          pw.SizedBox(height: 10),
          _buildOverviewTable(overview),
          
          pw.SizedBox(height: 20),
+         pw.Text("Visual Analytics", style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+         pw.SizedBox(height: 10),
+         _buildPdfVisuals(),
+         
+         pw.SizedBox(height: 20),
          pw.Text("Batch-wise Breakdown", style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
          pw.SizedBox(height: 10),
          _buildBreakdownTable(breakdown),
-      ]
-    );
+    ];
   }
 
-  pw.Widget _buildSpecificBatchContent() {
+  List<pw.Widget> _buildSpecificBatchContent() {
     final overview = _reportData!['overview'];
     final details = _reportData!['student_details'] as List?;
-    // Batch name from breakdown or filter (if available in overview it's better, but we have input)
-    // For specific batch, overview usually contains data for that batch only
     
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
+    return [
          pw.Text("Batch Overview", style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
          pw.SizedBox(height: 10),
          _buildOverviewTable(overview),
+
+         pw.SizedBox(height: 20),
+         pw.Text("Visual Analytics", style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+         pw.SizedBox(height: 10),
+         _buildPdfVisuals(),
          
          pw.SizedBox(height: 20),
          pw.Text("Student-Level Details", style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
@@ -725,7 +723,198 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
            _buildStudentDetailsTable(details)
          else
            pw.Text("No student details available."),
-      ]
+    ];
+  }
+
+  pw.Widget _buildPdfVisuals() {
+    final chartData = _reportData!['chart_data'];
+    final overview = _reportData!['overview'];
+    
+    List<String> labels = [];
+    List<double> values = [];
+    if (chartData != null) {
+      labels = List<String>.from(chartData['labels'] ?? []);
+      values = (chartData['values'] as List?)?.map((e) => _sanitize(e)).toList() ?? [];
+    }
+
+    return pw.Container(
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.center,
+            children: [
+              pw.SizedBox(
+                width: 250,
+                height: 180,
+                child: _buildPieChart(overview),
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 30),
+          
+          pw.Text("Batch Comparison", style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 10),
+          pw.SizedBox(
+            width: double.infinity,
+            height: 150,
+            child: _buildBarChart(labels, values),
+          ),
+          
+          if (_reportData!['trend_data'] != null && (_reportData!['trend_data']['labels'] as List).isNotEmpty) ...[
+             pw.SizedBox(height: 30),
+             pw.Text("Monthly Performance Trend", style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
+             pw.SizedBox(height: 10),
+             pw.SizedBox(
+               width: double.infinity,
+               height: 150,
+               child: _buildLineChart(),
+             ),
+          ],
+          
+          pw.SizedBox(height: 30),
+          pw.Text("Batch-wise Detailed Comparison", style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
+          pw.SizedBox(height: 10),
+          _buildHorizontalBarChart(labels, values),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _buildLineChart() {
+    final trendData = _reportData!['trend_data'];
+    final labels = List<String>.from(trendData['labels'] ?? []);
+    final values = (trendData['values'] as List?)?.map((e) => _sanitize(e)).toList() ?? [];
+    
+    if (labels.isEmpty || values.isEmpty) return pw.SizedBox();
+
+    return pw.Chart(
+      grid: pw.CartesianGrid(
+        xAxis: pw.FixedAxis(
+          List.generate(labels.length, (i) => i.toDouble()),
+          format: (v) {
+            final s = labels[v.toInt()];
+            return s.length >= 7 ? s.substring(2) : s;
+          },
+          textStyle: const pw.TextStyle(fontSize: 6),
+        ),
+        yAxis: pw.FixedAxis(
+          [0, 20, 40, 60, 80, 100],
+          textStyle: const pw.TextStyle(fontSize: 6),
+        ),
+      ),
+      datasets: [
+        pw.LineDataSet(
+          color: PdfColors.red,
+          drawPoints: true,
+          pointSize: 2,
+          data: List.generate(values.length, (i) => pw.LineChartValue(i.toDouble(), values[i])),
+        ),
+      ],
+    );
+  }
+
+  pw.Widget _buildPieChart(Map<String, dynamic> overview) {
+    List<pw.PieDataSet> datasets = [];
+    
+    if (_reportType == ReportType.attendance) {
+      final present = _sanitize(overview['present_count']);
+      final absent = _sanitize(overview['absent_count']);
+      if (present == 0 && absent == 0) return pw.Center(child: pw.Text("No attendance data recorded"));
+      datasets = [
+        pw.PieDataSet(legend: 'Present', value: present, color: PdfColors.green),
+        pw.PieDataSet(legend: 'Absent', value: absent, color: PdfColors.red),
+      ];
+    } else if (_reportType == ReportType.fee) {
+      final collected = _sanitize(overview['total_collected']);
+      final pending = _sanitize(overview['pending_amount']);
+      if (collected == 0 && pending == 0) return pw.Center(child: pw.Text("No fee data recorded"));
+      datasets = [
+        pw.PieDataSet(legend: 'Collected', value: collected, color: PdfColors.blue),
+        pw.PieDataSet(legend: 'Pending', value: pending, color: PdfColors.orange),
+      ];
+    } else {
+      final reviewed = _sanitize(overview['students_reviewed']);
+      final total = _sanitize(overview['total_students']);
+      if (total == 0) return pw.Center(child: pw.Text("No performance data recorded"));
+      datasets = [
+        pw.PieDataSet(legend: 'Reviewed', value: reviewed, color: PdfColors.purple),
+        pw.PieDataSet(legend: 'Not Reviewed', value: total - reviewed, color: PdfColors.grey),
+      ];
+    }
+
+    return pw.Chart(
+      title: pw.Text("Overall Distribution", style: const pw.TextStyle(fontSize: 10)),
+      grid: pw.PieGrid(),
+      datasets: datasets,
+    );
+  }
+
+  pw.Widget _buildBarChart(List<String> labels, List<double> values) {
+    if (labels.isEmpty || values.isEmpty) return pw.Text("No comparison data");
+
+    return pw.Chart(
+      grid: pw.CartesianGrid(
+        xAxis: pw.FixedAxis(
+          List.generate(labels.length, (i) => i.toDouble()),
+          format: (v) {
+             final label = labels[v.toInt()];
+             return label.length > 8 ? label.substring(0, 7) + ".." : label;
+          },
+          textStyle: const pw.TextStyle(fontSize: 6),
+          angle: labels.length > 5 ? 0.3 : 0, // Slight slant if many
+        ),
+        yAxis: pw.FixedAxis(
+          [0, 20, 40, 60, 80, 100],
+          textStyle: const pw.TextStyle(fontSize: 6),
+        ),
+      ),
+      datasets: [
+        pw.BarDataSet(
+          color: PdfColors.blue,
+          width: (250 / (labels.length * 1.5).clamp(1, 50)), // Better width calc
+          data: List.generate(values.length, (i) => pw.LineChartValue(i.toDouble(), values[i])),
+        ),
+      ],
+    );
+  }
+
+  pw.Widget _buildHorizontalBarChart(List<String> labels, List<double> values) {
+    if (labels.isEmpty || values.isEmpty) return pw.SizedBox();
+
+    // Use a custom drawing for horizontal bars since pw.BarDataSet is vertical
+    return pw.Column(
+      children: List.generate(labels.length.clamp(0, 10), (index) {
+        final label = labels[index];
+        final value = values[index];
+        final maxVal = values.isNotEmpty ? values.reduce((a, b) => a > b ? a : b) : 100.0;
+        final percentage = maxVal > 0 ? value / maxVal : 0.0;
+
+        return pw.Padding(
+          padding: const pw.EdgeInsets.symmetric(vertical: 2),
+          child: pw.Row(
+            children: [
+              pw.SizedBox(width: 60, child: pw.Text(label, style: const pw.TextStyle(fontSize: 8))),
+              pw.Expanded(
+                child: pw.Stack(
+                  children: [
+                    pw.Container(
+                      height: 10,
+                      decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+                    ),
+                    pw.Container(
+                      height: 10,
+                      width: 300 * percentage, // Rough estimation for width
+                      decoration: const pw.BoxDecoration(color: PdfColors.blue600),
+                    ),
+                  ],
+                ),
+              ),
+              pw.SizedBox(width: 50, child: pw.Text(" ${value.toStringAsFixed(1)}", style: const pw.TextStyle(fontSize: 8))),
+            ],
+          ),
+        );
+      }),
     );
   }
 
@@ -893,9 +1082,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         pw.MultiPage(
           header: (ctx) => _buildPdfHeader(ctx, academyName, address, ownerName),
           footer: (ctx) => _buildPdfFooter(ctx, academyName),
-          build: (ctx) => [
-             _buildPdfContent(ctx),
-          ],
+          build: (ctx) => _buildPdfContent(ctx),
         ),
       );
       
@@ -923,6 +1110,15 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
          SuccessSnackbar.showError(context, 'Error generating PDF: $e');
       }
     }
+  }
+
+  double _sanitize(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is! num) return 0.0;
+    final d = value.toDouble();
+    if (d.isNaN || d.isInfinite) return 0.0;
+    // Also avoid negative values for charts if they represent counts/rates
+    return d < 0 ? 0.0 : d;
   }
 }
 
