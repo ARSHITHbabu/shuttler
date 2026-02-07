@@ -1086,7 +1086,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         ),
       );
       
-      final name = "Report_${_reportType.name}_${DateTime.now().millisecondsSinceEpoch}.pdf";
+      final typeStr = _reportType.name.capitalize();
+      final dateStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final periodStr = (_reportData?['period']?.toString() ?? 'Report').replaceAll(' ', '');
+      final cleanAcademyName = academyName.replaceAll(' ', '');
+      
+      final name = "${typeStr}_${cleanAcademyName}_${periodStr}_$dateStr.pdf";
       final bytes = await pdf.save();
       
       if (kIsWeb) {

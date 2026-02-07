@@ -851,7 +851,8 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
               await ref.read(studentListProvider.notifier).approveRejoin(student.id);
             }
             if (mounted) {
-              SuccessSnackbar.show(context, 'Student $actionName\d successfully');
+              Navigator.of(context).pop();
+              SuccessSnackbar.show(context, 'Student ${actionName}d successfully');
             }
           } catch (e) {
             if (mounted) {
@@ -874,6 +875,7 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
           try {
             await ref.read(studentListProvider.notifier).approveRejoin(student.id);
             if (mounted) {
+              Navigator.of(context).pop();
               SuccessSnackbar.show(context, 'Rejoin request approved for ${student.name}');
             }
           } catch (e) {
@@ -957,6 +959,7 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
           try {
             await ref.read(studentListProvider.notifier).removeStudentPermanently(student.id);
             if (mounted) {
+              Navigator.of(context).pop();
               SuccessSnackbar.show(context, 'Student deleted permanently');
             }
           } catch (e) {
