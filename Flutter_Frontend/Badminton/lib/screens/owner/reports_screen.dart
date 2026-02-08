@@ -667,6 +667,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   }
   
   List<pw.Widget> _buildPdfContent(pw.Context context) {
+    if (_reportType == ReportType.performance) {
+      return _buildPerformanceReportContent();
+    }
+
     // Determine context: All Batches vs Specific Batch, Year vs Season
     final bool isAllBatches = _selectedBatchId == 'all';
     
@@ -675,6 +679,144 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     } else {
       return _buildSpecificBatchContent();
     }
+  }
+
+  List<pw.Widget> _buildPerformanceReportContent() {
+    final breakdown = _reportData!['breakdown'] as List;
+    final overview = _reportData!['overview'];
+    final List<pw.Widget> content = [];
+
+    content.add(pw.Text("Performance Report", style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)));
+    content.add(pw.SizedBox(height: 5));
+    content.add(pw.Text("Period: ${_reportData!['period']}", style: const pw.TextStyle(fontSize: 10)));
+    content.add(pw.SizedBox(height: 15));
+
+    // Summary Visual for the whole report
+    final skillAverages = overview['skill_averages'] as Map<String, dynamic>? ?? {};
+    if (skillAverages.isNotEmpty) {
+      content.add(pw.Text("Overall Skill Distribution", style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)));
+      content.add(pw.SizedBox(height: 10));
+      
+      final labels = skillAverages.keys.toList();
+      final values = skillAverages.values.map((v) => (v as num).toDouble()).toList();
+      
+      content.add(pw.SizedBox(
+        height: 150,
+        width: double.infinity,
+        child: _buildBarChart(labels, values),
+      ));
+      content.add(pw.SizedBox(height: 25));
+    }
+
+    // Batch-wise breakdown
+    for (var batch in breakdown) {
+      content.add(pw.Container(
+        padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+        decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+        child: pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Text("Batch: ${batch['name']}", style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+            pw.Text("Batch Avg: ${batch['average_rating']} / 5.0", style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+          ],
+        ),
+      ));
+      content.add(pw.SizedBox(height: 10));
+
+      final students = batch['students'] as List? ?? [];
+      if (students.isEmpty) {
+        content.add(pw.Padding(
+          padding: const pw.EdgeInsets.only(left: 20, top: 10, bottom: 20),
+          child: pw.Text("No student performance data recorded for this batch in the selected period.", 
+            style: const pw.TextStyle(fontSize: 9, fontStyle: pw.FontStyle.italic, color: PdfColors.grey600)),
+        ));
+      } else {
+        // Build rows of student performance
+        for (var student in students) {
+          content.add(_buildStudentPerformanceRow(student));
+        }
+      }
+      content.add(pw.SizedBox(height: 15));
+    }
+
+    return content;
+  }
+
+  pw.Widget _buildStudentPerformanceRow(Map<String, dynamic> student) {
+    final skills = student['skill_breakdown'] as Map<String, dynamic>? ?? {};
+    
+    return pw.Container(
+      margin: const pw.EdgeInsets.only(bottom: 6),
+      padding: const pw.EdgeInsets.all(8),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: PdfColors.grey200, width: 0.5),
+        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(student['name'], style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                  pw.Text("${student['email'] or student['phone'] or '-'}", style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+                ],
+              ),
+              pw.Row(
+                children: [
+                   pw.Text("Rating: ", style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                   pw.Container(
+                    padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: const pw.BoxDecoration(color: PdfColors.blue700, borderRadius: pw.BorderRadius.all(pw.Radius.circular(2))),
+                    child: pw.Text("${student['average_rating']} / 5.0", style: pw.TextStyle(fontSize: 10, color: PdfColors.white, fontWeight: pw.FontWeight.bold)),
+                  ),
+                ]
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 8),
+          
+          if (skills.isNotEmpty)
+            pw.Wrap(
+              spacing: 12,
+              runSpacing: 6,
+              children: skills.entries.map((e) {
+                return pw.SizedBox(
+                  width: 85,
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(e.key.capitalize(), style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey800)),
+                      pw.Row(
+                        children: [
+                          _buildPdfMiniRatingBar(e.value),
+                          pw.SizedBox(width: 4),
+                          pw.Text("${e.value}", style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            )
+          else
+             pw.Text("No skill-wise ratings recorded in this period.", style: const pw.TextStyle(fontSize: 8, fontStyle: pw.FontStyle.italic, color: PdfColors.grey500)),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _buildPdfMiniRatingBar(dynamic rating) {
+    double val = (rating as num?)?.toDouble() ?? 0.0;
+    return pw.Stack(
+      children: [
+        pw.Container(height: 4, width: 45, decoration: const pw.BoxDecoration(color: PdfColors.grey200)),
+        pw.Container(height: 4, width: (val / 5.0) * 45, decoration: const pw.BoxDecoration(color: PdfColors.orange)),
+      ],
+    );
   }
 
   List<pw.Widget> _buildAllBatchesContent() {

@@ -11,7 +11,7 @@ class StudentService {
   /// Get all students
   Future<List<Student>> getStudents() async {
     try {
-      final response = await _apiService.get(ApiEndpoints.students);
+      final response = await _apiService.get('${ApiEndpoints.students}?include_deleted=true');
       if (response.data is List) {
         return (response.data as List)
             .map((json) => Student.fromJson(json as Map<String, dynamic>))
