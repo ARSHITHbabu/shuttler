@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
+import '../../core/utils/string_extensions.dart';
 
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
@@ -41,6 +42,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   int _selectedYear = DateTime.now().year;
   DateTime _selectedMonth = DateTime.now();
   String _selectedBatchId = 'all';
+
+  // State for History
+  int _tabIndex = 0; // 0: Generate, 1: History
+  List<Map<String, dynamic>> _historyData = [];
+  bool _isHistoryLoading = false;
+
 
   // Data
   List<dynamic> _seasons = []; // Use dynamic or Session model
@@ -149,6 +156,14 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         generatedByName: userName,
         generatedByRole: userRole,
       );
+      
+      // Add filter_summary and type to report data for PDF use
+      data['filter_summary'] = data['filter_summary'] ?? 
+          "Season: ${_seasons.firstWhere((s) => s.id.toString() == _selectedSeasonId, orElse: () => Session(id: -1, name: 'Unknown', startDate: DateTime.now(), endDate: DateTime.now(), status: 'active')).name} | Batch: ${_selectedBatchId == 'all' ? 'All' : _filteredBatches.firstWhere((b) => b.id.toString() == _selectedBatchId, orElse: () => Batch(id: -1, batchName: 'Unknown', timing: '', period: '', capacity: 0, fees: '', startDate: '', createdBy: '')).batchName}";
+      
+      data['report_type'] = _reportType.name;
+      data['generated_by_role'] = userRole; // Store for history
+      data['batch_id'] = _selectedBatchId; // Store for context
 
       setState(() {
         _reportData = data;
@@ -182,13 +197,19 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildReportTypeSelector(),
+              _buildTabSelector(),
               const SizedBox(height: AppDimensions.spacingL),
-              _buildFilters(),
-              const SizedBox(height: AppDimensions.spacingL),
-              _buildGenerateButton(),
-              const SizedBox(height: AppDimensions.spacingL),
-              if (_reportData != null) _buildReportPreview(),
+              if (_tabIndex == 0) ...[
+                _buildReportTypeSelector(),
+                const SizedBox(height: AppDimensions.spacingL),
+                _buildFilters(),
+                const SizedBox(height: AppDimensions.spacingL),
+                _buildGenerateButton(),
+                const SizedBox(height: AppDimensions.spacingL),
+                if (_reportData != null) _buildReportPreview(),
+              ] else ...[
+                _buildHistoryList(),
+              ]
             ],
           ),
         ),
@@ -429,10 +450,120 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     );
   }
 
+  Widget _buildTabSelector() {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: _tabButton("Generate Report", 0)),
+          Expanded(child: _tabButton("History", 1)),
+        ],
+      ),
+    );
+  }
+
+  Widget _tabButton(String title, int index) {
+      bool isSelected = _tabIndex == index;
+      return InkWell(
+        onTap: () {
+          setState(() {
+             _tabIndex = index;
+             if (index == 1) _loadHistory();
+          });
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.accent : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            title,
+            style: TextStyle(
+              color: isSelected ? Colors.white : AppColors.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      );
+  }
+
+  Future<void> _loadHistory() async {
+     setState(() => _isHistoryLoading = true);
+     try {
+       final history = await ref.read(reportServiceProvider).getReportHistory();
+       if (mounted) setState(() => _historyData = history);
+     } catch (e) {
+       if (mounted) SuccessSnackbar.showError(context, "Error loading history: $e");
+     } finally {
+       if (mounted) setState(() => _isHistoryLoading = false);
+     }
+  }
+
+  Widget _buildHistoryList() {
+    if (_isHistoryLoading) return const Center(child: CircularProgressIndicator());
+    if (_historyData.isEmpty) return const Center(child: Text("No report history found."));
+
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _historyData.length,
+      itemBuilder: (context, index) {
+        final item = _historyData[index];
+        final date = DateTime.tryParse(item['generated_on'] ?? '') ?? DateTime.now();
+        
+        return NeumorphicContainer(
+          padding: const EdgeInsets.all(16),
+          margin: const EdgeInsets.only(bottom: 12),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: AppColors.accent.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                child: Icon(Icons.description, color: AppColors.accent),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(item['report_type']?.toString().toUpperCase() ?? 'REPORT', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    Text(item['filter_summary'] ?? '', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                    Text(DateFormat('dd MMM yyyy, hh:mm a').format(date), style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.download, color: AppColors.accent),
+                onPressed: () {
+                   setState(() {
+                     _reportData = Map<String, dynamic>.from(item['report_data']);
+                     // Ensure types match for PDF generation
+                     try {
+                        _reportType = ReportType.values.firstWhere((e) => e.name == item['report_type']);
+                     } catch (_) {}
+                   });
+                   _exportPDF(isHistory: true);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildReportPreview() {
     final filterSummary = _reportData!['filter_summary'];
-    final generatedBy = _reportData!['generated_by'] ?? "Unknown";
-    final generatedOn = _reportData!['generated_on'] ?? "N/A";
+    // final generatedBy = _reportData!['generated_by'] ?? "Unknown"; // Removed as per request
+    final generatedOn = _reportData!['generated_on'] ?? DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now());
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -474,41 +605,24 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          filterSummary ?? "",
+                          "$filterSummary",
                           style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                        ),
+                         Text(
+                          "Generated On: $generatedOn",
+                          style: TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w500),
                         ),
                       ],
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.picture_as_pdf, color: Colors.red, size: 28),
-                    onPressed: _exportPDF,
+                    onPressed: () => _exportPDF(isHistory: false),
+                    icon: const Icon(Icons.download, color: AppColors.accent),
                     tooltip: "Download PDF",
                   ),
                 ],
               ),
-              const Divider(height: 32),
-              _infoRow(Icons.person_outline, "Generated By", generatedBy),
-              const SizedBox(height: 8),
-              _infoRow(Icons.calendar_today_outlined, "Generated On", generatedOn),
-              const SizedBox(height: 20),
-              
-              const SizedBox(height: 16),
-              const SizedBox(height: 16),
-              
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: _exportPDF,
-                  icon: const Icon(Icons.download, size: 18),
-                  label: const Text("Download Full PDF Report"),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.accent,
-                    side: const BorderSide(color: AppColors.accent),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                ),
-              ),
+              // Removed Divider and Overview Table
             ],
           ),
         ),
@@ -617,13 +731,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
                       pw.Text("Report Type: ${_reportType.name.toUpperCase()}", style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                      pw.Text("Generated By: ${_reportData!['generated_by'] ?? 'Admin'}"),
+                      // Removed Generated By
                     ]
                   ),
                  pw.Column(
                    crossAxisAlignment: pw.CrossAxisAlignment.end,
                    children: [
-                     pw.Text("Generated On: ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())}"),
+                     // Moved Generated On to Coverage box
                    ]
                  ),
                ]
@@ -640,7 +754,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 children: [
                   pw.Text("Coverage Summary", style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
                   pw.SizedBox(height: 4),
-                  pw.Text("Coverage: ${_filterType.name.substring(0,1).toUpperCase()}${_filterType.name.substring(1)} (${_reportData!['period']?.replaceAll('Period: ', '') ?? ''}) | ${_selectedBatchId == 'all' ? 'All Batches' : 'Specific Batch'}"),
+                  // Use _reportData['filter_summary'] if available to be independent of state
+                  pw.Text("Coverage: ${_reportData!['filter_summary'] ?? 'Report'}", style: const pw.TextStyle(fontSize: 10)),
+                  pw.SizedBox(height: 4),
+                  pw.Text("Generated On: ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())}", style: const pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
                 ]
               )
             ),
@@ -666,14 +783,158 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   }
   
   List<pw.Widget> _buildPdfContent(pw.Context context) {
+    if (_reportType == ReportType.performance) {
+      return _buildPerformanceReportContent();
+    }
+
     // Determine context: All Batches vs Specific Batch, Year vs Season
-    final bool isAllBatches = _selectedBatchId == 'all';
+    // Use batch_id from report data if available (history context), otherwise fallback to selection
+    final batchId = _reportData!['batch_id'] ?? _selectedBatchId;
+    final bool isAllBatches = batchId.toString() == 'all';
     
     if (isAllBatches) {
       return _buildAllBatchesContent();
     } else {
       return _buildSpecificBatchContent();
     }
+  }
+
+  List<pw.Widget> _buildPerformanceReportContent() {
+    final breakdown = _reportData!['breakdown'] as List;
+    final overview = _reportData!['overview'];
+    final List<pw.Widget> content = [];
+
+    content.add(pw.Text("Performance Report", style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)));
+    content.add(pw.SizedBox(height: 5));
+    content.add(pw.Text("Period: ${_reportData!['period']}", style: const pw.TextStyle(fontSize: 10)));
+    content.add(pw.SizedBox(height: 15));
+
+    // Summary Visual for the whole report
+    final skillAverages = overview['skill_averages'] as Map<String, dynamic>? ?? {};
+    if (skillAverages.isNotEmpty) {
+      content.add(pw.Text("Overall Skill Distribution", style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)));
+      content.add(pw.SizedBox(height: 10));
+      
+      final labels = skillAverages.keys.toList();
+      final values = skillAverages.values.map((v) => _sanitize(v)).toList();
+      
+      content.add(pw.SizedBox(
+        height: 150,
+        width: double.infinity,
+        child: _buildBarChart(labels, values),
+      ));
+      content.add(pw.SizedBox(height: 25));
+    }
+
+    // Batch-wise breakdown
+    for (var batch in breakdown) {
+      content.add(pw.Container(
+        padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+        decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+        child: pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Text("Batch: ${batch['name']}", style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+            pw.Text("Batch Avg: ${batch['average_rating']} / 5.0", style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+          ],
+        ),
+      ));
+      content.add(pw.SizedBox(height: 10));
+
+      final students = batch['students'] as List? ?? [];
+      if (students.isEmpty) {
+        content.add(pw.Padding(
+          padding: const pw.EdgeInsets.only(left: 20, top: 10, bottom: 20),
+          child: pw.Text("No student performance data recorded for this batch in the selected period.", 
+            style: const pw.TextStyle(fontSize: 9, fontStyle: pw.FontStyle.italic, color: PdfColors.grey600)),
+        ));
+      } else {
+        // Build rows of student performance
+        for (var student in students) {
+          content.add(_buildStudentPerformanceRow(student));
+        }
+      }
+      content.add(pw.SizedBox(height: 15));
+    }
+
+    return content;
+  }
+
+  pw.Widget _buildStudentPerformanceRow(Map<String, dynamic> student) {
+    final skills = student['skill_breakdown'] as Map<String, dynamic>? ?? {};
+    
+    return pw.Container(
+      margin: const pw.EdgeInsets.only(bottom: 6),
+      padding: const pw.EdgeInsets.all(8),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: PdfColors.grey200, width: 0.5),
+        borderRadius: const pw.BorderRadius.all(pw.Radius.circular(4)),
+      ),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(student['name'], style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                  pw.Text("${student['email'] ?? student['phone'] ?? '-'}", style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+                ],
+              ),
+              pw.Row(
+                children: [
+                   pw.Text("Rating: ", style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+                   pw.Container(
+                    padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: const pw.BoxDecoration(color: PdfColors.blue700, borderRadius: pw.BorderRadius.all(pw.Radius.circular(2))),
+                    child: pw.Text("${student['average_rating']} / 5.0", style: pw.TextStyle(fontSize: 10, color: PdfColors.white, fontWeight: pw.FontWeight.bold)),
+                  ),
+                ]
+              ),
+            ],
+          ),
+          pw.SizedBox(height: 8),
+          
+          if (skills.isNotEmpty)
+            pw.Wrap(
+              spacing: 12,
+              runSpacing: 6,
+              children: skills.entries.map((e) {
+                return pw.SizedBox(
+                  width: 85,
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text(e.key.capitalize(), style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey800)),
+                      pw.Row(
+                        children: [
+                          _buildPdfMiniRatingBar(e.value),
+                          pw.SizedBox(width: 4),
+                          pw.Text("${e.value}", style: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold)),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            )
+          else
+             pw.Text("No skill-wise ratings recorded in this period.", style: const pw.TextStyle(fontSize: 8, fontStyle: pw.FontStyle.italic, color: PdfColors.grey500)),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _buildPdfMiniRatingBar(dynamic rating) {
+    double val = (rating as num?)?.toDouble() ?? 0.0;
+    return pw.Stack(
+      children: [
+        pw.Container(height: 4, width: 45, decoration: const pw.BoxDecoration(color: PdfColors.grey200)),
+        pw.Container(height: 4, width: (val / 5.0) * 45, decoration: const pw.BoxDecoration(color: PdfColors.orange)),
+      ],
+    );
   }
 
   List<pw.Widget> _buildAllBatchesContent() {
@@ -853,6 +1114,14 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   pw.Widget _buildBarChart(List<String> labels, List<double> values) {
     if (labels.isEmpty || values.isEmpty) return pw.Text("No comparison data");
 
+    // Sanitize values to prevent NaN errors
+    final sanitizedValues = values.map((v) => _sanitize(v)).toList();
+    
+    // If all values are 0 after sanitization, show message
+    if (sanitizedValues.every((v) => v == 0.0)) {
+      return pw.Text("No data available for chart", style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey600));
+    }
+
     return pw.Chart(
       grid: pw.CartesianGrid(
         xAxis: pw.FixedAxis(
@@ -873,7 +1142,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         pw.BarDataSet(
           color: PdfColors.blue,
           width: (250 / (labels.length * 1.5).clamp(1, 50)), // Better width calc
-          data: List.generate(values.length, (i) => pw.LineChartValue(i.toDouble(), values[i])),
+          data: List.generate(sanitizedValues.length, (i) => pw.LineChartValue(i.toDouble(), sanitizedValues[i])),
         ),
       ],
     );
@@ -1068,7 +1337,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   }
 
   // Update _exportPDF to pass ownerName
-  Future<void> _exportPDF() async {
+  Future<void> _exportPDF({bool isHistory = false}) async {
     if (_reportData == null) return;
     
     try {
@@ -1110,6 +1379,21 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
            SuccessSnackbar.show(context, 'Report saved to ${file.path}');
         }
       }
+      
+      // Save history logic
+      if (!isHistory) {
+         try {
+           final reportService = ref.read(reportServiceProvider);
+           await reportService.saveReportHistory(
+             reportType: _reportType.name,
+             filterSummary: _reportData!['filter_summary'] ?? 'Report',
+             reportData: _reportData!,
+           );
+         } catch (e) {
+           print("History save error: $e");
+         }
+      }
+
     } catch (e) {
       if (mounted) {
          SuccessSnackbar.showError(context, 'Error generating PDF: $e');
@@ -1124,6 +1408,62 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     if (d.isNaN || d.isInfinite) return 0.0;
     // Also avoid negative values for charts if they represent counts/rates
     return d < 0 ? 0.0 : d;
+  }
+
+  Widget _buildFlutterOverviewTable(Map<String, dynamic> overview) {
+    List<MapEntry<String, String>> metrics = [];
+
+    if (_reportType == ReportType.attendance) {
+       metrics = [
+          MapEntry('Total Students', '${overview['total_students']}'),
+          MapEntry('Classes Conducted', '${overview['total_conducted']}'),
+          MapEntry('Present Count', '${overview['present_count']}'),
+          MapEntry('Absent Count', '${overview['absent_count']}'),
+          MapEntry('Attendance Rate', '${overview['attendance_rate']}%'),
+       ];
+    } else if (_reportType == ReportType.fee) {
+       metrics = [
+           MapEntry('Total Students', '${overview['total_students']}'),
+           MapEntry('Expected Revenue', '${overview['total_expected']}'), 
+           MapEntry('Collected Revenue', '${overview['total_collected']}'),
+           MapEntry('Pending Amount', '${overview['pending_amount']}'),
+           MapEntry('Overdue Amount', '${overview['overdue_amount']}'),
+       ];
+    } else {
+       metrics = [
+           MapEntry('Total Students', '${overview['total_students']}'),
+           MapEntry('Total Reviews', '${overview['reviews_count']}'),
+           MapEntry('Students Reviewed', '${overview['students_reviewed']}'),
+           MapEntry('Average Rating', '${overview['average_rating']} / 5.0'),
+       ];
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        children: metrics.asMap().entries.map((entry) {
+          final index = entry.key;
+          final metric = entry.value;
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: index % 2 == 0 ? AppColors.surface : Colors.transparent,
+              border: index != metrics.length - 1 ? Border(bottom: BorderSide(color: AppColors.border.withOpacity(0.5))) : null,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(metric.key, style: const TextStyle(fontWeight: FontWeight.w500)),
+                Text(metric.value, style: const TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    );
   }
 }
 

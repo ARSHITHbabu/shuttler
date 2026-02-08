@@ -8,7 +8,7 @@ from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel, field_validator
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Optional, Dict, Any, Union, Annotated
 from datetime import datetime, date, timedelta
 import json
 import os
@@ -534,6 +534,20 @@ class CoachRegistrationRequestDB(Base):
     reviewed_by = Column(Integer, nullable=True)  # Owner ID who reviewed
     reviewed_at = Column(DateTime(timezone=True), nullable=True)
     review_notes = Column(Text, nullable=True)
+
+class ReportHistoryDB(Base):
+    """History of generated reports"""
+    __tablename__ = "report_history"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False)
+    user_role = Column(String(50), nullable=False) # "owner", "coach"
+    report_type = Column(String(50), nullable=False) # "attendance", "fee", "performance"
+    filter_summary = Column(String(255), nullable=True) # e.g. "Season: Winter 2025 | Batch: All"
+    generated_on = Column(DateTime(timezone=True), server_default=func.now())
+    report_data = Column(JSON, nullable=False) # The full JSON data needed to recreate the report
+    key_metrics = Column(JSON, nullable=True) # Optional summary metrics for quick display
+
 
 # ==================== Database Migration Functions ====================
 
@@ -8044,61 +8058,102 @@ def generate_report(filter: ReportFilter):
             )
             reviews = query.all()
             
-            student_count_query = db.query(BatchStudentDB).filter(
-                BatchStudentDB.batch_id.in_(target_batch_ids),
-                BatchStudentDB.status.in_(['approved', 'active'])
-            )
-            total_students = student_count_query.count()
-            
-            # Average Ratings
+            # Average Ratings (Overall for the selection)
             avg_overall = db.query(func.avg(PerformanceDB.rating)).filter(
                 PerformanceDB.date >= start_date,
                 PerformanceDB.date <= end_date,
                 PerformanceDB.batch_id.in_(target_batch_ids)
             ).scalar() or 0
             
-            overview = {
-                "total_students": total_students,
-                "reviews_count": len(reviews),
-                "average_rating": round(float(avg_overall), 1),
-                "students_reviewed": len(set(r.student_id for r in reviews))
-            }
-            
-            # Breakdown by Batch
-            for b_id in target_batch_ids:
-                b_recs = [r for r in reviews if r.batch_id == b_id]
-                b_avg = sum(r.rating for r in b_recs) / len(b_recs) if b_recs else 0
-                b_stud_count = db.query(BatchStudentDB).filter(
-                    BatchStudentDB.batch_id == b_id,
-                    BatchStudentDB.status.in_(['approved', 'active'])
-                ).count()
+            # Group reviews by (batch_id, student_id)
+            student_reviews_map = {}
+            for r in reviews:
+                key = (r.batch_id, r.student_id)
+                if key not in student_reviews_map:
+                    student_reviews_map[key] = []
+                student_reviews_map[key].append(r)
+
+            # Get students for each batch
+            batch_students = db.query(BatchStudentDB, StudentDB).join(
+                StudentDB, StudentDB.id == BatchStudentDB.student_id
+            ).filter(
+                BatchStudentDB.batch_id.in_(target_batch_ids),
+                BatchStudentDB.status.in_(['approved', 'active'])
+            ).all()
+
+            # Process all students by batch
+            batch_results = {} # batch_id -> list of student performances
+            for bs, s in batch_students:
+                if bs.batch_id not in batch_results:
+                    batch_results[bs.batch_id] = []
                 
-                breakdown.append({
-                    "name": batch_map.get(b_id, "Unknown"),
-                    "total_students": b_stud_count,
-                    "reviews_count": len(b_recs),
-                    "average_rating": round(b_avg, 1)
+                s_recs = student_reviews_map.get((bs.batch_id, s.id), [])
+                
+                # Aggregate by skill
+                skill_scores = {}
+                for r in s_recs:
+                    if r.skill not in skill_scores:
+                        skill_scores[r.skill] = []
+                    skill_scores[r.skill].append(r.rating)
+                
+                skill_averages = {skill: round(sum(scores)/len(scores), 1) for skill, scores in skill_scores.items()}
+                # Map standard skill names if they exist, or just use what we have
+                # Standard skills from frontend: Serve, Smash, Footwork, Defense, Stamina
+                
+                overall_avg = round(sum(r.rating for r in s_recs)/len(s_recs), 1) if s_recs else 0
+                
+                batch_results[bs.batch_id].append({
+                    "id": s.id,
+                    "name": s.name,
+                    "phone": s.phone,
+                    "email": s.email,
+                    "skill_breakdown": skill_averages,
+                    "average_rating": overall_avg,
+                    "reviews_count": len(s_recs),
+                    "last_review": s_recs[-1].date if s_recs else "N/A"
                 })
 
-            # Student Details
+            # Overview (For summary count context)
+            all_skill_scores = {}
+            for r in reviews:
+                if r.skill not in all_skill_scores:
+                    all_skill_scores[r.skill] = []
+                all_skill_scores[r.skill].append(r.rating)
+            
+            skill_averages_overall = {skill: round(sum(scores)/len(scores), 1) for skill, scores in all_skill_scores.items()}
+
+            overview = {
+                "total_students": len(batch_students),
+                "reviews_count": len(reviews),
+                "students_reviewed": len(student_reviews_map),
+                "average_rating": round(float(avg_overall), 1),
+                "skill_averages": skill_averages_overall
+            }
+            
+            # Breakdown (Batch summaries + student details)
+            breakdown = []
+            for b_id in target_batch_ids:
+                b_studs = batch_results.get(b_id, [])
+                if not b_studs: continue
+                
+                reviewed_studs = [s for s in b_studs if s['reviews_count'] > 0]
+                b_avg = sum(s['average_rating'] for s in reviewed_studs) / len(reviewed_studs) if reviewed_studs else 0
+                
+                breakdown.append({
+                    "id": b_id,
+                    "name": batch_map.get(b_id, "Unknown"),
+                    "total_students": len(b_studs),
+                    "reviews_count": sum(s['reviews_count'] for s in b_studs),
+                    "average_rating": round(b_avg, 1),
+                    "students": b_studs 
+                })
+
+            # Flat student details for Backward Compatibility
             if str(filter.batch_id).lower() != 'all':
-                students = db.query(
-                    StudentDB.name, StudentDB.phone, StudentDB.email, StudentDB.id
-                ).join(BatchStudentDB, BatchStudentDB.student_id == StudentDB.id)\
-                 .filter(BatchStudentDB.batch_id == int(filter.batch_id)).all()
-                 
-                for s in students:
-                    s_recs = [r for r in reviews if r.student_id == s.id]
-                    s_avg = sum(r.rating for r in s_recs) / len(s_recs) if s_recs else 0
-                    
-                    student_details.append({
-                        "name": s.name,
-                        "phone": s.phone,
-                        "email": s.email,
-                        "reviews_count": len(s_recs),
-                        "average_rating": round(s_avg, 1),
-                        "last_review": s_recs[-1].date if s_recs else "N/A"
-                    })
+                student_details = batch_results.get(int(filter.batch_id), [])
+            else:
+                for b_id in target_batch_ids:
+                    student_details.extend(batch_results.get(b_id, []))
 
         # 4. Generate Trend Data (Time Series for Line Chart)
         trend_data = {"labels": [], "values": []}
@@ -8202,3 +8257,81 @@ if __name__ == "__main__":
     print("⏰ Background cleanup scheduler started (Daily).")
     
     uvicorn.run(app, host="0.0.0.0", port=8001)
+
+# ==================== Report History Endpoints ====================
+
+class SaveReportHistoryRequest(BaseModel):
+    report_type: str
+    filter_summary: str
+    report_data: Dict[str, Any]
+    key_metrics: Optional[Dict[str, Any]] = None
+
+@app.post("/api/reports/history")
+async def save_report_history(
+    request: SaveReportHistoryRequest,
+    current_user: Annotated[Union[dict, str], Depends(get_current_user_with_role)]
+):
+    db: Session = SessionLocal()
+    try:
+        # Determine user ID and role
+        user_id = None
+        user_role = None
+        
+        if isinstance(current_user, str):
+             # Just an email/username string (legacy auth helper might return this)
+             # Ideally get_current_user_with_role returns dict
+             raise HTTPException(status_code=401, detail="Invalid user authentication")
+        else:
+             user_id = current_user.get("id")
+             user_role = current_user.get("type", "unknown")
+
+        if not user_id:
+             raise HTTPException(status_code=401, detail="User ID not found")
+
+        history_entry = ReportHistoryDB(
+            user_id=user_id,
+            user_role=user_role,
+            report_type=request.report_type,
+            filter_summary=request.filter_summary,
+            report_data=request.report_data,
+            key_metrics=request.key_metrics
+        )
+        
+        db.add(history_entry)
+        db.commit()
+        db.refresh(history_entry)
+        
+        return {"status": "success", "id": history_entry.id}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.get("/api/reports/history")
+async def get_report_history(
+    current_user: Annotated[Union[dict, str], Depends(get_current_user_with_role)]
+):
+    db: Session = SessionLocal()
+    try:
+        user_id = None
+        user_role = None
+        
+        if isinstance(current_user, dict):
+             user_id = current_user.get("id")
+             user_role = current_user.get("type")
+        
+        if not user_id:
+            raise HTTPException(status_code=401, detail="User ID not found")
+            
+        # Fetch history for this user
+        history = db.query(ReportHistoryDB).filter(
+            ReportHistoryDB.user_id == user_id,
+            ReportHistoryDB.user_role == user_role
+        ).order_by(ReportHistoryDB.generated_on.desc()).all()
+        
+        return history
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()

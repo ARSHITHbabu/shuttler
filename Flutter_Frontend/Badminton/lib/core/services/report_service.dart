@@ -10,7 +10,7 @@ class ReportService {
     required String type, // 'attendance', 'fee', 'performance'
     required String filterType, // 'season', 'year', 'month'
     required String filterValue,
-    required String batchId,
+    String? batchId,
     String? generatedByName,
     String? generatedByRole,
   }) async {
@@ -33,6 +33,40 @@ class ReportService {
       } else {
         throw Exception('Failed to generate report');
       }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<void> saveReportHistory({
+    required String reportType,
+    required String filterSummary,
+    required Map<String, dynamic> reportData,
+    Map<String, dynamic>? keyMetrics,
+  }) async {
+    try {
+      await _apiService.post(
+        '/api/reports/history',
+        data: {
+          'report_type': reportType,
+          'filter_summary': filterSummary,
+          'report_data': reportData,
+          'key_metrics': keyMetrics,
+        },
+      );
+    } catch (e) {
+      // Don't rethrow, just log error so UI doesn't break if history save fails
+      print("Error saving report history: $e");
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getReportHistory() async {
+    try {
+      final response = await _apiService.get('/api/reports/history');
+      if (response.data is List) {
+        return List<Map<String, dynamic>>.from(response.data);
+      }
+      return [];
     } catch (e) {
       rethrow;
     }

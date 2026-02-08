@@ -88,7 +88,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   _StatCard(
                     icon: Icons.people_outline,
                     value: stats.totalStudents.toString(),
-                    label: 'Total Students',
+                    label: 'Active Students',
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
