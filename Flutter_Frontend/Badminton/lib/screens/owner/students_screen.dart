@@ -34,7 +34,7 @@ class StudentsScreen extends ConsumerStatefulWidget {
 
 class _StudentsScreenState extends ConsumerState<StudentsScreen> {
   final TextEditingController _searchController = TextEditingController();
-  String _selectedFilter = 'all'; // 'all', 'active', 'inactive'
+  String _selectedFilter = 'active'; // 'active', 'inactive'
   String _searchQuery = '';
 
   @override
@@ -107,12 +107,6 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                   child: Row(
                     children: [
                       _FilterChip(
-                        label: 'All',
-                        isSelected: _selectedFilter == 'all',
-                        onTap: () => setState(() => _selectedFilter = 'all'),
-                      ),
-                      const SizedBox(width: AppDimensions.spacingS),
-                      _FilterChip(
                         label: 'Active',
                         isSelected: _selectedFilter == 'active',
                         onTap: () => setState(() => _selectedFilter = 'active'),
@@ -147,14 +141,14 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                   } else if (_selectedFilter == 'inactive') {
                     return student.status == 'inactive';
                   }
-                  return true;
+                  return student.status == 'active'; // Fallback
                 }).toList();
 
                 // Sort filtered students alphabetically by name
                 filteredStudents.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
                 if (filteredStudents.isEmpty) {
-                  if (_selectedFilter == 'all' && _searchQuery.isEmpty) {
+                  if (_searchQuery.isEmpty) {
                     return EmptyState.noStudents(
                       onAdd: () => _showAddStudentDialog(context),
                     );
