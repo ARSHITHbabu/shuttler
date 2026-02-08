@@ -15,6 +15,7 @@ import '../owner/bmi_tracking_screen.dart';
 import '../owner/performance_tracking_screen.dart';
 import 'coach_fees_screen.dart';
 import 'leave_request_screen.dart';
+import 'coach_reports_screen.dart';
 import '../common/academy_info_screen.dart';
 import '../owner/notifications_screen.dart';
 
@@ -201,6 +202,20 @@ class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (context) => const LeaveRequestScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.assessment_outlined,
+              title: 'Reports',
+              subtitle: 'Generate attendance and performance reports',
+              isDark: isDark,
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const CoachReportsScreen(),
                   ),
                 );
               },

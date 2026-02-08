@@ -10,7 +10,7 @@ class ReportService {
     required String type, // 'attendance', 'fee', 'performance'
     required String filterType, // 'season', 'year', 'month'
     required String filterValue,
-    required String batchId,
+    String? batchId,
     String? generatedByName,
     String? generatedByRole,
   }) async {
