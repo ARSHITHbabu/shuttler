@@ -546,29 +546,29 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Report Preview',
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.download, color: AppColors.accent),
-                onPressed: _downloadReport,
-              ),
-            ],
-          ),
-          const SizedBox(height: AppDimensions.spacingM),
-          
           // Report metadata
           _buildMetadataRow('Report Type', _reportType.name.capitalize()),
           _buildMetadataRow('Filter', _filterType.name.capitalize()),
           _buildMetadataRow('Generated On', DateFormat('MMM dd, yyyy HH:mm').format(DateTime.now())),
+          
+          const SizedBox(height: AppDimensions.spacingL),
+          
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _downloadReport,
+              icon: const Icon(Icons.download, size: 18),
+              label: const Text("Download PDF"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.accent,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ),
           
           const SizedBox(height: AppDimensions.spacingL),
           const Divider(color: AppColors.textSecondary),
@@ -782,7 +782,7 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
       content.add(pw.SizedBox(height: 10));
       
       final labels = skillAverages.keys.toList();
-      final values = skillAverages.values.map((v) => (v as num).toDouble()).toList();
+      final values = skillAverages.values.map((v) => _sanitize(v)).toList();
       
       content.add(pw.SizedBox(
         height: 150,
@@ -970,43 +970,64 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
   }
 
   pw.Widget _buildBarChart(List<String> labels, List<double> values) {
-    if (labels.isEmpty || values.isEmpty) {
-      return pw.Text("No data available");
+    if (labels.isEmpty || values.isEmpty) return pw.Text("No comparison data");
+
+    // Sanitize values to prevent NaN errors
+    final sanitizedValues = values.map((v) => _sanitize(v)).toList();
+    
+    // If all values are 0 after sanitization, show message
+    if (sanitizedValues.every((v) => v == 0.0)) {
+      return pw.Text("No data available for chart", style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey600));
     }
 
-    final maxValue = values.reduce((a, b) => a > b ? a : b);
-    
+    final maxValue = sanitizedValues.reduce((a, b) => a > b ? a : b);
+    final barHeight = 100.0;
+    final barWidth = 30.0;
+
     return pw.Row(
       crossAxisAlignment: pw.CrossAxisAlignment.end,
       mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
       children: List.generate(labels.length, (index) {
-        final barHeight = maxValue > 0 ? (values[index] / maxValue) * 120 : 0;
+        final value = sanitizedValues[index];
+        final heightRatio = maxValue > 0 ? value / maxValue : 0.0;
+        final currentBarHeight = barHeight * heightRatio;
+
         return pw.Column(
           mainAxisAlignment: pw.MainAxisAlignment.end,
           children: [
-            pw.Text(values[index].toStringAsFixed(1), style: const pw.TextStyle(fontSize: 8)),
+            pw.Text(value.toStringAsFixed(1), style: const pw.TextStyle(fontSize: 8)),
             pw.SizedBox(height: 4),
             pw.Container(
               width: 30,
-              height: barHeight.toDouble(),
+              height: currentBarHeight.toDouble(),
               decoration: const pw.BoxDecoration(
                 color: PdfColors.blue700,
                 borderRadius: pw.BorderRadius.all(pw.Radius.circular(2)),
               ),
             ),
             pw.SizedBox(height: 4),
-            pw.Container(
-              width: 40,
+            pw.SizedBox(
+              width: barWidth + 10,
               child: pw.Text(
                 labels[index],
                 style: const pw.TextStyle(fontSize: 7),
                 textAlign: pw.TextAlign.center,
+                maxLines: 2,
+                overflow: pw.TextOverflow.clip,
               ),
             ),
           ],
         );
       }),
     );
+  }
+
+  double _sanitize(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is! num) return 0.0;
+    final d = value.toDouble();
+    if (d.isNaN || d.isInfinite) return 0.0;
+    return d < 0 ? 0.0 : d;
   }
 
   pw.Widget _buildOverviewTable(Map<String, dynamic> overview) {

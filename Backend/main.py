@@ -8,7 +8,7 @@ from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel, field_validator
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Optional, Dict, Any, Union, Annotated
 from datetime import datetime, date, timedelta
 import json
 import os
@@ -534,6 +534,20 @@ class CoachRegistrationRequestDB(Base):
     reviewed_by = Column(Integer, nullable=True)  # Owner ID who reviewed
     reviewed_at = Column(DateTime(timezone=True), nullable=True)
     review_notes = Column(Text, nullable=True)
+
+class ReportHistoryDB(Base):
+    """History of generated reports"""
+    __tablename__ = "report_history"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False)
+    user_role = Column(String(50), nullable=False) # "owner", "coach"
+    report_type = Column(String(50), nullable=False) # "attendance", "fee", "performance"
+    filter_summary = Column(String(255), nullable=True) # e.g. "Season: Winter 2025 | Batch: All"
+    generated_on = Column(DateTime(timezone=True), server_default=func.now())
+    report_data = Column(JSON, nullable=False) # The full JSON data needed to recreate the report
+    key_metrics = Column(JSON, nullable=True) # Optional summary metrics for quick display
+
 
 # ==================== Database Migration Functions ====================
 
@@ -8243,3 +8257,81 @@ if __name__ == "__main__":
     print("⏰ Background cleanup scheduler started (Daily).")
     
     uvicorn.run(app, host="0.0.0.0", port=8001)
+
+# ==================== Report History Endpoints ====================
+
+class SaveReportHistoryRequest(BaseModel):
+    report_type: str
+    filter_summary: str
+    report_data: Dict[str, Any]
+    key_metrics: Optional[Dict[str, Any]] = None
+
+@app.post("/api/reports/history")
+async def save_report_history(
+    request: SaveReportHistoryRequest,
+    current_user: Annotated[Union[dict, str], Depends(get_current_user_with_role)]
+):
+    db: Session = SessionLocal()
+    try:
+        # Determine user ID and role
+        user_id = None
+        user_role = None
+        
+        if isinstance(current_user, str):
+             # Just an email/username string (legacy auth helper might return this)
+             # Ideally get_current_user_with_role returns dict
+             raise HTTPException(status_code=401, detail="Invalid user authentication")
+        else:
+             user_id = current_user.get("id")
+             user_role = current_user.get("type", "unknown")
+
+        if not user_id:
+             raise HTTPException(status_code=401, detail="User ID not found")
+
+        history_entry = ReportHistoryDB(
+            user_id=user_id,
+            user_role=user_role,
+            report_type=request.report_type,
+            filter_summary=request.filter_summary,
+            report_data=request.report_data,
+            key_metrics=request.key_metrics
+        )
+        
+        db.add(history_entry)
+        db.commit()
+        db.refresh(history_entry)
+        
+        return {"status": "success", "id": history_entry.id}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.get("/api/reports/history")
+async def get_report_history(
+    current_user: Annotated[Union[dict, str], Depends(get_current_user_with_role)]
+):
+    db: Session = SessionLocal()
+    try:
+        user_id = None
+        user_role = None
+        
+        if isinstance(current_user, dict):
+             user_id = current_user.get("id")
+             user_role = current_user.get("type")
+        
+        if not user_id:
+            raise HTTPException(status_code=401, detail="User ID not found")
+            
+        # Fetch history for this user
+        history = db.query(ReportHistoryDB).filter(
+            ReportHistoryDB.user_id == user_id,
+            ReportHistoryDB.user_role == user_role
+        ).order_by(ReportHistoryDB.generated_on.desc()).all()
+        
+        return history
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
