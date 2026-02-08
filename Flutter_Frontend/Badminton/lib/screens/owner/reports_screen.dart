@@ -762,7 +762,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
                   pw.Text(student['name'], style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
-                  pw.Text("${student['email'] or student['phone'] or '-'}", style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
+                  pw.Text("${student['email'] ?? student['phone'] ?? '-'}", style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey600)),
                 ],
               ),
               pw.Row(
