@@ -65,12 +65,9 @@ class DashboardService {
   /// Get total number of students
   Future<int> _getTotalStudents() async {
     try {
-      final response = await _apiService.get('${ApiEndpoints.students}?include_deleted=true');
+      final response = await _apiService.get(ApiEndpoints.students);
       if (response.data is List) {
-        final students = (response.data as List)
-            .map((json) => json as Map<String, dynamic>)
-            .toList();
-        return students.where((s) => s['status'] == 'active').length;
+        return (response.data as List).length;
       }
       return 0;
     } catch (e) {
