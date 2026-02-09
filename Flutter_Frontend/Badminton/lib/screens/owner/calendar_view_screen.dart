@@ -369,6 +369,66 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                     setState(() => _focusedDay = focusedDay);
                   },
                   calendarBuilders: CalendarBuilders(
+                    defaultBuilder: (context, date, focusedDay) {
+                      final dateKey = DateTime(date.year, date.month, date.day);
+                      final isHoliday = canadianHolidays.containsKey(dateKey) || 
+                                      events.any((e) => isSameDay(e.date, date) && e.isHoliday);
+                      
+                      if (isHoliday) {
+                        return Center(
+                          child: Text(
+                            '${date.day}',
+                            style: const TextStyle(
+                              color: Colors.red,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        );
+                      }
+                      return null;
+                    },
+                    selectedBuilder: (context, date, focusedDay) {
+                      final dateKey = DateTime(date.year, date.month, date.day);
+                      final isHoliday = canadianHolidays.containsKey(dateKey) || 
+                                      events.any((e) => isSameDay(e.date, date) && e.isHoliday);
+                      
+                      return Container(
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: isHoliday ? Colors.red.withOpacity(0.15) : AppColors.accent,
+                          shape: BoxShape.circle,
+                          border: isHoliday ? Border.all(color: Colors.red, width: 1) : null,
+                        ),
+                        child: Text(
+                          '${date.day}',
+                          style: TextStyle(
+                            color: isHoliday ? Colors.red : Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      );
+                    },
+                    todayBuilder: (context, date, focusedDay) {
+                      final dateKey = DateTime(date.year, date.month, date.day);
+                      final isHoliday = canadianHolidays.containsKey(dateKey) || 
+                                      events.any((e) => isSameDay(e.date, date) && e.isHoliday);
+                      
+                      return Container(
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: AppColors.accent.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                          border: isHoliday ? Border.all(color: Colors.red, width: 1) : null,
+                        ),
+                        child: Text(
+                          '${date.day}',
+                          style: TextStyle(
+                            color: isHoliday ? Colors.red : AppColors.textPrimary,
+                            fontWeight: isHoliday ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                      );
+                    },
                     markerBuilder: (context, date, events) {
                       final hasCanadianHoliday = CanadianHolidays.isHoliday(date);
                       final hasAcademyHoliday = events.any((e) => e.isHoliday);
