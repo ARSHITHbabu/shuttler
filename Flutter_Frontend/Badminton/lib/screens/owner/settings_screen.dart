@@ -264,19 +264,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           );
                         },
                       ),
-                      const Divider(height: 1),
-                      _buildActionTile(
-                        title: 'Contact Support',
-                        icon: Icons.support_agent_outlined,
-                        isDark: isDark,
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => const HelpSupportScreen(userRole: 'owner'),
-                            ),
-                          );
-                        },
-                      ),
                     ],
                   ),
 
@@ -325,10 +312,84 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   // App Branding
                   _buildAppBranding(isDark),
 
+                  const SizedBox(height: AppDimensions.spacingXl),
+
+                  // Contact Support at the very end as a premium card
+                  _buildSupportCard(isDark),
+
                   const SizedBox(height: 100),
                 ],
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSupportCard(bool isDark) {
+    final accentColor = isDark ? AppColors.accent : AppColorsLight.accent;
+    return NeumorphicContainer(
+      padding: const EdgeInsets.all(AppDimensions.paddingL),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                ),
+                child: Icon(
+                  Icons.support_agent_outlined,
+                  color: accentColor,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: AppDimensions.spacingM),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Need Help?',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      'Contact our support team',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const HelpSupportScreen(userRole: 'owner'),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: accentColor,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                  ),
+                  elevation: 0,
+                ),
+                child: const Text('Support'),
+              ),
+            ],
           ),
         ],
       ),

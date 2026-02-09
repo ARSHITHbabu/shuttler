@@ -226,19 +226,6 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
                           );
                         },
                       ),
-                      const Divider(height: 1),
-                      _buildActionTile(
-                        title: 'Contact Support',
-                        icon: Icons.support_agent_outlined,
-                        isDark: isDark,
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => const HelpSupportScreen(userRole: 'coach'),
-                            ),
-                          );
-                        },
-                      ),
                     ],
                   ),
 

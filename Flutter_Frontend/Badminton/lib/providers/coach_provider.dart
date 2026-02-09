@@ -21,7 +21,9 @@ Future<Coach> coachById(CoachByIdRef ref, int id) async {
 Future<List<Batch>> coachBatches(CoachBatchesRef ref, int coachId) async {
   final batchService = ref.watch(batchServiceProvider);
   // Use optimized endpoint to get batches directly for this coach
-  return batchService.getBatchesByCoachId(coachId);
+  final batches = await batchService.getBatchesByCoachId(coachId);
+  // Sort by ID descending (latest first)
+  return batches..sort((a, b) => b.id.compareTo(a.id));
 }
 
 /// Provider for coach statistics

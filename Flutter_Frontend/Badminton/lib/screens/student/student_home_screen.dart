@@ -5,6 +5,7 @@ import '../../core/utils/contact_utils.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
+import '../../core/utils/canadian_holidays.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/error_widget.dart';
@@ -137,6 +138,33 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
               color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
             ),
           ),
+          // Holiday Indicator
+          if (CanadianHolidays.isHoliday(DateTime.now())) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                border: Border.all(color: Colors.red.withOpacity(0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.celebration, size: 16, color: Colors.red),
+                  const SizedBox(width: 8),
+                  Text(
+                    CanadianHolidays.getHolidayName(DateTime.now())!,
+                    style: const TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

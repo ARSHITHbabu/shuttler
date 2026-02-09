@@ -15,6 +15,7 @@ import '../common/help_support_screen.dart';
 import '../../widgets/common/app_logo.dart';
 import '../../widgets/forms/change_password_dialog.dart';
 import 'student_profile_screen.dart';
+import 'student_batches_screen.dart';
 
 /// Student Settings Screen - App preferences and account settings
 /// Students can toggle theme, manage notifications, and logout
@@ -156,6 +157,19 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                       ),
                       const Divider(height: 1),
                       _buildActionTile(
+                        title: 'Batches',
+                        icon: Icons.group_outlined,
+                        isDark: isDark,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const StudentBatchesScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      const Divider(height: 1),
+                      _buildActionTile(
                         title: 'Change Password',
                         icon: Icons.lock_outline,
                         isDark: isDark,
@@ -263,19 +277,6 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (context) => const TermsConditionsScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                      const Divider(height: 1),
-                      _buildActionTile(
-                        title: 'Contact Support',
-                        icon: Icons.support_agent_outlined,
-                        isDark: isDark,
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => const HelpSupportScreen(userRole: 'student'),
                             ),
                           );
                         },

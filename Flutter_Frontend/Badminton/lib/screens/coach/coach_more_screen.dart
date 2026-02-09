@@ -8,7 +8,6 @@ import '../../providers/auth_provider.dart';
 import 'coach_announcements_screen.dart';
 import 'coach_attendance_view_screen.dart';
 import 'coach_schedule_screen.dart';
-import 'coach_calendar_screen.dart';
 import 'coach_settings_screen.dart';
 import 'coach_video_management_screen.dart';
 import '../owner/bmi_tracking_screen.dart';
@@ -122,20 +121,7 @@ class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
                 );
               },
             ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.calendar_month_outlined,
-              title: 'Calendar',
-              subtitle: 'View academy calendar events',
-              isDark: isDark,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const CoachCalendarScreen(),
-                  ),
-                );
-              },
-            ),
+
             const SizedBox(height: AppDimensions.spacingS),
             _MenuItem(
               icon: Icons.payments_outlined,
@@ -168,7 +154,7 @@ class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
             _MenuItem(
               icon: Icons.calendar_today_outlined,
               title: 'Schedule',
-              subtitle: 'View your session schedule',
+              subtitle: 'View sessions, holidays, and academy events',
               isDark: isDark,
               onTap: () {
                 Navigator.of(context).push(

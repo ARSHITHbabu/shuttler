@@ -96,19 +96,23 @@ class AttendanceService {
     String? markedBy,
   }) async {
     try {
-      // Mark attendance for each student
-      for (final attendance in attendanceList) {
-        await markStudentAttendance(
-          studentId: attendance['student_id'] as int,
-          batchId: attendance['batch_id'] as int,
-          date: attendance['date'] as DateTime,
-          status: attendance['status'] as String,
-          remarks: attendance['remarks'] as String?,
-          markedBy: markedBy ?? attendance['marked_by'] as String?,
-        );
-      }
+      final records = attendanceList.map((a) {
+        return {
+          'student_id': a['student_id'],
+          'batch_id': a['batch_id'],
+          'date': (a['date'] as DateTime).toIso8601String().split('T')[0],
+          'status': a['status'],
+          'remarks': a['remarks'],
+          'marked_by': markedBy ?? a['marked_by'] ?? 'Owner',
+        };
+      }).toList();
+
+      await _apiService.post(
+        '/attendance/bulk/',
+        data: {'attendances': records},
+      );
     } catch (e) {
-      throw Exception('Failed to mark attendance: ${_apiService.getErrorMessage(e)}');
+      throw Exception('Failed to mark bulk attendance: ${_apiService.getErrorMessage(e)}');
     }
   }
 

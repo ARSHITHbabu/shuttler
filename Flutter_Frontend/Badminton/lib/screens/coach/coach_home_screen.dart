@@ -14,6 +14,7 @@ import '../../widgets/forms/add_student_dialog.dart';
 import 'coach_schedule_screen.dart';
 import 'coach_students_screen.dart';
 import 'coach_attendance_view_screen.dart';
+import '../../core/utils/canadian_holidays.dart';
 
 /// Coach Home Screen - Dashboard overview
 /// Shows coach's assigned batches, today's sessions, and quick stats
@@ -98,6 +99,33 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
                       color: context.textSecondaryColor,
                     ),
                   ),
+                  // Holiday Indicator
+                  if (CanadianHolidays.isHoliday(DateTime.now())) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: context.errorColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                        border: Border.all(color: context.errorColor.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.celebration, size: 16, color: context.errorColor),
+                          const SizedBox(width: 8),
+                          Text(
+                            CanadianHolidays.getHolidayName(DateTime.now())!,
+                            style: TextStyle(
+                              color: context.errorColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
