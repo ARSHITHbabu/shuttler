@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
+import '../../widgets/common/app_logo.dart';
 
 /// Role selection screen for choosing user type before login
 class RoleSelectionScreen extends StatelessWidget {
@@ -20,10 +21,10 @@ class RoleSelectionScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // App Logo/Icon
-              const Icon(
-                Icons.sports_tennis,
-                size: 80,
-                color: AppColors.accent,
+              const Center(
+                child: AppLogo(
+                  height: 120,
+                ),
               ),
               const SizedBox(height: AppDimensions.spacingM),
 

@@ -10,6 +10,7 @@ import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/service_providers.dart';
+import '../../widgets/common/app_logo.dart';
 
 /// Login screen for user authentication
 class LoginScreen extends ConsumerStatefulWidget {
@@ -113,16 +114,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // App Icon
-                Container(
-                  padding: const EdgeInsets.all(AppDimensions.paddingL),
-                  decoration: BoxDecoration(
-                    color: AppColors.accent.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.sports_tennis,
-                    size: 64,
-                    color: AppColors.accent,
+                const Center(
+                  child: AppLogo(
+                    height: 120,
                   ),
                 ),
                 const SizedBox(height: AppDimensions.spacingL),

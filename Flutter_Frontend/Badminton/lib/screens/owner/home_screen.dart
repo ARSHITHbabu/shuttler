@@ -54,7 +54,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Ace Badminton Academy',
+                  'Pursue Badminton',
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.w600,

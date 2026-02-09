@@ -11,6 +11,7 @@ import '../../core/utils/string_extensions.dart';
 
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
+import '../../core/constants/legal_content.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../providers/service_providers.dart';
@@ -1359,7 +1360,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     try {
       final pdf = pw.Document();
       
-      final academyName = "Badminton Academy"; // TODO: Get from store
+      final academyName = LegalContent.appName; 
       final address = "123 Sports Ave, Tech City"; // TODO: Get from store
       final ownerName = "Jane Doe"; // TODO: Get from store
       

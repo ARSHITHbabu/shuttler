@@ -11,6 +11,7 @@ import '../../core/utils/string_extensions.dart';
 
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
+import '../../core/constants/legal_content.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../providers/service_providers.dart';
@@ -781,7 +782,7 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(40),
         header: (context) => _buildPdfHeader(context, userName, userRole),
-        footer: (context) => _buildPdfFooter(context, 'Ace Badminton Academy'),
+        footer: (context) => _buildPdfFooter(context, LegalContent.appName),
         build: (context) => _buildPdfContent(context),
       ),
     );
@@ -799,8 +800,8 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
             pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Text('Badminton App', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
-                pw.Text('Ace Badminton Academy', style: const pw.TextStyle(fontSize: 12)),
+                pw.Text(LegalContent.appName, style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+                pw.Text(LegalContent.appName, style: const pw.TextStyle(fontSize: 12)),
               ],
             ),
             pw.Column(
@@ -828,7 +829,7 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
         pw.Row(
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [
-            pw.Text("$academyName | Badminton App", style: const pw.TextStyle(fontSize: 8)),
+            pw.Text("${LegalContent.appName} | Management System", style: const pw.TextStyle(fontSize: 8)),
             pw.Text("Page ${context.pageNumber} of ${context.pagesCount}", style: const pw.TextStyle(fontSize: 8)),
           ],
         ),
