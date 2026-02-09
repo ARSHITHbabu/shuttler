@@ -252,6 +252,32 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
                               // Filter Tabs
                               _buildFilterTabs(isDark),
 
+                              const SizedBox(height: AppDimensions.spacingL),
+
+                              // History Header
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'Attendance History',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w600,
+                                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                                      ),
+                                    ),
+                                    Text(
+                                      '${_filterRecords(enrichedRecords).length} sessions',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                               const SizedBox(height: AppDimensions.spacingM),
                             ],
                           );
@@ -396,79 +422,47 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
     final absentDays = (attendanceStats['absent_days'] ?? 0) as int;
     final attendanceRate = (attendanceStats['attendance_rate'] ?? 0.0).toDouble();
 
+    final textP = isDark ? AppColors.textPrimary : AppColorsLight.textPrimary;
+    final textS = isDark ? AppColors.textSecondary : AppColorsLight.textSecondary;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
       child: NeumorphicContainer(
-        padding: const EdgeInsets.all(AppDimensions.paddingL),
-        child: Column(
+        padding: const EdgeInsets.symmetric(vertical: AppDimensions.paddingL),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            // Attendance Rate Circle
-            Stack(
-              alignment: Alignment.center,
-              children: [
-                SizedBox(
-                  width: 120,
-                  height: 120,
-                  child: CircularProgressIndicator(
-                    value: (attendanceRate / 100).clamp(0.0, 1.0),
-                    strokeWidth: 10,
-                    backgroundColor: isDark ? AppColors.surfaceLight : AppColorsLight.surfaceLight,
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      _getAttendanceColor(attendanceRate, isDark),
-                    ),
-                  ),
-                ),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '${attendanceRate.toStringAsFixed(0)}%',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                      ),
-                    ),
-                    Text(
-                      'Attendance',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-            const SizedBox(height: AppDimensions.spacingL),
-
-            // Stats Row
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _StatItem(
-                  label: 'Total Days',
-                  value: totalDays.toString(),
-                  color: isDark ? AppColors.accent : AppColorsLight.accent,
-                  isDark: isDark,
-                ),
-                _StatItem(
-                  label: 'Present',
-                  value: presentDays.toString(),
-                  color: isDark ? AppColors.success : AppColorsLight.success,
-                  isDark: isDark,
-                ),
-                _StatItem(
-                  label: 'Absent',
-                  value: absentDays.toString(),
-                  color: isDark ? AppColors.error : AppColorsLight.error,
-                  isDark: isDark,
-                ),
-              ],
-            ),
+            _buildSimpleStat('Total', totalDays.toString(), textP, isDark),
+            _buildSimpleStat('Present', presentDays.toString(), isDark ? AppColors.success : AppColorsLight.success, isDark),
+            _buildSimpleStat('Absent', absentDays.toString(), isDark ? AppColors.error : AppColorsLight.error, isDark),
+            _buildSimpleStat('Percentage', '${attendanceRate.toStringAsFixed(0)}%', textP, isDark),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildSimpleStat(String label, String value, Color color, bool isDark) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+          ),
+        ),
+      ],
     );
   }
 
