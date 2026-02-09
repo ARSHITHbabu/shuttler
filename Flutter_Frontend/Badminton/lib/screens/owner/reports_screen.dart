@@ -497,8 +497,24 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   Future<void> _loadHistory() async {
      setState(() => _isHistoryLoading = true);
      try {
-       final history = await ref.read(reportServiceProvider).getReportHistory();
-       if (mounted) setState(() => _historyData = history);
+       final authState = ref.read(authProvider);
+       int? userId;
+       String? userRole;
+       
+       authState.whenData((state) {
+         if (state is Authenticated) {
+           userId = state.userId;
+           userRole = state.userRole ?? 'owner'; // Default to owner if null
+         }
+       });
+
+       if (userId != null && userRole != null) {
+         final history = await ref.read(reportServiceProvider).getReportHistory(
+           userId: userId!,
+           userRole: userRole!,
+         );
+         if (mounted) setState(() => _historyData = history);
+       }
      } catch (e) {
        if (mounted) SuccessSnackbar.showError(context, "Error loading history: $e");
      } finally {
@@ -1383,12 +1399,27 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       // Save history logic
       if (!isHistory) {
          try {
-           final reportService = ref.read(reportServiceProvider);
-           await reportService.saveReportHistory(
-             reportType: _reportType.name,
-             filterSummary: _reportData!['filter_summary'] ?? 'Report',
-             reportData: _reportData!,
-           );
+           final authState = ref.read(authProvider);
+           int? userId;
+           String? userRole;
+           
+           authState.whenData((state) {
+             if (state is Authenticated) {
+               userId = state.userId;
+               userRole = state.userRole ?? 'owner';
+             }
+           });
+
+           if (userId != null && userRole != null) {
+             final reportService = ref.read(reportServiceProvider);
+             await reportService.saveReportHistory(
+               reportType: _reportType.name,
+               filterSummary: _reportData!['filter_summary'] ?? 'Report',
+               reportData: _reportData!,
+               userId: userId!,
+               userRole: userRole!,
+             );
+           }
          } catch (e) {
            print("History save error: $e");
          }

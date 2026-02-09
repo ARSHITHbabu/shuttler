@@ -42,6 +42,8 @@ class ReportService {
     required String reportType,
     required String filterSummary,
     required Map<String, dynamic> reportData,
+    required int userId,
+    required String userRole,
     Map<String, dynamic>? keyMetrics,
   }) async {
     try {
@@ -52,6 +54,8 @@ class ReportService {
           'filter_summary': filterSummary,
           'report_data': reportData,
           'key_metrics': keyMetrics,
+          'user_id': userId,
+          'user_role': userRole,
         },
       );
     } catch (e) {
@@ -60,9 +64,18 @@ class ReportService {
     }
   }
 
-  Future<List<Map<String, dynamic>>> getReportHistory() async {
+  Future<List<Map<String, dynamic>>> getReportHistory({
+    required int userId, 
+    required String userRole,
+  }) async {
     try {
-      final response = await _apiService.get('/api/reports/history');
+      final response = await _apiService.get(
+        '/api/reports/history',
+        queryParameters: {
+          'user_id': userId,
+          'user_role': userRole,
+        },
+      );
       if (response.data is List) {
         return List<Map<String, dynamic>>.from(response.data);
       }
