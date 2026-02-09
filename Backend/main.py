@@ -277,6 +277,7 @@ class CoachAttendanceDB(Base):
     coach_id = Column(Integer, nullable=False)
     date = Column(String, nullable=False)
     status = Column(String, nullable=False)  
+    marked_by = Column(String, nullable=True)
     remarks = Column(Text, nullable=True)
 
 class CoachSalaryDB(Base):
@@ -1372,6 +1373,9 @@ class AttendanceCreate(BaseModel):
     marked_by: str
     remarks: Optional[str] = None
 
+class AttendanceBulkCreate(BaseModel):
+    attendances: List[AttendanceCreate]
+
 class Attendance(BaseModel):
     id: int
     batch_id: int
@@ -1388,6 +1392,7 @@ class CoachAttendanceCreate(BaseModel):
     coach_id: int
     date: str
     status: str
+    marked_by: Optional[str] = None
     remarks: Optional[str] = None
 
 class CoachAttendance(BaseModel):
@@ -1395,6 +1400,7 @@ class CoachAttendance(BaseModel):
     coach_id: int
     date: str
     status: str
+    marked_by: Optional[str] = None
     remarks: Optional[str] = None
     
     class Config:
@@ -2227,7 +2233,6 @@ def unified_login(login_data: UnifiedLoginRequest):
                     'guardian_phone': student.guardian_phone,
                     'date_of_birth': student.date_of_birth,
                     'address': student.address,
-                    'profile_photo': student.profile_photo,
                     't_shirt_size': student.t_shirt_size,
                 }
                 profile_complete = all(v is not None and str(v).strip() != '' for v in required_profile_fields.values())
@@ -3549,7 +3554,6 @@ def check_profile_complete(student_id: int):
             'guardian_phone': student.guardian_phone,
             'date_of_birth': student.date_of_birth,
             'address': student.address,
-            'profile_photo': student.profile_photo,
             't_shirt_size': student.t_shirt_size,
         }
         
@@ -3619,7 +3623,6 @@ def login_student(login_data: StudentLogin):
                 'guardian_phone': student.guardian_phone,
                 'date_of_birth': student.date_of_birth,
                 'address': student.address,
-                'profile_photo': student.profile_photo,
                 't_shirt_size': student.t_shirt_size,
             }
             
@@ -3791,6 +3794,18 @@ def remove_student_from_batch(batch_id: int, student_id: int):
 
 # ==================== Attendance Routes ====================
 
+def attendance_db_to_response(attn_db: AttendanceDB) -> Attendance:
+    """Convert AttendanceDB to Attendance response model"""
+    return Attendance(
+        id=attn_db.id,
+        batch_id=attn_db.batch_id,
+        student_id=attn_db.student_id,
+        date=attn_db.date,
+        status=attn_db.status,
+        marked_by=attn_db.marked_by,
+        remarks=attn_db.remarks
+    )
+
 @app.get("/attendance/", response_model=List[Attendance])
 def get_attendance(
     date: Optional[str] = None,
@@ -3823,7 +3838,7 @@ def get_attendance(
             query = query.filter(AttendanceDB.student_id == student_id)
         
         attendance = query.order_by(AttendanceDB.date.desc()).all()
-        return attendance
+        return [attendance_db_to_response(a) for a in attendance]
     finally:
         db.close()
 
@@ -3857,7 +3872,7 @@ def mark_attendance(attendance: AttendanceCreate):
             except Exception as e:
                 print(f"Error sending attendance update notification: {e}")
                 
-            return existing
+            return attendance_db_to_response(existing)
         else:
             db_attendance = AttendanceDB(**attendance.model_dump())
             db.add(db_attendance)
@@ -3878,7 +3893,60 @@ def mark_attendance(attendance: AttendanceCreate):
             except Exception as e:
                 print(f"Error sending attendance notification: {e}")
                 
-            return db_attendance
+            return attendance_db_to_response(db_attendance)
+    finally:
+        db.close()
+
+@app.post("/attendance/bulk/", response_model=List[Attendance])
+def mark_attendance_bulk(bulk: AttendanceBulkCreate):
+    db = SessionLocal()
+    results = []
+    try:
+        for attendance in bulk.attendances:
+            existing = db.query(AttendanceDB).filter(
+                AttendanceDB.batch_id == attendance.batch_id,
+                AttendanceDB.student_id == attendance.student_id,
+                AttendanceDB.date == attendance.date
+            ).first()
+            
+            if existing:
+                for key, value in attendance.model_dump().items():
+                    setattr(existing, key, value)
+                db.commit()
+                db.refresh(existing)
+                results.append(attendance_db_to_response(existing))
+                
+                # Notify Student (Optional: could be throttled for bulk)
+                create_notification(
+                    db=db,
+                    user_id=existing.student_id,
+                    user_type="student",
+                    title="Attendance Updated",
+                    body=f"Your attendance for {existing.date} has been updated to: {existing.status}",
+                    type="attendance",
+                    data={"attendance_id": existing.id}
+                )
+            else:
+                db_attendance = AttendanceDB(**attendance.model_dump())
+                db.add(db_attendance)
+                db.commit()
+                db.refresh(db_attendance)
+                results.append(attendance_db_to_response(db_attendance))
+                
+                # Notify Student
+                create_notification(
+                    db=db,
+                    user_id=db_attendance.student_id,
+                    user_type="student",
+                    title="Attendance Marked",
+                    body=f"Your attendance for {db_attendance.date} has been marked as: {db_attendance.status}",
+                    type="attendance",
+                    data={"attendance_id": db_attendance.id}
+                )
+        return results
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
     finally:
         db.close()
 
@@ -3890,7 +3958,7 @@ def get_batch_attendance(batch_id: int, date: str):
             AttendanceDB.batch_id == batch_id,
             AttendanceDB.date == date
         ).all()
-        return attendance
+        return [attendance_db_to_response(a) for a in attendance]
     finally:
         db.close()
 
@@ -3899,9 +3967,20 @@ def get_student_attendance(student_id: int):
     db = SessionLocal()
     try:
         attendance = db.query(AttendanceDB).filter(AttendanceDB.student_id == student_id).all()
-        return attendance
+        return [attendance_db_to_response(a) for a in attendance]
     finally:
         db.close()
+
+def coach_attendance_db_to_response(attn_db: CoachAttendanceDB) -> CoachAttendance:
+    """Convert CoachAttendanceDB to CoachAttendance response model"""
+    return CoachAttendance(
+        id=attn_db.id,
+        coach_id=attn_db.coach_id,
+        date=attn_db.date,
+        status=attn_db.status,
+        marked_by=attn_db.marked_by,
+        remarks=attn_db.remarks
+    )
 
 # Coach Attendance Routes
 @app.post("/coach-attendance/", response_model=CoachAttendance)
@@ -3918,13 +3997,13 @@ def mark_coach_attendance(attendance: CoachAttendanceCreate):
                 setattr(existing, key, value)
             db.commit()
             db.refresh(existing)
-            return existing
+            return coach_attendance_db_to_response(existing)
         else:
             db_attendance = CoachAttendanceDB(**attendance.model_dump())
             db.add(db_attendance)
             db.commit()
             db.refresh(db_attendance)
-            return db_attendance
+            return coach_attendance_db_to_response(db_attendance)
     finally:
         db.close()
 
@@ -3933,7 +4012,7 @@ def get_coach_attendance_history(coach_id: int):
     db = SessionLocal()
     try:
         attendance = db.query(CoachAttendanceDB).filter(CoachAttendanceDB.coach_id == coach_id).all()
-        return attendance
+        return [coach_attendance_db_to_response(a) for a in attendance]
     finally:
         db.close()
 
@@ -3942,7 +4021,7 @@ def get_all_coach_attendance(date: str):
     db = SessionLocal()
     try:
         attendance = db.query(CoachAttendanceDB).filter(CoachAttendanceDB.date == date).all()
-        return attendance
+        return [coach_attendance_db_to_response(a) for a in attendance]
     finally:
         db.close()
 

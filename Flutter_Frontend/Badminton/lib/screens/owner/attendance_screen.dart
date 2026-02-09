@@ -635,16 +635,18 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       final attendanceService = ref.read(attendanceServiceProvider);
 
       if (_attendanceType == 'students' && _selectedBatchId != null) {
-        // Save student attendance
-        for (final entry in _attendance.entries) {
-          await attendanceService.markStudentAttendance(
-            studentId: entry.key,
-            batchId: _selectedBatchId!,
-            date: _selectedDate,
-            status: entry.value,
-            remarks: _remarks[entry.key],
-          );
-        }
+        // Save student attendance using bulk endpoint
+        final attendanceList = _attendance.entries.map((entry) {
+          return {
+            'student_id': entry.key,
+            'batch_id': _selectedBatchId!,
+            'date': _selectedDate,
+            'status': entry.value,
+            'remarks': _remarks[entry.key],
+          };
+        }).toList();
+
+        await attendanceService.markMultipleAttendance(attendanceList);
       } else if (_attendanceType == 'coaches') {
         // Save coach attendance
         for (final entry in _attendance.entries) {

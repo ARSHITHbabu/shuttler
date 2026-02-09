@@ -15,6 +15,7 @@ import '../common/help_support_screen.dart';
 import '../../widgets/common/app_logo.dart';
 import '../../widgets/forms/change_password_dialog.dart';
 import 'student_profile_screen.dart';
+import 'student_batches_screen.dart';
 
 /// Student Settings Screen - App preferences and account settings
 /// Students can toggle theme, manage notifications, and logout
@@ -150,6 +151,19 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (context) => const StudentProfileScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      const Divider(height: 1),
+                      _buildActionTile(
+                        title: 'Batches',
+                        icon: Icons.group_outlined,
+                        isDark: isDark,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const StudentBatchesScreen(),
                             ),
                           );
                         },

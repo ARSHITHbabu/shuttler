@@ -9,9 +9,9 @@ import 'student_fees_screen.dart';
 import 'student_bmi_screen.dart';
 import 'student_announcements_screen.dart';
 import 'student_schedule_screen.dart';
-import 'student_calendar_screen.dart';
 import 'student_profile_screen.dart';
 import 'student_settings_screen.dart';
+import 'student_batches_screen.dart';
 import 'student_videos_screen.dart';
 import '../common/academy_info_screen.dart';
 import '../owner/notifications_screen.dart';
@@ -90,14 +90,6 @@ class _StudentMoreScreenState extends ConsumerState<StudentMoreScreen> {
             ),
             const SizedBox(height: AppDimensions.spacingS),
             _MenuItem(
-              icon: Icons.calendar_month_outlined,
-              title: 'Calendar',
-              subtitle: 'View academy calendar events',
-              isDark: isDark,
-              onTap: () => setState(() => _currentView = 'calendar'),
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
               icon: Icons.payments_outlined,
               title: 'Fee Status',
               subtitle: 'View your fee records and payment history',
@@ -111,6 +103,14 @@ class _StudentMoreScreenState extends ConsumerState<StudentMoreScreen> {
               subtitle: 'View your session schedule',
               isDark: isDark,
               onTap: () => setState(() => _currentView = 'schedule'),
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.group_outlined,
+              title: 'Batches',
+              subtitle: 'View your enrolled batches',
+              isDark: isDark,
+              onTap: () => setState(() => _currentView = 'batches'),
             ),
             const SizedBox(height: AppDimensions.spacingS),
             _MenuItem(
@@ -177,11 +177,8 @@ class _StudentMoreScreenState extends ConsumerState<StudentMoreScreen> {
           onBack: () => setState(() => _currentView = null),
         );
       case 'schedule':
-        return StudentScheduleScreen(
-          onBack: () => setState(() => _currentView = null),
-        );
       case 'calendar':
-        return StudentCalendarScreen(
+        return StudentScheduleScreen(
           onBack: () => setState(() => _currentView = null),
         );
       case 'videos':
@@ -190,6 +187,10 @@ class _StudentMoreScreenState extends ConsumerState<StudentMoreScreen> {
         );
       case 'settings':
         return StudentSettingsScreen(
+          onBack: () => setState(() => _currentView = null),
+        );
+      case 'batches':
+        return StudentBatchesScreen(
           onBack: () => setState(() => _currentView = null),
         );
       default:

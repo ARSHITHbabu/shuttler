@@ -13,6 +13,7 @@ import '../../providers/batch_provider.dart';
 import 'students_screen.dart';
 import 'coaches_screen.dart';
 import 'fees_screen.dart';
+import '../../core/utils/canadian_holidays.dart';
 
 /// Home Screen - Dashboard overview
 /// Matches React reference: HomeScreen.tsx
@@ -69,6 +70,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     color: context.textSecondaryColor,
                   ),
                 ),
+                // Holiday Indicator
+                if (CanadianHolidays.isHoliday(DateTime.now())) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: context.errorColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                      border: Border.all(color: context.errorColor.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.celebration, size: 16, color: context.errorColor),
+                        const SizedBox(width: 8),
+                        Text(
+                          CanadianHolidays.getHolidayName(DateTime.now())!,
+                          style: TextStyle(
+                            color: context.errorColor,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

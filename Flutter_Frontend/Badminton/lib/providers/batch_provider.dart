@@ -12,7 +12,9 @@ class BatchList extends _$BatchList {
   @override
   Future<List<Batch>> build() async {
     final batchService = ref.watch(batchServiceProvider);
-    return batchService.getBatches();
+    final batches = await batchService.getBatches();
+    // Sort by ID descending (latest first)
+    return batches..sort((a, b) => b.id.compareTo(a.id));
   }
 
   /// Refresh batch list
@@ -20,7 +22,9 @@ class BatchList extends _$BatchList {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
       final batchService = ref.read(batchServiceProvider);
-      return batchService.getBatches();
+      final batches = await batchService.getBatches();
+      // Sort by ID descending (latest first)
+      return batches..sort((a, b) => b.id.compareTo(a.id));
     });
   }
 
@@ -144,9 +148,10 @@ Future<List<Student>> batchStudents(BatchStudentsRef ref, int batchId) async {
   return batchService.getBatchStudents(batchId);
 }
 
-/// Provider for student batches (batches a student is enrolled in)
 @riverpod
 Future<List<Batch>> studentBatches(StudentBatchesRef ref, int studentId) async {
   final batchService = ref.watch(batchServiceProvider);
-  return batchService.getStudentBatches(studentId);
+  final batches = await batchService.getStudentBatches(studentId);
+  // Sort by ID descending (latest first)
+  return batches..sort((a, b) => b.id.compareTo(a.id));
 }
