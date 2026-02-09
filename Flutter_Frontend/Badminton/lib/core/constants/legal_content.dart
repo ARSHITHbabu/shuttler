@@ -3,11 +3,11 @@
 
 class LegalContent {
   // App name used in legal documents
-  static const String appName = 'Shuttler';
-  static const String companyName = 'Shuttler Technologies';
-  static const String supportEmail = 'support@shuttler.app';
+  static const String appName = 'Pursue Badminton';
+  static const String companyName = 'Pursue Technologies';
+  static const String supportEmail = 'support@pursuebadminton.com';
   static const String supportPhone = '+91 1234567890';
-  static const String websiteUrl = 'https://shuttler.app';
+  static const String websiteUrl = 'https://pursuebadminton.com';
   static const String lastUpdated = 'January 25, 2026';
 
   // ============================================

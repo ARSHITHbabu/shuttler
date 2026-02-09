@@ -28,7 +28,7 @@ try:
     test_hash = bcrypt.hashpw(b"test", bcrypt.gensalt())
     USE_DIRECT_BCRYPT = True
 except Exception as e:
-    print(f"⚠️  Direct bcrypt test failed: {e}, using passlib")
+    print(f"  Direct bcrypt test failed: {e}, using passlib")
     USE_DIRECT_BCRYPT = False
 
 if USE_DIRECT_BCRYPT:
@@ -78,13 +78,13 @@ load_dotenv()
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not SQLALCHEMY_DATABASE_URL:
-    print("⚠️  WARNING: DATABASE_URL not found in .env file!")
-    print("⚠️  Falling back to SQLite (NOT recommended for production)")
-    print("⚠️  Please update your .env file with PostgreSQL connection string")
+    print("WARNING: DATABASE_URL not found in .env file!")
+    print("Falling back to SQLite (NOT recommended for production)")
+    print("Please update your .env file with PostgreSQL connection string")
     SQLALCHEMY_DATABASE_URL = "sqlite:///./academy_portal.db"
     engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 else:
-    print(f"✅ Connecting to PostgreSQL database...")
+    print(f"Connecting to PostgreSQL database...")
     # PostgreSQL connection with connection pooling for high concurrency
     engine = create_engine(
         SQLALCHEMY_DATABASE_URL,
@@ -94,7 +94,7 @@ else:
         pool_recycle=3600,  # Recycle connections after 1 hour
         echo=False  # Set to True to see SQL queries (for debugging)
     )
-    print("✅ PostgreSQL connection established!")
+    print("PostgreSQL connection established!")
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -560,7 +560,7 @@ def check_and_add_column(engine, table_name: str, column_name: str, column_type:
         columns = [col['name'] for col in inspector.get_columns(table_name)]
         
         if column_name not in columns:
-            print(f"⚠️  Column '{column_name}' missing in '{table_name}' table. Adding...")
+            print(f"Column '{column_name}' missing in '{table_name}' table. Adding...")
             try:
                 with engine.begin() as conn:
                     alter_sql = f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"
@@ -569,14 +569,14 @@ def check_and_add_column(engine, table_name: str, column_name: str, column_type:
                     if default_value:
                         alter_sql += f" DEFAULT {default_value}"
                     conn.execute(text(alter_sql))
-                print(f"✅ Added column '{column_name}' to '{table_name}' table")
+                print(f"Added column '{column_name}' to '{table_name}' table")
                 return True
             except Exception as e:
-                print(f"❌ Error adding column '{column_name}': {e}")
+                print(f"Error adding column '{column_name}': {e}")
                 return False
         return False
     except Exception as e:
-        print(f"⚠️  Could not check columns for '{table_name}': {e}")
+        print(f"Could not check columns for '{table_name}': {e}")
         return False
 
 def migrate_database_schema(engine):
@@ -644,7 +644,7 @@ def migrate_database_schema(engine):
                         if col_info and not col_info.get('nullable', True):
                             conn.execute(text("ALTER TABLE students ALTER COLUMN added_by DROP NOT NULL"))
             except Exception as alter_error:
-                print(f"⚠️  Warning: Could not alter column constraints: {alter_error}")
+                print(f"Warning: Could not alter column constraints: {alter_error}")
         
         # Migrate announcements table - add creator_type and make created_by nullable
         if 'announcements' in tables:
@@ -677,7 +677,7 @@ def migrate_database_schema(engine):
                             # Drop the foreign key constraint
                             drop_fk_sql = text(f"ALTER TABLE announcements DROP CONSTRAINT IF EXISTS {fk_name}")
                             conn.execute(drop_fk_sql)
-                            print(f"✅ Dropped foreign key constraint {fk_name} from announcements.created_by")
+                            print(f" Dropped foreign key constraint {fk_name} from announcements.created_by")
                             break
                     
                     # Also try to find and drop any foreign key constraint on created_by column
@@ -696,9 +696,9 @@ def migrate_database_schema(engine):
                         fk_name = fk_row[0]
                         drop_fk_sql = text(f"ALTER TABLE announcements DROP CONSTRAINT IF EXISTS {fk_name}")
                         conn.execute(drop_fk_sql)
-                        print(f"✅ Dropped foreign key constraint {fk_name} from announcements.created_by")
+                        print(f" Dropped foreign key constraint {fk_name} from announcements.created_by")
             except Exception as alter_error:
-                print(f"⚠️  Warning: Could not alter announcements.created_by constraint: {alter_error}")
+                print(f"  Warning: Could not alter announcements.created_by constraint: {alter_error}")
         
         # Migrate calendar_events table - add creator_type and make created_by nullable
         if 'calendar_events' in tables:
@@ -730,7 +730,7 @@ def migrate_database_schema(engine):
                             # Drop the foreign key constraint
                             drop_fk_sql = text(f"ALTER TABLE calendar_events DROP CONSTRAINT IF EXISTS {fk_name}")
                             conn.execute(drop_fk_sql)
-                            print(f"✅ Dropped foreign key constraint {fk_name} from calendar_events.created_by")
+                            print(f" Dropped foreign key constraint {fk_name} from calendar_events.created_by")
                             break
                     
                     # Also try to find and drop any foreign key constraint on created_by column
@@ -748,9 +748,9 @@ def migrate_database_schema(engine):
                         fk_name = fk_row[0]
                         drop_fk_sql = text(f"ALTER TABLE calendar_events DROP CONSTRAINT IF EXISTS {fk_name}")
                         conn.execute(drop_fk_sql)
-                        print(f"✅ Dropped foreign key constraint {fk_name} from calendar_events.created_by")
+                        print(f" Dropped foreign key constraint {fk_name} from calendar_events.created_by")
             except Exception as alter_error:
-                print(f"⚠️  Warning: Could not alter calendar_events.created_by constraint: {alter_error}")
+                print(f"  Warning: Could not alter calendar_events.created_by constraint: {alter_error}")
 
         # Migrate video_resources table - add batch_id and session_id, make student_id nullable
         if 'video_resources' in tables:
@@ -765,9 +765,9 @@ def migrate_database_schema(engine):
                         col_info = next((col for col in inspector.get_columns('video_resources') if col['name'] == 'student_id'), None)
                         if col_info and not col_info.get('nullable', True):
                             conn.execute(text("ALTER TABLE video_resources ALTER COLUMN student_id DROP NOT NULL"))
-                            print("✅ Made video_resources.student_id nullable")
+                            print(" Made video_resources.student_id nullable")
             except Exception as e:
-                print(f"⚠️  Warning: Could not alter video_resources.student_id constraint: {e}")
+                print(f"  Warning: Could not alter video_resources.student_id constraint: {e}")
             check_and_add_column(engine, 'calendar_events', 'creator_type', 'VARCHAR(20)', nullable=True, default_value="'coach'")
             # Make created_by nullable and remove foreign key constraint (since it can reference either coaches or owners)
             try:
@@ -796,7 +796,7 @@ def migrate_database_schema(engine):
                             # Drop the foreign key constraint
                             drop_fk_sql = text(f"ALTER TABLE calendar_events DROP CONSTRAINT IF EXISTS {fk_name}")
                             conn.execute(drop_fk_sql)
-                            print(f"✅ Dropped foreign key constraint {fk_name} from calendar_events.created_by")
+                            print(f" Dropped foreign key constraint {fk_name} from calendar_events.created_by")
                             break
                     
                     # Also try to find and drop any foreign key constraint on created_by column
@@ -814,9 +814,9 @@ def migrate_database_schema(engine):
                         fk_name = fk_row[0]
                         drop_fk_sql = text(f"ALTER TABLE calendar_events DROP CONSTRAINT IF EXISTS {fk_name}")
                         conn.execute(drop_fk_sql)
-                        print(f"✅ Dropped foreign key constraint {fk_name} from calendar_events.created_by")
+                        print(f"Dropped foreign key constraint {fk_name} from calendar_events.created_by")
             except Exception as alter_error:
-                print(f"⚠️  Warning: Could not alter calendar_events.created_by constraint: {alter_error}")
+                print(f"Warning: Could not alter calendar_events.created_by constraint: {alter_error}")
 
         # Migrate student_registration_requests table
         if 'student_registration_requests' in tables:
@@ -859,17 +859,17 @@ def migrate_database_schema(engine):
                             REFERENCES students(id)
                         """)
                         conn.execute(fk_sql)
-                        print("✅ Added foreign key constraint for fees.payee_student_id")
+                        print("Added foreign key constraint for fees.payee_student_id")
             except Exception as fk_error:
                 # Foreign key might already exist or constraint name might be different
-                print(f"⚠️  Note: Foreign key constraint check: {fk_error}")
+                print(f"Note: Foreign key constraint check: {fk_error}")
         
         # Verify fee_payments table exists (should be created by Base.metadata.create_all)
         if 'fee_payments' not in tables:
-            print("⚠️  fee_payments table not found. It should be created automatically.")
-            print("⚠️  If this persists, check that FeePaymentDB model is properly defined.")
+            print("fee_payments table not found. It should be created automatically.")
+            print("If this persists, check that FeePaymentDB model is properly defined.")
         else:
-            print("✅ fee_payments table exists")
+            print("fee_payments table exists")
             # Migrate fee_payments table - add payee_name column
             check_and_add_column(engine, 'fee_payments', 'payee_name', 'VARCHAR(255)', nullable=True)
         
@@ -879,7 +879,7 @@ def migrate_database_schema(engine):
         
         # Migrate sessions table - create if it doesn't exist
         if 'sessions' not in tables:
-            print("⚠️  Table 'sessions' missing. Creating...")
+            print("Table 'sessions' missing. Creating...")
             try:
                 with engine.begin() as conn:
                     sessions_table_sql = text("""
@@ -894,17 +894,17 @@ def migrate_database_schema(engine):
                         )
                     """)
                     conn.execute(sessions_table_sql)
-                print("✅ Created table 'sessions'")
+                print("Created table 'sessions'")
             except Exception as e:
-                print(f"⚠️  Error creating sessions table: {e}")
+                print(f"Error creating sessions table: {e}")
         else:
-            print("✅ Table 'sessions' already exists")
+            print("Table 'sessions' already exists")
         
         # Migrate batches table - add session_id column
         if 'batches' in tables:
             columns = [col['name'] for col in inspector.get_columns('batches')]
             if 'session_id' not in columns:
-                print("⚠️  Column 'session_id' missing in 'batches' table. Adding...")
+                print("Column 'session_id' missing in 'batches' table. Adding...")
                 try:
                     with engine.begin() as conn:
                         # First, ensure sessions table exists (should already be created above)
@@ -915,7 +915,7 @@ def migrate_database_schema(engine):
                             REFERENCES sessions(id) ON DELETE SET NULL
                         """)
                         conn.execute(alter_sql)
-                        print("✅ Added column 'session_id' to 'batches' table")
+                        print("Added column 'session_id' to 'batches' table")
                         
                         # Create index on session_id for better query performance
                         index_check = text("""
@@ -928,11 +928,11 @@ def migrate_database_schema(engine):
                         if index_result == 0:
                             create_index_sql = text("CREATE INDEX idx_batches_session_id ON batches(session_id)")
                             conn.execute(create_index_sql)
-                            print("✅ Created index 'idx_batches_session_id' on 'batches' table")
+                            print("Created index 'idx_batches_session_id' on 'batches' table")
                 except Exception as e:
-                    print(f"⚠️  Error adding session_id column: {e}")
+                    print(f"Error adding session_id column: {e}")
             else:
-                print("✅ Column 'session_id' already exists in 'batches' table")
+                print("Column 'session_id' already exists in 'batches' table")
         
         # Migrate invitations table - add invite_token and make columns nullable
         if 'invitations' in tables:
@@ -947,17 +947,17 @@ def migrate_database_schema(engine):
                         
                         # Add column as nullable first (to handle existing rows)
                         conn.execute(text("ALTER TABLE invitations ADD COLUMN invite_token VARCHAR(255)"))
-                        print("✅ Added invite_token column to invitations table")
+                        print(" Added invite_token column to invitations table")
                         
                         # If there are existing rows, generate tokens for them
                         if row_count > 0:
-                            print(f"⚠️  Found {row_count} existing invitation(s), generating tokens...")
+                            print(f"  Found {row_count} existing invitation(s), generating tokens...")
                             rows = conn.execute(text("SELECT id FROM invitations WHERE invite_token IS NULL")).fetchall()
                             for row in rows:
                                 token = secrets.token_urlsafe(32)
                                 conn.execute(text("UPDATE invitations SET invite_token = :token WHERE id = :id"), 
                                            {"token": token, "id": row[0]})
-                            print(f"✅ Generated tokens for {row_count} existing invitation(s)")
+                            print(f" Generated tokens for {row_count} existing invitation(s)")
                         
                         # Now make it NOT NULL
                         conn.execute(text("ALTER TABLE invitations ALTER COLUMN invite_token SET NOT NULL"))
@@ -972,7 +972,7 @@ def migrate_database_schema(engine):
                         result = conn.execute(constraint_check).scalar()
                         if result == 0:
                             conn.execute(text("ALTER TABLE invitations ADD CONSTRAINT invitations_invite_token_key UNIQUE (invite_token)"))
-                            print("✅ Added unique constraint for invitations.invite_token")
+                            print(" Added unique constraint for invitations.invite_token")
                         
                         # Create index if it doesn't exist
                         index_check = text("""
@@ -984,9 +984,9 @@ def migrate_database_schema(engine):
                         index_result = conn.execute(index_check).scalar()
                         if index_result == 0:
                             conn.execute(text("CREATE INDEX ix_invitations_invite_token ON invitations (invite_token)"))
-                            print("✅ Added index for invitations.invite_token")
+                            print(" Added index for invitations.invite_token")
                 except Exception as constraint_error:
-                    print(f"⚠️  Error adding invite_token column: {constraint_error}")
+                    print(f"  Error adding invite_token column: {constraint_error}")
             
             # Make student_phone, student_email, and batch_id nullable if they aren't already
             try:
@@ -995,26 +995,26 @@ def migrate_database_schema(engine):
                         col_info = next((col for col in inspector.get_columns('invitations') if col['name'] == 'student_phone'), None)
                         if col_info and not col_info.get('nullable', True):
                             conn.execute(text("ALTER TABLE invitations ALTER COLUMN student_phone DROP NOT NULL"))
-                            print("✅ Made student_phone nullable in invitations table")
+                            print(" Made student_phone nullable in invitations table")
                     
                     if 'student_email' in columns:
                         col_info = next((col for col in inspector.get_columns('invitations') if col['name'] == 'student_email'), None)
                         if col_info and not col_info.get('nullable', True):
                             conn.execute(text("ALTER TABLE invitations ALTER COLUMN student_email DROP NOT NULL"))
-                            print("✅ Made student_email nullable in invitations table")
+                            print(" Made student_email nullable in invitations table")
                     
                     if 'batch_id' in columns:
                         col_info = next((col for col in inspector.get_columns('invitations') if col['name'] == 'batch_id'), None)
                         if col_info and not col_info.get('nullable', True):
                             conn.execute(text("ALTER TABLE invitations ALTER COLUMN batch_id DROP NOT NULL"))
-                            print("✅ Made batch_id nullable in invitations table")
+                            print(" Made batch_id nullable in invitations table")
             except Exception as alter_error:
-                print(f"⚠️  Warning: Could not alter column constraints: {alter_error}")
+                print(f"  Warning: Could not alter column constraints: {alter_error}")
 
         # Migrate video_resources table - add new columns for student video feature
         if 'video_resources' in tables:
             video_columns = [col['name'] for col in inspector.get_columns('video_resources')]
-            print(f"📹 video_resources table found with columns: {video_columns}")
+            print(f"video_resources table found with columns: {video_columns}")
 
             # Ensure student_id is nullable (for multi-target support)
             try:
@@ -1022,20 +1022,20 @@ def migrate_database_schema(engine):
                     col_info = next((col for col in inspector.get_columns('video_resources') if col['name'] == 'student_id'), None)
                     if col_info and not col_info.get('nullable', True):
                         conn.execute(text("ALTER TABLE video_resources ALTER COLUMN student_id DROP NOT NULL"))
-                        print("✅ Made video_resources.student_id nullable")
+                        print("Made video_resources.student_id nullable")
             except Exception as e:
-                print(f"⚠️  Note: video_resources.student_id nullable migration: {e}")
+                print(f"Note: video_resources.student_id nullable migration: {e}")
 
             # Add new columns
             check_and_add_column(engine, 'video_resources', 'remarks', 'TEXT', nullable=True)
             check_and_add_column(engine, 'video_resources', 'uploaded_by', 'INTEGER', nullable=True)
             check_and_add_column(engine, 'video_resources', 'audience_type', 'VARCHAR(50)', nullable=True, default_value="'student'")
             check_and_add_column(engine, 'video_resources', 'created_at', 'TIMESTAMP WITH TIME ZONE', nullable=True, default_value='NOW()')
-            print("✅ video_resources table schema verified")
+            print(" video_resources table schema verified")
 
         # Migrate video_targets table
         if 'video_targets' not in tables:
-            print("⚠️  Table 'video_targets' missing. Creating...")
+            print("  Table 'video_targets' missing. Creating...")
             try:
                 with engine.begin() as conn:
                     conn.execute(text("""
@@ -1046,54 +1046,54 @@ def migrate_database_schema(engine):
                         )
                     """))
                     conn.execute(text("CREATE INDEX idx_video_targets_video_id ON video_targets(video_id)"))
-                print("✅ Created table 'video_targets'")
+                print(" Created table 'video_targets'")
             except Exception as e:
-                print(f"⚠️  Error creating video_targets table: {e}")
+                print(f"  Error creating video_targets table: {e}")
         else:
-            print("📹 video_resources table will be created by SQLAlchemy")
+            print(" video_resources table will be created by SQLAlchemy")
 
         # Check if leave_requests table exists
         if 'leave_requests' not in tables:
-            print("⚠️  leave_requests table not found. Creating...")
+            print("  leave_requests table not found. Creating...")
             try:
                 LeaveRequestDB.__table__.create(bind=engine)
-                print("✅ leave_requests table created!")
+                print(" leave_requests table created!")
             except Exception as e:
-                print(f"❌ Error creating leave_requests table: {e}")
+                print(f" Error creating leave_requests table: {e}")
         else:
-            print("✅ leave_requests table exists")
+            print(" leave_requests table exists")
         
         # Check if student_registration_requests table exists
         if 'student_registration_requests' not in tables:
-            print("⚠️  student_registration_requests table not found. Creating...")
+            print("  student_registration_requests table not found. Creating...")
             try:
                 StudentRegistrationRequestDB.__table__.create(bind=engine)
-                print("✅ student_registration_requests table created!")
+                print(" student_registration_requests table created!")
             except Exception as e:
-                print(f"❌ Error creating student_registration_requests table: {e}")
+                print(f" Error creating student_registration_requests table: {e}")
         else:
-            print("✅ student_registration_requests table exists")
+            print(" student_registration_requests table exists")
         
         # Check if coach_registration_requests table exists
         if 'coach_registration_requests' not in tables:
-            print("⚠️  coach_registration_requests table not found. Creating...")
+            print("  coach_registration_requests table not found. Creating...")
             try:
                 CoachRegistrationRequestDB.__table__.create(bind=engine)
-                print("✅ coach_registration_requests table created!")
+                print(" coach_registration_requests table created!")
             except Exception as e:
-                print(f"❌ Error creating coach_registration_requests table: {e}")
+                print(f" Error creating coach_registration_requests table: {e}")
         else:
-            print("✅ coach_registration_requests table exists")
+            print(" coach_registration_requests table exists")
         
         # Migrate calendar_events table - add end_date and related_leave_request_id columns
         if 'calendar_events' in tables:
             check_and_add_column(engine, 'calendar_events', 'end_date', 'DATE', nullable=True)
             check_and_add_column(engine, 'calendar_events', 'related_leave_request_id', 'INTEGER', nullable=True)
-            print("✅ calendar_events table schema updated for leave support")
+            print(" calendar_events table schema updated for leave support")
         
-        print("✅ Database schema migration completed!")
+        print("Database schema migration completed!")
     except Exception as e:
-        print(f"⚠️  Migration error: {e}")
+        print(f"Migration error: {e}")
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -1101,7 +1101,7 @@ Base.metadata.create_all(bind=engine)
 # Run migration to add missing columns
 migrate_database_schema(engine)
 
-print("✅ Database tables created/verified!")
+print("Database tables created/verified!")
 
 # ==================== Pydantic Models ====================
 
@@ -1633,7 +1633,7 @@ def create_notification(db, user_id: int, user_type: str, title: str, body: str,
         db.refresh(notification)
         return notification
     except Exception as e:
-        print(f"❌ Error creating notification: {e}")
+        print(f" Error creating notification: {e}")
         traceback.print_exc()
         return None
 
@@ -2008,7 +2008,7 @@ app.add_middleware(
 # Create uploads directory for image storage
 UPLOAD_DIR = Path("./uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
-print(f"✅ Upload directory ready at: {UPLOAD_DIR.absolute()}")
+print(f" Upload directory ready at: {UPLOAD_DIR.absolute()}")
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 def get_db():
@@ -6357,7 +6357,7 @@ def create_calendar_event(event: CalendarEventCreate):
         # Log the full error for debugging
         import traceback
         error_trace = traceback.format_exc()
-        print(f"❌ Error creating calendar event: {error_trace}")
+        print(f" Error creating calendar event: {error_trace}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
     finally:
         db.close()
@@ -8229,6 +8229,64 @@ def generate_report(filter: ReportFilter):
 
 # ==================== Server ====================
 
+
+# ==================== Report History Endpoints ====================
+
+class SaveReportHistoryRequest(BaseModel):
+    report_type: str
+    filter_summary: str
+    report_data: Dict[str, Any]
+    key_metrics: Optional[Dict[str, Any]] = None
+    user_id: int
+    user_role: str
+
+@app.post("/api/reports/history")
+def save_report_history(request: SaveReportHistoryRequest):
+    """Save generated report to history"""
+    db = SessionLocal()
+    try:
+        history_entry = ReportHistoryDB(
+            user_id=request.user_id,
+            user_role=request.user_role,
+            report_type=request.report_type,
+            filter_summary=request.filter_summary,
+            report_data=request.report_data,
+            key_metrics=request.key_metrics
+        )
+        
+        db.add(history_entry)
+        db.commit()
+        db.refresh(history_entry)
+        
+        return {"status": "success", "id": history_entry.id}
+    except Exception as e:
+        db.rollback()
+        print(f"Error saving report history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.get("/api/reports/history")
+def get_report_history(
+    user_id: int = Query(..., description="User ID to fetch history for"),
+    user_role: str = Query(..., description="User Role (owner, coach)")
+):
+    """Get report history for specific user"""
+    db = SessionLocal()
+    try:
+        history = db.query(ReportHistoryDB).filter(
+            ReportHistoryDB.user_id == user_id,
+            ReportHistoryDB.user_role == user_role
+        ).order_by(ReportHistoryDB.generated_on.desc()).all()
+        return history
+    except Exception as e:
+        print(f"Error fetching report history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+# ==================== Server ====================
+
 if __name__ == "__main__":
     import uvicorn
     
@@ -8243,95 +8301,19 @@ if __name__ == "__main__":
         # Don't crash if watcher fails
         print(f"[Schema Watcher] Could not start: {e}")
     
-    print("🚀 Starting Badminton Academy Management System API...")
-    print("📖 API Documentation (Local): http://127.0.0.1:8001/docs")
-    print("📖 API Documentation (Network): http://192.168.1.4:8001/docs")
-    print("📊 Alternative Docs: http://127.0.0.1:8001/redoc")
-    print("📱 Mobile devices can connect to: http://192.168.1.4:8001")
+    print("Starting Badminton Academy Management System API...")
+    print("API Documentation (Local): http://127.0.0.1:8001/docs")
+    print("API Documentation (Network): http://192.168.1.4:8001/docs")
+    print("Alternative Docs: http://127.0.0.1:8001/redoc")
+    print("Mobile devices can connect to: http://192.168.1.4:8001")
     # host="0.0.0.0" allows connections from any device on the network
     
     # Start background cleanup scheduler
     scheduler = BackgroundScheduler()
     scheduler.add_job(cleanup_inactive_records, 'interval', days=1)
     scheduler.start()
-    print("⏰ Background cleanup scheduler started (Daily).")
+    print("Background cleanup scheduler started (Daily).")
     
     uvicorn.run(app, host="0.0.0.0", port=8001)
 
-# ==================== Report History Endpoints ====================
 
-class SaveReportHistoryRequest(BaseModel):
-    report_type: str
-    filter_summary: str
-    report_data: Dict[str, Any]
-    key_metrics: Optional[Dict[str, Any]] = None
-
-@app.post("/api/reports/history")
-async def save_report_history(
-    request: SaveReportHistoryRequest,
-    current_user: Annotated[Union[dict, str], Depends(get_current_user_with_role)]
-):
-    db: Session = SessionLocal()
-    try:
-        # Determine user ID and role
-        user_id = None
-        user_role = None
-        
-        if isinstance(current_user, str):
-             # Just an email/username string (legacy auth helper might return this)
-             # Ideally get_current_user_with_role returns dict
-             raise HTTPException(status_code=401, detail="Invalid user authentication")
-        else:
-             user_id = current_user.get("id")
-             user_role = current_user.get("type", "unknown")
-
-        if not user_id:
-             raise HTTPException(status_code=401, detail="User ID not found")
-
-        history_entry = ReportHistoryDB(
-            user_id=user_id,
-            user_role=user_role,
-            report_type=request.report_type,
-            filter_summary=request.filter_summary,
-            report_data=request.report_data,
-            key_metrics=request.key_metrics
-        )
-        
-        db.add(history_entry)
-        db.commit()
-        db.refresh(history_entry)
-        
-        return {"status": "success", "id": history_entry.id}
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
-
-@app.get("/api/reports/history")
-async def get_report_history(
-    current_user: Annotated[Union[dict, str], Depends(get_current_user_with_role)]
-):
-    db: Session = SessionLocal()
-    try:
-        user_id = None
-        user_role = None
-        
-        if isinstance(current_user, dict):
-             user_id = current_user.get("id")
-             user_role = current_user.get("type")
-        
-        if not user_id:
-            raise HTTPException(status_code=401, detail="User ID not found")
-            
-        # Fetch history for this user
-        history = db.query(ReportHistoryDB).filter(
-            ReportHistoryDB.user_id == user_id,
-            ReportHistoryDB.user_role == user_role
-        ).order_by(ReportHistoryDB.generated_on.desc()).all()
-        
-        return history
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()

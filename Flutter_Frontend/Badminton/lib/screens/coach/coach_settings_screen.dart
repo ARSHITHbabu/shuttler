@@ -16,6 +16,7 @@ import '../common/privacy_policy_screen.dart';
 import '../common/terms_conditions_screen.dart';
 import '../common/help_support_screen.dart';
 import '../../widgets/forms/change_password_dialog.dart';
+import '../../widgets/common/app_logo.dart'; // Added this import
 import 'coach_profile_screen.dart';
 
 /// Coach Settings Screen - App settings and preferences
@@ -482,22 +483,12 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
   Widget _buildAppBranding(bool isDark) {
     return Column(
       children: [
-        Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(
-            color: isDark ? AppColors.accent : AppColorsLight.accent,
-            borderRadius: BorderRadius.circular(AppDimensions.radiusL),
-          ),
-          child: const Icon(
-            Icons.sports_tennis,
-            size: 32,
-            color: Colors.white,
-          ),
+        const AppLogo(
+          height: 80,
         ),
         const SizedBox(height: AppDimensions.spacingM),
         Text(
-          'Shuttler',
+          'Pursue Badminton',
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w600,

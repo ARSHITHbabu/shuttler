@@ -11,6 +11,7 @@ import '../../core/utils/string_extensions.dart';
 
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
+import '../../core/constants/legal_content.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../providers/service_providers.dart';
@@ -52,6 +53,11 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
   Map<String, dynamic>? _reportData;
   bool _isLoading = false;
   bool _isInitializing = true;
+  
+  // History State
+  int _tabIndex = 0; // 0: Generate, 1: History
+  List<Map<String, dynamic>> _historyData = [];
+  bool _isHistoryLoading = false;
 
   @override
   void initState() {
@@ -117,14 +123,7 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
             icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
             onPressed: () => Navigator.of(context).pop(),
           ),
-          title: const Text(
-            'Reports',
-            style: TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+          title: const Text('Reports', style: TextStyle(color: AppColors.textPrimary, fontSize: 20, fontWeight: FontWeight.w600)),
         ),
         body: const Center(child: CircularProgressIndicator()),
       );
@@ -139,207 +138,253 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
           icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text(
-          'Reports',
-          style: TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        title: const Text('Reports', style: TextStyle(color: AppColors.textPrimary, fontSize: 20, fontWeight: FontWeight.w600)),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppDimensions.paddingL),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Report Type Selection (Attendance and Performance only)
-            const Text(
-              'Report Type',
-              style: TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: AppDimensions.spacingM),
-            Row(
-              children: [
-                Expanded(
-                  child: _ReportTypeCard(
-                    icon: Icons.fact_check_outlined,
-                    label: 'Attendance',
-                    isSelected: _reportType == ReportType.attendance,
-                    onTap: () {
-                      setState(() {
-                        _reportType = ReportType.attendance;
-                        _reportData = null;
-                      });
-                    },
-                  ),
-                ),
-                const SizedBox(width: AppDimensions.spacingM),
-                Expanded(
-                  child: _ReportTypeCard(
-                    icon: Icons.trending_up_outlined,
-                    label: 'Performance',
-                    isSelected: _reportType == ReportType.performance,
-                    onTap: () {
-                      setState(() {
-                        _reportType = ReportType.performance;
-                        _reportData = null;
-                      });
-                    },
-                  ),
-                ),
-              ],
-            ),
-
+            _buildTabSelector(),
             const SizedBox(height: AppDimensions.spacingL),
-
-            // Filter Type Selection
-            const Text(
-              'Filter By',
-              style: TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: AppDimensions.spacingM),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
+            
+            if (_tabIndex == 0) ...[
+              // Report Type Selection
+              const Text('Report Type', style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w600)),
+              const SizedBox(height: AppDimensions.spacingM),
+              Row(
                 children: [
-                  _FilterChip(
-                    label: 'Season',
-                    isSelected: _filterType == FilterType.season,
-                    onTap: () {
-                      setState(() {
-                        _filterType = FilterType.season;
-                        _filterBatches();
-                        _reportData = null;
-                      });
-                    },
+                  Expanded(
+                    child: _ReportTypeCard(
+                      icon: Icons.fact_check_outlined,
+                      label: 'Attendance',
+                      isSelected: _reportType == ReportType.attendance,
+                      onTap: () => setState(() { _reportType = ReportType.attendance; _reportData = null; }),
+                    ),
                   ),
-                  const SizedBox(width: AppDimensions.spacingS),
-                  _FilterChip(
-                    label: 'Year',
-                    isSelected: _filterType == FilterType.year,
-                    onTap: () {
-                      setState(() {
-                        _filterType = FilterType.year;
-                        _filterBatches();
-                        _reportData = null;
-                      });
-                    },
-                  ),
-                  const SizedBox(width: AppDimensions.spacingS),
-                  _FilterChip(
-                    label: 'Month',
-                    isSelected: _filterType == FilterType.month,
-                    onTap: () {
-                      setState(() {
-                        _filterType = FilterType.month;
-                        _filterBatches();
-                        _reportData = null;
-                      });
-                    },
+                  const SizedBox(width: AppDimensions.spacingM),
+                  Expanded(
+                    child: _ReportTypeCard(
+                      icon: Icons.trending_up_outlined,
+                      label: 'Performance',
+                      isSelected: _reportType == ReportType.performance,
+                      onTap: () => setState(() { _reportType = ReportType.performance; _reportData = null; }),
+                    ),
                   ),
                 ],
               ),
-            ),
 
-            const SizedBox(height: AppDimensions.spacingL),
+              const SizedBox(height: AppDimensions.spacingL),
 
-            // Filter Value Selection
-            _buildFilterValueSelector(),
-
-            const SizedBox(height: AppDimensions.spacingL),
-
-            // Batch Selection
-            const Text(
-              'Select Batch',
-              style: TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: AppDimensions.spacingM),
-            NeumorphicContainer(
-              padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
-              child: DropdownButtonFormField<String>(
-                value: _selectedBatchId,
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  hintText: 'Select Batch',
-                  hintStyle: TextStyle(color: AppColors.textSecondary),
+              // Filter Type Selection
+              const Text('Filter By', style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w600)),
+              const SizedBox(height: AppDimensions.spacingM),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _FilterChip(
+                      label: 'Season',
+                      isSelected: _filterType == FilterType.season,
+                      onTap: () => setState(() { _filterType = FilterType.season; _filterBatches(); _reportData = null; }),
+                    ),
+                    const SizedBox(width: AppDimensions.spacingS),
+                    _FilterChip(
+                      label: 'Year',
+                      isSelected: _filterType == FilterType.year,
+                      onTap: () => setState(() { _filterType = FilterType.year; _filterBatches(); _reportData = null; }),
+                    ),
+                    const SizedBox(width: AppDimensions.spacingS),
+                    _FilterChip(
+                      label: 'Month',
+                      isSelected: _filterType == FilterType.month,
+                      onTap: () => setState(() { _filterType = FilterType.month; _filterBatches(); _reportData = null; }),
+                    ),
+                  ],
                 ),
-                dropdownColor: AppColors.cardBackground,
-                style: const TextStyle(color: AppColors.textPrimary),
-                items: [
-                  const DropdownMenuItem(
-                    value: 'all',
-                    child: Text('All Batches'),
-                  ),
-                  ..._filteredBatches.map((batch) {
-                    return DropdownMenuItem<String>(
-                      value: batch.id.toString(),
-                      child: Text(batch.batchName),
-                    );
-                  }),
-                ],
-                onChanged: (value) {
-                  setState(() {
-                    _selectedBatchId = value ?? 'all';
-                    _reportData = null;
-                  });
-                },
               ),
-            ),
 
-            const SizedBox(height: AppDimensions.spacingXl),
+              const SizedBox(height: AppDimensions.spacingL),
 
-            // Generate Report Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _isLoading ? null : _generateReport,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.accent,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: AppDimensions.paddingM),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-                  ),
+              // Filter Value Selection
+              _buildFilterValueSelector(),
+
+              const SizedBox(height: AppDimensions.spacingL),
+
+              // Batch Selection
+              const Text('Select Batch', style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w600)),
+              const SizedBox(height: AppDimensions.spacingM),
+              NeumorphicContainer(
+                padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
+                child: DropdownButtonFormField<String>(
+                  value: _selectedBatchId,
+                  decoration: const InputDecoration(border: InputBorder.none, hintText: 'Select Batch', hintStyle: TextStyle(color: AppColors.textSecondary)),
+                  dropdownColor: AppColors.cardBackground,
+                  style: const TextStyle(color: AppColors.textPrimary),
+                  items: [
+                    const DropdownMenuItem(value: 'all', child: Text('All Batches')),
+                    ..._filteredBatches.map((batch) {
+                      return DropdownMenuItem<String>(value: batch.id.toString(), child: Text(batch.batchName));
+                    }),
+                  ],
+                  onChanged: (value) => setState(() { _selectedBatchId = value ?? 'all'; _reportData = null; }),
                 ),
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      )
-                    : const Text(
-                        'Generate Report',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
               ),
-            ),
 
-            if (_reportData != null) ...[
               const SizedBox(height: AppDimensions.spacingXl),
-              _buildReportPreview(),
+
+              // Generate Report Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _generateReport,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.accent,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: AppDimensions.paddingM),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppDimensions.radiusM)),
+                  ),
+                  child: _isLoading
+                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)))
+                      : const Text('Generate Report', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                ),
+              ),
+
+              if (_reportData != null) ...[
+                const SizedBox(height: AppDimensions.spacingXl),
+                _buildReportPreview(),
+              ],
+            ] else ...[
+               _buildHistoryList(),
             ],
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildTabSelector() {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: _tabButton("Generate Report", 0)),
+          Expanded(child: _tabButton("History", 1)),
+        ],
+      ),
+    );
+  }
+
+  Widget _tabButton(String title, int index) {
+      bool isSelected = _tabIndex == index;
+      return InkWell(
+        onTap: () {
+          setState(() {
+             _tabIndex = index;
+             if (index == 1) _loadHistory();
+          });
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.accent : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            title,
+            style: TextStyle(
+              color: isSelected ? Colors.white : AppColors.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      );
+  }
+
+  Future<void> _loadHistory() async {
+     setState(() => _isHistoryLoading = true);
+     try {
+       final authState = ref.read(authProvider);
+       int? userId;
+       String? userRole;
+       
+       authState.whenData((state) {
+         if (state is Authenticated) {
+           userId = state.userId;
+           userRole = state.userRole ?? 'coach';
+         }
+       });
+
+       if (userId != null && userRole != null) {
+         final history = await ref.read(reportServiceProvider).getReportHistory(
+           userId: userId!,
+           userRole: userRole!,
+         );
+         if (mounted) setState(() => _historyData = history);
+       }
+     } catch (e) {
+       if (mounted) SuccessSnackbar.showError(context, "Error loading history: $e");
+     } finally {
+       if (mounted) setState(() => _isHistoryLoading = false);
+     }
+  }
+
+  Widget _buildHistoryList() {
+    if (_isHistoryLoading) return const Center(child: CircularProgressIndicator());
+    if (_historyData.isEmpty) return const Center(child: Text("No report history found."));
+
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _historyData.length,
+      itemBuilder: (context, index) {
+        final item = _historyData[index];
+        final date = DateTime.tryParse(item['generated_on'] ?? '') ?? DateTime.now();
+        
+        return NeumorphicContainer(
+          padding: const EdgeInsets.all(16),
+          margin: const EdgeInsets.only(bottom: 12),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: AppColors.accent.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                child: Icon(Icons.description, color: AppColors.accent),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(item['report_type']?.toString().toUpperCase() ?? 'REPORT', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 4),
+                    Text(item['filter_summary'] ?? '', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                    Text(DateFormat('dd MMM yyyy, hh:mm a').format(date), style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.download, color: AppColors.accent),
+                onPressed: () {
+                   setState(() {
+                     _reportData = Map<String, dynamic>.from(item['report_data']);
+                     try {
+                        _reportType = ReportType.values.firstWhere((e) => e.name == item['report_type']);
+                     } catch (_) {}
+                   });
+                   _downloadReport(isHistory: true);
+                },
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -556,7 +601,7 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: _downloadReport,
+              onPressed: () => _downloadReport(isHistory: false),
               icon: const Icon(Icons.download, size: 18),
               label: const Text("Download PDF"),
               style: ElevatedButton.styleFrom(
@@ -631,7 +676,7 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
     );
   }
 
-  Future<void> _downloadReport() async {
+  Future<void> _downloadReport({bool isHistory = false}) async {
     try {
       // Generate PDF
       final pdf = await _generatePDF();
@@ -648,13 +693,55 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
       } else {
         // Mobile download
         final output = await getApplicationDocumentsDirectory();
+        
+         // Create reports directory if not exists
+        final reportsDir = Directory('${output.path}/Reports');
+        if (!await reportsDir.exists()) {
+           await reportsDir.create(recursive: true);
+        }
+
         final fileName = _getFileName();
-        final file = File('${output.path}/$fileName');
+        final file = File('${reportsDir.path}/$fileName');
         await file.writeAsBytes(await pdf.save());
         if (mounted) {
           SuccessSnackbar.show(context, 'Report saved to ${file.path}');
         }
       }
+
+      // Save history logic
+      if (!isHistory) {
+         try {
+           final authState = ref.read(authProvider);
+           int? userId;
+           String? userRole;
+           
+           authState.whenData((state) {
+             if (state is Authenticated) {
+               userId = state.userId;
+               userRole = state.userRole ?? 'coach';
+             }
+           });
+
+           if (userId != null && userRole != null) {
+             final reportService = ref.read(reportServiceProvider);
+             
+             // Ensure filter_summary exists
+             final filterSummary = _reportData!['filter_summary'] ?? 
+                "Season: ${_seasons.firstWhere((s) => s.id.toString() == _selectedSeasonId, orElse: () => Session(id: -1, name: 'Unknown', startDate: DateTime.now(), endDate: DateTime.now(), status: 'active')).name} | Batch: ${_selectedBatchId == 'all' ? 'All' : _filteredBatches.firstWhere((b) => b.id.toString() == _selectedBatchId, orElse: () => Batch(id: -1, batchName: 'Unknown', timing: '', period: '', capacity: 0, fees: '', startDate: '', createdBy: '')).batchName}";
+
+             await reportService.saveReportHistory(
+               reportType: _reportType.name,
+               filterSummary: filterSummary,
+               reportData: _reportData!,
+               userId: userId!,
+               userRole: userRole!,
+             );
+           }
+         } catch (e) {
+           print("History save error: $e");
+         }
+      }
+
     } catch (e) {
       if (mounted) {
         SuccessSnackbar.showError(context, 'Error downloading report: $e');
@@ -695,7 +782,7 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(40),
         header: (context) => _buildPdfHeader(context, userName, userRole),
-        footer: (context) => _buildPdfFooter(context, 'Ace Badminton Academy'),
+        footer: (context) => _buildPdfFooter(context, LegalContent.appName),
         build: (context) => _buildPdfContent(context),
       ),
     );
@@ -713,8 +800,8 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
             pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                pw.Text('Badminton App', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
-                pw.Text('Ace Badminton Academy', style: const pw.TextStyle(fontSize: 12)),
+                pw.Text(LegalContent.appName, style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+                pw.Text(LegalContent.appName, style: const pw.TextStyle(fontSize: 12)),
               ],
             ),
             pw.Column(
@@ -742,7 +829,7 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
         pw.Row(
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [
-            pw.Text("$academyName | Badminton App", style: const pw.TextStyle(fontSize: 8)),
+            pw.Text("${LegalContent.appName} | Management System", style: const pw.TextStyle(fontSize: 8)),
             pw.Text("Page ${context.pageNumber} of ${context.pagesCount}", style: const pw.TextStyle(fontSize: 8)),
           ],
         ),

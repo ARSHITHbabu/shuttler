@@ -12,6 +12,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/service_providers.dart';
 import '../../core/services/student_registration_request_service.dart';
 import '../../core/theme/neumorphic_styles.dart';
+import '../../widgets/common/app_logo.dart';
 
 /// Signup screen for user registration
 class SignupScreen extends ConsumerStatefulWidget {
@@ -132,6 +133,13 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                const Center(
+                  child: AppLogo(
+                    height: 80,
+                  ),
+                ),
+                const SizedBox(height: AppDimensions.spacingL),
+                
                 // Creative Role Selector
                 Container(
                   padding: const EdgeInsets.all(AppDimensions.paddingXs),

@@ -11,6 +11,7 @@ import '../../core/utils/string_extensions.dart';
 
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
+import '../../core/constants/legal_content.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../providers/service_providers.dart';
@@ -497,8 +498,24 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   Future<void> _loadHistory() async {
      setState(() => _isHistoryLoading = true);
      try {
-       final history = await ref.read(reportServiceProvider).getReportHistory();
-       if (mounted) setState(() => _historyData = history);
+       final authState = ref.read(authProvider);
+       int? userId;
+       String? userRole;
+       
+       authState.whenData((state) {
+         if (state is Authenticated) {
+           userId = state.userId;
+           userRole = state.userRole ?? 'owner'; // Default to owner if null
+         }
+       });
+
+       if (userId != null && userRole != null) {
+         final history = await ref.read(reportServiceProvider).getReportHistory(
+           userId: userId!,
+           userRole: userRole!,
+         );
+         if (mounted) setState(() => _historyData = history);
+       }
      } catch (e) {
        if (mounted) SuccessSnackbar.showError(context, "Error loading history: $e");
      } finally {
@@ -1343,7 +1360,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     try {
       final pdf = pw.Document();
       
-      final academyName = "Badminton Academy"; // TODO: Get from store
+      final academyName = LegalContent.appName; 
       final address = "123 Sports Ave, Tech City"; // TODO: Get from store
       final ownerName = "Jane Doe"; // TODO: Get from store
       
@@ -1383,12 +1400,27 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       // Save history logic
       if (!isHistory) {
          try {
-           final reportService = ref.read(reportServiceProvider);
-           await reportService.saveReportHistory(
-             reportType: _reportType.name,
-             filterSummary: _reportData!['filter_summary'] ?? 'Report',
-             reportData: _reportData!,
-           );
+           final authState = ref.read(authProvider);
+           int? userId;
+           String? userRole;
+           
+           authState.whenData((state) {
+             if (state is Authenticated) {
+               userId = state.userId;
+               userRole = state.userRole ?? 'owner';
+             }
+           });
+
+           if (userId != null && userRole != null) {
+             final reportService = ref.read(reportServiceProvider);
+             await reportService.saveReportHistory(
+               reportType: _reportType.name,
+               filterSummary: _reportData!['filter_summary'] ?? 'Report',
+               reportData: _reportData!,
+               userId: userId!,
+               userRole: userRole!,
+             );
+           }
          } catch (e) {
            print("History save error: $e");
          }
