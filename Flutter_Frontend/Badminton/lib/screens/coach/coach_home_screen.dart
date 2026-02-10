@@ -13,7 +13,7 @@ import '../../models/schedule.dart';
 import '../../widgets/forms/add_student_dialog.dart';
 import 'coach_schedule_screen.dart';
 import 'coach_students_screen.dart';
-import 'coach_attendance_view_screen.dart';
+import 'coach_attendance_screen.dart';
 import '../../core/utils/canadian_holidays.dart';
 
 /// Coach Home Screen - Dashboard overview
@@ -160,7 +160,9 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
                       onTap: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (context) => const CoachAttendanceViewScreen(),
+                            builder: (context) => const CoachAttendanceScreen(
+                              initialMode: AttendanceViewMode.personal,
+                            ),
                           ),
                         );
                       },
