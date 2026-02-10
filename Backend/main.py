@@ -2837,12 +2837,18 @@ def create_batch(batch: BatchCreate):
         db.close()
 
 @app.get("/batches/", response_model=List[Batch])
-def get_batches():
+def get_batches(status: Optional[str] = Query(None)):
     db = SessionLocal()
     try:
         # Try normal query first
         try:
-            batches_db = db.query(BatchDB).filter(BatchDB.status == "active").all()
+            query = db.query(BatchDB)
+            if status and status.lower() != 'all':
+                query = query.filter(BatchDB.status == status)
+            elif not status:
+                query = query.filter(BatchDB.status == "active")
+            
+            batches_db = query.all()
             batches = []
             for batch_db in batches_db:
                 # Get coaches from junction table

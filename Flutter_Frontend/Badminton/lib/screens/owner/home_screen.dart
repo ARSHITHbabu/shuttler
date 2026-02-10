@@ -13,6 +13,7 @@ import '../../providers/batch_provider.dart';
 import 'students_screen.dart';
 import 'coaches_screen.dart';
 import 'fees_screen.dart';
+import '../../providers/owner_navigation_provider.dart';
 import '../../core/utils/canadian_holidays.dart';
 
 /// Home Screen - Dashboard overview
@@ -140,7 +141,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     icon: Icons.calendar_today_outlined,
                     value: stats.activeBatches.toString(),
                     label: 'Active Batches',
-                    onTap: null,
+                    onTap: () {
+                      ref.read(ownerBottomNavIndexProvider.notifier).state = 1; // 1 is Batches screen index
+                    },
                   ),
                   _StatCard(
                     icon: Icons.attach_money_outlined,

@@ -12,7 +12,7 @@ class BatchList extends _$BatchList {
   @override
   Future<List<Batch>> build() async {
     final batchService = ref.watch(batchServiceProvider);
-    final batches = await batchService.getBatches();
+    final batches = await batchService.getBatches(status: 'all');
     // Sort by ID descending (latest first)
     return batches..sort((a, b) => b.id.compareTo(a.id));
   }
@@ -22,7 +22,7 @@ class BatchList extends _$BatchList {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
       final batchService = ref.read(batchServiceProvider);
-      final batches = await batchService.getBatches();
+      final batches = await batchService.getBatches(status: 'all');
       // Sort by ID descending (latest first)
       return batches..sort((a, b) => b.id.compareTo(a.id));
     });

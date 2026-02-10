@@ -96,8 +96,13 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
   void _handleDeactivateBatch(Batch batch) async {
     try {
       await ref.read(batchListProvider.notifier).deactivateBatch(batch.id);
+      
+      // Add a small delay to ensure dialog transition is complete and build context is stable
       if (mounted) {
-        SuccessSnackbar.show(context, 'Batch deactivated successfully');
+        await Future.delayed(const Duration(milliseconds: 300));
+        if (mounted) {
+          SuccessSnackbar.show(context, 'Batch deactivated successfully');
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -224,10 +229,17 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                 // Batches List
                 batchesAsync.when(
                   data: (batches) {
+                    // Debug logging to verify batch statuses
+                    debugPrint('DEBUG: Loaded ${batches.length} batches from backend');
+                    for (var b in batches) {
+                      debugPrint('Batch ${b.id}: ${b.name} [${b.status}]');
+                    }
+
                     final filteredBatches = batches.where((batch) {
                       // Filter by status
-                      if (_statusFilter == 'active' && batch.status != 'active') return false;
-                      if (_statusFilter == 'inactive' && batch.status == 'active') return false;
+                      final status = batch.status.toLowerCase();
+                      if (_statusFilter == 'active' && status != 'active') return false;
+                      if (_statusFilter == 'inactive' && status == 'active') return false;
                       
                       // Filter by search query
                       if (_searchQuery.isEmpty) return true;
@@ -235,6 +247,9 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                     }).toList();
 
                     if (filteredBatches.isEmpty) {
+                      if (_statusFilter == 'inactive') {
+                        return EmptyState.noInactiveBatches();
+                      }
                       return EmptyState.noBatches(
                         onCreate: _searchQuery.isEmpty ? _openAddForm : null,
                       );

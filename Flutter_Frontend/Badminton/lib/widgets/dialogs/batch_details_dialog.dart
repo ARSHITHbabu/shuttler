@@ -441,7 +441,7 @@ class _BatchDetailsDialogState extends ConsumerState<BatchDetailsDialog> {
           
         // Add Deactivate and Delete buttons for owners
         if (widget.isOwner) ...[
-          const SizedBox(height: AppDimensions.spacingXL),
+          const SizedBox(height: AppDimensions.spacingXl),
           const Divider(color: AppColors.textSecondary, thickness: 0.5),
           const SizedBox(height: AppDimensions.spacingL),
           

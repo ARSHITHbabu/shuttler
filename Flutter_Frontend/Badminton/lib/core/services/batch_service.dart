@@ -12,20 +12,20 @@ class BatchService {
   /// Get all batches
   Future<List<Batch>> getBatches({String? status}) async {
     try {
-      // Backend doesn't support status filter in query params
-      final response = await _apiService.get(ApiEndpoints.batches);
+      final Map<String, dynamic> queryParams = {};
+      if (status != null) {
+        queryParams['status'] = status;
+      }
+
+      final response = await _apiService.get(
+        ApiEndpoints.batches,
+        queryParameters: queryParams.isNotEmpty ? queryParams : null,
+      );
       
       if (response.data is List) {
         final batches = (response.data as List)
             .map((json) => Batch.fromJson(json as Map<String, dynamic>))
             .toList();
-        
-        // Filter by status if provided (client-side filtering)
-        if (status != null) {
-          // Note: Backend doesn't have status field, so we'll return all
-          // You may need to add status filtering logic based on your needs
-          return batches;
-        }
         
         return batches;
       }

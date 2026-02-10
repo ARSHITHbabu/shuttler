@@ -147,8 +147,9 @@ class _CoachBatchesScreenState extends ConsumerState<CoachBatchesScreen> {
                   // Filter batches by status and search query
                   final filteredBatches = batches.where((batch) {
                     // Filter by status
-                    if (_statusFilter == 'active' && batch.status != 'active') return false;
-                    if (_statusFilter == 'inactive' && batch.status == 'active') return false;
+                    final status = batch.status.toLowerCase();
+                    if (_statusFilter == 'active' && status != 'active') return false;
+                    if (_statusFilter == 'inactive' && status == 'active') return false;
                     
                     // Filter by search query
                     if (_searchQuery.isEmpty) return true;
