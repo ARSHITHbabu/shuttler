@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
@@ -13,26 +14,42 @@ import '../../providers/attendance_provider.dart';
 import '../../providers/service_providers.dart';
 import '../../models/student.dart';
 import '../../models/batch.dart';
+import '../../models/attendance.dart';
+
+enum AttendanceViewMode { student, personal }
 
 /// Coach Attendance Screen - Mark attendance for assigned batches
 /// Matches Owner Attendance Screen UI and workflow
 class CoachAttendanceScreen extends ConsumerStatefulWidget {
-  const CoachAttendanceScreen({super.key});
+  final AttendanceViewMode? initialMode;
+  const CoachAttendanceScreen({super.key, this.initialMode});
 
   @override
   ConsumerState<CoachAttendanceScreen> createState() => _CoachAttendanceScreenState();
 }
 
 class _CoachAttendanceScreenState extends ConsumerState<CoachAttendanceScreen> {
+  late AttendanceViewMode _viewMode;
   int? _selectedBatchId;
   DateTime _selectedDate = DateTime.now();
   final Map<int, String> _attendance = {}; // studentId -> 'present' or 'absent'
   final Map<int, String> _remarks = {}; // studentId -> remarks
   bool _hasUnsavedChanges = false; // Track if there are unsaved changes
 
+  // Personal Attendance State (Coach's own)
+  String _selectedFilter = 'all'; // 'all', 'present', 'absent'
+  String _selectionMode = 'month'; // 'date', 'month', 'year', 'all'
+  DateTime? _pSelectedDate;
+  DateTime? _pSelectedMonth;
+  int? _pSelectedYear;
+
   @override
   void initState() {
     super.initState();
+    _viewMode = widget.initialMode ?? AttendanceViewMode.student;
+    _pSelectedMonth = DateTime.now();
+    _pSelectedDate = DateTime.now();
+    _pSelectedYear = DateTime.now().year;
     // Load existing attendance when batch/date changes
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_selectedBatchId != null) {
@@ -70,8 +87,6 @@ class _CoachAttendanceScreenState extends ConsumerState<CoachAttendanceScreen> {
   }
 
   Widget _buildContent(int coachId) {
-    final batchesAsync = ref.watch(coachBatchesProvider(coachId));
-
     return LayoutBuilder(
       builder: (context, constraints) {
         return SingleChildScrollView(
@@ -84,77 +99,35 @@ class _CoachAttendanceScreenState extends ConsumerState<CoachAttendanceScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Header
-                  const Text(
-                    'Attendance',
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Attendance',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      if (_viewMode == AttendanceViewMode.personal)
+                        IconButton(
+                          icon: const Icon(Icons.refresh, color: AppColors.textSecondary),
+                          onPressed: () => ref.invalidate(coachAttendanceByCoachIdProvider(coachId)),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: AppDimensions.spacingL),
 
-                  // Date Picker
-                  NeumorphicContainer(
-                    padding: const EdgeInsets.all(AppDimensions.paddingM),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.calendar_today_outlined,
-                          color: AppColors.iconPrimary,
-                          size: 20,
-                        ),
-                        const SizedBox(width: AppDimensions.spacingM),
-                        Expanded(
-                          child: GestureDetector(
-                            onTap: () async {
-                              final date = await showDatePicker(
-                                context: context,
-                                initialDate: _selectedDate,
-                                firstDate: DateTime(2020),
-                                lastDate: DateTime(2030),
-                                builder: (context, child) {
-                                  return Theme(
-                                    data: Theme.of(context).copyWith(
-                                      colorScheme: const ColorScheme.dark(
-                                        primary: AppColors.accent,
-                                        surface: AppColors.cardBackground,
-                                      ),
-                                    ),
-                                    child: child!,
-                                  );
-                                },
-                              );
-                              if (date != null) {
-                                setState(() {
-                                  _selectedDate = date;
-                                });
-                                // Load existing attendance for the selected date
-                                if (_selectedBatchId != null) {
-                                  _loadExistingAttendance();
-                                }
-                              }
-                            },
-                            child: Text(
-                              '${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}',
-                              style: const TextStyle(
-                                color: AppColors.textPrimary,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  // Mode Toggle
+                  _buildModeToggle(),
 
                   const SizedBox(height: AppDimensions.spacingL),
 
-                  // Batch Selector (card-based, matching owner screen)
-                  if (_selectedBatchId == null)
-                    _buildBatchSelector(batchesAsync, coachId)
+                  if (_viewMode == AttendanceViewMode.student)
+                    _buildStudentAttendanceView(coachId)
                   else
-                    _buildStudentAttendanceList(batchesAsync, coachId),
+                    _buildPersonalAttendanceView(coachId),
 
                   const SizedBox(height: 100), // Space for bottom nav
                 ],
@@ -163,6 +136,347 @@ class _CoachAttendanceScreenState extends ConsumerState<CoachAttendanceScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildModeToggle() {
+    return NeumorphicContainer(
+      padding: const EdgeInsets.all(AppDimensions.spacingS),
+      child: Row(
+        children: [
+          Expanded(
+            child: _ToggleItem(
+              label: 'Student Attendance',
+              isSelected: _viewMode == AttendanceViewMode.student,
+              onTap: () => setState(() => _viewMode = AttendanceViewMode.student),
+            ),
+          ),
+          const SizedBox(width: AppDimensions.spacingS),
+          Expanded(
+            child: _ToggleItem(
+              label: 'My Attendance',
+              isSelected: _viewMode == AttendanceViewMode.personal,
+              onTap: () => setState(() => _viewMode = AttendanceViewMode.personal),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStudentAttendanceView(int coachId) {
+    final batchesAsync = ref.watch(coachBatchesProvider(coachId));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Date Picker
+        NeumorphicContainer(
+          padding: const EdgeInsets.all(AppDimensions.paddingM),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.calendar_today_outlined,
+                color: AppColors.iconPrimary,
+                size: 20,
+              ),
+              const SizedBox(width: AppDimensions.spacingM),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () async {
+                    final date = await showDatePicker(
+                      context: context,
+                      initialDate: _selectedDate,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime(2030),
+                      builder: (context, child) {
+                        return Theme(
+                          data: Theme.of(context).copyWith(
+                            colorScheme: const ColorScheme.dark(
+                              primary: AppColors.accent,
+                              surface: AppColors.cardBackground,
+                            ),
+                          ),
+                          child: child!,
+                        );
+                      },
+                    );
+                    if (date != null) {
+                      setState(() {
+                        _selectedDate = date;
+                      });
+                      // Load existing attendance for the selected date
+                      if (_selectedBatchId != null) {
+                        _loadExistingAttendance();
+                      }
+                    }
+                  },
+                  child: Text(
+                    '${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}',
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: AppDimensions.spacingL),
+
+        // Batch Selector (card-based, matching owner screen)
+        if (_selectedBatchId == null)
+          _buildBatchSelector(batchesAsync, coachId)
+        else
+          _buildStudentAttendanceList(batchesAsync, coachId),
+      ],
+    );
+  }
+
+  Widget _buildPersonalAttendanceView(int coachId) {
+    // Determine date range based on selection mode
+    DateTime? startDate;
+    DateTime? endDate;
+    int? month;
+    int? year;
+
+    if (_selectionMode == 'date' && _pSelectedDate != null) {
+      startDate = DateTime(_pSelectedDate!.year, _pSelectedDate!.month, _pSelectedDate!.day);
+      endDate = DateTime(_pSelectedDate!.year, _pSelectedDate!.month, _pSelectedDate!.day, 23, 59, 59);
+    } else if (_selectionMode == 'month' && _pSelectedMonth != null) {
+      month = _pSelectedMonth!.month;
+      year = _pSelectedMonth!.year;
+    } else if (_selectionMode == 'year' && _pSelectedYear != null) {
+      startDate = DateTime(_pSelectedYear!, 1, 1);
+      endDate = DateTime(_pSelectedYear!, 12, 31, 23, 59, 59);
+    }
+
+    final attendanceAsync = ref.watch(coachAttendanceByCoachIdProvider(coachId));
+
+    return attendanceAsync.when(
+      loading: () => const Center(child: ListSkeleton(itemCount: 3)),
+      error: (error, stack) => ErrorDisplay(
+        message: 'Failed to load attendance records: ${error.toString()}',
+        onRetry: () => ref.invalidate(coachAttendanceByCoachIdProvider(coachId)),
+      ),
+      data: (allRecords) {
+        // Filter records based on selected date/month/year and present/absent filter
+        final filteredByDate = allRecords.where((record) {
+          if (_selectionMode == 'date' && _pSelectedDate != null) {
+            return record.date.year == _pSelectedDate!.year &&
+                record.date.month == _pSelectedDate!.month &&
+                record.date.day == _pSelectedDate!.day;
+          } else if (_selectionMode == 'month' && _pSelectedMonth != null) {
+            return record.date.year == _pSelectedMonth!.year &&
+                record.date.month == _pSelectedMonth!.month;
+          } else if (_selectionMode == 'year' && _pSelectedYear != null) {
+            return record.date.year == _pSelectedYear;
+          }
+          return true; // All mode
+        }).toList();
+
+        final filteredRecords = _selectedFilter == 'all'
+            ? filteredByDate
+            : filteredByDate.where((r) => r.status.toLowerCase() == _selectedFilter).toList();
+
+        final stats = _calculatePersonalStats(filteredByDate);
+
+        return Column(
+          children: [
+            // Stats Summary row
+            _buildPersonalStatsSummary(stats),
+
+            const SizedBox(height: AppDimensions.spacingL),
+
+            // Date/Month/Year Selector
+            _buildPersonalDateSelector(),
+
+            const SizedBox(height: AppDimensions.spacingM),
+
+            // Filter Tabs (All, Present, Absent)
+            _buildPersonalFilterTabs(),
+
+            const SizedBox(height: AppDimensions.spacingL),
+
+            // History Header
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Attendance History',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                Text(
+                  '${filteredRecords.length} sessions',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppDimensions.spacingM),
+
+            if (filteredRecords.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 40),
+                child: Center(
+                  child: Column(
+                    children: [
+                      Icon(Icons.event_busy, size: 64, color: AppColors.textTertiary.withOpacity(0.5)),
+                      const SizedBox(height: AppDimensions.spacingM),
+                      Text(
+                        'No attendance records found',
+                        style: TextStyle(color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: filteredRecords.length,
+                itemBuilder: (context, index) {
+                  return _PersonalAttendanceRecordCard(record: filteredRecords[index]);
+                },
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Map<String, dynamic> _calculatePersonalStats(List<CoachAttendance> records) {
+    if (records.isEmpty) {
+      return {
+        'total': 0,
+        'present': 0,
+        'absent': 0,
+        'rate': 0.0,
+      };
+    }
+    final total = records.length;
+    final present = records.where((r) => r.status.toLowerCase() == 'present').length;
+    final absent = total - present;
+    return {
+      'total': total,
+      'present': present,
+      'absent': absent,
+      'rate': (present / total) * 100,
+    };
+  }
+
+  Widget _buildPersonalStatsSummary(Map<String, dynamic> stats) {
+    return NeumorphicContainer(
+      padding: const EdgeInsets.symmetric(vertical: AppDimensions.paddingL),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _PersonalStatItem(label: 'Total', value: stats['total'].toString(), color: AppColors.textPrimary),
+          _PersonalStatItem(label: 'Present', value: stats['present'].toString(), color: AppColors.success),
+          _PersonalStatItem(label: 'Absent', value: stats['absent'].toString(), color: AppColors.error),
+          _PersonalStatItem(label: 'Percentage', value: '${(stats['rate'] as double).toStringAsFixed(0)}%', color: AppColors.accent),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPersonalDateSelector() {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(child: _SelectionTab(label: 'Date', isSelected: _selectionMode == 'date', onTap: () => setState(() => _selectionMode = 'date'))),
+            const SizedBox(width: AppDimensions.spacingS),
+            Expanded(child: _SelectionTab(label: 'Month', isSelected: _selectionMode == 'month', onTap: () => setState(() => _selectionMode = 'month'))),
+            const SizedBox(width: AppDimensions.spacingS),
+            Expanded(child: _SelectionTab(label: 'Year', isSelected: _selectionMode == 'year', onTap: () => setState(() => _selectionMode = 'year'))),
+            const SizedBox(width: AppDimensions.spacingS),
+            Expanded(child: _SelectionTab(label: 'All', isSelected: _selectionMode == 'all', onTap: () => setState(() => _selectionMode = 'all'))),
+          ],
+        ),
+        const SizedBox(height: AppDimensions.spacingM),
+        _buildPersonalDateDisplay(),
+      ],
+    );
+  }
+
+  Widget _buildPersonalDateDisplay() {
+    if (_selectionMode == 'all') {
+      return NeumorphicContainer(
+        padding: const EdgeInsets.all(AppDimensions.paddingM),
+        child: const Center(child: Text('All Attendance Records', style: TextStyle(fontWeight: FontWeight.w600))),
+      );
+    }
+
+    String displayTitle = '';
+    if (_selectionMode == 'date') displayTitle = DateFormat('EEE, d MMM yyyy').format(_pSelectedDate!);
+    if (_selectionMode == 'month') displayTitle = DateFormat('MMMM yyyy').format(_pSelectedMonth!);
+    if (_selectionMode == 'year') displayTitle = _pSelectedYear.toString();
+
+    return GestureDetector(
+      onTap: () => _showPersonalDatePicker(),
+      child: NeumorphicContainer(
+        padding: const EdgeInsets.all(AppDimensions.paddingM),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.chevron_left),
+              onPressed: () => _navigatePersonalDate(-1),
+            ),
+            Text(displayTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+            IconButton(
+              icon: const Icon(Icons.chevron_right),
+              onPressed: () => _navigatePersonalDate(1),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _navigatePersonalDate(int direction) {
+    setState(() {
+      if (_selectionMode == 'date') _pSelectedDate = _pSelectedDate!.add(Duration(days: direction));
+      if (_selectionMode == 'month') _pSelectedMonth = DateTime(_pSelectedMonth!.year, _pSelectedMonth!.month + direction);
+      if (_selectionMode == 'year') _pSelectedYear = _pSelectedYear! + direction;
+    });
+  }
+
+  void _showPersonalDatePicker() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectionMode == 'date' ? _pSelectedDate! : _pSelectedMonth!,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      initialDatePickerMode: _selectionMode == 'date' ? DatePickerMode.day : DatePickerMode.year,
+    );
+    if (picked != null) {
+      setState(() {
+        if (_selectionMode == 'date') _pSelectedDate = picked;
+        if (_selectionMode == 'month') _pSelectedMonth = picked;
+        if (_selectionMode == 'year') _pSelectedYear = picked.year;
+      });
+    }
+  }
+
+  Widget _buildPersonalFilterTabs() {
+    return Row(
+      children: [
+        Expanded(child: _FilterTabItem(label: 'All', isSelected: _selectedFilter == 'all', onTap: () => setState(() => _selectedFilter = 'all'))),
+        const SizedBox(width: AppDimensions.spacingS),
+        Expanded(child: _FilterTabItem(label: 'Present', isSelected: _selectedFilter == 'present', onTap: () => setState(() => _selectedFilter = 'present'))),
+        const SizedBox(width: AppDimensions.spacingS),
+        Expanded(child: _FilterTabItem(label: 'Absent', isSelected: _selectedFilter == 'absent', onTap: () => setState(() => _selectedFilter = 'absent'))),
+      ],
     );
   }
 
@@ -717,6 +1031,245 @@ class _SummaryItem extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ToggleItem extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _ToggleItem({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingM),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.accent : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+          boxShadow: isSelected ? null : NeumorphicStyles.getElevatedShadow(),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              color: isSelected ? Colors.white : AppColors.textPrimary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PersonalStatItem extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _PersonalStatItem({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: AppColors.textSecondary,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SelectionTab extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _SelectionTab({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.accent : AppColors.cardBackground,
+          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+          boxShadow: isSelected ? null : NeumorphicStyles.getElevatedShadow(),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              color: isSelected ? Colors.white : AppColors.textPrimary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FilterTabItem extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _FilterTabItem({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingM),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.accent : AppColors.cardBackground,
+          borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+          boxShadow: isSelected ? null : NeumorphicStyles.getElevatedShadow(),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              color: isSelected ? Colors.white : AppColors.textPrimary,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PersonalAttendanceRecordCard extends StatelessWidget {
+  final CoachAttendance record;
+
+  const _PersonalAttendanceRecordCard({required this.record});
+
+  @override
+  Widget build(BuildContext context) {
+    final isPresent = record.status.toLowerCase() == 'present';
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
+      child: NeumorphicContainer(
+        padding: const EdgeInsets.all(AppDimensions.paddingM),
+        child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: isPresent
+                    ? AppColors.success.withOpacity(0.1)
+                    : AppColors.error.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+              ),
+              child: Icon(
+                isPresent ? Icons.check_circle : Icons.cancel,
+                color: isPresent ? AppColors.success : AppColors.error,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: AppDimensions.spacingM),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    DateFormat('EEE, d MMM yyyy').format(record.date),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  const Text(
+                    'Coach Attendance',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  if (record.remarks != null && record.remarks!.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      record.remarks!,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontStyle: FontStyle.italic,
+                        color: AppColors.textTertiary,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppDimensions.spacingM,
+                vertical: AppDimensions.spacingS,
+              ),
+              decoration: BoxDecoration(
+                color: isPresent
+                    ? AppColors.success.withOpacity(0.1)
+                    : AppColors.error.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+              ),
+              child: Text(
+                isPresent ? 'Present' : 'Absent',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: isPresent ? AppColors.success : AppColors.error,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -13,6 +13,7 @@ import '../../providers/batch_provider.dart';
 import 'students_screen.dart';
 import 'coaches_screen.dart';
 import 'fees_screen.dart';
+import '../../providers/owner_navigation_provider.dart';
 import '../../core/utils/canadian_holidays.dart';
 
 /// Home Screen - Dashboard overview
@@ -28,12 +29,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final statsAsync = ref.watch(dashboardStatsProvider);
-    final upcomingBatchesAsync = ref.watch(upcomingBatchesProvider);
 
     return RefreshIndicator(
       onRefresh: () async {
         await ref.read(dashboardStatsProvider.notifier).refresh();
-        ref.invalidate(upcomingBatchesProvider);
+        ref.invalidate(ownerUpcomingSessionsProvider);
       },
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -141,7 +141,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     icon: Icons.calendar_today_outlined,
                     value: stats.activeBatches.toString(),
                     label: 'Active Batches',
-                    onTap: null,
+                    onTap: () {
+                      ref.read(ownerBottomNavIndexProvider.notifier).state = 1; // 1 is Batches screen index
+                    },
                   ),
                   _StatCard(
                     icon: Icons.attach_money_outlined,
@@ -173,14 +175,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
           const SizedBox(height: AppDimensions.spacingL),
 
-          // Today's Insights
+          // Upcoming Sessions
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "Today's Insights",
+                  'Upcoming Sessions',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
@@ -188,57 +190,62 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                 ),
                 const SizedBox(height: AppDimensions.spacingM),
-                upcomingBatchesAsync.when(
-                  data: (batches) => NeumorphicContainer(
-                    padding: const EdgeInsets.all(AppDimensions.paddingM),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Upcoming Batches',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: context.textSecondaryColor,
-                          ),
-                        ),
-                        const SizedBox(height: AppDimensions.spacingM),
-                        if (batches.isEmpty)
-                          Padding(
-                            padding: const EdgeInsets.all(AppDimensions.spacingM),
-                            child: Builder(
-                              builder: (context) => Text(
-                                'No upcoming batches today',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: context.textSecondaryColor,
+                ref.watch(ownerUpcomingSessionsProvider).when(
+                      data: (sessions) => NeumorphicContainer(
+                        padding: const EdgeInsets.all(AppDimensions.paddingM),
+                        child: sessions.isEmpty
+                            ? Padding(
+                                padding: const EdgeInsets.all(AppDimensions.spacingM),
+                                child: Center(
+                                  child: Column(
+                                    children: [
+                                      Icon(
+                                        Icons.event_available,
+                                        size: 48,
+                                        color: context.textTertiaryColor,
+                                      ),
+                                      const SizedBox(height: AppDimensions.spacingM),
+                                      Text(
+                                        'No upcoming sessions',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: context.textSecondaryColor,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
+                              )
+                            : Column(
+                                children: sessions.asMap().entries.map((entry) {
+                                  final session = entry.value;
+                                  final isLast = entry.key == sessions.length - 1;
+                                  return Column(
+                                    children: [
+                                      _UpcomingSessionItem(
+                                        name: session['batch_name'] ?? 'Unknown Batch',
+                                        time: session['time'] ?? '',
+                                        location: session['location'] ?? '',
+                                        date: session['date'] != null 
+                                          ? _formatSessionDate(DateTime.parse(session['date']))
+                                          : null,
+                                      ),
+                                      if (!isLast)
+                                        Divider(
+                                          color: context.surfaceLightColor,
+                                          height: AppDimensions.spacingL,
+                                        ),
+                                    ],
+                                  );
+                                }).toList(),
                               ),
-                            ),
-                          )
-                        else
-                          ...batches.asMap().entries.map((entry) {
-                            final batch = entry.value;
-                            final isLast = entry.key == batches.length - 1;
-                            return Column(
-                              children: [
-                                _UpcomingBatchItem(
-                                  name: batch.name,
-                                  time: batch.timeRange,
-                                  batchId: batch.id,
-                                ),
-                                if (!isLast) const SizedBox(height: AppDimensions.spacingS),
-                              ],
-                            );
-                          }),
-                      ],
+                      ),
+                      loading: () => const NeumorphicContainer(
+                        padding: EdgeInsets.all(AppDimensions.paddingM),
+                        child: ListSkeleton(itemCount: 3),
+                      ),
+                      error: (error, stack) => const SizedBox.shrink(),
                     ),
-                  ),
-                  loading: () => const NeumorphicContainer(
-                    padding: EdgeInsets.all(AppDimensions.paddingM),
-                    child: ListSkeleton(itemCount: 3),
-                  ),
-                  error: (error, stack) => const SizedBox.shrink(),
-                ),
               ],
             ),
           ),
@@ -305,6 +312,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     
     return '${weekdays[now.weekday - 1]}, ${months[now.month - 1]} ${now.day}, ${now.year}';
+  }
+
+  String _formatSessionDate(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+    final sessionDate = DateTime(date.year, date.month, date.day);
+
+    if (sessionDate == today) return 'Today';
+    if (sessionDate == tomorrow) return 'Tomorrow';
+    
+    final weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return '${weekdays[date.weekday - 1]}, ${months[date.month - 1]} ${date.day}';
   }
 
   void _showAddStudentDialog(BuildContext context) {
@@ -412,130 +433,84 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-class _UpcomingBatchItem extends ConsumerWidget {
+class _UpcomingSessionItem extends StatelessWidget {
   final String name;
   final String time;
-  final int batchId;
+  final String location;
+  final String? date;
 
-  const _UpcomingBatchItem({
+  const _UpcomingSessionItem({
     required this.name,
     required this.time,
-    required this.batchId,
+    required this.location,
+    this.date,
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final batchStudentsAsync = ref.watch(batchStudentsProvider(batchId));
-    
-    return batchStudentsAsync.when(
-      data: (students) {
-        final studentCount = students.length;
-        
-        return Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: context.textPrimaryColor,
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: context.backgroundColor,
+            borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+            boxShadow: NeumorphicStyles.getInsetShadow(),
+          ),
+          child: Icon(
+            Icons.sports_tennis,
+            size: 20,
+            color: context.accentColor,
+          ),
+        ),
+        const SizedBox(width: AppDimensions.spacingM),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    name,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: context.textPrimaryColor,
+                    ),
                   ),
+                  if (date != null)
+                    Text(
+                      date!,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: context.accentColor,
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 2),
+              Text(
+                time,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: context.textSecondaryColor,
                 ),
+              ),
+              if (location.isNotEmpty)
                 Text(
-                  time,
+                  location,
                   style: TextStyle(
                     fontSize: 12,
-                    color: context.textSecondaryColor,
+                    color: context.textTertiaryColor,
                   ),
                 ),
-              ],
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppDimensions.spacingM,
-                vertical: AppDimensions.spacingS,
-              ),
-              decoration: BoxDecoration(
-                color: context.backgroundColor,
-                borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                boxShadow: NeumorphicStyles.getSmallInsetShadow(),
-              ),
-              child: Text(
-                '$studentCount ${studentCount == 1 ? 'student' : 'students'}',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: context.iconPrimaryColor,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-      loading: () => Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                name,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: context.textPrimaryColor,
-                ),
-              ),
-              Text(
-                time,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: context.textSecondaryColor,
-                ),
-              ),
             ],
           ),
-          const SizedBox(
-            width: 60,
-            height: 20,
-            child: Center(child: ListSkeleton(itemCount: 1)),
-          ),
-        ],
-      ),
-      error: (error, stack) => Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                name,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: context.textPrimaryColor,
-                ),
-              ),
-              Text(
-                time,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: context.textSecondaryColor,
-                ),
-              ),
-            ],
-          ),
-          Builder(
-            builder: (context) => Text(
-              '0 students',
-              style: TextStyle(
-                fontSize: 12,
-                color: context.textSecondaryColor,
-              ),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

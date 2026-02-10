@@ -2837,12 +2837,18 @@ def create_batch(batch: BatchCreate):
         db.close()
 
 @app.get("/batches/", response_model=List[Batch])
-def get_batches():
+def get_batches(status: Optional[str] = Query(None)):
     db = SessionLocal()
     try:
         # Try normal query first
         try:
-            batches_db = db.query(BatchDB).filter(BatchDB.status == "active").all()
+            query = db.query(BatchDB)
+            if status and status.lower() != 'all':
+                query = query.filter(BatchDB.status == status)
+            elif not status:
+                query = query.filter(BatchDB.status == "active")
+            
+            batches_db = query.all()
             batches = []
             for batch_db in batches_db:
                 # Get coaches from junction table
@@ -2876,6 +2882,9 @@ def get_batches():
                 result = db.execute(text("""
                     SELECT id, batch_name, capacity, fees, start_date, timing, period, 
                            location, created_by, assigned_coach_id, assigned_coach_name
+                    SELECT id, batch_name, capacity, fees, start_date, timing, period, 
+                           location, created_by, assigned_coach_id, assigned_coach_name,
+                           status, inactive_at
                     FROM batches
                 """))
                 batches = []
@@ -2901,6 +2910,8 @@ def get_batches():
                         assigned_coach_ids=coach_ids_list,
                         assigned_coaches=coaches,
                         session_id=None,  # Default to None if column doesn't exist
+                        status=row[11] if len(row) > 11 else "active",
+                        inactive_at=row[12] if len(row) > 12 else None
                     )
                     batches.append(batch)
                 return batches
@@ -3019,6 +3030,9 @@ def get_coach_batches(coach_id: int):
                     result = db.execute(text("""
                         SELECT id, batch_name, capacity, fees, start_date, timing, period, 
                                location, created_by, assigned_coach_id, assigned_coach_name
+                        SELECT id, batch_name, capacity, fees, start_date, timing, period, 
+                               location, created_by, assigned_coach_id, assigned_coach_name,
+                               status, inactive_at
                         FROM batches
                         WHERE assigned_coach_id = :coach_id
                     """), {"coach_id": coach_id})
@@ -3043,6 +3057,8 @@ def get_coach_batches(coach_id: int):
                             assigned_coach_ids=coach_ids_list,
                             assigned_coaches=coaches,
                             session_id=None,
+                            status=row[11] if len(row) > 11 else "active",
+                            inactive_at=row[12] if len(row) > 12 else None
                         )
                         batches.append(batch)
                     return batches
@@ -3069,6 +3085,9 @@ def update_batch(batch_id: int, batch_update: BatchUpdate):
                 result = db.execute(text("""
                     SELECT id, batch_name, capacity, fees, start_date, timing, period, 
                            location, created_by, assigned_coach_id, assigned_coach_name
+                    SELECT id, batch_name, capacity, fees, start_date, timing, period, 
+                           location, created_by, assigned_coach_id, assigned_coach_name,
+                           status, inactive_at
                     FROM batches
                     WHERE id = :batch_id
                 """), {"batch_id": batch_id})
@@ -3159,7 +3178,8 @@ def update_batch(batch_id: int, batch_update: BatchUpdate):
             from sqlalchemy import text
             result = db.execute(text("""
                 SELECT id, batch_name, capacity, fees, start_date, timing, period, 
-                       location, created_by, assigned_coach_id, assigned_coach_name
+                       location, created_by, assigned_coach_id, assigned_coach_name,
+                       status, inactive_at
                 FROM batches
                 WHERE id = :batch_id
             """), {"batch_id": batch_id})
@@ -3174,7 +3194,9 @@ def update_batch(batch_id: int, batch_update: BatchUpdate):
                 'period': row[6],
                 'location': row[7],
                 'created_by': row[8],
-                'session_id': None
+                'session_id': None,
+                'status': row[11] if len(row) > 11 else "active",
+                'inactive_at': row[12] if len(row) > 12 else None
             }
         
         # Build response

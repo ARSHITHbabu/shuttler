@@ -6,7 +6,7 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../providers/auth_provider.dart';
 import 'coach_announcements_screen.dart';
-import 'coach_attendance_view_screen.dart';
+import 'coach_attendance_screen.dart';
 import 'coach_schedule_screen.dart';
 import 'coach_settings_screen.dart';
 import 'coach_video_management_screen.dart';
@@ -89,20 +89,6 @@ class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (context) => const AcademyInfoScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.fact_check_outlined,
-              title: 'Attendance Rate',
-              subtitle: 'View attendance statistics',
-              isDark: isDark,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const CoachAttendanceViewScreen(),
                   ),
                 );
               },

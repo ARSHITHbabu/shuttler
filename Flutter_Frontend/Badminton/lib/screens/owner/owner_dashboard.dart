@@ -4,6 +4,7 @@ import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/owner_navigation_provider.dart';
 import '../../widgets/owner/force_change_password_dialog.dart';
 import 'home_screen.dart';
 import 'batches_screen.dart';
@@ -21,7 +22,7 @@ class OwnerDashboard extends ConsumerStatefulWidget {
 }
 
 class _OwnerDashboardState extends ConsumerState<OwnerDashboard> {
-  int _currentIndex = 0;
+  // Navigation state is now managed by ownerBottomNavIndexProvider
 
   @override
   void initState() {
@@ -61,6 +62,7 @@ class _OwnerDashboardState extends ConsumerState<OwnerDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    final currentIndex = ref.watch(ownerBottomNavIndexProvider);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final backgroundColor = theme.scaffoldBackgroundColor;
@@ -79,7 +81,7 @@ class _OwnerDashboardState extends ConsumerState<OwnerDashboard> {
               // Content Area
               Expanded(
                 child: RepaintBoundary(
-                  child: _screens[_currentIndex],
+                  child: _screens[currentIndex],
                 ),
               ),
 
@@ -113,7 +115,7 @@ class _OwnerDashboardState extends ConsumerState<OwnerDashboard> {
                       children: List.generate(
                         _navItems.length,
                         (index) => Expanded(
-                          child: _buildNavItem(index),
+                          child: _buildNavItem(index, currentIndex),
                         ),
                       ),
                     ),
@@ -127,9 +129,9 @@ class _OwnerDashboardState extends ConsumerState<OwnerDashboard> {
     );
   }
 
-  Widget _buildNavItem(int index) {
+  Widget _buildNavItem(int index, int currentIndex) {
     final item = _navItems[index];
-    final isActive = _currentIndex == index;
+    final isActive = currentIndex == index;
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final cardColor = isDark ? AppColors.cardBackground : AppColorsLight.cardBackground;
@@ -138,9 +140,7 @@ class _OwnerDashboardState extends ConsumerState<OwnerDashboard> {
 
     return GestureDetector(
       onTap: () {
-        setState(() {
-          _currentIndex = index;
-        });
+        ref.read(ownerBottomNavIndexProvider.notifier).state = index;
       },
       child: Container(
         padding: const EdgeInsets.symmetric(

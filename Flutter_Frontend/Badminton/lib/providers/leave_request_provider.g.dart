@@ -467,7 +467,7 @@ class _LeaveRequestByIdProviderElement
 }
 
 String _$leaveRequestManagerHash() =>
-    r'9c5b3a1e9274b2e914a722f09c0662d6d3c43e7d';
+    r'6c54b0743d59d7b323b21beefcbbe16dedf4e5aa';
 
 abstract class _$LeaveRequestManager
     extends BuildlessAutoDisposeAsyncNotifier<List<LeaveRequest>> {

@@ -97,6 +97,15 @@ class EmptyState extends StatelessWidget {
     );
   }
 
+  /// Empty state for inactive batches
+  factory EmptyState.noInactiveBatches() {
+    return const EmptyState(
+      title: 'No Inactive Batches',
+      message: 'All your batches are currently active.',
+      icon: Icons.check_circle_outline,
+    );
+  }
+
   /// Empty state for attendance records
   factory EmptyState.noAttendance({VoidCallback? onMark}) {
     return EmptyState(
