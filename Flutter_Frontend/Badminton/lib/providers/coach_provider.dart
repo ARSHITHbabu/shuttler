@@ -168,6 +168,112 @@ Future<List<Schedule>> coachTodaySessions(CoachTodaySessionsRef ref, int coachId
   return todaySessions;
 }
 
+/// Provider for coach's upcoming sessions (next 7 days)
+/// Similar logic to student dashboard but for all batches assigned to the coach
+@riverpod
+Future<List<Map<String, dynamic>>> coachUpcomingSessions(CoachUpcomingSessionsRef ref, int coachId) async {
+  final batchService = ref.watch(batchServiceProvider);
+  final now = DateTime.now();
+  final dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  final todayDayName = dayNames[now.weekday - 1];
+  
+  // Get coach's assigned batches
+  final coachBatches = await batchService.getBatchesByCoachId(coachId);
+  final upcomingSessions = <Map<String, dynamic>>[];
+
+  // Parse batch timing to extract start/end times
+  String? parseBatchStartTime(String timing) {
+    try {
+      final parts = timing.split(' - ');
+      if (parts.length == 2) return parts[0].trim();
+    } catch (_) {}
+    return null;
+  }
+
+  String? parseBatchEndTime(String timing) {
+    try {
+      final parts = timing.split(' - ');
+      if (parts.length == 2) return parts[1].trim();
+    } catch (_) {}
+    return null;
+  }
+
+  // Get today's sessions and future sessions (next 7 days)
+  for (var batch in coachBatches) {
+    bool batchAdded = false;
+
+    // Check if batch runs today
+    final runsToday =
+        batch.period.toLowerCase() == 'daily' ||
+        batch.days.contains(todayDayName);
+
+    if (runsToday && BatchTimeUtils.isBatchUpcoming(batch)) {
+      // Batch runs today and is upcoming - add it
+      final startTimeStr = parseBatchStartTime(batch.timing);
+      final endTimeStr = parseBatchEndTime(batch.timing);
+      final timeStr = startTimeStr != null && endTimeStr != null
+          ? '$startTimeStr - $endTimeStr'
+          : (startTimeStr ?? batch.timing);
+
+      upcomingSessions.add({
+        'batch_id': batch.id,
+        'batch_name': batch.batchName,
+        'time': timeStr,
+        'location': batch.location ?? '',
+        'date': DateTime(now.year, now.month, now.day).toIso8601String(),
+      });
+      batchAdded = true;
+    }
+
+    // Only check future days if batch wasn't added for today
+    if (!batchAdded) {
+      for (int i = 1; i <= 7 && upcomingSessions.length < 10; i++) {
+        final checkDate = now.add(Duration(days: i));
+        final checkDayName = dayNames[checkDate.weekday - 1];
+
+        final runsOnDay =
+            batch.period.toLowerCase() == 'daily' ||
+            batch.days.contains(checkDayName);
+
+        if (runsOnDay) {
+          final startTimeStr = parseBatchStartTime(batch.timing);
+          final endTimeStr = parseBatchEndTime(batch.timing);
+          final timeStr = startTimeStr != null && endTimeStr != null
+              ? '$startTimeStr - $endTimeStr'
+              : (startTimeStr ?? batch.timing);
+
+          final dateStr = DateTime(
+            checkDate.year,
+            checkDate.month,
+            checkDate.day,
+          ).toIso8601String();
+          upcomingSessions.add({
+            'batch_id': batch.id,
+            'batch_name': batch.batchName,
+            'time': timeStr,
+            'location': batch.location ?? '',
+            'date': dateStr,
+          });
+          break;
+        }
+      }
+    }
+  }
+
+  // Sort by date and limit to 5
+  upcomingSessions.sort((a, b) {
+    try {
+      final dateA = DateTime.parse(a['date'] as String);
+      final dateB = DateTime.parse(b['date'] as String);
+      return dateA.compareTo(dateB);
+    } catch (_) {
+      return 0;
+    }
+  });
+
+  return upcomingSessions.take(5).toList();
+}
+
 /// Provider for coach announcements (filtered for coaches)
 @riverpod
 Future<List<Announcement>> coachAnnouncements(CoachAnnouncementsRef ref) async {

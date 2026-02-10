@@ -278,6 +278,9 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                             batchName: session['batch_name'] ?? 'Unknown Batch',
                             time: session['time'] ?? '',
                             location: session['location'] ?? '',
+                            date: session['date'] != null 
+                              ? _formatSessionDate(DateTime.parse(session['date']))
+                              : null,
                             isDark: isDark,
                           ),
                           if (!isLast)
@@ -569,6 +572,20 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
     return '${weekdays[now.weekday - 1]}, ${months[now.month - 1]} ${now.day}, ${now.year}';
   }
 
+  String _formatSessionDate(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+    final sessionDate = DateTime(date.year, date.month, date.day);
+
+    if (sessionDate == today) return 'Today';
+    if (sessionDate == tomorrow) return 'Tomorrow';
+    
+    final weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return '${weekdays[date.weekday - 1]}, ${months[date.month - 1]} ${date.day}';
+  }
+
   Color _getAttendanceColor(double rate, bool isDark) {
     if (rate >= 80) {
       return isDark ? AppColors.success : AppColorsLight.success;
@@ -657,12 +674,14 @@ class _UpcomingSessionItem extends StatelessWidget {
   final String batchName;
   final String time;
   final String location;
+  final String? date;
   final bool isDark;
 
   const _UpcomingSessionItem({
     required this.batchName,
     required this.time,
     required this.location,
+    this.date,
     required this.isDark,
   });
 
@@ -689,13 +708,27 @@ class _UpcomingSessionItem extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                batchName,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    batchName,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                    ),
+                  ),
+                  if (date != null)
+                    Text(
+                      date!,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? AppColors.accent : AppColorsLight.accent,
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(height: 2),
               Text(
