@@ -861,7 +861,7 @@ class _StudentCoachesProviderElement
   int get studentId => (origin as StudentCoachesProvider).studentId;
 }
 
-String _$studentListHash() => r'34ee8a637f622f49796dd3b3f756b2629273a38d';
+String _$studentListHash() => r'ddfb84c1761b1083a67f708c72ddd15a950a84ae';
 
 /// Provider for student list state
 ///

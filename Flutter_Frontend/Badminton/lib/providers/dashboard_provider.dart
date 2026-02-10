@@ -108,6 +108,14 @@ Future<List<Map<String, dynamic>>> ownerUpcomingSessions(OwnerUpcomingSessionsRe
   final activeBatches = allBatches.where((b) => b.status == 'active').toList();
   final upcomingSessions = <Map<String, dynamic>>[];
 
+  for (var batch in activeBatches) {
+    bool batchAdded = false;
+
+    // Check if batch runs today
+    final runsToday =
+        batch.period.toLowerCase() == 'daily' ||
+        batch.days.contains(todayDayName);
+
     if (runsToday && BatchTimeUtils.isBatchUpcoming(batch)) {
       upcomingSessions.add({
         'batch_id': batch.id,
