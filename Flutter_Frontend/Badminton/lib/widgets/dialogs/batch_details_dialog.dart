@@ -216,6 +216,85 @@ class _BatchDetailsDialogState extends ConsumerState<BatchDetailsDialog> {
     }
   }
 
+  Future<void> _handleDeactivateBatch() async {
+    if (widget.batch == null) return;
+    
+    try {
+      await ref.read(batchListProvider.notifier).deactivateBatch(widget.batch!.id);
+      if (mounted) {
+        SuccessSnackbar.show(context, 'Batch deactivated successfully');
+      }
+    } catch (e) {
+      if (mounted) {
+        SuccessSnackbar.showError(context, 'Failed to deactivate batch: ${e.toString()}');
+      }
+    }
+  }
+
+  Future<void> _handleDeleteBatch() async {
+    if (widget.batch == null) return;
+    
+    // Show confirmation dialog with soft/hard delete options
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.cardBackground,
+        title: const Text('Delete Batch', style: TextStyle(color: AppColors.textPrimary)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Choose how you want to remove ${widget.batch!.name}:',
+                style: const TextStyle(color: AppColors.textPrimary)),
+            const SizedBox(height: 16),
+            _DeleteOption(
+              title: 'Deactivate (Soft Delete)',
+              description: 'Hide batch from UI but keep historical data for reports.',
+              icon: Icons.pause_circle_outline,
+              color: AppColors.warning,
+              onTap: () {
+                Navigator.pop(context);
+                _handleDeactivateBatch();
+              },
+            ),
+            const SizedBox(height: 12),
+            _DeleteOption(
+              title: 'Delete Permanently (Hard Delete)',
+              description: 'Immediately wipe all batch data and student associations.',
+              icon: Icons.delete_forever,
+              color: AppColors.error,
+              onTap: () {
+                Navigator.pop(context);
+                _handleRemoveBatchPermanently();
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleRemoveBatchPermanently() async {
+    if (widget.batch == null) return;
+    
+    try {
+      await ref.read(batchListProvider.notifier).removeBatchPermanently(widget.batch!.id);
+      if (mounted) {
+        SuccessSnackbar.show(context, 'Batch deleted permanently');
+      }
+    } catch (e) {
+      if (mounted) {
+        SuccessSnackbar.showError(context, 'Failed to delete batch: ${e.toString()}');
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
@@ -360,6 +439,51 @@ class _BatchDetailsDialogState extends ConsumerState<BatchDetailsDialog> {
             )).toList(),
           ),
           
+        // Add Deactivate and Delete buttons for owners
+        if (widget.isOwner) ...[
+          const SizedBox(height: AppDimensions.spacingXL),
+          const Divider(color: AppColors.textSecondary, thickness: 0.5),
+          const SizedBox(height: AppDimensions.spacingL),
+          
+          // Deactivate Button
+          if (batch.status == 'active')
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  _handleDeactivateBatch();
+                },
+                icon: const Icon(Icons.archive_outlined, size: 20),
+                label: const Text('Deactivate Batch'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.warning,
+                  side: const BorderSide(color: AppColors.warning),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ),
+          
+          const SizedBox(height: AppDimensions.spacingM),
+          
+          // Delete Button
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _handleDeleteBatch();
+              },
+              icon: const Icon(Icons.delete_outline, size: 20),
+              label: const Text('Delete Batch'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.error,
+                side: const BorderSide(color: AppColors.error),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -728,6 +852,53 @@ class _DetailItem extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _DeleteOption extends StatelessWidget {
+  final String title;
+  final String description;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _DeleteOption({
+    required this.title,
+    required this.description,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          border: Border.all(color: color.withOpacity(0.3)),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 14)),
+                  const SizedBox(height: 4),
+                  Text(description, style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

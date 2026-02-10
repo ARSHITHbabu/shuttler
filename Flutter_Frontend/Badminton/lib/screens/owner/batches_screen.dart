@@ -31,6 +31,7 @@ class BatchesScreen extends ConsumerStatefulWidget {
 
 class _BatchesScreenState extends ConsumerState<BatchesScreen> {
   String _searchQuery = '';
+  String _statusFilter = 'active'; // 'active' or 'inactive'
 
   @override
   void initState() {
@@ -189,12 +190,46 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                   ),
                 ),
 
+                const SizedBox(height: AppDimensions.spacingM),
+
+                // Status Filter Toggle
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+                  child: NeumorphicContainer(
+                    padding: const EdgeInsets.all(4),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _FilterButton(
+                            label: 'Active',
+                            isSelected: _statusFilter == 'active',
+                            onTap: () => setState(() => _statusFilter = 'active'),
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: _FilterButton(
+                            label: 'Inactive',
+                            isSelected: _statusFilter == 'inactive',
+                            onTap: () => setState(() => _statusFilter = 'inactive'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
                 const SizedBox(height: AppDimensions.spacingL),
 
                 // Batches List
                 batchesAsync.when(
                   data: (batches) {
                     final filteredBatches = batches.where((batch) {
+                      // Filter by status
+                      if (_statusFilter == 'active' && batch.status != 'active') return false;
+                      if (_statusFilter == 'inactive' && batch.status == 'active') return false;
+                      
+                      // Filter by search query
                       if (_searchQuery.isEmpty) return true;
                       return batch.name.toLowerCase().contains(_searchQuery.toLowerCase());
                     }).toList();
@@ -261,6 +296,7 @@ class _BatchCard extends StatelessWidget {
     return NeumorphicContainer(
       margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
       padding: const EdgeInsets.all(AppDimensions.paddingL),
+      onTap: onEdit, // Make entire card clickable to open batch details
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -284,51 +320,8 @@ class _BatchCard extends StatelessWidget {
                   ],
                 ),
               ),
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert, color: AppColors.textSecondary),
-                onSelected: (value) {
-                  if (value == 'edit') {
-                    onEdit();
-                  } else if (value == 'deactivate') {
-                    onDeactivate();
-                  } else if (value == 'delete') {
-                    onDelete();
-                  }
-                },
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'edit',
-                    child: Row(
-                      children: [
-                        Icon(Icons.edit_outlined, size: 20),
-                        SizedBox(width: 8),
-                        Text('Edit'),
-                      ],
-                    ),
-                  ),
-                  if (batch.status == 'active')
-                    const PopupMenuItem(
-                      value: 'deactivate',
-                      child: Row(
-                        children: [
-                          Icon(Icons.archive_outlined, size: 20),
-                          SizedBox(width: 8),
-                          Text('Deactivate'),
-                        ],
-                      ),
-                    ),
-                  const PopupMenuItem(
-                    value: 'delete',
-                    child: Row(
-                      children: [
-                        Icon(Icons.delete_outline, size: 20, color: AppColors.error),
-                        SizedBox(width: 8),
-                        Text('Delete', style: TextStyle(color: AppColors.error)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+              // Removed three-dot menu - actions now in dialog
+              const Icon(Icons.chevron_right, color: AppColors.textSecondary),
             ],
           ),
           const SizedBox(height: AppDimensions.spacingM),
@@ -464,6 +457,43 @@ class _DeleteOption extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FilterButton extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _FilterButton({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.accent.withOpacity(0.15) : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? AppColors.accent : AppColors.textSecondary,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              fontSize: 14,
+            ),
+          ),
         ),
       ),
     );
