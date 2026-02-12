@@ -34,28 +34,33 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final authStateAsync = ref.watch(authProvider);
 
     return authStateAsync.when(
       data: (authState) {
         if (authState is! Authenticated) {
           return Scaffold(
-            backgroundColor: AppColors.background,
-            body: const Center(
-              child: Text('Please log in to view notifications'),
+            backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+            body: Center(
+              child: Text(
+                'Please log in to view notifications',
+                style: TextStyle(color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
+              ),
             ),
           );
         }
 
-        return _buildNotificationsScreen(authState);
+        return _buildNotificationsScreen(authState, isDark);
       },
       loading: () => Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
         appBar: AppBar(
-          backgroundColor: AppColors.background,
+          backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+            icon: Icon(Icons.arrow_back, color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
             onPressed: () {
               if (widget.onBack != null) {
                 widget.onBack!();
@@ -64,10 +69,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
               }
             },
           ),
-          title: const Text(
+          title: Text(
             'Notifications',
             style: TextStyle(
-              color: AppColors.textPrimary,
+              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
               fontSize: 20,
               fontWeight: FontWeight.w600,
             ),
@@ -76,12 +81,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         body: const Center(child: ListSkeleton(itemCount: 5)),
       ),
       error: (error, stack) => Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
         appBar: AppBar(
-          backgroundColor: AppColors.background,
+          backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+            icon: Icon(Icons.arrow_back, color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
             onPressed: () {
               if (widget.onBack != null) {
                 widget.onBack!();
@@ -90,10 +95,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
               }
             },
           ),
-          title: const Text(
+          title: Text(
             'Notifications',
             style: TextStyle(
-              color: AppColors.textPrimary,
+              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
               fontSize: 20,
               fontWeight: FontWeight.w600,
             ),
@@ -107,7 +112,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     );
   }
 
-  Widget _buildNotificationsScreen(Authenticated authState) {
+  Widget _buildNotificationsScreen(Authenticated authState, bool isDark) {
     // Build filter parameters
     String? typeFilter;
     if (_selectedFilter != 'all') {
@@ -129,12 +134,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     ));
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back, color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
           onPressed: () {
             if (widget.onBack != null) {
               widget.onBack!();
@@ -143,17 +148,17 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             }
           },
         ),
-        title: const Text(
+        title: Text(
           'Notifications',
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
             fontSize: 20,
             fontWeight: FontWeight.w600,
           ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.check_circle_outline, color: AppColors.accent),
+            icon: Icon(Icons.check_circle_outline, color: isDark ? AppColors.accent : AppColorsLight.accent),
             tooltip: 'Mark all as read',
             onPressed: () => _markAllAsRead(authState),
           ),
@@ -162,7 +167,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       body: Column(
         children: [
           // Filters
-          _buildFilters(),
+          _buildFilters(isDark),
           
           // Notifications List
           Expanded(
@@ -198,6 +203,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                       final notification = notifications[index];
                       return _NotificationCard(
                         notification: notification,
+                        isDark: isDark,
                         onTap: () => _handleNotificationTap(notification, authState),
                         onDelete: () => _deleteNotification(notification),
                       );
@@ -212,19 +218,25 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     );
   }
 
-  Widget _buildFilters() {
+  Widget _buildFilters(bool isDark) {
+    final textSecondary = isDark ? AppColors.textSecondary : AppColorsLight.textSecondary;
+    final accent = isDark ? AppColors.accent : AppColorsLight.accent;
+    final cardBg = isDark ? AppColors.cardBackground : AppColorsLight.cardBackground;
+    final bg = isDark ? AppColors.background : AppColorsLight.background;
+    final textPrimary = isDark ? AppColors.textPrimary : AppColorsLight.textPrimary;
+
     return NeumorphicContainer(
       padding: const EdgeInsets.all(AppDimensions.paddingM),
       margin: const EdgeInsets.all(AppDimensions.paddingL),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Filter by Type',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary,
+              color: textSecondary,
             ),
           ),
           const SizedBox(height: AppDimensions.spacingS),
@@ -240,14 +252,14 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                     horizontal: AppDimensions.paddingM,
                     vertical: AppDimensions.spacingS,
                   ),
-                  color: isSelected ? AppColors.accent : AppColors.cardBackground,
+                  color: isSelected ? accent : cardBg,
                   borderRadius: AppDimensions.radiusS,
                   child: Text(
                     type == 'all' ? 'All' : type.replaceAll('_', ' ').toUpperCase(),
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                      color: isSelected ? AppColors.background : AppColors.textPrimary,
+                      color: isSelected ? bg : textPrimary,
                     ),
                   ),
                 ),
@@ -255,12 +267,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             }).toList(),
           ),
           const SizedBox(height: AppDimensions.spacingM),
-          const Text(
+          Text(
             'Filter by Status',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary,
+              color: textSecondary,
             ),
           ),
           const SizedBox(height: AppDimensions.spacingS),
@@ -276,14 +288,14 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                     horizontal: AppDimensions.paddingM,
                     vertical: AppDimensions.spacingS,
                   ),
-                  color: isSelected ? AppColors.accent : AppColors.cardBackground,
+                  color: isSelected ? accent : cardBg,
                   borderRadius: AppDimensions.radiusS,
                   child: Text(
                     status == 'all' ? 'All' : status.toUpperCase(),
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                      color: isSelected ? AppColors.background : AppColors.textPrimary,
+                      color: isSelected ? bg : textPrimary,
                     ),
                   ),
                 ),
@@ -444,11 +456,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
 class _NotificationCard extends StatelessWidget {
   final Notification notification;
+  final bool isDark;
   final VoidCallback onTap;
   final VoidCallback onDelete;
 
   const _NotificationCard({
     required this.notification,
+    required this.isDark,
     required this.onTap,
     required this.onDelete,
   });
@@ -469,13 +483,13 @@ class _NotificationCard extends StatelessWidget {
   Color _getColorForType(String type) {
     switch (type) {
       case 'fee_due':
-        return AppColors.error;
+        return isDark ? AppColors.error : AppColorsLight.error;
       case 'attendance':
-        return AppColors.success;
+        return isDark ? AppColors.success : AppColorsLight.success;
       case 'announcement':
-        return AppColors.warning;
+        return isDark ? AppColors.warning : AppColorsLight.warning;
       default:
-        return AppColors.accent;
+        return isDark ? AppColors.accent : AppColorsLight.accent;
     }
   }
 
@@ -484,6 +498,10 @@ class _NotificationCard extends StatelessWidget {
     final isUnread = !notification.isRead;
     final timeAgo = _formatTimeAgo(notification.createdAt);
     final iconColor = _getColorForType(notification.type);
+    final textPrimary = isDark ? AppColors.textPrimary : AppColorsLight.textPrimary;
+    final textSecondary = isDark ? AppColors.textSecondary : AppColorsLight.textSecondary;
+    final textTertiary = isDark ? AppColors.textTertiary : AppColorsLight.textTertiary;
+    final accent = isDark ? AppColors.accent : AppColorsLight.accent;
 
     return NeumorphicContainer(
       padding: const EdgeInsets.all(AppDimensions.paddingM),
@@ -521,7 +539,7 @@ class _NotificationCard extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: isUnread ? FontWeight.w600 : FontWeight.normal,
-                          color: AppColors.textPrimary,
+                          color: textPrimary,
                         ),
                       ),
                     ),
@@ -529,8 +547,8 @@ class _NotificationCard extends StatelessWidget {
                       Container(
                         width: 8,
                         height: 8,
-                        decoration: const BoxDecoration(
-                          color: AppColors.accent,
+                        decoration: BoxDecoration(
+                          color: accent,
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -541,7 +559,7 @@ class _NotificationCard extends StatelessWidget {
                   notification.body,
                   style: TextStyle(
                     fontSize: 14,
-                    color: AppColors.textSecondary,
+                    color: textSecondary,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -549,9 +567,9 @@ class _NotificationCard extends StatelessWidget {
                 const SizedBox(height: AppDimensions.spacingS),
                 Text(
                   timeAgo,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
-                    color: AppColors.textTertiary,
+                    color: textTertiary,
                   ),
                 ),
               ],
@@ -561,7 +579,7 @@ class _NotificationCard extends StatelessWidget {
           // Delete button
           IconButton(
             icon: const Icon(Icons.delete_outline, size: 20),
-            color: AppColors.textTertiary,
+            color: textTertiary,
             onPressed: onDelete,
             tooltip: 'Delete notification',
           ),

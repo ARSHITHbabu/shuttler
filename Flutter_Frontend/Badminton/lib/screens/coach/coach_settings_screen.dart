@@ -16,7 +16,8 @@ import '../common/privacy_policy_screen.dart';
 import '../common/terms_conditions_screen.dart';
 import '../common/help_support_screen.dart';
 import '../../widgets/forms/change_password_dialog.dart';
-import '../../widgets/common/app_logo.dart'; // Added this import
+import '../common/academy_info_screen.dart';
+import '../../widgets/common/app_logo.dart';
 import 'coach_profile_screen.dart';
 
 /// Coach Settings Screen - App settings and preferences
@@ -199,6 +200,19 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
                         title: 'App Version',
                         value: '1.0.0',
                         isDark: isDark,
+                      ),
+                      const Divider(height: 1),
+                      _buildActionTile(
+                        title: 'Academy Details',
+                        icon: Icons.business_outlined,
+                        isDark: isDark,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const AcademyInfoScreen(),
+                            ),
+                          );
+                        },
                       ),
                       const Divider(height: 1),
                       _buildActionTile(
