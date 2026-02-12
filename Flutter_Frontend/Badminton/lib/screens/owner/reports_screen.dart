@@ -403,35 +403,83 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   }
   
   Widget _buildMonthSelector() {
-     return InkWell(
-        onTap: () async {
-          final d = await showDatePicker(
-            context: context,
-            initialDate: _selectedMonth,
-            firstDate: DateTime(2020),
-            lastDate: DateTime(2030),
-            initialDatePickerMode: DatePickerMode.year,
-          );
-          if (d != null) {
-            setState(() => _selectedMonth = d);
-          }
-        },
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            border: Border.all(color: AppColors.border),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(DateFormat('MMMM yyyy').format(_selectedMonth)),
-              const Icon(Icons.calendar_today, size: 16),
-            ],
-          ),
+    int currentYear = DateTime.now().year;
+    List<int> years = List.generate(10, (i) => currentYear - 5 + i);
+    List<String> months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                   Text("Month", style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<int>(
+                        value: _selectedMonth.month,
+                        isExpanded: true,
+                        items: List.generate(12, (i) => DropdownMenuItem(
+                          value: i + 1,
+                          child: Text(months[i]),
+                        )),
+                        onChanged: (val) => setState(() {
+                          _selectedMonth = DateTime(_selectedMonth.year, val!);
+                          _reportData = null;
+                        }),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: AppDimensions.spacingM),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Year", style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<int>(
+                        value: _selectedMonth.year,
+                        isExpanded: true,
+                        items: years.map((y) => DropdownMenuItem(
+                          value: y,
+                          child: Text(y.toString()),
+                        )).toList(),
+                        onChanged: (val) => setState(() {
+                          _selectedMonth = DateTime(val!, _selectedMonth.month);
+                          _reportData = null;
+                        }),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
-     );
+      ],
+    );
   }
 
   Widget _buildGenerateButton() {

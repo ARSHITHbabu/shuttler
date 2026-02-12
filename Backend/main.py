@@ -461,6 +461,9 @@ class CalendarEventDB(Base):
     created_by = Column(Integer, nullable=True)  # Can be coach or owner ID
     creator_type = Column(String(20), default="coach")  # "coach" or "owner"
     related_leave_request_id = Column(Integer, nullable=True)  # Link to leave_requests table if this is a leave event
+    related_tournament_id = Column(Integer, nullable=True)     # Link to tournaments table
+    related_announcement_id = Column(Integer, nullable=True)   # Link to announcements table
+    related_schedule_id = Column(Integer, nullable=True)       # Link to schedules table
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Note: Relationships are handled via creator_type field - use creator_type to determine if created_by refers to coach or owner
@@ -1090,7 +1093,10 @@ def migrate_database_schema(engine):
         if 'calendar_events' in tables:
             check_and_add_column(engine, 'calendar_events', 'end_date', 'DATE', nullable=True)
             check_and_add_column(engine, 'calendar_events', 'related_leave_request_id', 'INTEGER', nullable=True)
-            print(" calendar_events table schema updated for leave support")
+            check_and_add_column(engine, 'calendar_events', 'related_tournament_id', 'INTEGER', nullable=True)
+            check_and_add_column(engine, 'calendar_events', 'related_announcement_id', 'INTEGER', nullable=True)
+            check_and_add_column(engine, 'calendar_events', 'related_schedule_id', 'INTEGER', nullable=True)
+            print(" calendar_events table schema updated for multi-table support")
         
         print("Database schema migration completed!")
     except Exception as e:
@@ -1975,6 +1981,9 @@ class CalendarEventCreate(BaseModel):
     created_by: int
     creator_type: str = "coach"  # "coach" or "owner"
     related_leave_request_id: Optional[int] = None  # Link to leave request if this is a leave event
+    related_tournament_id: Optional[int] = None     # Link to tournament
+    related_announcement_id: Optional[int] = None   # Link to announcement
+    related_schedule_id: Optional[int] = None       # Link to schedule
 
 class CalendarEvent(BaseModel):
     id: int
@@ -1986,6 +1995,9 @@ class CalendarEvent(BaseModel):
     created_by: int
     creator_type: str = "coach"  # "coach" or "owner"
     related_leave_request_id: Optional[int] = None
+    related_tournament_id: Optional[int] = None
+    related_announcement_id: Optional[int] = None
+    related_schedule_id: Optional[int] = None
     created_at: str
 
     class Config:
@@ -5437,10 +5449,27 @@ def delete_enquiry(enquiry_id: int):
 def create_schedule(schedule: ScheduleCreate):
     db = SessionLocal()
     try:
-        db_schedule = ScheduleDB(**schedule.dict())
+        db_schedule = ScheduleDB(**schedule.model_dump())
         db.add(db_schedule)
         db.commit()
         db.refresh(db_schedule)
+        
+        # Sync with CalendarEvent
+        try:
+            schedule_date = datetime.strptime(db_schedule.date, "%Y-%m-%d").date()
+            calendar_event = CalendarEventDB(
+                title=f"Session: {db_schedule.activity}",
+                event_type="event",
+                date=schedule_date,
+                description=db_schedule.description,
+                creator_type="coach", # Default to coach context for schedules
+                related_schedule_id=db_schedule.id
+            )
+            db.add(calendar_event)
+            db.commit()
+        except Exception as e:
+            print(f"Error syncing schedule to calendar: {e}")
+            
         return db_schedule
     finally:
         db.close()
@@ -5470,6 +5499,12 @@ def delete_schedule(schedule_id: int):
         schedule = db.query(ScheduleDB).filter(ScheduleDB.id == schedule_id).first()
         if not schedule:
             raise HTTPException(status_code=404, detail="Schedule not found")
+            
+        # Remove linked calendar event
+        try:
+            db.query(CalendarEventDB).filter(CalendarEventDB.related_schedule_id == schedule_id).delete()
+        except: pass
+            
         db.delete(schedule)
         db.commit()
         return {"message": "Schedule deleted"}
@@ -5482,10 +5517,27 @@ def delete_schedule(schedule_id: int):
 def create_tournament(tournament: TournamentCreate):
     db = SessionLocal()
     try:
-        db_tournament = TournamentDB(**tournament.dict())
+        db_tournament = TournamentDB(**tournament.model_dump())
         db.add(db_tournament)
         db.commit()
         db.refresh(db_tournament)
+        
+        # Sync with CalendarEvent
+        try:
+            tournament_date = datetime.strptime(db_tournament.date, "%Y-%m-%d").date()
+            calendar_event = CalendarEventDB(
+                title=f"Tournament: {db_tournament.name}",
+                event_type="tournament",
+                date=tournament_date,
+                description=db_tournament.description,
+                creator_type="owner",
+                related_tournament_id=db_tournament.id
+            )
+            db.add(calendar_event)
+            db.commit()
+        except Exception as e:
+            print(f"Error syncing tournament to calendar: {e}")
+            
         return db_tournament
     finally:
         db.close()
@@ -5516,6 +5568,12 @@ def delete_tournament(tournament_id: int):
         tournament = db.query(TournamentDB).filter(TournamentDB.id == tournament_id).first()
         if not tournament:
             raise HTTPException(status_code=404, detail="Tournament not found")
+            
+        # Remove linked calendar event
+        try:
+            db.query(CalendarEventDB).filter(CalendarEventDB.related_tournament_id == tournament_id).delete()
+        except: pass
+            
         db.delete(tournament)
         db.commit()
         return {"message": "Tournament deleted"}
@@ -6261,6 +6319,27 @@ def create_announcement(announcement: AnnouncementCreate):
         db.commit()
         db.refresh(db_announcement)
         
+        # Sync with CalendarEvent
+        try:
+            # If scheduled_at is provided, use its date, otherwise use today's date
+            event_date = date.today()
+            if db_announcement.scheduled_at:
+                event_date = db_announcement.scheduled_at.date()
+            
+            calendar_event = CalendarEventDB(
+                title=f"Announcement: {db_announcement.title}",
+                event_type="event",
+                date=event_date,
+                description=db_announcement.message,
+                created_by=db_announcement.created_by,
+                creator_type=db_announcement.creator_type,
+                related_announcement_id=db_announcement.id
+            )
+            db.add(calendar_event)
+            db.commit()
+        except Exception as e:
+            print(f"Error syncing announcement to calendar: {e}")
+        
         # Notify Target Audience
         try:
             target_users = []
@@ -6351,6 +6430,24 @@ def update_announcement(announcement_id: int, announcement: AnnouncementUpdate):
 
         db.commit()
         db.refresh(db_announcement)
+        
+        # Sync with CalendarEvent
+        try:
+            calendar_event = db.query(CalendarEventDB).filter(CalendarEventDB.related_announcement_id == announcement_id).first()
+            if calendar_event:
+                if 'title' in update_data:
+                    calendar_event.title = f"Announcement: {db_announcement.title}"
+                if 'message' in update_data:
+                    calendar_event.description = db_announcement.message
+                if 'scheduled_at' in update_data:
+                    if db_announcement.scheduled_at:
+                        calendar_event.date = db_announcement.scheduled_at.date()
+                    else:
+                        calendar_event.date = date.today()
+                db.commit()
+        except Exception as e:
+            print(f"Error updating announcement in calendar: {e}")
+            
         return _db_announcement_to_pydantic(db_announcement)
     except Exception as e:
         db.rollback()
@@ -6367,6 +6464,11 @@ def delete_announcement(announcement_id: int):
         if not db_announcement:
             raise HTTPException(status_code=404, detail="Announcement not found")
 
+        # Remove linked calendar event
+        try:
+            db.query(CalendarEventDB).filter(CalendarEventDB.related_announcement_id == announcement_id).delete()
+        except: pass
+            
         db.delete(db_announcement)
         db.commit()
         return {"message": "Announcement deleted successfully"}
@@ -6390,6 +6492,9 @@ def _db_event_to_pydantic(db_event: CalendarEventDB) -> CalendarEvent:
         created_by=db_event.created_by,
         creator_type=db_event.creator_type or "coach",
         related_leave_request_id=db_event.related_leave_request_id,
+        related_tournament_id=db_event.related_tournament_id,
+        related_announcement_id=db_event.related_announcement_id,
+        related_schedule_id=db_event.related_schedule_id,
         created_at=db_event.created_at.isoformat() if hasattr(db_event.created_at, 'isoformat') else str(db_event.created_at),
     )
 

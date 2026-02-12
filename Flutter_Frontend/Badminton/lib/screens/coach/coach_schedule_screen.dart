@@ -14,7 +14,7 @@ import '../../models/schedule.dart';
 import '../../models/calendar_event.dart';
 import '../../core/utils/canadian_holidays.dart';
 
-enum ScheduleFilter { all, batches, holidays, tournaments, events }
+enum ScheduleFilter { all, batches, holidays, tournaments, events, leave }
 
 /// Coach Schedule Screen - Calendar-based view of batch schedules, operating days, and holidays
 class CoachScheduleScreen extends ConsumerStatefulWidget {
@@ -35,6 +35,7 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
   static const Color tournamentColor = Color(0xFFFF9800); // Orange
   static const Color eventColor = Color(0xFF00A86B); // Green
   static const Color batchColor = Colors.purple;
+  static const Color leaveColor = Colors.teal; // Color for leave
 
   Map<DateTime, List<dynamic>> _groupItemsByDate(List<Schedule> sessions, List<CalendarEvent> events) {
     final Map<DateTime, List<dynamic>> grouped = {};
@@ -72,6 +73,7 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
         if (item.isHoliday) return _selectedFilter == ScheduleFilter.holidays;
         if (item.eventType.toLowerCase() == 'tournament') return _selectedFilter == ScheduleFilter.tournaments;
         if (item.eventType.toLowerCase() == 'event') return _selectedFilter == ScheduleFilter.events;
+        if (item.eventType.toLowerCase() == 'leave') return _selectedFilter == ScheduleFilter.leave;
       }
       return false;
     }).toList();
@@ -298,12 +300,14 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
                           final hasTournament = events.any((e) => e is CalendarEvent && e.eventType.toLowerCase() == 'tournament');
                           final hasEvent = events.any((e) => e is CalendarEvent && e.eventType.toLowerCase() == 'event');
                           final hasBatch = events.any((e) => e is Schedule);
+                          final hasLeave = events.any((e) => e is CalendarEvent && e.eventType.toLowerCase() == 'leave');
 
                           List<Widget> markers = [];
                           if (hasholiday) markers.add(_buildMarkerCircle(holidayColor));
                           if (hasTournament) markers.add(_buildMarkerCircle(tournamentColor));
                           if (hasEvent) markers.add(_buildMarkerCircle(eventColor));
                           if (hasBatch) markers.add(_buildMarkerCircle(batchColor));
+                          if (hasLeave) markers.add(_buildMarkerCircle(leaveColor));
 
                           return Positioned(
                             bottom: 1,
@@ -416,6 +420,7 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
           _buildFilterChip('Holidays', ScheduleFilter.holidays, isDark),
           _buildFilterChip('Tournaments', ScheduleFilter.tournaments, isDark),
           _buildFilterChip('Events', ScheduleFilter.events, isDark),
+          _buildFilterChip('Leave', ScheduleFilter.leave, isDark),
         ],
       ),
     );
