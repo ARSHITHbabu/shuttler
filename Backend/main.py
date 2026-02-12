@@ -7188,9 +7188,30 @@ def submit_leave_modification(request_id: int, modification: LeaveRequestModific
         db.commit()
         db.refresh(db_request)
         
-        # Determine effective response values
+        # Determine effective response values for notifications
         mod_start = db_request.modification_start_date.strftime("%Y-%m-%d") if db_request.modification_start_date else None
         mod_end = db_request.modification_end_date.strftime("%Y-%m-%d") if db_request.modification_end_date else None
+        
+        # Notify Owners about the modification request
+        try:
+            owners = db.query(OwnerDB).filter(OwnerDB.role == "owner").all()
+            for owner in owners:
+                create_notification(
+                    db=db,
+                    user_id=owner.id,
+                    user_type="owner",
+                    title="Leave Modification Request",
+                    body=f"Coach {db_request.coach_name} has requested to modify their {db_request.leave_type} leave from {mod_start} to {mod_end}. Reason: {modification.reason}",
+                    type="general",
+                    data={
+                        "leave_request_id": db_request.id,
+                        "modification_status": "pending",
+                        "original_dates": f"{db_request.start_date} to {db_request.end_date}",
+                        "new_dates": f"{mod_start} to {mod_end}"
+                    }
+                )
+        except Exception as e:
+            print(f"Error sending leave modification notifications: {e}")
         
         return LeaveRequest(
             id=db_request.id,
@@ -7291,6 +7312,37 @@ def review_modification_request(request_id: int, review: LeaveRequestModificatio
         # Prepare response
         mod_start = db_request.modification_start_date.strftime("%Y-%m-%d") if db_request.modification_start_date else None
         mod_end = db_request.modification_end_date.strftime("%Y-%m-%d") if db_request.modification_end_date else None
+        
+        # Notify Coach about the modification review
+        try:
+            if review.action == "approve":
+                notif_title = "Leave Modification Approved"
+                notif_body = f"Your modification request for {db_request.leave_type} leave has been approved. New dates: {mod_start} to {mod_end}"
+            elif review.action == "reject_modification":
+                notif_title = "Leave Modification Rejected"
+                notif_body = f"Your modification request for {db_request.leave_type} leave has been rejected. Original leave dates remain: {db_request.start_date} to {db_request.end_date}"
+            elif review.action == "reject_all":
+                notif_title = "Leave Request Cancelled"
+                notif_body = f"Your {db_request.leave_type} leave request and modification have been rejected."
+            else:
+                notif_title = "Leave Modification Update"
+                notif_body = f"Your leave modification request has been reviewed."
+            
+            create_notification(
+                db=db,
+                user_id=db_request.coach_id,
+                user_type="coach",
+                title=notif_title,
+                body=notif_body,
+                type="general",
+                data={
+                    "leave_request_id": db_request.id,
+                    "action": review.action,
+                    "modification_status": db_request.modification_status
+                }
+            )
+        except Exception as e:
+            print(f"Error sending modification review notification: {e}")
         
         return LeaveRequest(
             id=db_request.id,
