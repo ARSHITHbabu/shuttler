@@ -10,6 +10,7 @@ import '../../providers/coach_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/batch_provider.dart';
 import '../../models/schedule.dart';
+import '../../providers/owner_provider.dart';
 import '../../widgets/forms/add_student_dialog.dart';
 import 'coach_schedule_screen.dart';
 import 'coach_students_screen.dart';
@@ -81,7 +82,6 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
                       color: context.textSecondaryColor,
                     ),
                   ),
-                  const SizedBox(height: 4),
                   Text(
                     coachName,
                     style: TextStyle(
@@ -90,6 +90,23 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
                       color: context.textPrimaryColor,
                     ),
                   ),
+                  ref.watch(activeOwnerProvider).when(
+                        data: (owner) => owner?.academyName != null
+                            ? Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(
+                                  owner!.academyName!,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: context.accentColor,
+                                  ),
+                                ),
+                              )
+                            : const SizedBox.shrink(),
+                        loading: () => const SizedBox.shrink(),
+                        error: (_, __) => const SizedBox.shrink(),
+                      ),
                   const SizedBox(height: 4),
                   Text(
                     _getFormattedDate(),

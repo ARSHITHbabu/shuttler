@@ -279,7 +279,7 @@ class _StudentBatchesProviderElement
   int get studentId => (origin as StudentBatchesProvider).studentId;
 }
 
-String _$batchListHash() => r'0d4cb15745ff2578541309508b34ee2e636ab7bf';
+String _$batchListHash() => r'56a0adeb55731abeef0770ac38d4cece0d1e1abd';
 
 /// Provider for batch list state
 ///

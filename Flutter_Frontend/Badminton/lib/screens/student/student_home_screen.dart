@@ -9,8 +9,11 @@ import '../../core/utils/canadian_holidays.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/error_widget.dart';
+import '../../models/schedule.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/student_provider.dart';
+import '../../providers/owner_provider.dart';
+import '../../providers/service_providers.dart';
 import 'student_attendance_screen.dart';
 import 'student_performance_screen.dart';
 import 'student_bmi_screen.dart';
@@ -121,7 +124,6 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
               color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
             ),
           ),
-          const SizedBox(height: 4),
           Text(
             studentName,
             style: TextStyle(
@@ -130,6 +132,23 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
               color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
             ),
           ),
+          ref.watch(activeOwnerProvider).when(
+                data: (owner) => owner?.academyName != null
+                    ? Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          owner!.academyName!,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: isDark ? AppColors.accent : AppColorsLight.accent,
+                          ),
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+                loading: () => const SizedBox.shrink(),
+                error: (_, __) => const SizedBox.shrink(),
+              ),
           const SizedBox(height: 4),
           Text(
             _getFormattedDate(),

@@ -15,6 +15,7 @@ import 'coaches_screen.dart';
 import 'fees_screen.dart';
 import '../../providers/owner_navigation_provider.dart';
 import '../../core/utils/canadian_holidays.dart';
+import '../../providers/owner_provider.dart';
 
 /// Home Screen - Dashboard overview
 /// Matches React reference: HomeScreen.tsx
@@ -54,14 +55,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  'Pursue Badminton',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
-                    color: context.textPrimaryColor,
-                  ),
-                ),
+                ref.watch(activeOwnerProvider).when(
+                      data: (owner) => Text(
+                        owner?.academyName ?? 'Pursue Badminton',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w600,
+                          color: context.textPrimaryColor,
+                        ),
+                      ),
+                      loading: () => Container(
+                        height: 28,
+                        width: 150,
+                        decoration: BoxDecoration(
+                          color: context.cardBackgroundColor,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      error: (_, __) => Text(
+                        'Pursue Badminton',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w600,
+                          color: context.textPrimaryColor,
+                        ),
+                      ),
+                    ),
                 const SizedBox(height: 4),
                 Text(
                   _getFormattedDate(),

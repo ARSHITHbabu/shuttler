@@ -2191,7 +2191,11 @@ def unified_login(login_data: UnifiedLoginRequest):
                         "phone": owner.phone,
                         "role": owner.role,
                         "must_change_password": owner.must_change_password,
-                        "profile_photo": owner.profile_photo
+                        "profile_photo": owner.profile_photo,
+                        "academy_name": owner.academy_name,
+                        "academy_address": owner.academy_address,
+                        "academy_contact": owner.academy_contact,
+                        "academy_email": owner.academy_email
                     }
                 }
 
@@ -2698,7 +2702,11 @@ def login_owner(login_data: OwnerLogin):
                     "status": owner.status,
                     "role": owner.role,
                     "must_change_password": owner.must_change_password,
-                    "profile_photo": owner.profile_photo
+                    "profile_photo": owner.profile_photo,
+                    "academy_name": owner.academy_name,
+                    "academy_address": owner.academy_address,
+                    "academy_contact": owner.academy_contact,
+                    "academy_email": owner.academy_email
                 }
             }
         else:

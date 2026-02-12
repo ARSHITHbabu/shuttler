@@ -32,10 +32,10 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
 
   // Colors consistent with user requirements
   static const Color holidayColor = Colors.red;
-  static const Color tournamentColor = Color(0xFFFF9800); // Orange
-  static const Color eventColor = Color(0xFF00A86B); // Green
+  static const Color tournamentColor = Color(0xFF00A86B); // Jade green
+  static const Color eventColor = Color(0xFF00A86B); // Jade green
   static const Color batchColor = Colors.purple;
-  static const Color leaveColor = Colors.teal; // Color for leave
+  static const Color leaveColor = Color(0xFFFF9800); // Orange/Amber
 
   Map<DateTime, List<dynamic>> _groupItemsByDate(List<Schedule> sessions, List<CalendarEvent> events) {
     final Map<DateTime, List<dynamic>> grouped = {};
