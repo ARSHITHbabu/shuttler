@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
+import 'package:printing/printing.dart';
 import '../../core/utils/string_extensions.dart';
 
 import '../../core/constants/colors.dart';
@@ -752,9 +753,25 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
 
         final fileName = _getFileName();
         final file = File('${reportsDir.path}/$fileName');
-        await file.writeAsBytes(await pdf.save());
+        final bytes = await pdf.save();
+        await file.writeAsBytes(bytes);
+
+        // On mobile, use Printing.layoutPdf which provides a standard "Save as PDF" 
+        // option in the system dialog.
+        await Printing.layoutPdf(
+          onLayout: (PdfPageFormat format) async => bytes,
+          name: fileName,
+        );
+
         if (mounted) {
-          SuccessSnackbar.show(context, 'Report saved to ${file.path}');
+          SuccessSnackbar.show(
+            context, 
+            'Report generated successfully',
+            actionLabel: 'OPEN',
+            onAction: () async {
+              await Printing.layoutPdf(onLayout: (format) async => bytes, name: fileName);
+            },
+          );
         }
       }
 
