@@ -14,7 +14,7 @@ import '../../models/schedule.dart';
 import '../../core/utils/canadian_holidays.dart';
 import 'package:intl/intl.dart';
 
-enum ScheduleFilter { all, batches, holidays, tournaments, events }
+enum ScheduleFilter { all, batches, holidays, tournaments, events, leave }
 
 /// Combined Student Schedule Screen
 /// Shows calendar and events (batches, holidays, tournaments, events)
@@ -35,8 +35,9 @@ class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
 
   // Colors based on user requirements
   static const Color holidayColor = Colors.red;
-  static const Color tournamentColor = Color(0xFFFF9800); // Orange
-  static const Color eventColor = Color(0xFF00A86B); // Green
+  static const Color tournamentColor = Color(0xFF00A86B); // Jade green
+  static const Color eventColor = Color(0xFF00A86B); // Jade green
+  static const Color leaveColor = Color(0xFFFF9800); // Orange/Amber
   static const Color batchColor = Colors.purple;
 
   Map<DateTime, List<dynamic>> _groupItemsByDate(List<CalendarEvent> events, List<Schedule> schedules) {
@@ -257,12 +258,14 @@ class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
                               final hasTournament = events.any((e) => e is CalendarEvent && e.eventType.toLowerCase() == 'tournament');
                               final hasEvent = events.any((e) => e is CalendarEvent && e.eventType.toLowerCase() == 'event');
                               final hasBatch = events.any((e) => e is Schedule);
+    final hasLeave = events.any((e) => e is CalendarEvent && e.isLeave);
 
-                              List<Widget> markers = [];
-                              if (hasholiday) markers.add(_buildMarkerCircle(holidayColor));
-                              if (hasTournament) markers.add(_buildMarkerCircle(tournamentColor));
-                              if (hasEvent) markers.add(_buildMarkerCircle(eventColor));
-                              if (hasBatch) markers.add(_buildMarkerCircle(batchColor));
+    List<Widget> markers = [];
+    if (hasholiday) markers.add(_buildMarkerCircle(holidayColor));
+    if (hasTournament) markers.add(_buildMarkerCircle(tournamentColor));
+    if (hasEvent) markers.add(_buildMarkerCircle(eventColor));
+    if (hasBatch) markers.add(_buildMarkerCircle(batchColor));
+    if (hasLeave) markers.add(_buildMarkerCircle(leaveColor));
 
                               return Positioned(
                                 bottom: 1,
@@ -345,6 +348,7 @@ class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
           _buildFilterChip('Holidays', ScheduleFilter.holidays, isDark),
           _buildFilterChip('Tournaments', ScheduleFilter.tournaments, isDark),
           _buildFilterChip('Events', ScheduleFilter.events, isDark),
+          _buildFilterChip('Leave', ScheduleFilter.leave, isDark),
         ],
       ),
     );
@@ -428,6 +432,7 @@ class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
     final batches = items.whereType<Schedule>().toList();
     final tournaments = items.whereType<CalendarEvent>().where((e) => e.eventType.toLowerCase() == 'tournament').toList();
     final events = items.whereType<CalendarEvent>().where((e) => e.eventType.toLowerCase() == 'event').toList();
+    final leaveEvents = items.whereType<CalendarEvent>().where((e) => e.isLeave).toList();
     final holidays = items.whereType<CalendarEvent>().where((e) => e.isHoliday).toList();
 
     return Column(
@@ -459,6 +464,13 @@ class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
           if (events.isNotEmpty) ...[
             _buildSectionHeader('Events', eventColor, isDark),
             ...events.map((e) => _buildSimpleCard(e.title, e.description ?? '', eventColor, Icons.event, isDark)),
+            const SizedBox(height: AppDimensions.spacingL),
+          ],
+
+        if (_selectedFilter == ScheduleFilter.all || _selectedFilter == ScheduleFilter.leave)
+          if (leaveEvents.isNotEmpty) ...[
+            _buildSectionHeader('Leave', leaveColor, isDark),
+            ...leaveEvents.map((e) => _buildSimpleCard(e.title, e.description ?? '', leaveColor, Icons.airplane_ticket, isDark)),
             const SizedBox(height: AppDimensions.spacingL),
           ],
       ],

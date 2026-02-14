@@ -10,6 +10,7 @@ import '../../providers/coach_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/batch_provider.dart';
 import '../../models/schedule.dart';
+import '../../providers/owner_provider.dart';
 import '../../widgets/forms/add_student_dialog.dart';
 import 'coach_schedule_screen.dart';
 import 'coach_students_screen.dart';
@@ -29,6 +30,8 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
     
     return authState.when(
       data: (authValue) {
@@ -42,7 +45,7 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
         }
 
         final coachId = authValue.userId;
-        return _buildContent(coachId, authValue.userName);
+        return _buildContent(coachId, authValue.userName, isSmallScreen);
       },
       loading: () => const Center(child: DashboardSkeleton()),
       error: (error, stack) => Center(
@@ -54,7 +57,7 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
     );
   }
 
-  Widget _buildContent(int coachId, String coachName) {
+  Widget _buildContent(int coachId, String coachName, bool isSmallScreen) {
 
     final coachStatsAsync = ref.watch(coachStatsProvider(coachId));
 
@@ -70,7 +73,7 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
           children: [
             // Header
             Padding(
-              padding: const EdgeInsets.all(AppDimensions.paddingL),
+              padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -81,7 +84,6 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
                       color: context.textSecondaryColor,
                     ),
                   ),
-                  const SizedBox(height: 4),
                   Text(
                     coachName,
                     style: TextStyle(
@@ -90,6 +92,23 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
                       color: context.textPrimaryColor,
                     ),
                   ),
+                  ref.watch(activeOwnerProvider).when(
+                        data: (owner) => owner?.academyName != null
+                            ? Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(
+                                  owner!.academyName!,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: context.accentColor,
+                                  ),
+                                ),
+                              )
+                            : const SizedBox.shrink(),
+                        loading: () => const SizedBox.shrink(),
+                        error: (_, __) => const SizedBox.shrink(),
+                      ),
                   const SizedBox(height: 4),
                   Text(
                     _getFormattedDate(),
@@ -132,7 +151,7 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
             // Stats Grid
             coachStatsAsync.when(
               data: (stats) => Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+                padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
                 child: GridView.count(
                   crossAxisCount: 2,
                   shrinkWrap: true,
@@ -145,6 +164,7 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
                       icon: Icons.people_outline,
                       value: stats.totalStudents.toString(),
                       label: 'Total Students',
+                      isSmallScreen: isSmallScreen,
                       onTap: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
@@ -157,6 +177,7 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
                       icon: Icons.trending_up,
                       value: '${stats.attendanceRate.toStringAsFixed(0)}%',
                       label: 'Attendance Rate',
+                      isSmallScreen: isSmallScreen,
                       onTap: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
@@ -187,14 +208,14 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
 
             // Upcoming Sessions
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+              padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     'Upcoming Sessions',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: isSmallScreen ? 16 : 18,
                       fontWeight: FontWeight.w600,
                       color: context.textPrimaryColor,
                     ),
@@ -264,14 +285,14 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
 
             // Quick Actions
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+              padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     'Quick Actions',
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: isSmallScreen ? 16 : 18,
                       fontWeight: FontWeight.w600,
                       color: context.textPrimaryColor,
                     ),
@@ -283,6 +304,7 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
                         child: _QuickActionButton(
                           icon: Icons.add,
                           label: 'Add Student',
+                          isSmallScreen: isSmallScreen,
                           onTap: () => _showAddStudentDialog(context),
                         ),
                       ),
@@ -291,6 +313,7 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
                         child: _QuickActionButton(
                           icon: Icons.calendar_today_outlined,
                           label: 'View Schedule',
+                          isSmallScreen: isSmallScreen,
                           onTap: () {
                             Navigator.of(context).push(
                               MaterialPageRoute(
@@ -483,12 +506,14 @@ class _StatCard extends StatelessWidget {
   final String value;
   final String label;
   final VoidCallback? onTap;
+  final bool isSmallScreen;
 
   const _StatCard({
     required this.icon,
     required this.value,
     required this.label,
     this.onTap,
+    this.isSmallScreen = false,
   });
 
   @override
@@ -504,8 +529,8 @@ class _StatCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: isSmallScreen ? 32 : 40,
+                height: isSmallScreen ? 32 : 40,
                 decoration: BoxDecoration(
                   color: context.backgroundColor,
                   borderRadius: BorderRadius.circular(AppDimensions.radiusM),
@@ -513,7 +538,7 @@ class _StatCard extends StatelessWidget {
                 ),
                 child: Icon(
                   icon,
-                  size: 20,
+                  size: isSmallScreen ? 16 : 20,
                   color: context.iconPrimaryColor,
                 ),
               ),
@@ -530,7 +555,7 @@ class _StatCard extends StatelessWidget {
             child: Text(
               value,
               style: TextStyle(
-                fontSize: 22,
+                fontSize: isSmallScreen ? 18 : 22,
                 fontWeight: FontWeight.w600,
                 color: context.textPrimaryColor,
                 height: 1.2,
@@ -567,11 +592,13 @@ class _QuickActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final bool isSmallScreen;
 
   const _QuickActionButton({
     required this.icon,
     required this.label,
     required this.onTap,
+    this.isSmallScreen = false,
   });
 
   @override
@@ -584,14 +611,14 @@ class _QuickActionButton extends StatelessWidget {
           children: [
             Icon(
               icon,
-              size: 24,
+              size: isSmallScreen ? 20 : 24,
               color: context.iconPrimaryColor,
             ),
             const SizedBox(height: AppDimensions.spacingS),
             Text(
               label,
               style: TextStyle(
-                fontSize: 14,
+                fontSize: isSmallScreen ? 13 : 14,
                 color: context.textPrimaryColor,
               ),
               textAlign: TextAlign.center,

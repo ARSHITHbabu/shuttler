@@ -11,6 +11,7 @@ import '../../providers/theme_provider.dart';
 import '../../widgets/settings/shuttlecock_theme_toggle.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/service_providers.dart';
+import '../../providers/owner_provider.dart';
 import '../../widgets/common/app_logo.dart';
 import '../../widgets/forms/change_password_dialog.dart';
 import '../common/privacy_policy_screen.dart';
@@ -586,14 +587,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           height: 80,
         ),
         const SizedBox(height: AppDimensions.spacingM),
-        Text(
-          'Pursue Badminton',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-          ),
-        ),
+        ref.watch(activeOwnerProvider).when(
+              data: (owner) => Text(
+                owner?.academyName ?? 'Pursue Badminton',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                ),
+              ),
+              loading: () => const SizedBox(height: 20),
+              error: (_, __) => Text(
+                'Pursue Badminton',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                ),
+              ),
+            ),
         Text(
           'Badminton Academy Management',
           style: TextStyle(

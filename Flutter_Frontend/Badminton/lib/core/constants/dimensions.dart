@@ -1,6 +1,7 @@
 /// App spacing and sizing constants
 class AppDimensions {
   // Spacing
+  static const double spacingXS = 2.0;
   static const double spacingXs = 4.0;
   static const double spacingS = 8.0;
   static const double spacingM = 16.0;

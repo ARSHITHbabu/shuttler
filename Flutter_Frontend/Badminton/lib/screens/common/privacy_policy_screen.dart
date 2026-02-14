@@ -49,183 +49,198 @@ class PrivacyPolicyScreen extends StatelessWidget {
       ),
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: AppDimensions.spacingM),
-              // Header Card - Premium Look
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(AppDimensions.paddingXl),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: isDark 
-                      ? [AppColors.surface, AppColors.background] 
-                      : [AppColorsLight.cardBackground, AppColorsLight.background],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(AppDimensions.radiusXl),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
-                      blurRadius: 20,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [accentColor, accentColor.withValues(alpha: 0.7)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
+        child: Builder(
+          builder: (context) {
+            final screenWidth = MediaQuery.of(context).size.width;
+            final isSmallScreen = screenWidth < 600;
+            
+            return Padding(
+              padding: EdgeInsets.symmetric(
+                horizontal: isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: AppDimensions.spacingM),
+                  // Header Card - Premium Look
+                  Container(
+                    width: double.infinity,
+                    padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingL : AppDimensions.paddingXl),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: isDark 
+                          ? [AppColors.surface, AppColors.background] 
+                          : [AppColorsLight.cardBackground, AppColorsLight.background],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(AppDimensions.radiusXl),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
                         ),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: accentColor.withValues(alpha: 0.3),
-                            blurRadius: 15,
-                            offset: const Offset(0, 5),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(isSmallScreen ? 16 : 20),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [accentColor, accentColor.withValues(alpha: 0.7)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: accentColor.withValues(alpha: 0.3),
+                                blurRadius: 15,
+                                offset: const Offset(0, 5),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.privacy_tip_outlined,
-                        size: 40,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(height: AppDimensions.spacingL),
-                    Text(
-                      LegalContent.appName,
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: textPrimaryColor,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                    const SizedBox(height: AppDimensions.spacingXs),
-                    Text(
-                      'Privacy Policy',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: textSecondaryColor,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const SizedBox(height: AppDimensions.spacingL),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppDimensions.paddingL,
-                        vertical: AppDimensions.spacingS,
-                      ),
-                      decoration: BoxDecoration(
-                        color: accentColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(AppDimensions.radiusL),
-                        border: Border.all(
-                          color: accentColor.withValues(alpha: 0.2),
-                          width: 1,
+                          child: Icon(
+                            Icons.privacy_tip_outlined,
+                            size: isSmallScreen ? 32 : 40,
+                            color: Colors.white,
+                          ),
                         ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.update, size: 14, color: accentColor),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Last Updated: ${LegalContent.lastUpdated}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: accentColor,
-                              fontWeight: FontWeight.bold,
+                        SizedBox(height: isSmallScreen ? AppDimensions.spacingM : AppDimensions.spacingL),
+                        Text(
+                          LegalContent.appName,
+                          style: TextStyle(
+                            fontSize: isSmallScreen ? 20 : 24,
+                            fontWeight: FontWeight.bold,
+                            color: textPrimaryColor,
+                            letterSpacing: 1,
+                          ),
+                        ),
+                        const SizedBox(height: AppDimensions.spacingXs),
+                        Text(
+                          'Privacy Policy',
+                          style: TextStyle(
+                            fontSize: isSmallScreen ? 14 : 16,
+                            color: textSecondaryColor,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        SizedBox(height: isSmallScreen ? AppDimensions.spacingM : AppDimensions.spacingL),
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL,
+                            vertical: AppDimensions.spacingS,
+                          ),
+                          decoration: BoxDecoration(
+                            color: accentColor.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+                            border: Border.all(
+                              color: accentColor.withValues(alpha: 0.2),
+                              width: 1,
                             ),
                           ),
-                        ],
-                      ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.update, size: 14, color: accentColor),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  'Last Updated: ${LegalContent.lastUpdated}',
+                                  style: TextStyle(
+                                    fontSize: isSmallScreen ? 11 : 12,
+                                    color: accentColor,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: AppDimensions.spacingXl),
-
-              // Introduction
-              _buildContentCard(
-                child: Text(
-                  LegalContent.privacyPolicyIntro,
-                  style: TextStyle(
-                    fontSize: 15,
-                    height: 1.8,
-                    color: textSecondaryColor,
-                    letterSpacing: 0.2,
                   ),
-                ),
-                isDark: isDark,
-              ),
 
-              const SizedBox(height: AppDimensions.spacingL),
+                  const SizedBox(height: AppDimensions.spacingXl),
 
-              // Policy Sections
-              ...LegalContent.privacyPolicySections.map((section) =>
-                _buildSection(
-                  title: section['title'] as String,
-                  content: section['content'] as String,
-                  isDark: isDark,
-                  textPrimaryColor: textPrimaryColor,
-                  textSecondaryColor: textSecondaryColor,
-                  accentColor: accentColor,
-                ),
-              ),
-
-              const SizedBox(height: AppDimensions.spacingXl),
-
-              // Footer
-              Center(
-                child: Column(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: textSecondaryColor.withValues(alpha: 0.05),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.security,
-                        size: 24,
-                        color: textSecondaryColor.withValues(alpha: 0.4),
-                      ),
-                    ),
-                    const SizedBox(height: AppDimensions.spacingM),
-                    Text(
-                      'Your privacy is our top priority',
+                  // Introduction
+                  _buildContentCard(
+                    child: Text(
+                      LegalContent.privacyPolicyIntro,
                       style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: textSecondaryColor.withValues(alpha: 0.6),
+                        fontSize: isSmallScreen ? 14 : 15,
+                        height: 1.8,
+                        color: textSecondaryColor,
+                        letterSpacing: 0.2,
                       ),
                     ),
-                    const SizedBox(height: 60),
-                  ],
-                ),
+                    isDark: isDark,
+                    isSmallScreen: isSmallScreen,
+                  ),
+
+                  const SizedBox(height: AppDimensions.spacingL),
+
+                  // Policy Sections
+                  ...LegalContent.privacyPolicySections.map((section) =>
+                    _buildSection(
+                      title: section['title'] as String,
+                      content: section['content'] as String,
+                      isDark: isDark,
+                      textPrimaryColor: textPrimaryColor,
+                      textSecondaryColor: textSecondaryColor,
+                      accentColor: accentColor,
+                      isSmallScreen: isSmallScreen,
+                    ),
+                  ),
+
+                  const SizedBox(height: AppDimensions.spacingXl),
+
+                  // Footer
+                  Center(
+                    child: Column(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: textSecondaryColor.withValues(alpha: 0.05),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.security,
+                            size: 24,
+                            color: textSecondaryColor.withValues(alpha: 0.4),
+                          ),
+                        ),
+                        const SizedBox(height: AppDimensions.spacingM),
+                        Text(
+                          'Your privacy is our top priority',
+                          style: TextStyle(
+                            fontSize: isSmallScreen ? 12 : 13,
+                            fontWeight: FontWeight.w500,
+                            color: textSecondaryColor.withValues(alpha: 0.6),
+                          ),
+                        ),
+                        const SizedBox(height: 60),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
   }
 
-  Widget _buildContentCard({required Widget child, required bool isDark}) {
+  Widget _buildContentCard({required Widget child, required bool isDark, bool isSmallScreen = false}) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(AppDimensions.paddingL),
+      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
       decoration: BoxDecoration(
         color: isDark ? AppColors.surface : Colors.white,
         borderRadius: BorderRadius.circular(AppDimensions.radiusL),
@@ -252,6 +267,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
     required Color textPrimaryColor,
     required Color textSecondaryColor,
     required Color accentColor,
+    bool isSmallScreen = false,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppDimensions.spacingL),
@@ -271,13 +287,17 @@ class PrivacyPolicyScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                    color: textPrimaryColor,
-                    letterSpacing: 0.3,
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: isSmallScreen ? 15 : 17,
+                      fontWeight: FontWeight.bold,
+                      color: textPrimaryColor,
+                      letterSpacing: 0.3,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
@@ -285,10 +305,11 @@ class PrivacyPolicyScreen extends StatelessWidget {
           ),
           _buildContentCard(
             isDark: isDark,
+            isSmallScreen: isSmallScreen,
             child: Text(
               content,
               style: TextStyle(
-                fontSize: 14,
+                fontSize: isSmallScreen ? 13 : 14,
                 height: 1.7,
                 color: textSecondaryColor,
               ),

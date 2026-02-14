@@ -26,6 +26,8 @@ class _StudentBatchesScreenState extends ConsumerState<StudentBatchesScreen> {
     final authState = ref.watch(authProvider);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
@@ -83,13 +85,14 @@ class _StudentBatchesScreenState extends ConsumerState<StudentBatchesScreen> {
               }
 
               return ListView.builder(
-                padding: const EdgeInsets.all(AppDimensions.paddingL),
+                padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
                 itemCount: batches.length,
                 itemBuilder: (context, index) {
                   final batch = batches[index];
                   return _StudentBatchCard(
                     batch: batch,
                     onTap: () => _showBatchDetails(batch),
+                    isSmallScreen: isSmallScreen,
                   );
                 },
               );
@@ -120,10 +123,12 @@ class _StudentBatchesScreenState extends ConsumerState<StudentBatchesScreen> {
 class _StudentBatchCard extends StatelessWidget {
   final Batch batch;
   final VoidCallback onTap;
+  final bool isSmallScreen;
 
   const _StudentBatchCard({
     required this.batch,
     required this.onTap,
+    this.isSmallScreen = false,
   });
 
   @override
@@ -132,8 +137,8 @@ class _StudentBatchCard extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
 
     return NeumorphicContainer(
-      margin: const EdgeInsets.only(bottom: AppDimensions.spacingL),
-      padding: const EdgeInsets.all(AppDimensions.paddingL),
+      margin: EdgeInsets.only(bottom: isSmallScreen ? AppDimensions.spacingM : AppDimensions.spacingL),
+      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
       onTap: onTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -145,7 +150,7 @@ class _StudentBatchCard extends StatelessWidget {
                 child: Text(
                   batch.batchName,
                   style: TextStyle(
-                    fontSize: 18,
+                    fontSize: isSmallScreen ? 16 : 18,
                     fontWeight: FontWeight.bold,
                     color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                   ),
@@ -162,38 +167,41 @@ class _StudentBatchCard extends StatelessWidget {
             Icons.calendar_today_outlined,
             batch.period,
             isDark,
+            isSmallScreen,
           ),
-          const SizedBox(height: AppDimensions.spacingXs),
+          SizedBox(height: isSmallScreen ? 6 : AppDimensions.spacingXs),
           _buildInfoRow(
             Icons.access_time_outlined,
             batch.timing,
             isDark,
+            isSmallScreen,
           ),
-          const SizedBox(height: AppDimensions.spacingXs),
+          SizedBox(height: isSmallScreen ? 6 : AppDimensions.spacingXs),
           _buildInfoRow(
             Icons.person_outline,
             'Coach: ${batch.coachName ?? "Not assigned"}',
             isDark,
+            isSmallScreen,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildInfoRow(IconData icon, String text, bool isDark) {
+  Widget _buildInfoRow(IconData icon, String text, bool isDark, bool isSmallScreen) {
     return Row(
       children: [
         Icon(
           icon,
-          size: 16,
+          size: isSmallScreen ? 14 : 16,
           color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
         ),
-        const SizedBox(width: AppDimensions.spacingS),
+        SizedBox(width: isSmallScreen ? 6 : AppDimensions.spacingS),
         Expanded(
           child: Text(
             text,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: isSmallScreen ? 13 : 14,
               color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
             ),
           ),

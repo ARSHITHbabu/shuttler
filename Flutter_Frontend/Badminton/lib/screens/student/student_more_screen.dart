@@ -15,6 +15,7 @@ import 'student_batches_screen.dart';
 import 'student_videos_screen.dart';
 import '../common/academy_info_screen.dart';
 import '../owner/notifications_screen.dart';
+import '../../providers/owner_provider.dart';
 
 /// Student More Screen - Navigation hub for additional features
 /// All features are READ-ONLY for students
@@ -52,6 +53,23 @@ class _StudentMoreScreenState extends ConsumerState<StudentMoreScreen> {
                 color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
               ),
             ),
+            ref.watch(activeOwnerProvider).when(
+                  data: (owner) => owner?.academyName != null
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            owner!.academyName!,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: isDark ? AppColors.accent : AppColorsLight.accent,
+                            ),
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                  loading: () => const SizedBox.shrink(),
+                  error: (_, __) => const SizedBox.shrink(),
+                ),
             const SizedBox(height: AppDimensions.spacingL),
 
             // Information Section (READ-ONLY)

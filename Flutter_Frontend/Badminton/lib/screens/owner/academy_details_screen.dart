@@ -9,6 +9,7 @@ import '../../widgets/common/success_snackbar.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/student_provider.dart';
+import '../../providers/owner_provider.dart';
 
 /// Academy Details Screen - Edit academy information
 class AcademyDetailsScreen extends ConsumerStatefulWidget {

@@ -62,6 +62,9 @@ class _OwnerDashboardState extends ConsumerState<OwnerDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+
     final currentIndex = ref.watch(ownerBottomNavIndexProvider);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
@@ -106,16 +109,16 @@ class _OwnerDashboardState extends ConsumerState<OwnerDashboard> {
                 child: SafeArea(
                   top: false,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
+                    padding: EdgeInsets.symmetric(
                       horizontal: AppDimensions.spacingXs,
-                      vertical: AppDimensions.spacingS,
+                      vertical: isSmallScreen ? 4 : AppDimensions.spacingS,
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: List.generate(
                         _navItems.length,
                         (index) => Expanded(
-                          child: _buildNavItem(index, currentIndex),
+                          child: _buildNavItem(index, currentIndex, isSmallScreen),
                         ),
                       ),
                     ),
@@ -129,7 +132,7 @@ class _OwnerDashboardState extends ConsumerState<OwnerDashboard> {
     );
   }
 
-  Widget _buildNavItem(int index, int currentIndex) {
+  Widget _buildNavItem(int index, int currentIndex, bool isSmallScreen) {
     final item = _navItems[index];
     final isActive = currentIndex == index;
     final theme = Theme.of(context);
@@ -143,9 +146,9 @@ class _OwnerDashboardState extends ConsumerState<OwnerDashboard> {
         ref.read(ownerBottomNavIndexProvider.notifier).state = index;
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppDimensions.paddingXs,
-          vertical: AppDimensions.spacingXs,
+        padding: EdgeInsets.symmetric(
+          horizontal: isSmallScreen ? 4 : AppDimensions.paddingXs,
+          vertical: isSmallScreen ? 4 : AppDimensions.spacingXs,
         ),
         decoration: BoxDecoration(
           color: isActive ? cardColor : Colors.transparent,

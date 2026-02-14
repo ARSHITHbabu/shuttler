@@ -30,6 +30,8 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
   final Map<int, String> _remarks = {}; // studentId/coachId -> remarks
   bool _hasUnsavedChanges = false; // Track if there are unsaved changes
 
+  bool get isSmallScreen => MediaQuery.of(context).size.width < 600;
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -39,15 +41,15 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
           child: ConstrainedBox(
             constraints: BoxConstraints(minHeight: constraints.maxHeight),
             child: Padding(
-              padding: const EdgeInsets.all(AppDimensions.paddingL),
+              padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
             // Header
-            const Text(
+            Text(
               'Attendance',
               style: TextStyle(
-                fontSize: 24,
+                fontSize: isSmallScreen ? 20 : 24,
                 fontWeight: FontWeight.w600,
                 color: AppColors.textPrimary,
               ),
@@ -61,7 +63,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                 children: [
                   Expanded(
                     child: _TypeSelectorButton(
-                      label: 'Student Attendance',
+                      label: isSmallScreen ? 'Students' : 'Student Attendance',
                       icon: Icons.people_outline,
                       isActive: _attendanceType == 'students',
                       onTap: () {
@@ -80,7 +82,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                   const SizedBox(width: 4),
                   Expanded(
                     child: _TypeSelectorButton(
-                      label: 'Coach Attendance',
+                      label: isSmallScreen ? 'Coaches' : 'Coach Attendance',
                       icon: Icons.person_outline,
                       isActive: _attendanceType == 'coaches',
                       onTap: () {
@@ -148,9 +150,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                       },
                       child: Text(
                         '${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: AppColors.textPrimary,
-                          fontSize: 16,
+                          fontSize: isSmallScreen ? 14 : 16,
                         ),
                       ),
                     ),
@@ -188,9 +190,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.accent,
                           foregroundColor: Colors.white,
-                          minimumSize: const Size(double.infinity, 48),
+                          minimumSize: Size(double.infinity, isSmallScreen ? 40 : 48),
                         ),
-                        child: const Text('Save Attendance'),
+                        child: Text(isSmallScreen ? 'Save' : 'Save Attendance'),
                       ),
                     ),
                     const SizedBox(width: AppDimensions.spacingM),
@@ -202,9 +204,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.textPrimary,
                           side: const BorderSide(color: AppColors.textSecondary),
-                          minimumSize: const Size(double.infinity, 48),
+                          minimumSize: Size(double.infinity, isSmallScreen ? 40 : 48),
                         ),
-                        child: const Text('Cancel'),
+                        child: Text(isSmallScreen ? 'Cancel' : 'Cancel'),
                       ),
                     ),
                   ],
@@ -356,8 +358,8 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                       children: [
                         Text(
                           batch?.name ?? 'Unknown Batch',
-                          style: const TextStyle(
-                            fontSize: 18,
+                          style: TextStyle(
+                            fontSize: isSmallScreen ? 16 : 18,
                             fontWeight: FontWeight.w600,
                             color: AppColors.textPrimary,
                           ),
@@ -442,9 +444,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.accent,
                         foregroundColor: Colors.white,
-                        minimumSize: const Size(double.infinity, 48),
+                        minimumSize: Size(double.infinity, isSmallScreen ? 40 : 48),
                       ),
-                      child: const Text('Save Attendance'),
+                      child: Text(isSmallScreen ? 'Save' : 'Save Attendance'),
                     ),
                   ),
                   const SizedBox(width: AppDimensions.spacingM),
@@ -456,9 +458,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.textPrimary,
                         side: const BorderSide(color: AppColors.textSecondary),
-                        minimumSize: const Size(double.infinity, 48),
+                        minimumSize: Size(double.infinity, isSmallScreen ? 40 : 48),
                       ),
-                      child: const Text('Cancel'),
+                      child: Text(isSmallScreen ? 'Cancel' : 'Cancel'),
                     ),
                   ),
                 ],

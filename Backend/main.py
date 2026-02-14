@@ -461,6 +461,9 @@ class CalendarEventDB(Base):
     created_by = Column(Integer, nullable=True)  # Can be coach or owner ID
     creator_type = Column(String(20), default="coach")  # "coach" or "owner"
     related_leave_request_id = Column(Integer, nullable=True)  # Link to leave_requests table if this is a leave event
+    related_tournament_id = Column(Integer, nullable=True)     # Link to tournaments table
+    related_announcement_id = Column(Integer, nullable=True)   # Link to announcements table
+    related_schedule_id = Column(Integer, nullable=True)       # Link to schedules table
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Note: Relationships are handled via creator_type field - use creator_type to determine if created_by refers to coach or owner
@@ -1090,7 +1093,10 @@ def migrate_database_schema(engine):
         if 'calendar_events' in tables:
             check_and_add_column(engine, 'calendar_events', 'end_date', 'DATE', nullable=True)
             check_and_add_column(engine, 'calendar_events', 'related_leave_request_id', 'INTEGER', nullable=True)
-            print(" calendar_events table schema updated for leave support")
+            check_and_add_column(engine, 'calendar_events', 'related_tournament_id', 'INTEGER', nullable=True)
+            check_and_add_column(engine, 'calendar_events', 'related_announcement_id', 'INTEGER', nullable=True)
+            check_and_add_column(engine, 'calendar_events', 'related_schedule_id', 'INTEGER', nullable=True)
+            print(" calendar_events table schema updated for multi-table support")
         
         print("Database schema migration completed!")
     except Exception as e:
@@ -1975,6 +1981,9 @@ class CalendarEventCreate(BaseModel):
     created_by: int
     creator_type: str = "coach"  # "coach" or "owner"
     related_leave_request_id: Optional[int] = None  # Link to leave request if this is a leave event
+    related_tournament_id: Optional[int] = None     # Link to tournament
+    related_announcement_id: Optional[int] = None   # Link to announcement
+    related_schedule_id: Optional[int] = None       # Link to schedule
 
 class CalendarEvent(BaseModel):
     id: int
@@ -1986,6 +1995,9 @@ class CalendarEvent(BaseModel):
     created_by: int
     creator_type: str = "coach"  # "coach" or "owner"
     related_leave_request_id: Optional[int] = None
+    related_tournament_id: Optional[int] = None
+    related_announcement_id: Optional[int] = None
+    related_schedule_id: Optional[int] = None
     created_at: str
 
     class Config:
@@ -2075,12 +2087,15 @@ def create_coach(coach: CoachCreate):
         db.commit()
         db.refresh(db_coach)
         
+        # Convert to Pydantic model before closing session
+        coach_response = Coach.model_validate(db_coach)
+        
         # Verify it was saved to coaches table by querying it back
         verify_coach = db.query(CoachDB).filter(CoachDB.id == db_coach.id).first()
         if not verify_coach:
             raise HTTPException(status_code=500, detail="Error: Coach was not saved to coaches table")
         
-        return db_coach
+        return coach_response
     except IntegrityError as e:
         db.rollback()
         error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
@@ -2099,7 +2114,7 @@ def get_coaches():
     try:
         # Get all coaches (owners are in separate table)
         coaches = db.query(CoachDB).all()
-        return coaches
+        return [Coach.model_validate(c) for c in coaches]
     finally:
         db.close()
 
@@ -2110,7 +2125,7 @@ def get_coach(coach_id: int):
         coach = db.query(CoachDB).filter(CoachDB.id == coach_id).first()
         if not coach:
             raise HTTPException(status_code=404, detail="Coach not found")
-        return coach
+        return Coach.model_validate(coach)
     finally:
         db.close()
 
@@ -2128,7 +2143,7 @@ def update_coach(coach_id: int, coach_update: CoachUpdate):
         
         db.commit()
         db.refresh(coach)
-        return coach
+        return Coach.model_validate(coach)
     finally:
         db.close()
 
@@ -2179,7 +2194,11 @@ def unified_login(login_data: UnifiedLoginRequest):
                         "phone": owner.phone,
                         "role": owner.role,
                         "must_change_password": owner.must_change_password,
-                        "profile_photo": owner.profile_photo
+                        "profile_photo": owner.profile_photo,
+                        "academy_name": owner.academy_name,
+                        "academy_address": owner.academy_address,
+                        "academy_contact": owner.academy_contact,
+                        "academy_email": owner.academy_email
                     }
                 }
 
@@ -2542,15 +2561,17 @@ def create_owner(owner: OwnerCreate):
             raise HTTPException(status_code=500, detail="Internal error: Owner not mapped to owners table")
         
         db.add(db_owner)
-        db.commit()
         db.refresh(db_owner)
+        
+        # Convert to Pydantic model before closing session
+        owner_response = Owner.model_validate(db_owner)
         
         # Verify it was saved to owners table by querying it back
         verify_owner = db.query(OwnerDB).filter(OwnerDB.id == db_owner.id).first()
         if not verify_owner:
             raise HTTPException(status_code=500, detail="Error: Owner was not saved to owners table")
         
-        return db_owner
+        return owner_response
     except IntegrityError as e:
         db.rollback()
         error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
@@ -2576,7 +2597,7 @@ def get_owners():
     db = SessionLocal()
     try:
         owners = db.query(OwnerDB).all()
-        return owners
+        return [Owner.model_validate(o) for o in owners]
     finally:
         db.close()
 
@@ -2588,7 +2609,7 @@ def get_owner(owner_id: int):
         owner = db.query(OwnerDB).filter(OwnerDB.id == owner_id).first()
         if not owner:
             raise HTTPException(status_code=404, detail="Owner not found")
-        return owner
+        return Owner.model_validate(owner)
     finally:
         db.close()
 
@@ -2616,7 +2637,7 @@ def update_owner(owner_id: int, owner_update: OwnerUpdate):
         
         db.commit()
         db.refresh(owner)
-        return owner
+        return Owner.model_validate(owner)
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error updating owner: {str(e)}")
@@ -2686,7 +2707,11 @@ def login_owner(login_data: OwnerLogin):
                     "status": owner.status,
                     "role": owner.role,
                     "must_change_password": owner.must_change_password,
-                    "profile_photo": owner.profile_photo
+                    "profile_photo": owner.profile_photo,
+                    "academy_name": owner.academy_name,
+                    "academy_address": owner.academy_address,
+                    "academy_contact": owner.academy_contact,
+                    "academy_email": owner.academy_email
                 }
             }
         else:
@@ -3383,7 +3408,7 @@ def create_student(student: StudentCreate):
         db.add(db_student)
         db.commit()
         db.refresh(db_student)
-        return db_student
+        return Student.model_validate(db_student)
     finally:
         db.close()
 
@@ -3395,7 +3420,7 @@ def get_students(include_deleted: bool = Query(False, description="Include delet
         if not include_deleted:
             query = query.filter(StudentDB.status == "active")
         students = query.all()
-        return students
+        return [Student.model_validate(s) for s in students]
     finally:
         db.close()
 
@@ -3406,7 +3431,7 @@ def get_student(student_id: int):
         student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
         if not student:
             raise HTTPException(status_code=404, detail="Student not found")
-        return student
+        return Student.model_validate(student)
     finally:
         db.close()
 
@@ -3424,7 +3449,7 @@ def update_student(student_id: int, student_update: StudentUpdate):
         
         db.commit()
         db.refresh(student)
-        return student
+        return Student.model_validate(student)
     finally:
         db.close()
 
@@ -3451,7 +3476,8 @@ def get_inactive_students():
     db = SessionLocal()
     try:
         query = db.query(StudentDB).filter(StudentDB.status == "inactive")
-        return query.all()
+        students = query.all()
+        return [Student.model_validate(s) for s in students]
     finally:
         db.close()
 
@@ -3461,7 +3487,8 @@ def get_rejoin_requests():
     db = SessionLocal()
     try:
         query = db.query(StudentDB).filter(StudentDB.rejoin_request_pending == True)
-        return query.all()
+        requests = query.all()
+        return [Student.model_validate(s) for s in requests]
     finally:
         db.close()
 
@@ -4658,7 +4685,7 @@ def get_batch_students(batch_id: int):
         
         # Get student details
         students = db.query(StudentDB).filter(StudentDB.id.in_(student_ids)).all()
-        return students
+        return [Student.model_validate(s) for s in students]
     finally:
         db.close()
 
@@ -4708,7 +4735,7 @@ def get_student_performance(student_id: int):
     db = SessionLocal()
     try:
         performance = db.query(PerformanceDB).filter(PerformanceDB.student_id == student_id).all()
-        return performance
+        return [Performance.model_validate(p) for p in performance]
     finally:
         db.close()
 
@@ -5378,7 +5405,7 @@ def create_enquiry(enquiry: EnquiryCreate):
         db.add(db_enquiry)
         db.commit()
         db.refresh(db_enquiry)
-        return db_enquiry
+        return Enquiry.model_validate(db_enquiry)
     finally:
         db.close()
 
@@ -5387,7 +5414,7 @@ def get_enquiries():
     db = SessionLocal()
     try:
         enquiries = db.query(EnquiryDB).all()
-        return enquiries
+        return [Enquiry.model_validate(e) for e in enquiries]
     finally:
         db.close()
 
@@ -5396,7 +5423,7 @@ def get_assigned_enquiries(assigned_to: str):
     db = SessionLocal()
     try:
         enquiries = db.query(EnquiryDB).filter(EnquiryDB.assigned_to == assigned_to).all()
-        return enquiries
+        return [Enquiry.model_validate(e) for e in enquiries]
     finally:
         db.close()
 
@@ -5414,7 +5441,7 @@ def update_enquiry(enquiry_id: int, enquiry_update: EnquiryUpdate):
         
         db.commit()
         db.refresh(enquiry)
-        return enquiry
+        return Enquiry.model_validate(enquiry)
     finally:
         db.close()
 
@@ -5437,11 +5464,29 @@ def delete_enquiry(enquiry_id: int):
 def create_schedule(schedule: ScheduleCreate):
     db = SessionLocal()
     try:
-        db_schedule = ScheduleDB(**schedule.dict())
+        db_schedule = ScheduleDB(**schedule.model_dump())
         db.add(db_schedule)
         db.commit()
         db.refresh(db_schedule)
-        return db_schedule
+        
+        # Sync with CalendarEvent
+        try:
+            schedule_date = datetime.strptime(db_schedule.date, "%Y-%m-%d").date()
+            calendar_event = CalendarEventDB(
+                title=f"Session: {db_schedule.activity}",
+                event_type="event",
+                date=schedule_date,
+                description=db_schedule.description,
+                creator_type="coach", # Default to coach context for schedules
+                related_schedule_id=db_schedule.id
+            )
+            db.add(calendar_event)
+            db.commit()
+        except Exception as e:
+            print(f"Error syncing schedule to calendar: {e}")
+            
+        # Convert to Pydantic model before closing session to avoid DetachedInstanceError
+        return Schedule.model_validate(db_schedule)
     finally:
         db.close()
 
@@ -5450,7 +5495,7 @@ def get_batch_schedules(batch_id: int):
     db = SessionLocal()
     try:
         schedules = db.query(ScheduleDB).filter(ScheduleDB.batch_id == batch_id).all()
-        return schedules
+        return [Schedule.model_validate(s) for s in schedules]
     finally:
         db.close()
 
@@ -5459,7 +5504,7 @@ def get_schedules_by_date(date: str):
     db = SessionLocal()
     try:
         schedules = db.query(ScheduleDB).filter(ScheduleDB.date == date).all()
-        return schedules
+        return [Schedule.model_validate(s) for s in schedules]
     finally:
         db.close()
 
@@ -5470,6 +5515,12 @@ def delete_schedule(schedule_id: int):
         schedule = db.query(ScheduleDB).filter(ScheduleDB.id == schedule_id).first()
         if not schedule:
             raise HTTPException(status_code=404, detail="Schedule not found")
+            
+        # Remove linked calendar event
+        try:
+            db.query(CalendarEventDB).filter(CalendarEventDB.related_schedule_id == schedule_id).delete()
+        except: pass
+            
         db.delete(schedule)
         db.commit()
         return {"message": "Schedule deleted"}
@@ -5482,11 +5533,29 @@ def delete_schedule(schedule_id: int):
 def create_tournament(tournament: TournamentCreate):
     db = SessionLocal()
     try:
-        db_tournament = TournamentDB(**tournament.dict())
+        db_tournament = TournamentDB(**tournament.model_dump())
         db.add(db_tournament)
         db.commit()
         db.refresh(db_tournament)
-        return db_tournament
+        
+        # Sync with CalendarEvent
+        try:
+            tournament_date = datetime.strptime(db_tournament.date, "%Y-%m-%d").date()
+            calendar_event = CalendarEventDB(
+                title=f"Tournament: {db_tournament.name}",
+                event_type="tournament",
+                date=tournament_date,
+                description=db_tournament.description,
+                creator_type="owner",
+                related_tournament_id=db_tournament.id
+            )
+            db.add(calendar_event)
+            db.commit()
+        except Exception as e:
+            print(f"Error syncing tournament to calendar: {e}")
+            
+        # Convert to Pydantic model before closing session to avoid DetachedInstanceError
+        return Tournament.model_validate(db_tournament)
     finally:
         db.close()
 
@@ -5495,7 +5564,7 @@ def get_tournaments():
     db = SessionLocal()
     try:
         tournaments = db.query(TournamentDB).all()
-        return tournaments
+        return [Tournament.model_validate(t) for t in tournaments]
     finally:
         db.close()
 
@@ -5505,7 +5574,7 @@ def get_upcoming_tournaments():
     try:
         today = datetime.now().strftime("%Y-%m-%d")
         tournaments = db.query(TournamentDB).filter(TournamentDB.date >= today).all()
-        return tournaments
+        return [Tournament.model_validate(t) for t in tournaments]
     finally:
         db.close()
 
@@ -5516,6 +5585,12 @@ def delete_tournament(tournament_id: int):
         tournament = db.query(TournamentDB).filter(TournamentDB.id == tournament_id).first()
         if not tournament:
             raise HTTPException(status_code=404, detail="Tournament not found")
+            
+        # Remove linked calendar event
+        try:
+            db.query(CalendarEventDB).filter(CalendarEventDB.related_tournament_id == tournament_id).delete()
+        except: pass
+            
         db.delete(tournament)
         db.commit()
         return {"message": "Tournament deleted"}
@@ -6056,7 +6131,7 @@ def get_student_invitations(student_email: str):
         invitations = db.query(InvitationDB).filter(
             InvitationDB.student_email == student_email
         ).all()
-        return invitations
+        return [Invitation.model_validate(i) for i in invitations]
     finally:
         db.close()
 
@@ -6065,7 +6140,7 @@ def get_coach_invitations(coach_id: int):
     db = SessionLocal()
     try:
         invitations = db.query(InvitationDB).filter(InvitationDB.coach_id == coach_id).all()
-        return invitations
+        return [Invitation.model_validate(i) for i in invitations]
     finally:
         db.close()
 
@@ -6103,7 +6178,7 @@ def update_invitation(invitation_id: int, invitation_update: InvitationUpdate):
         
         db.commit()
         db.refresh(invitation)
-        return invitation
+        return Invitation.model_validate(invitation)
     finally:
         db.close()
 
@@ -6261,6 +6336,27 @@ def create_announcement(announcement: AnnouncementCreate):
         db.commit()
         db.refresh(db_announcement)
         
+        # Sync with CalendarEvent
+        try:
+            # If scheduled_at is provided, use its date, otherwise use today's date
+            event_date = date.today()
+            if db_announcement.scheduled_at:
+                event_date = db_announcement.scheduled_at.date()
+            
+            calendar_event = CalendarEventDB(
+                title=f"Announcement: {db_announcement.title}",
+                event_type="event",
+                date=event_date,
+                description=db_announcement.message,
+                created_by=db_announcement.created_by,
+                creator_type=db_announcement.creator_type,
+                related_announcement_id=db_announcement.id
+            )
+            db.add(calendar_event)
+            db.commit()
+        except Exception as e:
+            print(f"Error syncing announcement to calendar: {e}")
+        
         # Notify Target Audience
         try:
             target_users = []
@@ -6351,6 +6447,24 @@ def update_announcement(announcement_id: int, announcement: AnnouncementUpdate):
 
         db.commit()
         db.refresh(db_announcement)
+        
+        # Sync with CalendarEvent
+        try:
+            calendar_event = db.query(CalendarEventDB).filter(CalendarEventDB.related_announcement_id == announcement_id).first()
+            if calendar_event:
+                if 'title' in update_data:
+                    calendar_event.title = f"Announcement: {db_announcement.title}"
+                if 'message' in update_data:
+                    calendar_event.description = db_announcement.message
+                if 'scheduled_at' in update_data:
+                    if db_announcement.scheduled_at:
+                        calendar_event.date = db_announcement.scheduled_at.date()
+                    else:
+                        calendar_event.date = date.today()
+                db.commit()
+        except Exception as e:
+            print(f"Error updating announcement in calendar: {e}")
+            
         return _db_announcement_to_pydantic(db_announcement)
     except Exception as e:
         db.rollback()
@@ -6367,6 +6481,11 @@ def delete_announcement(announcement_id: int):
         if not db_announcement:
             raise HTTPException(status_code=404, detail="Announcement not found")
 
+        # Remove linked calendar event
+        try:
+            db.query(CalendarEventDB).filter(CalendarEventDB.related_announcement_id == announcement_id).delete()
+        except: pass
+            
         db.delete(db_announcement)
         db.commit()
         return {"message": "Announcement deleted successfully"}
@@ -6390,6 +6509,9 @@ def _db_event_to_pydantic(db_event: CalendarEventDB) -> CalendarEvent:
         created_by=db_event.created_by,
         creator_type=db_event.creator_type or "coach",
         related_leave_request_id=db_event.related_leave_request_id,
+        related_tournament_id=db_event.related_tournament_id,
+        related_announcement_id=db_event.related_announcement_id,
+        related_schedule_id=db_event.related_schedule_id,
         created_at=db_event.created_at.isoformat() if hasattr(db_event.created_at, 'isoformat') else str(db_event.created_at),
     )
 
@@ -7075,9 +7197,30 @@ def submit_leave_modification(request_id: int, modification: LeaveRequestModific
         db.commit()
         db.refresh(db_request)
         
-        # Determine effective response values
+        # Determine effective response values for notifications
         mod_start = db_request.modification_start_date.strftime("%Y-%m-%d") if db_request.modification_start_date else None
         mod_end = db_request.modification_end_date.strftime("%Y-%m-%d") if db_request.modification_end_date else None
+        
+        # Notify Owners about the modification request
+        try:
+            owners = db.query(OwnerDB).filter(OwnerDB.role == "owner").all()
+            for owner in owners:
+                create_notification(
+                    db=db,
+                    user_id=owner.id,
+                    user_type="owner",
+                    title="Leave Modification Request",
+                    body=f"Coach {db_request.coach_name} has requested to modify their {db_request.leave_type} leave from {mod_start} to {mod_end}. Reason: {modification.reason}",
+                    type="general",
+                    data={
+                        "leave_request_id": db_request.id,
+                        "modification_status": "pending",
+                        "original_dates": f"{db_request.start_date} to {db_request.end_date}",
+                        "new_dates": f"{mod_start} to {mod_end}"
+                    }
+                )
+        except Exception as e:
+            print(f"Error sending leave modification notifications: {e}")
         
         return LeaveRequest(
             id=db_request.id,
@@ -7178,6 +7321,37 @@ def review_modification_request(request_id: int, review: LeaveRequestModificatio
         # Prepare response
         mod_start = db_request.modification_start_date.strftime("%Y-%m-%d") if db_request.modification_start_date else None
         mod_end = db_request.modification_end_date.strftime("%Y-%m-%d") if db_request.modification_end_date else None
+        
+        # Notify Coach about the modification review
+        try:
+            if review.action == "approve":
+                notif_title = "Leave Modification Approved"
+                notif_body = f"Your modification request for {db_request.leave_type} leave has been approved. New dates: {mod_start} to {mod_end}"
+            elif review.action == "reject_modification":
+                notif_title = "Leave Modification Rejected"
+                notif_body = f"Your modification request for {db_request.leave_type} leave has been rejected. Original leave dates remain: {db_request.start_date} to {db_request.end_date}"
+            elif review.action == "reject_all":
+                notif_title = "Leave Request Cancelled"
+                notif_body = f"Your {db_request.leave_type} leave request and modification have been rejected."
+            else:
+                notif_title = "Leave Modification Update"
+                notif_body = f"Your leave modification request has been reviewed."
+            
+            create_notification(
+                db=db,
+                user_id=db_request.coach_id,
+                user_type="coach",
+                title=notif_title,
+                body=notif_body,
+                type="general",
+                data={
+                    "leave_request_id": db_request.id,
+                    "action": review.action,
+                    "modification_status": db_request.modification_status
+                }
+            )
+        except Exception as e:
+            print(f"Error sending modification review notification: {e}")
         
         return LeaveRequest(
             id=db_request.id,

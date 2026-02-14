@@ -60,12 +60,16 @@ class _StudentPerformanceTabState extends ConsumerState<StudentPerformanceTab> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+    final horizontalPadding = isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL;
+    
     if (_showAddForm) {
       return _buildAddForm();
     }
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppDimensions.paddingL),
+      padding: EdgeInsets.all(horizontalPadding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -73,14 +77,18 @@ class _StudentPerformanceTabState extends ConsumerState<StudentPerformanceTab> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Performance Records',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+              Flexible(
+                child: Text(
+                  'Performance Records',
+                  style: TextStyle(
+                    fontSize: isSmallScreen ? 16 : 18,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
+              const SizedBox(width: 8),
               ElevatedButton.icon(
                 onPressed: () async {
                   // Fetch student batches if not already fetched
@@ -101,16 +109,23 @@ class _StudentPerformanceTabState extends ConsumerState<StudentPerformanceTab> {
                   }
                   setState(() => _showAddForm = true);
                 },
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Add Record'),
+                icon: Icon(Icons.add, size: isSmallScreen ? 16 : 18),
+                label: Text(
+                  isSmallScreen ? 'Add' : 'Add Record',
+                  style: TextStyle(fontSize: isSmallScreen ? 12 : 14),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.accent,
                   foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isSmallScreen ? 8 : 12,
+                    vertical: isSmallScreen ? 6 : 8,
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: AppDimensions.spacingL),
+          SizedBox(height: isSmallScreen ? AppDimensions.spacingM : AppDimensions.spacingL),
           
           // Performance History
           _buildPerformanceHistory(),
@@ -417,8 +432,11 @@ class _StudentPerformanceTabState extends ConsumerState<StudentPerformanceTab> {
   }
 
   Widget _buildPerformanceCard(Performance performance) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+    
     return NeumorphicContainer(
-      padding: const EdgeInsets.all(AppDimensions.paddingM),
+      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingS : AppDimensions.paddingM),
       margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -426,33 +444,38 @@ class _StudentPerformanceTabState extends ConsumerState<StudentPerformanceTab> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    DateFormat('dd MMM, yyyy').format(performance.date),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  if (performance.batchName != null)
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
-                      performance.batchName!,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.accent,
-                        fontWeight: FontWeight.w600,
+                      DateFormat('dd MMM, yyyy').format(performance.date),
+                      style: TextStyle(
+                        fontSize: isSmallScreen ? 14 : 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
                       ),
                     ),
-                ],
+                    if (performance.batchName != null)
+                      Text(
+                        performance.batchName!,
+                        style: TextStyle(
+                          fontSize: isSmallScreen ? 11 : 12,
+                          color: AppColors.accent,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppDimensions.spacingM,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM,
                       vertical: AppDimensions.spacingS,
                     ),
                     decoration: BoxDecoration(
@@ -461,14 +484,15 @@ class _StudentPerformanceTabState extends ConsumerState<StudentPerformanceTab> {
                     ),
                     child: Text(
                       'Avg: ${performance.averageRating.toStringAsFixed(1)}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AppColors.accent,
-                        fontSize: 12,
+                        fontSize: isSmallScreen ? 11 : 12,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
                   PopupMenuButton(
+                    padding: EdgeInsets.zero,
                     icon: const Icon(
                       Icons.more_vert,
                       size: 20,
@@ -510,14 +534,14 @@ class _StudentPerformanceTabState extends ConsumerState<StudentPerformanceTab> {
               ),
             ],
           ),
-          const SizedBox(height: AppDimensions.spacingM),
+          SizedBox(height: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM),
           _buildSkillRow('Serve', performance.serve),
           _buildSkillRow('Smash', performance.smash),
           _buildSkillRow('Footwork', performance.footwork),
           _buildSkillRow('Defense', performance.defense),
           _buildSkillRow('Stamina', performance.stamina),
           if (performance.comments != null && performance.comments!.isNotEmpty) ...[
-            const SizedBox(height: AppDimensions.spacingM),
+            SizedBox(height: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -534,7 +558,7 @@ class _StudentPerformanceTabState extends ConsumerState<StudentPerformanceTab> {
                       Text(
                         'Comment',
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: isSmallScreen ? 11 : 12,
                           color: AppColors.textSecondary,
                           fontWeight: FontWeight.w500,
                         ),
@@ -542,9 +566,9 @@ class _StudentPerformanceTabState extends ConsumerState<StudentPerformanceTab> {
                       const SizedBox(height: 4),
                       Text(
                         performance.comments!,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: AppColors.textPrimary,
-                          fontSize: 14,
+                          fontSize: isSmallScreen ? 13 : 14,
                         ),
                       ),
                     ],
@@ -588,24 +612,33 @@ class _StudentPerformanceTabState extends ConsumerState<StudentPerformanceTab> {
   }
 
   Widget _buildAddForm() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+    final horizontalPadding = isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL;
+    
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppDimensions.paddingL),
+      padding: EdgeInsets.all(horizontalPadding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                _editingPerformanceId != null ? 'Edit Performance' : 'Add Performance',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+              Flexible(
+                child: Text(
+                  _editingPerformanceId != null ? 'Edit Performance' : 'Add Performance',
+                  style: TextStyle(
+                    fontSize: isSmallScreen ? 16 : 18,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               IconButton(
                 icon: const Icon(Icons.close, color: AppColors.textSecondary),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
                 onPressed: () {
                   setState(() {
                     _showAddForm = false;
@@ -618,7 +651,7 @@ class _StudentPerformanceTabState extends ConsumerState<StudentPerformanceTab> {
               ),
             ],
           ),
-          const SizedBox(height: AppDimensions.spacingL),
+          SizedBox(height: isSmallScreen ? AppDimensions.spacingM : AppDimensions.spacingL),
           
           // Batch Selector (if multiple batches)
           if (_studentBatches.length > 1) ...[

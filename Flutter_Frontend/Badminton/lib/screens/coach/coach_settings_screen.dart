@@ -16,7 +16,9 @@ import '../common/privacy_policy_screen.dart';
 import '../common/terms_conditions_screen.dart';
 import '../common/help_support_screen.dart';
 import '../../widgets/forms/change_password_dialog.dart';
-import '../../widgets/common/app_logo.dart'; // Added this import
+import '../common/academy_info_screen.dart';
+import '../../widgets/common/app_logo.dart';
+import '../../providers/owner_provider.dart';
 import 'coach_profile_screen.dart';
 
 /// Coach Settings Screen - App settings and preferences
@@ -199,6 +201,19 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
                         title: 'App Version',
                         value: '1.0.0',
                         isDark: isDark,
+                      ),
+                      const Divider(height: 1),
+                      _buildActionTile(
+                        title: 'Academy Details',
+                        icon: Icons.business_outlined,
+                        isDark: isDark,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const AcademyInfoScreen(),
+                            ),
+                          );
+                        },
                       ),
                       const Divider(height: 1),
                       _buildActionTile(
@@ -474,14 +489,26 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
           height: 80,
         ),
         const SizedBox(height: AppDimensions.spacingM),
-        Text(
-          'Pursue Badminton',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-          ),
-        ),
+        ref.watch(activeOwnerProvider).when(
+              data: (owner) => Text(
+                owner?.academyName ?? 'Pursue Badminton',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                ),
+              ),
+              loading: () => const SizedBox(height: 20),
+              error: (_, __) => Text(
+                'Pursue Badminton',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                ),
+              ),
+            ),
+
         Text(
           'Badminton Academy Management',
           style: TextStyle(

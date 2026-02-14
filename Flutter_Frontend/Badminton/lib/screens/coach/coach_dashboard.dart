@@ -35,6 +35,9 @@ class _CoachDashboardState extends State<CoachDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final backgroundColor = theme.scaffoldBackgroundColor;
@@ -76,15 +79,15 @@ class _CoachDashboardState extends State<CoachDashboard> {
                 child: SafeArea(
                   top: false,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppDimensions.spacingS,
-                      vertical: AppDimensions.spacingM,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isSmallScreen ? 4 : AppDimensions.spacingS,
+                      vertical: isSmallScreen ? 8 : AppDimensions.spacingM,
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: List.generate(
                         _navItems.length,
-                        (index) => _buildNavItem(index),
+                        (index) => _buildNavItem(index, isSmallScreen),
                       ),
                     ),
                   ),
@@ -97,7 +100,7 @@ class _CoachDashboardState extends State<CoachDashboard> {
     );
   }
 
-  Widget _buildNavItem(int index) {
+  Widget _buildNavItem(int index, bool isSmallScreen) {
     final item = _navItems[index];
     final isActive = _currentIndex == index;
     final theme = Theme.of(context);
@@ -113,9 +116,9 @@ class _CoachDashboardState extends State<CoachDashboard> {
         });
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppDimensions.paddingM,
-          vertical: AppDimensions.spacingS,
+        padding: EdgeInsets.symmetric(
+          horizontal: isSmallScreen ? AppDimensions.paddingS : AppDimensions.paddingM,
+          vertical: isSmallScreen ? 6 : AppDimensions.spacingS,
         ),
         decoration: BoxDecoration(
           color: isActive ? cardColor : Colors.transparent,

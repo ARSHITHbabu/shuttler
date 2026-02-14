@@ -11,6 +11,9 @@ class CalendarEvent {
   final int? createdBy;
   final String creatorType; // 'coach' or 'owner'
   final int? relatedLeaveRequestId; // Link to leave request if this is a leave event
+  final int? relatedTournamentId; // Link to tournament
+  final int? relatedAnnouncementId; // Link to announcement
+  final int? relatedScheduleId; // Link to schedule
   final DateTime createdAt;
 
   CalendarEvent({
@@ -23,6 +26,9 @@ class CalendarEvent {
     this.createdBy,
     this.creatorType = 'coach',
     this.relatedLeaveRequestId,
+    this.relatedTournamentId,
+    this.relatedAnnouncementId,
+    this.relatedScheduleId,
     required this.createdAt,
   });
 
@@ -40,6 +46,9 @@ class CalendarEvent {
       createdBy: json['created_by'] as int?,
       creatorType: json['creator_type'] as String? ?? 'coach',
       relatedLeaveRequestId: json['related_leave_request_id'] as int?,
+      relatedTournamentId: json['related_tournament_id'] as int?,
+      relatedAnnouncementId: json['related_announcement_id'] as int?,
+      relatedScheduleId: json['related_schedule_id'] as int?,
       createdAt: DateTime.parse(json['created_at'] as String),
     );
   }
@@ -55,6 +64,9 @@ class CalendarEvent {
       'created_by': createdBy,
       'creator_type': creatorType,
       'related_leave_request_id': relatedLeaveRequestId,
+      'related_tournament_id': relatedTournamentId,
+      'related_announcement_id': relatedAnnouncementId,
+      'related_schedule_id': relatedScheduleId,
     };
   }
 
@@ -69,6 +81,9 @@ class CalendarEvent {
     int? createdBy,
     String? creatorType,
     int? relatedLeaveRequestId,
+    int? relatedTournamentId,
+    int? relatedAnnouncementId,
+    int? relatedScheduleId,
     DateTime? createdAt,
   }) {
     return CalendarEvent(
@@ -81,6 +96,9 @@ class CalendarEvent {
       createdBy: createdBy ?? this.createdBy,
       creatorType: creatorType ?? this.creatorType,
       relatedLeaveRequestId: relatedLeaveRequestId ?? this.relatedLeaveRequestId,
+      relatedTournamentId: relatedTournamentId ?? this.relatedTournamentId,
+      relatedAnnouncementId: relatedAnnouncementId ?? this.relatedAnnouncementId,
+      relatedScheduleId: relatedScheduleId ?? this.relatedScheduleId,
       createdAt: createdAt ?? this.createdAt,
     );
   }

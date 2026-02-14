@@ -14,6 +14,7 @@ import '../../providers/auth_provider.dart';
 import 'dart:io' if (dart.library.html) '../../utils/dart_io_stub.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/constants/api_endpoints.dart';
 import '../../widgets/video/video_player_dialog.dart';
 import '../../utils/file_download_helper_stub.dart'
@@ -346,38 +347,53 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
           SuccessSnackbar.show(context, 'Video download started');
         }
       } else {
-        final directoryPath = await getApplicationDocumentsPath();
-        if (directoryPath == null) {
-            if (mounted) {
+        // Mobile/Desktop download: Use url_launcher to hand off to system browser
+        final Uri videoUri = Uri.parse(fullUrl);
+        
+        if (await canLaunchUrl(videoUri)) {
+          await launchUrl(videoUri, mode: LaunchMode.externalApplication);
+          if (mounted) {
             setState(() {
               _isDownloading = false;
               _downloadingVideoId = null;
             });
-            SuccessSnackbar.showError(context, 'Download directory not available');
+            SuccessSnackbar.show(context, 'Opening download in browser...');
           }
-          return;
-        }
-
-        final directory = Directory(directoryPath);
-        if (!await directory.exists()) await directory.create(recursive: true);
-        final filePath = '${directory.path}/$fileName';
-
-        await dio.download(
-          fullUrl,
-          filePath,
-          onReceiveProgress: (received, total) {
-            if (total != -1 && mounted) {
-              setState(() => _downloadProgress = received / total);
+        } else {
+          // Fallback to internal storage
+          final directoryPath = await getApplicationDocumentsPath();
+          if (directoryPath == null) {
+            if (mounted) {
+              setState(() {
+                _isDownloading = false;
+                _downloadingVideoId = null;
+              });
+              SuccessSnackbar.showError(context, 'Download directory not available');
             }
-          },
-        );
+            return;
+          }
 
-        if (mounted) {
-          setState(() {
-            _isDownloading = false;
-            _downloadingVideoId = null;
-          });
-          SuccessSnackbar.show(context, 'Video downloaded to $directoryPath');
+          final directory = Directory(directoryPath);
+          if (!await directory.exists()) await directory.create(recursive: true);
+          final filePath = '${directory.path}/$fileName';
+
+          await dio.download(
+            fullUrl,
+            filePath,
+            onReceiveProgress: (received, total) {
+              if (total != -1 && mounted) {
+                setState(() => _downloadProgress = received / total);
+              }
+            },
+          );
+
+          if (mounted) {
+            setState(() {
+              _isDownloading = false;
+              _downloadingVideoId = null;
+            });
+            SuccessSnackbar.show(context, 'Video saved to $directoryPath');
+          }
         }
       }
     } catch (e) {
@@ -414,6 +430,9 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Video Management'),
@@ -429,14 +448,14 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
             )
           : null,
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppDimensions.paddingL),
+        padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (_showUploadForm) ...[
-              _buildUploadForm(),
+              _buildUploadForm(isSmallScreen),
             ] else ...[
-              _buildVideoList(),
+              _buildVideoList(isSmallScreen),
             ],
           ],
         ),
@@ -444,17 +463,17 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
     );
   }
 
-  Widget _buildUploadForm() {
+  Widget _buildUploadForm(bool isSmallScreen) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
+            Text(
               'Upload Videos',
               style: TextStyle(
-                fontSize: 18,
+                fontSize: isSmallScreen ? 16 : 18,
                 fontWeight: FontWeight.w600,
                 color: AppColors.textPrimary,
               ),
@@ -482,14 +501,13 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
           ),
         ),
         const SizedBox(height: AppDimensions.spacingS),
-        Row(
+        Wrap(
+          spacing: AppDimensions.spacingS,
+          runSpacing: AppDimensions.spacingS,
           children: [
             _buildAudienceChip('Everyone', 'all'),
-            const SizedBox(width: AppDimensions.spacingS),
             _buildAudienceChip('Sessions', 'session'),
-            const SizedBox(width: AppDimensions.spacingS),
             _buildAudienceChip('Batches', 'batch'),
-            const SizedBox(width: AppDimensions.spacingS),
             _buildAudienceChip('Individuals', 'student'),
           ],
         ),
@@ -651,18 +669,25 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
 
   Widget _buildAudienceChip(String label, String type) {
     final isSelected = _audienceType == type;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+    
     return GestureDetector(
       onTap: () => setState(() {
         _audienceType = type;
         _selectedTargetIds = [];
       }),
       child: NeumorphicContainer(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: EdgeInsets.symmetric(
+          horizontal: isSmallScreen ? 10 : 16,
+          vertical: isSmallScreen ? 6 : 8,
+        ),
         child: Text(
           label,
           style: TextStyle(
             color: isSelected ? AppColors.accent : AppColors.textSecondary,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            fontSize: isSmallScreen ? 12 : 14,
           ),
         ),
       ),
@@ -807,7 +832,7 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
     );
   }
 
-  Widget _buildVideoList() {
+  Widget _buildVideoList(bool isSmallScreen) {
     if (_loadingVideos) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -830,25 +855,28 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
       children: [
         Text(
           'Manage Videos (${_videos.length})',
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+          style: TextStyle(
+              fontSize: isSmallScreen ? 16 : 18,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary),
         ),
-        const SizedBox(height: AppDimensions.spacingM),
+        SizedBox(height: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM),
         ...List.generate(_videos.length, (index) {
           final video = _videos[index];
           return Padding(
-            padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
-            child: _buildVideoCard(video),
+            padding: EdgeInsets.only(bottom: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM),
+            child: _buildVideoCard(video, isSmallScreen),
           );
         }),
       ],
     );
   }
 
-  Widget _buildVideoCard(VideoResource video) {
+  Widget _buildVideoCard(VideoResource video, bool isSmallScreen) {
     final isDownloading = _isDownloading && _downloadingVideoId == video.id;
 
     return NeumorphicContainer(
-      padding: const EdgeInsets.all(AppDimensions.paddingM),
+      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingM),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -873,7 +901,10 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
                   children: [
                     Text(
                       video.displayTitle,
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                      style: TextStyle(
+                          fontSize: isSmallScreen ? 14 : 16,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),

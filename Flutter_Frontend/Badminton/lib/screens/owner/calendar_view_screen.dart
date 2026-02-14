@@ -771,7 +771,7 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                       label: 'Tournament',
                       value: 'tournament',
                       selected: _selectedEventType,
-                      color: Colors.blue,
+                      color: const Color(0xFF00A86B), // Jade green
                       onTap: () => setState(() => _selectedEventType = 'tournament'),
                     ),
                   ),
@@ -781,7 +781,7 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                       label: 'Event',
                       value: 'event',
                       selected: _selectedEventType,
-                      color: Colors.green,
+                      color: const Color(0xFF00A86B), // Jade green
                       onTap: () => setState(() => _selectedEventType = 'event'),
                     ),
                   ),

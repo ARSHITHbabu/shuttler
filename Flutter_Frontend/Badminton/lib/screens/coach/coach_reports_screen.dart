@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
+import 'package:printing/printing.dart';
 import '../../core/utils/string_extensions.dart';
 
 import '../../core/constants/colors.dart';
@@ -114,151 +115,329 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isInitializing) {
-      return Scaffold(
-        backgroundColor: AppColors.background,
-        appBar: AppBar(
-          backgroundColor: AppColors.background,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          title: const Text('Reports', style: TextStyle(color: AppColors.textPrimary, fontSize: 20, fontWeight: FontWeight.w600)),
-        ),
-        body: const Center(child: CircularProgressIndicator()),
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
       );
     }
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
+        title: const Text('Reports', style: TextStyle(color: AppColors.textPrimary)),
         backgroundColor: AppColors.background,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: const Text('Reports', style: TextStyle(color: AppColors.textPrimary, fontSize: 20, fontWeight: FontWeight.w600)),
+        leading: const BackButton(color: AppColors.textPrimary),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppDimensions.paddingL),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildTabSelector(),
-            const SizedBox(height: AppDimensions.spacingL),
-            
-            if (_tabIndex == 0) ...[
-              // Report Type Selection
-              const Text('Report Type', style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w600)),
-              const SizedBox(height: AppDimensions.spacingM),
-              Row(
-                children: [
-                  Expanded(
-                    child: _ReportTypeCard(
-                      icon: Icons.fact_check_outlined,
-                      label: 'Attendance',
-                      isSelected: _reportType == ReportType.attendance,
-                      onTap: () => setState(() { _reportType = ReportType.attendance; _reportData = null; }),
+        child: Padding(
+          padding: const EdgeInsets.all(AppDimensions.paddingL),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildTabSelector(),
+              const SizedBox(height: AppDimensions.spacingL),
+              if (_tabIndex == 0) ...[
+                _buildReportTypeSelector(),
+                const SizedBox(height: AppDimensions.spacingL),
+                _buildFilters(),
+                const SizedBox(height: AppDimensions.spacingL),
+                _buildGenerateButton(),
+                const SizedBox(height: AppDimensions.spacingL),
+                if (_reportData != null) _buildReportPreview(),
+              ] else ...[
+                _buildHistoryList(),
+              ]
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReportTypeSelector() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: ReportType.values.map((type) {
+           bool isSelected = _reportType == type;
+           return Padding(
+             padding: const EdgeInsets.only(right: 8.0),
+             child: ChoiceChip(
+               label: Text(type.name.toUpperCase()),
+               selected: isSelected,
+                onSelected: (val) {
+                  if (val) {
+                    setState(() {
+                      _reportType = type;
+                      _reportData = null; // Clear previous report data
+                    });
+                  }
+                },
+                selectedColor: AppColors.accent,
+                labelStyle: TextStyle(
+                  color: isSelected ? Colors.white : AppColors.textPrimary,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                ),
+              ),
+            );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildFilters() {
+    return NeumorphicContainer(
+      padding: const EdgeInsets.all(AppDimensions.paddingM),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Filter Type Toggle
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              children: FilterType.values.map((type) {
+                bool isSelected = _filterType == type;
+                return Expanded(
+                  child: InkWell(
+                    onTap: () {
+                      setState(() {
+                        _filterType = type;
+                        _filterBatches(); // Re-filter batches logic
+                        _reportData = null;
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isSelected ? AppColors.accent : Colors.transparent,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        type.name.substring(0, 1).toUpperCase() + type.name.substring(1),
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : AppColors.textPrimary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ),
                   ),
-                  const SizedBox(width: AppDimensions.spacingM),
-                  Expanded(
-                    child: _ReportTypeCard(
-                      icon: Icons.trending_up_outlined,
-                      label: 'Performance',
-                      isSelected: _reportType == ReportType.performance,
-                      onTap: () => setState(() { _reportType = ReportType.performance; _reportData = null; }),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: AppDimensions.spacingM),
+          
+          if (_filterType == FilterType.season)
+             _buildSeasonDropdown(),
+          if (_filterType == FilterType.year)
+             _buildYearSelector(),
+          if (_filterType == FilterType.month)
+             _buildMonthSelector(),
+             
+          const SizedBox(height: AppDimensions.spacingM),
+          
+          Text("Batch", style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              border: Border.all(color: AppColors.border),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _selectedBatchId,
+                isExpanded: true,
+                items: [
+                  const DropdownMenuItem(value: "all", child: Text("All Batches")),
+                  ..._filteredBatches.map((b) => DropdownMenuItem(
+                    value: b.id.toString(),
+                    child: Text(b.batchName ?? "Batch ${b.id}"),
+                  )),
+                ],
+                onChanged: (val) {
+                  if (val != null) setState(() {
+                    _selectedBatchId = val;
+                    _reportData = null;
+                  });
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSeasonDropdown() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text("Select Season", style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+        const SizedBox(height: 4),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.border),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _selectedSeasonId,
+              isExpanded: true,
+              hint: const Text("Choose Season"),
+              items: _seasons.map<DropdownMenuItem<String>>((s) { 
+                return DropdownMenuItem(
+                  value: s.id.toString(),
+                  child: Text(s.name ?? "Season ${s.id}"),
+                );
+              }).toList(),
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() {
+                    _selectedSeasonId = val;
+                    _filterBatches();
+                  });
+                }
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildYearSelector() {
+    int current = DateTime.now().year;
+    List<int> years = List.generate(10, (i) => current - 5 + i);
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text("Select Year", style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+        const SizedBox(height: 4),
+        Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              border: Border.all(color: AppColors.border),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                value: _selectedYear,
+                isExpanded: true,
+                items: years.map((y) => DropdownMenuItem(value: y, child: Text(y.toString()))).toList(),
+                onChanged: (val) => setState(() {
+                  _selectedYear = val!;
+                  _reportData = null;
+                }),
+              ),
+            ),
+        ),
+      ],
+    );
+  }
+  
+  Widget _buildMonthSelector() {
+    int currentYear = DateTime.now().year;
+    List<int> years = List.generate(10, (i) => currentYear - 5 + i);
+    List<String> months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Month", style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<int>(
+                        value: _selectedMonth.month,
+                        isExpanded: true,
+                        items: List.generate(12, (i) => DropdownMenuItem(
+                          value: i + 1,
+                          child: Text(months[i]),
+                        )),
+                        onChanged: (val) => setState(() {
+                          _selectedMonth = DateTime(_selectedMonth.year, val!);
+                          _reportData = null;
+                        }),
+                      ),
                     ),
                   ),
                 ],
               ),
-
-              const SizedBox(height: AppDimensions.spacingL),
-
-              // Filter Type Selection
-              const Text('Filter By', style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w600)),
-              const SizedBox(height: AppDimensions.spacingM),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _FilterChip(
-                      label: 'Season',
-                      isSelected: _filterType == FilterType.season,
-                      onTap: () => setState(() { _filterType = FilterType.season; _filterBatches(); _reportData = null; }),
+            ),
+            const SizedBox(width: AppDimensions.spacingM),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Year", style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    const SizedBox(width: AppDimensions.spacingS),
-                    _FilterChip(
-                      label: 'Year',
-                      isSelected: _filterType == FilterType.year,
-                      onTap: () => setState(() { _filterType = FilterType.year; _filterBatches(); _reportData = null; }),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<int>(
+                        value: _selectedMonth.year,
+                        isExpanded: true,
+                        items: years.map((y) => DropdownMenuItem(
+                          value: y,
+                          child: Text(y.toString()),
+                        )).toList(),
+                        onChanged: (val) => setState(() {
+                          _selectedMonth = DateTime(val!, _selectedMonth.month);
+                          _reportData = null;
+                        }),
+                      ),
                     ),
-                    const SizedBox(width: AppDimensions.spacingS),
-                    _FilterChip(
-                      label: 'Month',
-                      isSelected: _filterType == FilterType.month,
-                      onTap: () => setState(() { _filterType = FilterType.month; _filterBatches(); _reportData = null; }),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: AppDimensions.spacingL),
-
-              // Filter Value Selection
-              _buildFilterValueSelector(),
-
-              const SizedBox(height: AppDimensions.spacingL),
-
-              // Batch Selection
-              const Text('Select Batch', style: TextStyle(color: AppColors.textPrimary, fontSize: 16, fontWeight: FontWeight.w600)),
-              const SizedBox(height: AppDimensions.spacingM),
-              NeumorphicContainer(
-                padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
-                child: DropdownButtonFormField<String>(
-                  value: _selectedBatchId,
-                  decoration: const InputDecoration(border: InputBorder.none, hintText: 'Select Batch', hintStyle: TextStyle(color: AppColors.textSecondary)),
-                  dropdownColor: AppColors.cardBackground,
-                  style: const TextStyle(color: AppColors.textPrimary),
-                  items: [
-                    const DropdownMenuItem(value: 'all', child: Text('All Batches')),
-                    ..._filteredBatches.map((batch) {
-                      return DropdownMenuItem<String>(value: batch.id.toString(), child: Text(batch.batchName));
-                    }),
-                  ],
-                  onChanged: (value) => setState(() { _selectedBatchId = value ?? 'all'; _reportData = null; }),
-                ),
-              ),
-
-              const SizedBox(height: AppDimensions.spacingXl),
-
-              // Generate Report Button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _generateReport,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.accent,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: AppDimensions.paddingM),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppDimensions.radiusM)),
                   ),
-                  child: _isLoading
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)))
-                      : const Text('Generate Report', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                ),
+                ],
               ),
-
-              if (_reportData != null) ...[
-                const SizedBox(height: AppDimensions.spacingXl),
-                _buildReportPreview(),
-              ],
-            ] else ...[
-               _buildHistoryList(),
-            ],
+            ),
           ],
         ),
+      ],
+    );
+  }
+
+  Widget _buildGenerateButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.accent,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        onPressed: _isLoading ? null : _generateReport,
+        child: _isLoading 
+          ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+          : const Text("Generate Report", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
       ),
     );
   }
@@ -388,157 +567,7 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
     );
   }
 
-  Widget _buildFilterValueSelector() {
-    switch (_filterType) {
-      case FilterType.season:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Select Season',
-              style: TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: AppDimensions.spacingM),
-            NeumorphicContainer(
-              padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
-              child: DropdownButtonFormField<String>(
-                value: _selectedSeasonId,
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  hintText: 'Select Season',
-                  hintStyle: TextStyle(color: AppColors.textSecondary),
-                ),
-                dropdownColor: AppColors.cardBackground,
-                style: const TextStyle(color: AppColors.textPrimary),
-                items: _seasons.map<DropdownMenuItem<String>>((season) {
-                  return DropdownMenuItem<String>(
-                    value: season.id.toString(),
-                    child: Text(season.name),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedSeasonId = value;
-                    _filterBatches();
-                    _reportData = null;
-                  });
-                },
-              ),
-            ),
-          ],
-        );
 
-      case FilterType.year:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Select Year',
-              style: TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: AppDimensions.spacingM),
-            NeumorphicContainer(
-              padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
-              child: DropdownButtonFormField<int>(
-                value: _selectedYear,
-                decoration: const InputDecoration(
-                  border: InputBorder.none,
-                  hintText: 'Select Year',
-                  hintStyle: TextStyle(color: AppColors.textSecondary),
-                ),
-                dropdownColor: AppColors.cardBackground,
-                style: const TextStyle(color: AppColors.textPrimary),
-                items: List.generate(5, (index) {
-                  final year = DateTime.now().year - index;
-                  return DropdownMenuItem<int>(
-                    value: year,
-                    child: Text(year.toString()),
-                  );
-                }),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedYear = value ?? DateTime.now().year;
-                    _reportData = null;
-                  });
-                },
-              ),
-            ),
-          ],
-        );
-
-      case FilterType.month:
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Select Month',
-              style: TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: AppDimensions.spacingM),
-            NeumorphicContainer(
-              padding: const EdgeInsets.all(AppDimensions.paddingM),
-              child: InkWell(
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: _selectedMonth,
-                    firstDate: DateTime(2020),
-                    lastDate: DateTime.now(),
-                    initialDatePickerMode: DatePickerMode.year,
-                    builder: (context, child) {
-                      return Theme(
-                        data: ThemeData.dark().copyWith(
-                          colorScheme: const ColorScheme.dark(
-                            primary: AppColors.accent,
-                            surface: AppColors.cardBackground,
-                          ),
-                        ),
-                        child: child!,
-                      );
-                    },
-                  );
-                  if (picked != null) {
-                    setState(() {
-                      _selectedMonth = picked;
-                      _reportData = null;
-                    });
-                  }
-                },
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      DateFormat('MMMM yyyy').format(_selectedMonth),
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const Icon(
-                      Icons.calendar_today,
-                      color: AppColors.accent,
-                      size: 20,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        );
-    }
-  }
 
   Future<void> _generateReport() async {
     setState(() => _isLoading = true);
@@ -586,95 +615,117 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
   }
 
   Widget _buildReportPreview() {
-    return NeumorphicContainer(
-      padding: const EdgeInsets.all(AppDimensions.paddingL),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Report metadata
-          _buildMetadataRow('Report Type', _reportType.name.capitalize()),
-          _buildMetadataRow('Filter', _filterType.name.capitalize()),
-          _buildMetadataRow('Generated On', DateFormat('MMM dd, yyyy HH:mm').format(DateTime.now())),
-          
-          const SizedBox(height: AppDimensions.spacingL),
-          
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: () => _downloadReport(isHistory: false),
-              icon: const Icon(Icons.download, size: 18),
-              label: const Text("Download PDF"),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.accent,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-            ),
-          ),
-          
-          const SizedBox(height: AppDimensions.spacingL),
-          const Divider(color: AppColors.textSecondary),
-          const SizedBox(height: AppDimensions.spacingL),
-          
-          // Report summary
-          if (_reportData!['overview'] != null)
-            _buildOverviewSection(_reportData!['overview']),
-        ],
-      ),
-    );
-  }
+    final filterSummary = _reportData!['filter_summary'] ?? 
+        "Season: ${_seasons.firstWhere((s) => s.id.toString() == _selectedSeasonId, orElse: () => Session(id: -1, name: 'Unknown', startDate: DateTime.now(), endDate: DateTime.now(), status: 'active')).name} | Batch: ${_selectedBatchId == 'all' ? 'All' : _filteredBatches.firstWhere((b) => b.id.toString() == _selectedBatchId, orElse: () => Batch(id: -1, batchName: 'Unknown', timing: '', period: '', capacity: 0, fees: '', startDate: '', createdBy: '')).batchName}";
+    final generatedOn = _reportData!['generated_on'] ?? DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now());
 
-  Widget _buildMetadataRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppDimensions.spacingS),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 14,
-            ),
-          ),
-          Text(
-            value,
-            style: const TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOverviewSection(Map<String, dynamic> overview) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Overview',
-          style: TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
+        const Text("Generated Report", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+        const SizedBox(height: 12),
+        NeumorphicContainer(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                   Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.accent.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      _reportType == ReportType.attendance 
+                        ? Icons.fact_check 
+                        : Icons.insights,
+                      color: AppColors.accent,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "${_reportType.name.toUpperCase()} REPORT",
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "$filterSummary",
+                          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                        ),
+                         Text(
+                          "Generated On: $generatedOn",
+                          style: TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w500),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => _downloadReport(isHistory: false),
+                    icon: const Icon(Icons.download, color: AppColors.accent),
+                    tooltip: "Download PDF",
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppDimensions.spacingL),
+              const Divider(color: AppColors.textSecondary),
+              const SizedBox(height: AppDimensions.spacingL),
+              
+              if (_reportData!['overview'] != null)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Overview',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: AppDimensions.spacingM),
+                    ...(_reportData!['overview'] as Map<String, dynamic>).entries.map((entry) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: AppDimensions.spacingS),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              entry.key.replaceAll('_', ' ').capitalize(),
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 14,
+                              ),
+                            ),
+                            Text(
+                              entry.value.toString(),
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+            ],
           ),
         ),
-        const SizedBox(height: AppDimensions.spacingM),
-        ...overview.entries.map((entry) {
-          return _buildMetadataRow(
-            entry.key.replaceAll('_', ' ').capitalize(),
-            entry.value.toString(),
-          );
-        }),
       ],
     );
   }
+
+
 
   Future<void> _downloadReport({bool isHistory = false}) async {
     try {
@@ -702,9 +753,25 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
 
         final fileName = _getFileName();
         final file = File('${reportsDir.path}/$fileName');
-        await file.writeAsBytes(await pdf.save());
+        final bytes = await pdf.save();
+        await file.writeAsBytes(bytes);
+
+        // On mobile, use Printing.layoutPdf which provides a standard "Save as PDF" 
+        // option in the system dialog.
+        await Printing.layoutPdf(
+          onLayout: (PdfPageFormat format) async => bytes,
+          name: fileName,
+        );
+
         if (mounted) {
-          SuccessSnackbar.show(context, 'Report saved to ${file.path}');
+          SuccessSnackbar.show(
+            context, 
+            'Report generated successfully',
+            actionLabel: 'OPEN',
+            onAction: () async {
+              await Printing.layoutPdf(onLayout: (format) async => bytes, name: fileName);
+            },
+          );
         }
       }
 
@@ -1201,101 +1268,5 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
     } else {
       return '${student['average_rating']?.toStringAsFixed(1) ?? '0'}/5.0';
     }
-  }
-}
-
-class _ReportTypeCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _ReportTypeCard({
-    required this.icon,
-    required this.label,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: NeumorphicContainer(
-        padding: const EdgeInsets.all(AppDimensions.paddingL),
-        child: Column(
-          children: [
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: isSelected ? AppColors.accent : AppColors.background,
-                borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-              ),
-              child: Icon(
-                icon,
-                color: isSelected ? Colors.white : AppColors.textSecondary,
-                size: 28,
-              ),
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            Text(
-              label,
-              style: TextStyle(
-                color: isSelected ? AppColors.textPrimary : AppColors.textSecondary,
-                fontSize: 14,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _FilterChip({
-    required this.label,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppDimensions.paddingM,
-          vertical: AppDimensions.spacingS,
-        ),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.accent : AppColors.cardBackground,
-          borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: AppColors.accent.withValues(alpha: 0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : AppColors.textSecondary,
-            fontSize: 14,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-          ),
-        ),
-      ),
-    );
   }
 }

@@ -71,6 +71,8 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
 
     // Get user ID from auth provider
     final authStateAsync = ref.watch(authProvider);
@@ -240,23 +242,23 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
                           return Column(
                             children: [
                               // Stats Summary
-                              _buildStatsSummary(isDark, attendanceStats),
+                              _buildStatsSummary(isDark, attendanceStats, isSmallScreen),
 
                               const SizedBox(height: AppDimensions.spacingL),
 
                               // Date/Month/Year Selector
-                              _buildDateSelector(isDark),
+                              _buildDateSelector(isDark, isSmallScreen),
 
                               const SizedBox(height: AppDimensions.spacingM),
 
                               // Filter Tabs
-                              _buildFilterTabs(isDark),
+                              _buildFilterTabs(isDark, isSmallScreen),
 
                               const SizedBox(height: AppDimensions.spacingL),
 
                               // History Header
                               Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+                                padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
                                 child: Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
@@ -286,11 +288,11 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
                           final attendanceStats = _calculateStats(attendanceRecords);
                           return Column(
                             children: [
-                              _buildStatsSummary(isDark, attendanceStats),
+                              _buildStatsSummary(isDark, attendanceStats, isSmallScreen),
                               const SizedBox(height: AppDimensions.spacingL),
-                              _buildDateSelector(isDark),
+                              _buildDateSelector(isDark, isSmallScreen),
                               const SizedBox(height: AppDimensions.spacingM),
-                              _buildFilterTabs(isDark),
+                              _buildFilterTabs(isDark, isSmallScreen),
                               const SizedBox(height: AppDimensions.spacingM),
                             ],
                           );
@@ -299,11 +301,11 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
                           final attendanceStats = _calculateStats(attendanceRecords);
                           return Column(
                             children: [
-                              _buildStatsSummary(isDark, attendanceStats),
+                              _buildStatsSummary(isDark, attendanceStats, isSmallScreen),
                               const SizedBox(height: AppDimensions.spacingL),
-                              _buildDateSelector(isDark),
+                              _buildDateSelector(isDark, isSmallScreen),
                               const SizedBox(height: AppDimensions.spacingM),
-                              _buildFilterTabs(isDark),
+                              _buildFilterTabs(isDark, isSmallScreen),
                               const SizedBox(height: AppDimensions.spacingM),
                             ],
                           );
@@ -416,49 +418,49 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
     );
   }
 
-  Widget _buildStatsSummary(bool isDark, Map<String, dynamic> attendanceStats) {
+  Widget _buildStatsSummary(bool isDark, Map<String, dynamic> attendanceStats, bool isSmallScreen) {
     final totalDays = (attendanceStats['total_days'] ?? 0) as int;
     final presentDays = (attendanceStats['present_days'] ?? 0) as int;
     final absentDays = (attendanceStats['absent_days'] ?? 0) as int;
     final attendanceRate = (attendanceStats['attendance_rate'] ?? 0.0).toDouble();
 
     final textP = isDark ? AppColors.textPrimary : AppColorsLight.textPrimary;
-    final textS = isDark ? AppColors.textSecondary : AppColorsLight.textSecondary;
+    // final textS = isDark ? AppColors.textSecondary : AppColorsLight.textSecondary; // Unused variable removal
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+      padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
       child: NeumorphicContainer(
-        padding: const EdgeInsets.symmetric(vertical: AppDimensions.paddingL),
+        padding: EdgeInsets.symmetric(vertical: isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            _buildSimpleStat('Total', totalDays.toString(), textP, isDark),
-            _buildSimpleStat('Present', presentDays.toString(), isDark ? AppColors.success : AppColorsLight.success, isDark),
-            _buildSimpleStat('Absent', absentDays.toString(), isDark ? AppColors.error : AppColorsLight.error, isDark),
-            _buildSimpleStat('Percentage', '${attendanceRate.toStringAsFixed(0)}%', textP, isDark),
+            _buildSimpleStat('Total', totalDays.toString(), textP, isDark, isSmallScreen),
+            _buildSimpleStat('Present', presentDays.toString(), isDark ? AppColors.success : AppColorsLight.success, isDark, isSmallScreen),
+            _buildSimpleStat('Absent', absentDays.toString(), isDark ? AppColors.error : AppColorsLight.error, isDark, isSmallScreen),
+            _buildSimpleStat('Percentage', '${attendanceRate.toStringAsFixed(0)}%', textP, isDark, isSmallScreen),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSimpleStat(String label, String value, Color color, bool isDark) {
+  Widget _buildSimpleStat(String label, String value, Color color, bool isDark, bool isSmallScreen) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           value,
           style: TextStyle(
-            fontSize: 20,
+            fontSize: isSmallScreen ? 16 : 20,
             fontWeight: FontWeight.bold,
             color: color,
           ),
         ),
-        const SizedBox(height: 4),
+        SizedBox(height: isSmallScreen ? 2 : 4),
         Text(
           label,
           style: TextStyle(
-            fontSize: 12,
+            fontSize: isSmallScreen ? 10 : 12,
             color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
           ),
         ),
@@ -466,9 +468,9 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
     );
   }
 
-  Widget _buildDateSelector(bool isDark) {
+  Widget _buildDateSelector(bool isDark, bool isSmallScreen) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+      padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
       child: Column(
         children: [
           // Selection Mode Tabs
@@ -479,53 +481,57 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
                   label: 'Date',
                   isSelected: _selectionMode == 'date',
                   isDark: isDark,
+                  isSmallScreen: isSmallScreen,
                   onTap: () => setState(() => _selectionMode = 'date'),
                 ),
               ),
-              const SizedBox(width: AppDimensions.spacingS),
+              SizedBox(width: isSmallScreen ? 4 : AppDimensions.spacingS),
               Expanded(
                 child: _SelectionModeTab(
                   label: 'Month',
                   isSelected: _selectionMode == 'month',
                   isDark: isDark,
+                  isSmallScreen: isSmallScreen,
                   onTap: () => setState(() => _selectionMode = 'month'),
                 ),
               ),
-              const SizedBox(width: AppDimensions.spacingS),
+              SizedBox(width: isSmallScreen ? 4 : AppDimensions.spacingS),
               Expanded(
                 child: _SelectionModeTab(
                   label: 'Year',
                   isSelected: _selectionMode == 'year',
                   isDark: isDark,
+                  isSmallScreen: isSmallScreen,
                   onTap: () => setState(() => _selectionMode = 'year'),
                 ),
               ),
-              const SizedBox(width: AppDimensions.spacingS),
+              SizedBox(width: isSmallScreen ? 4 : AppDimensions.spacingS),
               Expanded(
                 child: _SelectionModeTab(
                   label: 'All',
                   isSelected: _selectionMode == 'all',
                   isDark: isDark,
+                  isSmallScreen: isSmallScreen,
                   onTap: () => setState(() => _selectionMode = 'all'),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: AppDimensions.spacingM),
+          SizedBox(height: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM),
           // Date/Month/Year Display and Navigation
-          _buildDateDisplay(isDark),
+          _buildDateDisplay(isDark, isSmallScreen),
         ],
       ),
     );
   }
 
-  Widget _buildDateDisplay(bool isDark) {
+  Widget _buildDateDisplay(bool isDark, bool isSmallScreen) {
     if (_selectionMode == 'date') {
       final date = _selectedDate ?? DateTime.now();
       return GestureDetector(
         onTap: () => _showDatePicker(isDark),
         child: NeumorphicContainer(
-          padding: const EdgeInsets.all(AppDimensions.paddingM),
+          padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingM),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -533,6 +539,7 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
                 icon: Icon(
                   Icons.chevron_left,
                   color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
+                  size: isSmallScreen ? 20 : 24,
                 ),
                 onPressed: () {
                   setState(() {
@@ -543,7 +550,7 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
               Text(
                 DateFormat('EEE, d MMM yyyy').format(date),
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: isSmallScreen ? 14 : 16,
                   fontWeight: FontWeight.w600,
                   color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                 ),
@@ -552,6 +559,7 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
                 icon: Icon(
                   Icons.chevron_right,
                   color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
+                  size: isSmallScreen ? 20 : 24,
                 ),
                 onPressed: () {
                   final now = DateTime.now();
@@ -576,7 +584,7 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
       return GestureDetector(
         onTap: () => _showMonthPicker(isDark),
         child: NeumorphicContainer(
-          padding: const EdgeInsets.all(AppDimensions.paddingM),
+          padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingM),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -584,6 +592,7 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
                 icon: Icon(
                   Icons.chevron_left,
                   color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
+                  size: isSmallScreen ? 20 : 24,
                 ),
                 onPressed: () {
                   setState(() {
@@ -596,7 +605,7 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
                   child: Text(
                     '${months[currentMonth.month - 1]} ${currentMonth.year}',
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: isSmallScreen ? 14 : 16,
                       fontWeight: FontWeight.w600,
                       color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                     ),
@@ -608,6 +617,7 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
                 icon: Icon(
                   Icons.chevron_right,
                   color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
+                  size: isSmallScreen ? 20 : 24,
                 ),
                 onPressed: () {
                   final now = DateTime.now();
@@ -628,7 +638,7 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
       return GestureDetector(
         onTap: () => _showYearPicker(isDark),
         child: NeumorphicContainer(
-          padding: const EdgeInsets.all(AppDimensions.paddingM),
+          padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingM),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -636,6 +646,7 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
                 icon: Icon(
                   Icons.chevron_left,
                   color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
+                  size: isSmallScreen ? 20 : 24,
                 ),
                 onPressed: () {
                   setState(() {
@@ -646,7 +657,7 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
               Text(
                 currentYear.toString(),
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: isSmallScreen ? 14 : 16,
                   fontWeight: FontWeight.w600,
                   color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                 ),
@@ -655,6 +666,7 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
                 icon: Icon(
                   Icons.chevron_right,
                   color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
+                  size: isSmallScreen ? 20 : 24,
                 ),
                 onPressed: () {
                   final now = DateTime.now();
@@ -672,12 +684,12 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
     } else {
       // All mode
       return NeumorphicContainer(
-        padding: const EdgeInsets.all(AppDimensions.paddingM),
+        padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingM),
         child: Center(
           child: Text(
             'All Attendance Records',
             style: TextStyle(
-              fontSize: 16,
+              fontSize: isSmallScreen ? 14 : 16,
               fontWeight: FontWeight.w600,
               color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
             ),
@@ -782,9 +794,9 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
     }
   }
 
-  Widget _buildFilterTabs(bool isDark) {
+  Widget _buildFilterTabs(bool isDark, bool isSmallScreen) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+      padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
       child: Row(
         children: [
           Expanded(
@@ -792,24 +804,27 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
               label: 'All',
               isSelected: _selectedFilter == 'all',
               isDark: isDark,
+              isSmallScreen: isSmallScreen,
               onTap: () => setState(() => _selectedFilter = 'all'),
             ),
           ),
-          const SizedBox(width: AppDimensions.spacingS),
+          SizedBox(width: isSmallScreen ? 4 : AppDimensions.spacingS),
           Expanded(
             child: _FilterTab(
               label: 'Present',
               isSelected: _selectedFilter == 'present',
               isDark: isDark,
+              isSmallScreen: isSmallScreen,
               onTap: () => setState(() => _selectedFilter = 'present'),
             ),
           ),
-          const SizedBox(width: AppDimensions.spacingS),
+          SizedBox(width: isSmallScreen ? 4 : AppDimensions.spacingS),
           Expanded(
             child: _FilterTab(
               label: 'Absent',
               isSelected: _selectedFilter == 'absent',
               isDark: isDark,
+              isSmallScreen: isSmallScreen,
               onTap: () => setState(() => _selectedFilter = 'absent'),
             ),
           ),
@@ -883,12 +898,14 @@ class _SelectionModeTab extends StatelessWidget {
   final String label;
   final bool isSelected;
   final bool isDark;
+  final bool isSmallScreen;
   final VoidCallback onTap;
 
   const _SelectionModeTab({
     required this.label,
     required this.isSelected,
     required this.isDark,
+    this.isSmallScreen = false,
     required this.onTap,
   });
 
@@ -897,7 +914,7 @@ class _SelectionModeTab extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
+        padding: EdgeInsets.symmetric(vertical: isSmallScreen ? 10 : AppDimensions.spacingS),
         decoration: BoxDecoration(
           color: isSelected
               ? (isDark ? AppColors.accent : AppColorsLight.accent)
@@ -909,7 +926,7 @@ class _SelectionModeTab extends StatelessWidget {
           child: Text(
             label,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: isSmallScreen ? 11 : 12,
               fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
               color: isSelected
                   ? Colors.white
@@ -926,12 +943,14 @@ class _FilterTab extends StatelessWidget {
   final String label;
   final bool isSelected;
   final bool isDark;
+  final bool isSmallScreen;
   final VoidCallback onTap;
 
   const _FilterTab({
     required this.label,
     required this.isSelected,
     required this.isDark,
+    this.isSmallScreen = false,
     required this.onTap,
   });
 
@@ -940,7 +959,7 @@ class _FilterTab extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingM),
+        padding: EdgeInsets.symmetric(vertical: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM),
         decoration: BoxDecoration(
           color: isSelected
               ? (isDark ? AppColors.accent : AppColorsLight.accent)
@@ -952,7 +971,7 @@ class _FilterTab extends StatelessWidget {
           child: Text(
             label,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: isSmallScreen ? 12 : 14,
               fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
               color: isSelected
                   ? Colors.white
@@ -968,10 +987,12 @@ class _FilterTab extends StatelessWidget {
 class _AttendanceRecordCard extends StatelessWidget {
   final Attendance record;
   final bool isDark;
+  final bool isSmallScreen;
 
   const _AttendanceRecordCard({
     required this.record,
     required this.isDark,
+    this.isSmallScreen = false,
   });
 
   @override
@@ -984,18 +1005,18 @@ class _AttendanceRecordCard extends StatelessWidget {
     final isPresent = status.toLowerCase() == 'present';
 
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppDimensions.paddingL,
-        vertical: AppDimensions.spacingS,
+      padding: EdgeInsets.symmetric(
+        horizontal: isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL,
+        vertical: isSmallScreen ? AppDimensions.spacingXS : AppDimensions.spacingS,
       ),
       child: NeumorphicContainer(
-        padding: const EdgeInsets.all(AppDimensions.paddingM),
+        padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingM),
         child: Row(
           children: [
             // Status Icon
             Container(
-              width: 48,
-              height: 48,
+              width: isSmallScreen ? 36 : 48,
+              height: isSmallScreen ? 36 : 48,
               decoration: BoxDecoration(
                 color: isPresent
                     ? (isDark ? AppColors.success : AppColorsLight.success).withValues(alpha: 0.1)
@@ -1020,7 +1041,7 @@ class _AttendanceRecordCard extends StatelessWidget {
                   Text(
                     _formatDate(date.toIso8601String()),
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: isSmallScreen ? 14 : 16,
                       fontWeight: FontWeight.w600,
                       color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                     ),
@@ -1029,7 +1050,7 @@ class _AttendanceRecordCard extends StatelessWidget {
                   Text(
                     batchName,
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: isSmallScreen ? 12 : 14,
                       color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                     ),
                   ),
@@ -1050,9 +1071,9 @@ class _AttendanceRecordCard extends StatelessWidget {
 
             // Status Badge
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppDimensions.spacingM,
-                vertical: AppDimensions.spacingS,
+              padding: EdgeInsets.symmetric(
+                horizontal: isSmallScreen ? 8 : AppDimensions.spacingM,
+                vertical: isSmallScreen ? 4 : AppDimensions.spacingS,
               ),
               decoration: BoxDecoration(
                 color: isPresent
@@ -1063,7 +1084,7 @@ class _AttendanceRecordCard extends StatelessWidget {
               child: Text(
                 isPresent ? 'Present' : 'Absent',
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: isSmallScreen ? 11 : 12,
                   fontWeight: FontWeight.w600,
                   color: isPresent
                       ? (isDark ? AppColors.success : AppColorsLight.success)

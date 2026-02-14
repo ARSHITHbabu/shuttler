@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../models/leave_request.dart';
 import 'service_providers.dart';
+import 'calendar_provider.dart';
 
 part 'leave_request_provider.g.dart';
 
@@ -98,6 +99,16 @@ class LeaveRequestManager extends _$LeaveRequestManager {
         status: status,
         reviewNotes: reviewNotes,
       );
+      
+      // Invalidate calendar providers on approval/rejection as it affects leave events
+      if (status == 'approved' || status == 'rejected') {
+        try {
+          final request = await leaveRequestService.getLeaveRequestById(requestId);
+          final startDate = request.startDate;
+          ref.invalidate(yearlyEventsProvider(startDate.year));
+        } catch (_) {}
+      }
+      
       await refresh();
     } catch (e) {
       throw Exception('Failed to update leave request: $e');

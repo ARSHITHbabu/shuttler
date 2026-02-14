@@ -58,6 +58,8 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
 
     // Build filter parameters
     String? statusFilter;
@@ -95,9 +97,9 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(60),
           child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppDimensions.paddingL,
-              vertical: AppDimensions.spacingM,
+            padding: EdgeInsets.symmetric(
+              horizontal: isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL,
+              vertical: isSmallScreen ? 6 : AppDimensions.spacingM,
             ),
             child: Row(
               children: [
@@ -150,9 +152,9 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
       body: TabBarView(
         controller: _tabController,
         children: [
-          _buildLeaveRequestsTab(isDark, statusFilter),
-          _buildRegistrationRequestsTab(isDark, statusFilter),
-          _buildRejoinRequestsTab(isDark),
+          _buildLeaveRequestsTab(isDark, statusFilter, isSmallScreen),
+          _buildRegistrationRequestsTab(isDark, statusFilter, isSmallScreen),
+          _buildRejoinRequestsTab(isDark, isSmallScreen),
         ],
       ),
     );
@@ -168,13 +170,16 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
     final cardColor = isDark ? AppColors.cardBackground : AppColorsLight.cardBackground;
     final activeColor = isDark ? AppColors.textPrimary : AppColorsLight.textPrimary;
     final inactiveColor = isDark ? AppColors.textSecondary : AppColorsLight.textSecondary;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+    final isVerySmallScreen = screenWidth < 400;
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppDimensions.paddingM,
-          vertical: AppDimensions.paddingS,
+        padding: EdgeInsets.symmetric(
+          horizontal: isSmallScreen ? AppDimensions.paddingS : AppDimensions.paddingM,
+          vertical: isSmallScreen ? 6 : AppDimensions.paddingS,
         ),
         decoration: BoxDecoration(
           color: isSelected ? cardColor : Colors.transparent,
@@ -187,23 +192,25 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
           children: [
             Icon(
               icon,
-              size: 18,
+              size: isSmallScreen ? 16 : 18,
               color: isSelected ? activeColor : inactiveColor,
             ),
-            const SizedBox(width: AppDimensions.spacingS),
-            Flexible(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                  color: isSelected ? activeColor : inactiveColor,
+            if (!isVerySmallScreen) ...[  
+              SizedBox(width: isSmallScreen ? 4 : AppDimensions.spacingS),
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: isSmallScreen ? 11 : 13,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    color: isSelected ? activeColor : inactiveColor,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
               ),
-            ),
+            ],
           ],
         ),
       ),
@@ -211,32 +218,35 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
   }
 
   Widget _buildFilters(bool isDark) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+    
     return NeumorphicContainer(
-      padding: const EdgeInsets.all(AppDimensions.paddingM),
-      margin: const EdgeInsets.all(AppDimensions.paddingL),
+      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingS : AppDimensions.paddingM),
+      margin: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'Filter by Status',
             style: TextStyle(
-              fontSize: 14,
+              fontSize: isSmallScreen ? 12 : 14,
               fontWeight: FontWeight.w600,
               color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
             ),
           ),
-          const SizedBox(height: AppDimensions.spacingS),
+          SizedBox(height: isSmallScreen ? 6 : AppDimensions.spacingS),
           Wrap(
-            spacing: AppDimensions.spacingS,
-            runSpacing: AppDimensions.spacingS,
+            spacing: isSmallScreen ? 6 : AppDimensions.spacingS,
+            runSpacing: isSmallScreen ? 6 : AppDimensions.spacingS,
             children: ['all', 'pending', 'approved', 'rejected'].map((status) {
               final isSelected = _selectedFilter == status;
               return GestureDetector(
                 onTap: () => setState(() => _selectedFilter = status),
                 child: NeumorphicContainer(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppDimensions.paddingM,
-                    vertical: AppDimensions.spacingS,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isSmallScreen ? 10 : AppDimensions.paddingM,
+                    vertical: isSmallScreen ? 6 : AppDimensions.spacingS,
                   ),
                   color: isSelected
                       ? (isDark ? AppColors.accent : AppColorsLight.accent)
@@ -245,7 +255,7 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
                   child: Text(
                     status.toUpperCase(),
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: isSmallScreen ? 10 : 12,
                       fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                       color: isSelected
                           ? (isDark ? AppColors.background : AppColorsLight.background)
@@ -262,13 +272,13 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
   }
 
 
-  Widget _buildLeaveRequestCard(LeaveRequest request, bool isDark) {
+  Widget _buildLeaveRequestCard(LeaveRequest request, bool isDark, bool isSmallScreen) {
     final statusColor = _getStatusColor(request.status, isDark);
     final statusBgColor = statusColor.withValues(alpha: 0.1);
 
     return NeumorphicContainer(
-      padding: const EdgeInsets.all(AppDimensions.paddingM),
-      margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
+      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingM),
+      margin: EdgeInsets.only(bottom: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -282,7 +292,7 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
                     Text(
                       request.coachName,
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: isSmallScreen ? 16 : 18,
                         fontWeight: FontWeight.w600,
                         color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                       ),
@@ -866,7 +876,7 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
     }
   }
 
-  Widget _buildLeaveRequestsTab(bool isDark, String? statusFilter) {
+  Widget _buildLeaveRequestsTab(bool isDark, String? statusFilter, bool isSmallScreen) {
     final leaveRequestsAsync = ref.watch(
       leaveRequestManagerProvider(
         coachId: null,
@@ -915,11 +925,11 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
                   });
 
                 return ListView.builder(
-                  padding: const EdgeInsets.all(AppDimensions.paddingL),
+                  padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
                   itemCount: sortedRequests.length,
                   itemBuilder: (context, index) {
                     final request = sortedRequests[index];
-                    return _buildLeaveRequestCard(request, isDark);
+                    return _buildLeaveRequestCard(request, isDark, isSmallScreen);
                   },
                 );
               },
@@ -930,7 +940,7 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
     );
   }
 
-  Widget _buildRegistrationRequestsTab(bool isDark, String? statusFilter) {
+  Widget _buildRegistrationRequestsTab(bool isDark, String? statusFilter, bool isSmallScreen) {
     // Only show pending invites if filter allows
     final showPendingInvites = statusFilter == null || statusFilter == 'all' || statusFilter == 'pending';
     
@@ -982,8 +992,8 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
                   data: (coachRequests) {
                     return pendingInvitationsAsync.when(
                       loading: () => const ListSkeleton(itemCount: 2),
-                      error: (_, __) => _buildRequestsList(studentRequests, coachRequests, [], isDark),
-                      data: (invitations) => _buildRequestsList(studentRequests, coachRequests, invitations, isDark),
+                      error: (_, __) => _buildRequestsList(studentRequests, coachRequests, [], isDark, isSmallScreen),
+                      data: (invitations) => _buildRequestsList(studentRequests, coachRequests, invitations, isDark, isSmallScreen),
                     );
                   },
                 );
@@ -999,7 +1009,8 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
     List<StudentRegistrationRequest> studentRequests, 
     List<CoachRegistrationRequest> coachRequests,
     List<Map<String, dynamic>> invitations, 
-    bool isDark
+    bool isDark,
+    bool isSmallScreen
   ) {
     if (studentRequests.isEmpty && coachRequests.isEmpty && invitations.isEmpty) {
       return _buildEmptyRegistrationState(isDark);
@@ -1022,23 +1033,23 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
       });
 
     return ListView(
-      padding: const EdgeInsets.all(AppDimensions.paddingL),
+      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
       children: [
         if (invitations.isNotEmpty) ...[
           _buildSectionHeader('PENDING STUDENT INVITES', isDark),
-          ...invitations.map((inv) => _buildPendingInvitationCard(inv, isDark)),
+          ...invitations.map((inv) => _buildPendingInvitationCard(inv, isDark, isSmallScreen)),
           const SizedBox(height: AppDimensions.spacingL),
         ],
         
         if (sortedCoachRequests.isNotEmpty) ...[
           _buildSectionHeader('COACH REGISTRATION REQUESTS', isDark),
-          ...sortedCoachRequests.map((req) => _buildCoachRegistrationRequestCard(req, isDark)),
+          ...sortedCoachRequests.map((req) => _buildCoachRegistrationRequestCard(req, isDark, isSmallScreen)),
           const SizedBox(height: AppDimensions.spacingL),
         ],
 
         if (sortedStudentRequests.isNotEmpty) ...[
           _buildSectionHeader('STUDENT REGISTRATION REQUESTS', isDark),
-          ...sortedStudentRequests.map((req) => _buildRegistrationRequestCard(req, isDark)),
+          ...sortedStudentRequests.map((req) => _buildRegistrationRequestCard(req, isDark, isSmallScreen)),
         ],
       ],
     );
@@ -1062,7 +1073,7 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
     );
   }
 
-  Widget _buildPendingInvitationCard(Map<String, dynamic> invitation, bool isDark) {
+  Widget _buildPendingInvitationCard(Map<String, dynamic> invitation, bool isDark, bool isSmallScreen) {
     final statusColor = AppColors.warning;
     final statusBgColor = statusColor.withValues(alpha: 0.1);
     final coachName = invitation['coach_name'] ?? 'Unknown Coach';
@@ -1072,8 +1083,8 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
     final date = dateStr != null ? DateTime.tryParse(dateStr) : null;
 
     return NeumorphicContainer(
-      padding: const EdgeInsets.all(AppDimensions.paddingM),
-      margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
+      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingM),
+      margin: EdgeInsets.only(bottom: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1086,7 +1097,7 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
                     Text(
                       studentEmail != 'No Email' ? studentEmail : studentPhone,
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: isSmallScreen ? 14 : 16,
                         fontWeight: FontWeight.w600,
                         color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                       ),
@@ -1116,7 +1127,7 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
                   'WAITING',
                   style: TextStyle(
                     color: statusColor,
-                    fontSize: 12,
+                    fontSize: isSmallScreen ? 11 : 12,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -1241,13 +1252,13 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
     );
   }
 
-  Widget _buildRegistrationRequestCard(StudentRegistrationRequest request, bool isDark) {
+  Widget _buildRegistrationRequestCard(StudentRegistrationRequest request, bool isDark, bool isSmallScreen) {
     final statusColor = _getStatusColor(request.status, isDark);
     final statusBgColor = statusColor.withValues(alpha: 0.1);
 
     return NeumorphicContainer(
-      padding: const EdgeInsets.all(AppDimensions.paddingM),
-      margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
+      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingM),
+      margin: EdgeInsets.only(bottom: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1261,7 +1272,7 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
                     Text(
                       request.name,
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: isSmallScreen ? 16 : 18,
                         fontWeight: FontWeight.w600,
                         color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                       ),
@@ -1558,13 +1569,13 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
     }
   }
 
-  Widget _buildCoachRegistrationRequestCard(CoachRegistrationRequest request, bool isDark) {
+  Widget _buildCoachRegistrationRequestCard(CoachRegistrationRequest request, bool isDark, bool isSmallScreen) {
     final statusColor = _getStatusColor(request.status, isDark);
     final statusBgColor = statusColor.withValues(alpha: 0.1);
 
     return NeumorphicContainer(
-      padding: const EdgeInsets.all(AppDimensions.paddingM),
-      margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
+      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingM),
+      margin: EdgeInsets.only(bottom: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1578,7 +1589,7 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
                     Text(
                       request.name,
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: isSmallScreen ? 16 : 18,
                         fontWeight: FontWeight.w600,
                         color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                       ),
@@ -1830,7 +1841,7 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
     }
   }
 
-  Widget _buildRejoinRequestsTab(bool isDark) {
+  Widget _buildRejoinRequestsTab(bool isDark, bool isSmallScreen) {
     final studentsAsync = ref.watch(studentListProvider);
 
     return studentsAsync.when(
@@ -1871,11 +1882,11 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.all(AppDimensions.paddingL),
+          padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
           itemCount: rejoinRequests.length,
           itemBuilder: (context, index) {
             final student = rejoinRequests[index];
-            return _buildRejoinRequestCard(student, isDark);
+            return _buildRejoinRequestCard(student, isDark, isSmallScreen);
           },
         );
       },
@@ -1887,10 +1898,10 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
     );
   }
 
-  Widget _buildRejoinRequestCard(Student student, bool isDark) {
+  Widget _buildRejoinRequestCard(Student student, bool isDark, bool isSmallScreen) {
     return NeumorphicContainer(
-      padding: const EdgeInsets.all(AppDimensions.paddingM),
-      margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
+      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingM),
+      margin: EdgeInsets.only(bottom: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
