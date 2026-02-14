@@ -201,6 +201,8 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final authStateAsync = ref.watch(authProvider);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
 
     return authStateAsync.when(
       data: (authState) {
@@ -214,10 +216,10 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
         }
 
         if (_showAddForm) {
-          return _buildAddForm(isDark);
+          return _buildAddForm(isDark, isSmallScreen);
         }
 
-        return _buildLeaveRequestsList(authState, isDark);
+        return _buildLeaveRequestsList(authState, isDark, isSmallScreen);
       },
       loading: () => Scaffold(
         backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
@@ -271,7 +273,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
     );
   }
 
-  Widget _buildLeaveRequestsList(Authenticated authState, bool isDark) {
+  Widget _buildLeaveRequestsList(Authenticated authState, bool isDark, bool isSmallScreen) {
     final leaveRequestsAsync = ref.watch(
       coachLeaveRequestsProvider(authState.userId),
     );
@@ -330,11 +332,11 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
               });
 
             return ListView.builder(
-              padding: const EdgeInsets.all(AppDimensions.paddingL),
+              padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
               itemCount: sortedRequests.length,
               itemBuilder: (context, index) {
                 final request = sortedRequests[index];
-                return _buildLeaveRequestCard(request, isDark);
+                return _buildLeaveRequestCard(request, isDark, isSmallScreen);
               },
             );
           },
@@ -392,7 +394,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
     );
   }
 
-  Widget _buildLeaveRequestCard(LeaveRequest request, bool isDark) {
+  Widget _buildLeaveRequestCard(LeaveRequest request, bool isDark, bool isSmallScreen) {
     final startDate = request.startDate;
     final endDate = request.endDate;
     final status = request.status;
@@ -400,8 +402,8 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
     final reason = request.reason;
 
     return NeumorphicContainer(
-      padding: const EdgeInsets.all(AppDimensions.paddingM),
-      margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
+      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingM),
+      margin: EdgeInsets.only(bottom: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -415,7 +417,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
                     Text(
                       _getLeaveTypeLabel(type),
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: isSmallScreen ? 16 : 18,
                         fontWeight: FontWeight.w600,
                         color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                       ),
@@ -444,7 +446,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
                   status.toUpperCase(),
                   style: TextStyle(
                     color: _getStatusColorObj(status),
-                    fontSize: 12,
+                    fontSize: isSmallScreen ? 11 : 12,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -620,7 +622,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
     }
   }
 
-  Widget _buildAddForm(bool isDark) {
+  Widget _buildAddForm(bool isDark, bool isSmallScreen) {
     return Scaffold(
       backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
       appBar: AppBar(
@@ -644,7 +646,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
       ),
       body: SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.all(AppDimensions.paddingL),
+          padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [

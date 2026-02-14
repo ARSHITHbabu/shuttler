@@ -205,12 +205,15 @@ class _ChangePasswordDialogState extends ConsumerState<ChangePasswordDialog> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        'Change Password',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
-                          color: textPrimaryColor,
+                      Expanded(
+                        child: Text(
+                          'Change Password',
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w600,
+                            color: textPrimaryColor,
+                          ),
                         ),
                       ),
                       IconButton(

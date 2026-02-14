@@ -296,6 +296,8 @@ class PrivacyPolicyScreen extends StatelessWidget {
                       color: textPrimaryColor,
                       letterSpacing: 0.3,
                     ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],

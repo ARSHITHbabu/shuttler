@@ -2087,12 +2087,15 @@ def create_coach(coach: CoachCreate):
         db.commit()
         db.refresh(db_coach)
         
+        # Convert to Pydantic model before closing session
+        coach_response = Coach.model_validate(db_coach)
+        
         # Verify it was saved to coaches table by querying it back
         verify_coach = db.query(CoachDB).filter(CoachDB.id == db_coach.id).first()
         if not verify_coach:
             raise HTTPException(status_code=500, detail="Error: Coach was not saved to coaches table")
         
-        return db_coach
+        return coach_response
     except IntegrityError as e:
         db.rollback()
         error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
@@ -2111,7 +2114,7 @@ def get_coaches():
     try:
         # Get all coaches (owners are in separate table)
         coaches = db.query(CoachDB).all()
-        return coaches
+        return [Coach.model_validate(c) for c in coaches]
     finally:
         db.close()
 
@@ -2122,7 +2125,7 @@ def get_coach(coach_id: int):
         coach = db.query(CoachDB).filter(CoachDB.id == coach_id).first()
         if not coach:
             raise HTTPException(status_code=404, detail="Coach not found")
-        return coach
+        return Coach.model_validate(coach)
     finally:
         db.close()
 
@@ -2140,7 +2143,7 @@ def update_coach(coach_id: int, coach_update: CoachUpdate):
         
         db.commit()
         db.refresh(coach)
-        return coach
+        return Coach.model_validate(coach)
     finally:
         db.close()
 
@@ -2558,15 +2561,17 @@ def create_owner(owner: OwnerCreate):
             raise HTTPException(status_code=500, detail="Internal error: Owner not mapped to owners table")
         
         db.add(db_owner)
-        db.commit()
         db.refresh(db_owner)
+        
+        # Convert to Pydantic model before closing session
+        owner_response = Owner.model_validate(db_owner)
         
         # Verify it was saved to owners table by querying it back
         verify_owner = db.query(OwnerDB).filter(OwnerDB.id == db_owner.id).first()
         if not verify_owner:
             raise HTTPException(status_code=500, detail="Error: Owner was not saved to owners table")
         
-        return db_owner
+        return owner_response
     except IntegrityError as e:
         db.rollback()
         error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
@@ -2592,7 +2597,7 @@ def get_owners():
     db = SessionLocal()
     try:
         owners = db.query(OwnerDB).all()
-        return owners
+        return [Owner.model_validate(o) for o in owners]
     finally:
         db.close()
 
@@ -2604,7 +2609,7 @@ def get_owner(owner_id: int):
         owner = db.query(OwnerDB).filter(OwnerDB.id == owner_id).first()
         if not owner:
             raise HTTPException(status_code=404, detail="Owner not found")
-        return owner
+        return Owner.model_validate(owner)
     finally:
         db.close()
 
@@ -2632,7 +2637,7 @@ def update_owner(owner_id: int, owner_update: OwnerUpdate):
         
         db.commit()
         db.refresh(owner)
-        return owner
+        return Owner.model_validate(owner)
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error updating owner: {str(e)}")
@@ -3403,7 +3408,7 @@ def create_student(student: StudentCreate):
         db.add(db_student)
         db.commit()
         db.refresh(db_student)
-        return db_student
+        return Student.model_validate(db_student)
     finally:
         db.close()
 
@@ -3415,7 +3420,7 @@ def get_students(include_deleted: bool = Query(False, description="Include delet
         if not include_deleted:
             query = query.filter(StudentDB.status == "active")
         students = query.all()
-        return students
+        return [Student.model_validate(s) for s in students]
     finally:
         db.close()
 
@@ -3426,7 +3431,7 @@ def get_student(student_id: int):
         student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
         if not student:
             raise HTTPException(status_code=404, detail="Student not found")
-        return student
+        return Student.model_validate(student)
     finally:
         db.close()
 
@@ -3444,7 +3449,7 @@ def update_student(student_id: int, student_update: StudentUpdate):
         
         db.commit()
         db.refresh(student)
-        return student
+        return Student.model_validate(student)
     finally:
         db.close()
 
@@ -3471,7 +3476,8 @@ def get_inactive_students():
     db = SessionLocal()
     try:
         query = db.query(StudentDB).filter(StudentDB.status == "inactive")
-        return query.all()
+        students = query.all()
+        return [Student.model_validate(s) for s in students]
     finally:
         db.close()
 
@@ -3481,7 +3487,8 @@ def get_rejoin_requests():
     db = SessionLocal()
     try:
         query = db.query(StudentDB).filter(StudentDB.rejoin_request_pending == True)
-        return query.all()
+        requests = query.all()
+        return [Student.model_validate(s) for s in requests]
     finally:
         db.close()
 
@@ -4678,7 +4685,7 @@ def get_batch_students(batch_id: int):
         
         # Get student details
         students = db.query(StudentDB).filter(StudentDB.id.in_(student_ids)).all()
-        return students
+        return [Student.model_validate(s) for s in students]
     finally:
         db.close()
 
@@ -4728,7 +4735,7 @@ def get_student_performance(student_id: int):
     db = SessionLocal()
     try:
         performance = db.query(PerformanceDB).filter(PerformanceDB.student_id == student_id).all()
-        return performance
+        return [Performance.model_validate(p) for p in performance]
     finally:
         db.close()
 
@@ -5398,7 +5405,7 @@ def create_enquiry(enquiry: EnquiryCreate):
         db.add(db_enquiry)
         db.commit()
         db.refresh(db_enquiry)
-        return db_enquiry
+        return Enquiry.model_validate(db_enquiry)
     finally:
         db.close()
 
@@ -5407,7 +5414,7 @@ def get_enquiries():
     db = SessionLocal()
     try:
         enquiries = db.query(EnquiryDB).all()
-        return enquiries
+        return [Enquiry.model_validate(e) for e in enquiries]
     finally:
         db.close()
 
@@ -5416,7 +5423,7 @@ def get_assigned_enquiries(assigned_to: str):
     db = SessionLocal()
     try:
         enquiries = db.query(EnquiryDB).filter(EnquiryDB.assigned_to == assigned_to).all()
-        return enquiries
+        return [Enquiry.model_validate(e) for e in enquiries]
     finally:
         db.close()
 
@@ -5434,7 +5441,7 @@ def update_enquiry(enquiry_id: int, enquiry_update: EnquiryUpdate):
         
         db.commit()
         db.refresh(enquiry)
-        return enquiry
+        return Enquiry.model_validate(enquiry)
     finally:
         db.close()
 
@@ -5478,7 +5485,8 @@ def create_schedule(schedule: ScheduleCreate):
         except Exception as e:
             print(f"Error syncing schedule to calendar: {e}")
             
-        return db_schedule
+        # Convert to Pydantic model before closing session to avoid DetachedInstanceError
+        return Schedule.model_validate(db_schedule)
     finally:
         db.close()
 
@@ -5487,7 +5495,7 @@ def get_batch_schedules(batch_id: int):
     db = SessionLocal()
     try:
         schedules = db.query(ScheduleDB).filter(ScheduleDB.batch_id == batch_id).all()
-        return schedules
+        return [Schedule.model_validate(s) for s in schedules]
     finally:
         db.close()
 
@@ -5496,7 +5504,7 @@ def get_schedules_by_date(date: str):
     db = SessionLocal()
     try:
         schedules = db.query(ScheduleDB).filter(ScheduleDB.date == date).all()
-        return schedules
+        return [Schedule.model_validate(s) for s in schedules]
     finally:
         db.close()
 
@@ -5546,7 +5554,8 @@ def create_tournament(tournament: TournamentCreate):
         except Exception as e:
             print(f"Error syncing tournament to calendar: {e}")
             
-        return db_tournament
+        # Convert to Pydantic model before closing session to avoid DetachedInstanceError
+        return Tournament.model_validate(db_tournament)
     finally:
         db.close()
 
@@ -5555,7 +5564,7 @@ def get_tournaments():
     db = SessionLocal()
     try:
         tournaments = db.query(TournamentDB).all()
-        return tournaments
+        return [Tournament.model_validate(t) for t in tournaments]
     finally:
         db.close()
 
@@ -5565,7 +5574,7 @@ def get_upcoming_tournaments():
     try:
         today = datetime.now().strftime("%Y-%m-%d")
         tournaments = db.query(TournamentDB).filter(TournamentDB.date >= today).all()
-        return tournaments
+        return [Tournament.model_validate(t) for t in tournaments]
     finally:
         db.close()
 
@@ -6122,7 +6131,7 @@ def get_student_invitations(student_email: str):
         invitations = db.query(InvitationDB).filter(
             InvitationDB.student_email == student_email
         ).all()
-        return invitations
+        return [Invitation.model_validate(i) for i in invitations]
     finally:
         db.close()
 
@@ -6131,7 +6140,7 @@ def get_coach_invitations(coach_id: int):
     db = SessionLocal()
     try:
         invitations = db.query(InvitationDB).filter(InvitationDB.coach_id == coach_id).all()
-        return invitations
+        return [Invitation.model_validate(i) for i in invitations]
     finally:
         db.close()
 
@@ -6169,7 +6178,7 @@ def update_invitation(invitation_id: int, invitation_update: InvitationUpdate):
         
         db.commit()
         db.refresh(invitation)
-        return invitation
+        return Invitation.model_validate(invitation)
     finally:
         db.close()
 

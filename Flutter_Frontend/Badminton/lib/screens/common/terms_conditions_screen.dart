@@ -19,6 +19,8 @@ class TermsConditionsScreen extends StatelessWidget {
     final textPrimaryColor = isDark ? AppColors.textPrimary : AppColorsLight.textPrimary;
     final textSecondaryColor = isDark ? AppColors.textSecondary : AppColorsLight.textSecondary;
     final accentColor = isDark ? AppColors.accent : AppColorsLight.accent;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -50,7 +52,7 @@ class TermsConditionsScreen extends StatelessWidget {
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+          padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -58,7 +60,7 @@ class TermsConditionsScreen extends StatelessWidget {
               // Header Card - Premium Look
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(AppDimensions.paddingXl),
+                padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingL : AppDimensions.paddingXl),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: isDark 
@@ -105,7 +107,7 @@ class TermsConditionsScreen extends StatelessWidget {
                     Text(
                       LegalContent.appName,
                       style: TextStyle(
-                        fontSize: 24,
+                        fontSize: isSmallScreen ? 20 : 24,
                         fontWeight: FontWeight.bold,
                         color: textPrimaryColor,
                         letterSpacing: 1,
@@ -115,7 +117,7 @@ class TermsConditionsScreen extends StatelessWidget {
                     Text(
                       'Terms and Conditions',
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: isSmallScreen ? 14 : 16,
                         color: textSecondaryColor,
                         fontWeight: FontWeight.w500,
                       ),
@@ -181,6 +183,7 @@ class TermsConditionsScreen extends StatelessWidget {
                   textPrimaryColor: textPrimaryColor,
                   textSecondaryColor: textSecondaryColor,
                   accentColor: accentColor,
+                  isSmallScreen: isSmallScreen,
                 ),
               ),
 
@@ -189,7 +192,7 @@ class TermsConditionsScreen extends StatelessWidget {
               // Acceptance Footer
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(AppDimensions.paddingXl),
+                padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingL : AppDimensions.paddingXl),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: isDark 
@@ -289,6 +292,7 @@ class TermsConditionsScreen extends StatelessWidget {
     required Color textPrimaryColor,
     required Color textSecondaryColor,
     required Color accentColor,
+    bool isSmallScreen = false,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppDimensions.spacingL),
@@ -308,13 +312,17 @@ class TermsConditionsScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                    color: textPrimaryColor,
-                    letterSpacing: 0.3,
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: isSmallScreen ? 15 : 17,
+                      fontWeight: FontWeight.bold,
+                      color: textPrimaryColor,
+                      letterSpacing: 0.3,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],

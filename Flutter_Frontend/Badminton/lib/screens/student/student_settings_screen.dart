@@ -83,6 +83,8 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
     final isDarkMode = themeMode == ThemeMode.dark;
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -115,7 +117,7 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
           // Content
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.all(AppDimensions.paddingL),
+              padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
               child: Column(
                 children: [
                   // Theme Section
@@ -143,11 +145,13 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                     title: 'Account',
                     icon: Icons.account_circle_outlined,
                     isDark: isDark,
+                    isSmallScreen: isSmallScreen,
                     children: [
                       _buildActionTile(
                         title: 'Profile',
                         icon: Icons.person_outline,
                         isDark: isDark,
+                        isSmallScreen: isSmallScreen,
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(
@@ -161,6 +165,7 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                         title: 'Batches',
                         icon: Icons.group_outlined,
                         isDark: isDark,
+                        isSmallScreen: isSmallScreen,
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(
@@ -174,6 +179,7 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                         title: 'Change Password',
                         icon: Icons.lock_outline,
                         isDark: isDark,
+                        isSmallScreen: isSmallScreen,
                         onTap: () => _showChangePassword(isDark),
                       ),
                     ],
@@ -186,6 +192,7 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                     title: 'Notifications',
                     icon: Icons.notifications_outlined,
                     isDark: isDark,
+                    isSmallScreen: isSmallScreen,
                     children: [
                       _buildSwitchTile(
                         title: 'Push Notifications',
@@ -196,6 +203,7 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                           _saveSettings();
                         },
                         isDark: isDark,
+                        isSmallScreen: isSmallScreen,
                       ),
                       const Divider(height: 1),
                       _buildSwitchTile(
@@ -207,6 +215,7 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                           _saveSettings();
                         },
                         isDark: isDark,
+                        isSmallScreen: isSmallScreen,
                       ),
                     ],
                   ),
@@ -218,6 +227,7 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                     title: 'Reminders',
                     icon: Icons.alarm_outlined,
                     isDark: isDark,
+                    isSmallScreen: isSmallScreen,
                     children: [
                       _buildSwitchTile(
                         title: 'Attendance Reminders',
@@ -228,6 +238,7 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                           _saveSettings();
                         },
                         isDark: isDark,
+                        isSmallScreen: isSmallScreen,
                       ),
                       const Divider(height: 1),
                       _buildSwitchTile(
@@ -239,6 +250,7 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                           _saveSettings();
                         },
                         isDark: isDark,
+                        isSmallScreen: isSmallScreen,
                       ),
                     ],
                   ),
@@ -250,17 +262,20 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                     title: 'About',
                     icon: Icons.info_outline,
                     isDark: isDark,
+                    isSmallScreen: isSmallScreen,
                     children: [
                       _buildInfoTile(
                         title: 'App Version',
                         value: '1.0.0',
                         isDark: isDark,
+                        isSmallScreen: isSmallScreen,
                       ),
                       const Divider(height: 1),
                       _buildActionTile(
                         title: 'Privacy Policy',
                         icon: Icons.privacy_tip_outlined,
                         isDark: isDark,
+                        isSmallScreen: isSmallScreen,
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(
@@ -274,6 +289,7 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                         title: 'Terms of Service',
                         icon: Icons.description_outlined,
                         isDark: isDark,
+                        isSmallScreen: isSmallScreen,
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(
@@ -305,9 +321,10 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
     required IconData icon,
     required bool isDark,
     required List<Widget> children,
+    bool isSmallScreen = false,
   }) {
     return NeumorphicContainer(
-      padding: const EdgeInsets.all(AppDimensions.paddingM),
+      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingM),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -315,15 +332,15 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
           Row(
             children: [
               Container(
-                width: 32,
-                height: 32,
+                width: isSmallScreen ? 28 : 32,
+                height: isSmallScreen ? 28 : 32,
                 decoration: BoxDecoration(
                   color: (isDark ? AppColors.accent : AppColorsLight.accent).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(AppDimensions.radiusS),
                 ),
                 child: Icon(
                   icon,
-                  size: 18,
+                  size: isSmallScreen ? 16 : 18,
                   color: isDark ? AppColors.accent : AppColorsLight.accent,
                 ),
               ),
@@ -331,7 +348,7 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
               Text(
                 title,
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: isSmallScreen ? 14 : 16,
                   fontWeight: FontWeight.w600,
                   color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                 ),
@@ -364,11 +381,12 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
     required bool value,
     required ValueChanged<bool> onChanged,
     required bool isDark,
+    bool isSmallScreen = false,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppDimensions.paddingM,
-        vertical: AppDimensions.spacingS,
+      padding: EdgeInsets.symmetric(
+        horizontal: isSmallScreen ? AppDimensions.paddingS : AppDimensions.paddingM,
+        vertical: isSmallScreen ? AppDimensions.spacingXs : AppDimensions.spacingS,
       ),
       child: Row(
         children: [
@@ -379,7 +397,7 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                 Text(
                   title,
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: isSmallScreen ? 13 : 14,
                     fontWeight: FontWeight.w500,
                     color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                   ),
@@ -387,7 +405,7 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                 Text(
                   subtitle,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: isSmallScreen ? 11 : 12,
                     color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                   ),
                 ),
@@ -414,16 +432,17 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
     required String title,
     required String value,
     required bool isDark,
+    bool isSmallScreen = false,
   }) {
     return Padding(
-      padding: const EdgeInsets.all(AppDimensions.paddingM),
+      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingS : AppDimensions.paddingM),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
             title,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: isSmallScreen ? 13 : 14,
               fontWeight: FontWeight.w500,
               color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
             ),
@@ -446,16 +465,17 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
     required bool isDark,
     required VoidCallback onTap,
     bool isDestructive = false,
+    bool isSmallScreen = false,
   }) {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.all(AppDimensions.paddingM),
+        padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingS : AppDimensions.paddingM),
         child: Row(
           children: [
             Icon(
               icon,
-              size: 20,
+              size: isSmallScreen ? 18 : 20,
               color: isDestructive
                   ? (isDark ? AppColors.error : AppColorsLight.error)
                   : (isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary),
@@ -465,7 +485,7 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
               child: Text(
                 title,
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: isSmallScreen ? 13 : 14,
                   fontWeight: FontWeight.w500,
                   color: isDestructive
                       ? (isDark ? AppColors.error : AppColorsLight.error)

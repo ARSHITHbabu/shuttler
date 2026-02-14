@@ -30,6 +30,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final statsAsync = ref.watch(dashboardStatsProvider);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
 
     return RefreshIndicator(
       onRefresh: () async {
@@ -43,7 +45,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         children: [
           // Header
           Padding(
-            padding: const EdgeInsets.all(AppDimensions.paddingL),
+            padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -59,7 +61,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       data: (owner) => Text(
                         owner?.academyName ?? 'Pursue Badminton',
                         style: TextStyle(
-                          fontSize: 24,
+                          fontSize: isSmallScreen ? 20 : 24,
                           fontWeight: FontWeight.w600,
                           color: context.textPrimaryColor,
                         ),
@@ -123,7 +125,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           // Stats Grid
           statsAsync.when(
             data: (stats) => Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+              padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
               child: GridView.count(
                 crossAxisCount: 2,
                 shrinkWrap: true,
@@ -136,6 +138,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     icon: Icons.people_outline,
                     value: stats.totalStudents.toString(),
                     label: 'Active Students',
+                    isSmallScreen: isSmallScreen,
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
@@ -148,6 +151,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     icon: Icons.person_outline,
                     value: stats.totalCoaches.toString(),
                     label: 'Total Coaches',
+                    isSmallScreen: isSmallScreen,
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
@@ -160,6 +164,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     icon: Icons.calendar_today_outlined,
                     value: stats.activeBatches.toString(),
                     label: 'Active Batches',
+                    isSmallScreen: isSmallScreen,
                     onTap: () {
                       ref.read(ownerBottomNavIndexProvider.notifier).state = 1; // 1 is Batches screen index
                     },
@@ -168,6 +173,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     icon: Icons.attach_money_outlined,
                     value: '\$${_formatCurrency(stats.pendingFees)}',
                     label: 'Pending Fees',
+                    isSmallScreen: isSmallScreen,
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
@@ -196,14 +202,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
           // Upcoming Sessions
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+            padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'Upcoming Sessions',
                   style: TextStyle(
-                    fontSize: 18,
+                    fontSize: isSmallScreen ? 16 : 18,
                     fontWeight: FontWeight.w600,
                     color: context.textPrimaryColor,
                   ),
@@ -273,14 +279,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
           // Quick Actions
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+            padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'Quick Actions',
                   style: TextStyle(
-                    fontSize: 18,
+                    fontSize: isSmallScreen ? 16 : 18,
                     fontWeight: FontWeight.w600,
                     color: context.textPrimaryColor,
                   ),
@@ -292,6 +298,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       child: _QuickActionButton(
                         icon: Icons.add,
                         label: 'Add Student',
+                        isSmallScreen: isSmallScreen,
                         onTap: () => _showAddStudentDialog(context),
                       ),
                     ),
@@ -300,6 +307,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       child: _QuickActionButton(
                         icon: Icons.add,
                         label: 'Invite Coach',
+                        isSmallScreen: isSmallScreen,
                         onTap: () => _showAddCoachDialog(context),
                       ),
                     ),
@@ -372,12 +380,14 @@ class _StatCard extends StatelessWidget {
   final String value;
   final String label;
   final VoidCallback? onTap;
+  final bool isSmallScreen;
 
   const _StatCard({
     required this.icon,
     required this.value,
     required this.label,
     this.onTap,
+    this.isSmallScreen = false,
   });
 
   @override
@@ -393,8 +403,8 @@ class _StatCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: isSmallScreen ? 32 : 40,
+                height: isSmallScreen ? 32 : 40,
                 decoration: BoxDecoration(
                   color: context.backgroundColor,
                   borderRadius: BorderRadius.circular(AppDimensions.radiusM),
@@ -402,7 +412,7 @@ class _StatCard extends StatelessWidget {
                 ),
                 child: Icon(
                   icon,
-                  size: 20,
+                  size: isSmallScreen ? 16 : 20,
                   color: context.iconPrimaryColor,
                 ),
               ),
@@ -419,7 +429,7 @@ class _StatCard extends StatelessWidget {
             child: Text(
               value,
               style: TextStyle(
-                fontSize: 22,
+                fontSize: isSmallScreen ? 18 : 22,
                 fontWeight: FontWeight.w600,
                 color: context.textPrimaryColor,
                 height: 1.2,
@@ -538,11 +548,13 @@ class _QuickActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final bool isSmallScreen;
 
   const _QuickActionButton({
     required this.icon,
     required this.label,
     required this.onTap,
+    this.isSmallScreen = false,
   });
 
   @override
@@ -555,14 +567,14 @@ class _QuickActionButton extends StatelessWidget {
           children: [
             Icon(
               icon,
-              size: 24,
+              size: isSmallScreen ? 20 : 24,
               color: context.iconPrimaryColor,
             ),
             const SizedBox(height: AppDimensions.spacingS),
             Text(
               label,
               style: TextStyle(
-                fontSize: 14,
+                fontSize: isSmallScreen ? 13 : 14,
                 color: context.textPrimaryColor,
               ),
             ),

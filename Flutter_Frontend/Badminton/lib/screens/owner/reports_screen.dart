@@ -178,6 +178,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+
     if (_isInitializing) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
@@ -187,29 +190,34 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('Reports', style: TextStyle(color: AppColors.textPrimary)),
+        title: Text('Reports', 
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: isSmallScreen ? 18 : 20,
+          )
+        ),
         backgroundColor: AppColors.background,
         elevation: 0,
         leading: const BackButton(color: AppColors.textPrimary),
       ),
       body: SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.all(AppDimensions.paddingL),
+          padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildTabSelector(),
+              _buildTabSelector(isSmallScreen),
               const SizedBox(height: AppDimensions.spacingL),
               if (_tabIndex == 0) ...[
                 _buildReportTypeSelector(),
                 const SizedBox(height: AppDimensions.spacingL),
-                _buildFilters(),
+                _buildFilters(isSmallScreen),
                 const SizedBox(height: AppDimensions.spacingL),
-                _buildGenerateButton(),
+                _buildGenerateButton(isSmallScreen),
                 const SizedBox(height: AppDimensions.spacingL),
-                if (_reportData != null) _buildReportPreview(),
+                if (_reportData != null) _buildReportPreview(isSmallScreen),
               ] else ...[
-                _buildHistoryList(),
+                _buildHistoryList(isSmallScreen),
               ]
             ],
           ),
@@ -238,9 +246,12 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   }
                 },
                 selectedColor: AppColors.accent,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                 labelStyle: TextStyle(
                   color: isSelected ? Colors.white : AppColors.textPrimary,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  fontSize: 12,
                 ),
               ),
             );
@@ -249,9 +260,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     );
   }
 
-  Widget _buildFilters() {
+  Widget _buildFilters(bool isSmallScreen) {
     return NeumorphicContainer(
-      padding: const EdgeInsets.all(AppDimensions.paddingM),
+      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingS : AppDimensions.paddingM),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -287,6 +298,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         style: TextStyle(
                           color: isSelected ? Colors.white : AppColors.textPrimary,
                           fontWeight: FontWeight.w500,
+                          fontSize: isSmallScreen ? 12 : 14,
                         ),
                       ),
                     ),
@@ -302,7 +314,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           if (_filterType == FilterType.year)
              _buildYearSelector(),
           if (_filterType == FilterType.month)
-             _buildMonthSelector(),
+             _buildMonthSelector(isSmallScreen),
              
           const SizedBox(height: AppDimensions.spacingM),
           
@@ -318,6 +330,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               child: DropdownButton<String>(
                 value: _selectedBatchId,
                 isExpanded: true,
+                style: TextStyle(color: AppColors.textPrimary, fontSize: isSmallScreen ? 13 : 15),
                 items: [
                   const DropdownMenuItem(value: "all", child: Text("All Batches")),
                   ..._filteredBatches.map((b) => DropdownMenuItem(
@@ -402,7 +415,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     );
   }
   
-  Widget _buildMonthSelector() {
+  Widget _buildMonthSelector(bool isSmallScreen) {
     int currentYear = DateTime.now().year;
     List<int> years = List.generate(10, (i) => currentYear - 5 + i);
     List<String> months = [
@@ -431,6 +444,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                       child: DropdownButton<int>(
                         value: _selectedMonth.month,
                         isExpanded: true,
+                        style: TextStyle(color: AppColors.textPrimary, fontSize: isSmallScreen ? 13 : 15),
                         items: List.generate(12, (i) => DropdownMenuItem(
                           value: i + 1,
                           child: Text(months[i]),
@@ -445,7 +459,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 ],
               ),
             ),
-            const SizedBox(width: AppDimensions.spacingM),
+            SizedBox(width: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -462,6 +476,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                       child: DropdownButton<int>(
                         value: _selectedMonth.year,
                         isExpanded: true,
+                        style: TextStyle(color: AppColors.textPrimary, fontSize: isSmallScreen ? 13 : 15),
                         items: years.map((y) => DropdownMenuItem(
                           value: y,
                           child: Text(y.toString()),
@@ -482,24 +497,24 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     );
   }
 
-  Widget _buildGenerateButton() {
+  Widget _buildGenerateButton(bool isSmallScreen) {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.accent,
-          padding: const EdgeInsets.symmetric(vertical: 16),
+          padding: EdgeInsets.symmetric(vertical: isSmallScreen ? 12 : 16),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
         onPressed: _isLoading ? null : _generateReport,
         child: _isLoading 
           ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-          : const Text("Generate Report", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          : Text("Generate Report", style: TextStyle(fontSize: isSmallScreen ? 14 : 16, fontWeight: FontWeight.bold)),
       ),
     );
   }
 
-  Widget _buildTabSelector() {
+  Widget _buildTabSelector(bool isSmallScreen) {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
@@ -509,14 +524,14 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       ),
       child: Row(
         children: [
-          Expanded(child: _tabButton("Generate Report", 0)),
-          Expanded(child: _tabButton("History", 1)),
+          Expanded(child: _tabButton("Generate Report", 0, isSmallScreen)),
+          Expanded(child: _tabButton("History", 1, isSmallScreen)),
         ],
       ),
     );
   }
 
-  Widget _tabButton(String title, int index) {
+  Widget _tabButton(String title, int index, bool isSmallScreen) {
       bool isSelected = _tabIndex == index;
       return InkWell(
         onTap: () {
@@ -526,7 +541,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           });
         },
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
+          padding: EdgeInsets.symmetric(vertical: isSmallScreen ? 8 : 10),
           decoration: BoxDecoration(
             color: isSelected ? AppColors.accent : Colors.transparent,
             borderRadius: BorderRadius.circular(6),
@@ -537,6 +552,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             style: TextStyle(
               color: isSelected ? Colors.white : AppColors.textPrimary,
               fontWeight: FontWeight.w600,
+              fontSize: isSmallScreen ? 12 : 14,
             ),
           ),
         ),
@@ -571,7 +587,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
      }
   }
 
-  Widget _buildHistoryList() {
+  Widget _buildHistoryList(bool isSmallScreen) {
     if (_isHistoryLoading) return const Center(child: CircularProgressIndicator());
     if (_historyData.isEmpty) return const Center(child: Text("No report history found."));
 
@@ -584,29 +600,35 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         final date = DateTime.tryParse(item['generated_on'] ?? '') ?? DateTime.now();
         
         return NeumorphicContainer(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(isSmallScreen ? 12 : 16),
           margin: const EdgeInsets.only(bottom: 12),
           child: Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(10),
+                padding: EdgeInsets.all(isSmallScreen ? 8 : 10),
                 decoration: BoxDecoration(color: AppColors.accent.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                child: Icon(Icons.description, color: AppColors.accent),
+                child: Icon(Icons.description, color: AppColors.accent, size: isSmallScreen ? 20 : 24),
               ),
-              const SizedBox(width: 16),
+              SizedBox(width: isSmallScreen ? 12 : 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(item['report_type']?.toString().toUpperCase() ?? 'REPORT', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    Text(item['report_type']?.toString().toUpperCase() ?? 'REPORT', 
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: isSmallScreen ? 13 : 14)),
                     const SizedBox(height: 4),
-                    Text(item['filter_summary'] ?? '', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-                    Text(DateFormat('dd MMM yyyy, hh:mm a').format(date), style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
+                    Text(item['filter_summary'] ?? '', 
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: isSmallScreen ? 11 : 12),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(DateFormat('dd MMM yyyy, hh:mm a').format(date), 
+                      style: TextStyle(color: AppColors.textSecondary, fontSize: isSmallScreen ? 9 : 10)),
                   ],
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.download, color: AppColors.accent),
+                icon: Icon(Icons.download, color: AppColors.accent, size: isSmallScreen ? 20 : 24),
                 onPressed: () {
                    setState(() {
                      _reportData = Map<String, dynamic>.from(item['report_data']);
@@ -625,7 +647,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     );
   }
 
-  Widget _buildReportPreview() {
+  Widget _buildReportPreview(bool isSmallScreen) {
     final filterSummary = _reportData!['filter_summary'];
     // final generatedBy = _reportData!['generated_by'] ?? "Unknown"; // Removed as per request
     final generatedOn = _reportData!['generated_on'] ?? DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now());
@@ -633,10 +655,10 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text("Generated Report", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text("Generated Report", style: TextStyle(fontSize: isSmallScreen ? 16 : 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
         NeumorphicContainer(
-          padding: const EdgeInsets.all(20),
+          padding: EdgeInsets.all(isSmallScreen ? 15 : 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -644,7 +666,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: EdgeInsets.all(isSmallScreen ? 10 : 12),
                     decoration: BoxDecoration(
                       color: AppColors.accent.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
@@ -656,33 +678,35 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                           ? Icons.payments 
                           : Icons.insights,
                       color: AppColors.accent,
-                      size: 24,
+                      size: isSmallScreen ? 20 : 24,
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  SizedBox(width: isSmallScreen ? 12 : 16),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           "${_reportType.name.toUpperCase()} REPORT",
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: isSmallScreen ? 14 : 16),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           "$filterSummary",
-                          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+                          style: TextStyle(color: AppColors.textSecondary, fontSize: isSmallScreen ? 11 : 13),
                         ),
                          Text(
                           "Generated On: $generatedOn",
-                          style: TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w500),
+                          style: TextStyle(color: AppColors.textSecondary, fontSize: isSmallScreen ? 11 : 13, fontWeight: FontWeight.w500),
                         ),
                       ],
                     ),
                   ),
                   IconButton(
                     onPressed: () => _exportPDF(isHistory: false),
-                    icon: const Icon(Icons.download, color: AppColors.accent),
+                    icon: Icon(Icons.download, color: AppColors.accent, size: isSmallScreen ? 20 : 24),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
                     tooltip: "Download PDF",
                   ),
                 ],
@@ -1441,7 +1465,11 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         final file = File('${reportsDir.path}/$name');
         await file.writeAsBytes(bytes);
         if (mounted) {
-           SuccessSnackbar.show(context, 'Report saved to ${file.path}');
+           final screenWidth = MediaQuery.of(context).size.width;
+           final displayPath = screenWidth < 600 
+               ? file.path.split('/').last 
+               : file.path;
+           SuccessSnackbar.show(context, 'Report saved: $displayPath');
         }
       }
       

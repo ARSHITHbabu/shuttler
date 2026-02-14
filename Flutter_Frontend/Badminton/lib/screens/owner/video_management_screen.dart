@@ -414,6 +414,9 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Video Management'),
@@ -429,14 +432,14 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
             )
           : null,
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppDimensions.paddingL),
+        padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (_showUploadForm) ...[
-              _buildUploadForm(),
+              _buildUploadForm(isSmallScreen),
             ] else ...[
-              _buildVideoList(),
+              _buildVideoList(isSmallScreen),
             ],
           ],
         ),
@@ -444,17 +447,17 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
     );
   }
 
-  Widget _buildUploadForm() {
+  Widget _buildUploadForm(bool isSmallScreen) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
+            Text(
               'Upload Videos',
               style: TextStyle(
-                fontSize: 18,
+                fontSize: isSmallScreen ? 16 : 18,
                 fontWeight: FontWeight.w600,
                 color: AppColors.textPrimary,
               ),
@@ -813,7 +816,7 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
     );
   }
 
-  Widget _buildVideoList() {
+  Widget _buildVideoList(bool isSmallScreen) {
     if (_loadingVideos) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -836,25 +839,28 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
       children: [
         Text(
           'Manage Videos (${_videos.length})',
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+          style: TextStyle(
+              fontSize: isSmallScreen ? 16 : 18,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary),
         ),
-        const SizedBox(height: AppDimensions.spacingM),
+        SizedBox(height: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM),
         ...List.generate(_videos.length, (index) {
           final video = _videos[index];
           return Padding(
-            padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
-            child: _buildVideoCard(video),
+            padding: EdgeInsets.only(bottom: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM),
+            child: _buildVideoCard(video, isSmallScreen),
           );
         }),
       ],
     );
   }
 
-  Widget _buildVideoCard(VideoResource video) {
+  Widget _buildVideoCard(VideoResource video, bool isSmallScreen) {
     final isDownloading = _isDownloading && _downloadingVideoId == video.id;
 
     return NeumorphicContainer(
-      padding: const EdgeInsets.all(AppDimensions.paddingM),
+      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingM),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -879,7 +885,10 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
                   children: [
                     Text(
                       video.displayTitle,
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                      style: TextStyle(
+                          fontSize: isSmallScreen ? 14 : 16,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),

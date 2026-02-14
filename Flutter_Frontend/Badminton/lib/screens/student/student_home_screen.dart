@@ -35,6 +35,8 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
 
     // Get user ID from auth provider
     final authStateAsync = ref.watch(authProvider);
@@ -81,7 +83,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Header
-                  _buildHeader(isDark, dashboardData.studentName),
+                  _buildHeader(isDark, dashboardData.studentName, isSmallScreen),
 
                   // Stats Grid
                   _buildStatsGrid(
@@ -89,17 +91,18 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                     isDark,
                     dashboardData.attendanceRate,
                     dashboardData.performanceScore,
+                    isSmallScreen,
                   ),
 
                   const SizedBox(height: AppDimensions.spacingL),
 
                   // Upcoming Sessions
-                  _buildUpcomingSessions(isDark, dashboardData.upcomingSessions),
+                  _buildUpcomingSessions(isDark, dashboardData.upcomingSessions, isSmallScreen),
 
                   const SizedBox(height: AppDimensions.spacingL),
 
                   // Quick Actions
-                  _buildQuickActions(context, isDark, userId),
+                  _buildQuickActions(context, isDark, userId, isSmallScreen),
 
                   const SizedBox(height: 100), // Space for bottom nav
                 ],
@@ -111,9 +114,9 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
     );
   }
 
-  Widget _buildHeader(bool isDark, String studentName) {
+  Widget _buildHeader(bool isDark, String studentName, bool isSmallScreen) {
     return Padding(
-      padding: const EdgeInsets.all(AppDimensions.paddingL),
+      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -127,7 +130,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
           Text(
             studentName,
             style: TextStyle(
-              fontSize: 24,
+              fontSize: isSmallScreen ? 20 : 24,
               fontWeight: FontWeight.w600,
               color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
             ),
@@ -194,23 +197,25 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
     bool isDark,
     double attendanceRate,
     double performanceScore,
+    bool isSmallScreen,
   ) {
-
+    // Grid for stats
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
       child: GridView.count(
         crossAxisCount: 2,
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        crossAxisSpacing: AppDimensions.spacingM,
-        mainAxisSpacing: AppDimensions.spacingM,
-        childAspectRatio: 0.85,
+        crossAxisSpacing: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM,
+        mainAxisSpacing: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM,
+        childAspectRatio: isSmallScreen ? 1.0 : 0.85,
         children: [
           _StatCard(
             icon: Icons.check_circle_outline,
             value: '${attendanceRate.toStringAsFixed(0)}%',
             label: 'Attendance Rate',
             isDark: isDark,
+            isSmallScreen: isSmallScreen,
             valueColor: _getAttendanceColor(attendanceRate, isDark),
             onTap: () {
               Navigator.push(
@@ -229,6 +234,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
             value: performanceScore > 0 ? '${performanceScore.toStringAsFixed(1)}/5' : 'N/A',
             label: 'Performance',
             isDark: isDark,
+            isSmallScreen: isSmallScreen,
             onTap: () {
               Navigator.push(
                 context,
@@ -247,9 +253,9 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
   }
 
 
-  Widget _buildUpcomingSessions(bool isDark, List<Map<String, dynamic>> upcomingSessions) {
+  Widget _buildUpcomingSessions(bool isDark, List<Map<String, dynamic>> upcomingSessions, bool isSmallScreen) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+      padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -317,16 +323,16 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
     );
   }
 
-  Widget _buildQuickActions(BuildContext context, bool isDark, int studentId) {
+  Widget _buildQuickActions(BuildContext context, bool isDark, int studentId, bool isSmallScreen) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+      padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'Quick Actions',
             style: TextStyle(
-              fontSize: 18,
+              fontSize: isSmallScreen ? 16 : 18,
               fontWeight: FontWeight.w600,
               color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
             ),
@@ -339,6 +345,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                   icon: Icons.person_outline,
                   label: 'Contact Owner',
                   isDark: isDark,
+                  isSmallScreen: isSmallScreen,
                   onTap: () => _showContactDialog(context, isDark, 'Owner', studentId),
                 ),
               ),
@@ -348,6 +355,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                   icon: Icons.sports_tennis_outlined,
                   label: 'Contact Coach',
                   isDark: isDark,
+                  isSmallScreen: isSmallScreen,
                   onTap: () => _showContactDialog(context, isDark, 'Coach', studentId),
                 ),
               ),
@@ -361,6 +369,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                   icon: Icons.monitor_weight_outlined,
                   label: 'BMI',
                   isDark: isDark,
+                  isSmallScreen: isSmallScreen,
                   onTap: () {
                     Navigator.push(
                       context,
@@ -380,6 +389,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                   icon: Icons.account_balance_wallet_outlined,
                   label: 'Fees',
                   isDark: isDark,
+                  isSmallScreen: isSmallScreen,
                   onTap: () {
                     Navigator.push(
                       context,
@@ -623,6 +633,7 @@ class _StatCard extends StatelessWidget {
   final bool isDark;
   final Color? valueColor;
   final VoidCallback? onTap;
+  final bool isSmallScreen;
 
   const _StatCard({
     required this.icon,
@@ -631,6 +642,7 @@ class _StatCard extends StatelessWidget {
     required this.isDark,
     this.valueColor,
     this.onTap,
+    this.isSmallScreen = false,
   });
 
   @override
@@ -638,14 +650,14 @@ class _StatCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: NeumorphicContainer(
-        padding: const EdgeInsets.all(AppDimensions.paddingM),
+        padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingS : AppDimensions.paddingM),
         child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 40,
-            height: 40,
+            width: isSmallScreen ? 32 : 40,
+            height: isSmallScreen ? 32 : 40,
             decoration: BoxDecoration(
               color: isDark ? AppColors.background : AppColorsLight.background,
               borderRadius: BorderRadius.circular(AppDimensions.radiusM),
@@ -653,7 +665,7 @@ class _StatCard extends StatelessWidget {
             ),
             child: Icon(
               icon,
-              size: 20,
+              size: isSmallScreen ? 16 : 20,
               color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
             ),
           ),
@@ -662,7 +674,7 @@ class _StatCard extends StatelessWidget {
             child: Text(
               value,
               style: TextStyle(
-                fontSize: 22,
+                fontSize: isSmallScreen ? 18 : 22,
                 fontWeight: FontWeight.w600,
                 color: valueColor ?? (isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
                 height: 1.2,
@@ -778,12 +790,14 @@ class _QuickActionButton extends StatelessWidget {
   final String label;
   final bool isDark;
   final VoidCallback onTap;
+  final bool isSmallScreen;
 
   const _QuickActionButton({
     required this.icon,
     required this.label,
     required this.isDark,
     required this.onTap,
+    this.isSmallScreen = false,
   });
 
   @override
@@ -791,19 +805,19 @@ class _QuickActionButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: NeumorphicContainer(
-        padding: const EdgeInsets.all(AppDimensions.paddingM),
+        padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingS : AppDimensions.paddingM),
         child: Column(
           children: [
             Icon(
               icon,
-              size: 24,
+              size: isSmallScreen ? 20 : 24,
               color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
             ),
             const SizedBox(height: AppDimensions.spacingS),
             Text(
               label,
               style: TextStyle(
-                fontSize: 14,
+                fontSize: isSmallScreen ? 12 : 14,
                 color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
               ),
               textAlign: TextAlign.center,
