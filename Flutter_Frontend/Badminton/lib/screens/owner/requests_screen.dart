@@ -168,13 +168,16 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
     final cardColor = isDark ? AppColors.cardBackground : AppColorsLight.cardBackground;
     final activeColor = isDark ? AppColors.textPrimary : AppColorsLight.textPrimary;
     final inactiveColor = isDark ? AppColors.textSecondary : AppColorsLight.textSecondary;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+    final isVerySmallScreen = screenWidth < 400;
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppDimensions.paddingM,
-          vertical: AppDimensions.paddingS,
+        padding: EdgeInsets.symmetric(
+          horizontal: isSmallScreen ? AppDimensions.paddingS : AppDimensions.paddingM,
+          vertical: isSmallScreen ? 6 : AppDimensions.paddingS,
         ),
         decoration: BoxDecoration(
           color: isSelected ? cardColor : Colors.transparent,
@@ -187,23 +190,25 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
           children: [
             Icon(
               icon,
-              size: 18,
+              size: isSmallScreen ? 16 : 18,
               color: isSelected ? activeColor : inactiveColor,
             ),
-            const SizedBox(width: AppDimensions.spacingS),
-            Flexible(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                  color: isSelected ? activeColor : inactiveColor,
+            if (!isVerySmallScreen) ...[  
+              SizedBox(width: isSmallScreen ? 4 : AppDimensions.spacingS),
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: isSmallScreen ? 11 : 13,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    color: isSelected ? activeColor : inactiveColor,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
               ),
-            ),
+            ],
           ],
         ),
       ),
@@ -211,32 +216,35 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
   }
 
   Widget _buildFilters(bool isDark) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+    
     return NeumorphicContainer(
-      padding: const EdgeInsets.all(AppDimensions.paddingM),
-      margin: const EdgeInsets.all(AppDimensions.paddingL),
+      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingS : AppDimensions.paddingM),
+      margin: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'Filter by Status',
             style: TextStyle(
-              fontSize: 14,
+              fontSize: isSmallScreen ? 12 : 14,
               fontWeight: FontWeight.w600,
               color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
             ),
           ),
-          const SizedBox(height: AppDimensions.spacingS),
+          SizedBox(height: isSmallScreen ? 6 : AppDimensions.spacingS),
           Wrap(
-            spacing: AppDimensions.spacingS,
-            runSpacing: AppDimensions.spacingS,
+            spacing: isSmallScreen ? 6 : AppDimensions.spacingS,
+            runSpacing: isSmallScreen ? 6 : AppDimensions.spacingS,
             children: ['all', 'pending', 'approved', 'rejected'].map((status) {
               final isSelected = _selectedFilter == status;
               return GestureDetector(
                 onTap: () => setState(() => _selectedFilter = status),
                 child: NeumorphicContainer(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppDimensions.paddingM,
-                    vertical: AppDimensions.spacingS,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isSmallScreen ? 10 : AppDimensions.paddingM,
+                    vertical: isSmallScreen ? 6 : AppDimensions.spacingS,
                   ),
                   color: isSelected
                       ? (isDark ? AppColors.accent : AppColorsLight.accent)
@@ -245,7 +253,7 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
                   child: Text(
                     status.toUpperCase(),
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: isSmallScreen ? 10 : 12,
                       fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                       color: isSelected
                           ? (isDark ? AppColors.background : AppColorsLight.background)

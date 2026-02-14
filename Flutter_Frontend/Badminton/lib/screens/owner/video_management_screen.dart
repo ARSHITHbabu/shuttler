@@ -482,14 +482,13 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
           ),
         ),
         const SizedBox(height: AppDimensions.spacingS),
-        Row(
+        Wrap(
+          spacing: AppDimensions.spacingS,
+          runSpacing: AppDimensions.spacingS,
           children: [
             _buildAudienceChip('Everyone', 'all'),
-            const SizedBox(width: AppDimensions.spacingS),
             _buildAudienceChip('Sessions', 'session'),
-            const SizedBox(width: AppDimensions.spacingS),
             _buildAudienceChip('Batches', 'batch'),
-            const SizedBox(width: AppDimensions.spacingS),
             _buildAudienceChip('Individuals', 'student'),
           ],
         ),
@@ -651,18 +650,25 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
 
   Widget _buildAudienceChip(String label, String type) {
     final isSelected = _audienceType == type;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+    
     return GestureDetector(
       onTap: () => setState(() {
         _audienceType = type;
         _selectedTargetIds = [];
       }),
       child: NeumorphicContainer(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: EdgeInsets.symmetric(
+          horizontal: isSmallScreen ? 10 : 16,
+          vertical: isSmallScreen ? 6 : 8,
+        ),
         child: Text(
           label,
           style: TextStyle(
             color: isSelected ? AppColors.accent : AppColors.textSecondary,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            fontSize: isSmallScreen ? 12 : 14,
           ),
         ),
       ),

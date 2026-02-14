@@ -34,20 +34,24 @@ class StudentFeesTab extends ConsumerStatefulWidget {
 class _StudentFeesTabState extends ConsumerState<StudentFeesTab> {
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+    final horizontalPadding = isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL;
+    
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppDimensions.paddingL),
+      padding: EdgeInsets.all(horizontalPadding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Fee Records',
             style: TextStyle(
-              fontSize: 18,
+              fontSize: isSmallScreen ? 16 : 18,
               fontWeight: FontWeight.w600,
               color: AppColors.textPrimary,
             ),
           ),
-          const SizedBox(height: AppDimensions.spacingL),
+          SizedBox(height: isSmallScreen ? AppDimensions.spacingM : AppDimensions.spacingL),
           
           // Fee List
           _buildFeeList(),
@@ -174,8 +178,11 @@ class _StudentFeesTabState extends ConsumerState<StudentFeesTab> {
   }
 
   Widget _buildFeeCard(Fee fee) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+    
     return NeumorphicContainer(
-      padding: const EdgeInsets.all(AppDimensions.paddingM),
+      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingS : AppDimensions.paddingM),
       margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -191,16 +198,17 @@ class _StudentFeesTabState extends ConsumerState<StudentFeesTab> {
                     if (fee.batchName != null)
                       Text(
                         fee.batchName!,
-                        style: const TextStyle(
-                          fontSize: 14,
+                        style: TextStyle(
+                          fontSize: isSmallScreen ? 12 : 14,
                           color: AppColors.textSecondary,
                         ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     const SizedBox(height: 4),
                     Text(
                       '\$${fee.amount.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontSize: 20,
+                      style: TextStyle(
+                        fontSize: isSmallScreen ? 18 : 20,
                         fontWeight: FontWeight.w600,
                         color: AppColors.textPrimary,
                       ),
@@ -208,9 +216,10 @@ class _StudentFeesTabState extends ConsumerState<StudentFeesTab> {
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppDimensions.spacingM,
+                padding: EdgeInsets.symmetric(
+                  horizontal: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM,
                   vertical: AppDimensions.spacingS,
                 ),
                 decoration: BoxDecoration(
@@ -219,16 +228,16 @@ class _StudentFeesTabState extends ConsumerState<StudentFeesTab> {
                 ),
                 child: Text(
                   fee.status.toUpperCase(),
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
-                    fontSize: 12,
+                    fontSize: isSmallScreen ? 10 : 12,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: AppDimensions.spacingM),
+          SizedBox(height: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM),
           
           // Details
           _buildInfoRow(Icons.calendar_today, 'Due Date', DateFormat('dd MMM, yyyy').format(fee.dueDate)),
@@ -248,13 +257,13 @@ class _StudentFeesTabState extends ConsumerState<StudentFeesTab> {
           
           // Payment History
           if (fee.payments != null && fee.payments!.isNotEmpty) ...[
-            const SizedBox(height: AppDimensions.spacingM),
+            SizedBox(height: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM),
             const Divider(color: AppColors.textSecondary),
-            const SizedBox(height: AppDimensions.spacingM),
-            const Text(
+            SizedBox(height: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM),
+            Text(
               'Payment History',
               style: TextStyle(
-                fontSize: 14,
+                fontSize: isSmallScreen ? 13 : 14,
                 fontWeight: FontWeight.w600,
                 color: AppColors.textPrimary,
               ),
@@ -263,35 +272,61 @@ class _StudentFeesTabState extends ConsumerState<StudentFeesTab> {
             ...fee.payments!.map((payment) => _buildPaymentItem(fee, payment)),
           ],
           
-          const SizedBox(height: AppDimensions.spacingM),
+          SizedBox(height: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM),
           
           // Action Buttons
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: () => _showAddPaymentDialog(fee),
-                  icon: const Icon(Icons.payment, size: 18),
-                  label: const Text('Add Payment'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.accent,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
-                  ),
+          isSmallScreen
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: () => _showAddPaymentDialog(fee),
+                      icon: const Icon(Icons.payment, size: 18),
+                      label: const Text('Add Payment'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.accent,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
+                      ),
+                    ),
+                    const SizedBox(height: AppDimensions.spacingS),
+                    OutlinedButton.icon(
+                      onPressed: fee.id == -1 ? null : () => _editFee(fee),
+                      icon: const Icon(Icons.edit, size: 18),
+                      label: const Text('Edit'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.textPrimary,
+                        padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
+                      ),
+                    ),
+                  ],
+                )
+              : Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => _showAddPaymentDialog(fee),
+                        icon: const Icon(Icons.payment, size: 18),
+                        label: const Text('Add Payment'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.accent,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppDimensions.spacingS),
+                    OutlinedButton.icon(
+                      onPressed: fee.id == -1 ? null : () => _editFee(fee),
+                      icon: const Icon(Icons.edit, size: 18),
+                      label: const Text('Edit'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.textPrimary,
+                        padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(width: AppDimensions.spacingS),
-              OutlinedButton.icon(
-                onPressed: fee.id == -1 ? null : () => _editFee(fee), // Disable edit for virtual fees
-                icon: const Icon(Icons.edit, size: 18),
-                label: const Text('Edit'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.textPrimary,
-                  padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
-                ),
-              ),
-            ],
-          ),
         ],
       ),
     );
@@ -322,9 +357,12 @@ class _StudentFeesTabState extends ConsumerState<StudentFeesTab> {
   }
 
   Widget _buildPaymentItem(Fee fee, FeePayment payment) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+    
     return Container(
       margin: const EdgeInsets.only(bottom: AppDimensions.spacingS),
-      padding: const EdgeInsets.all(AppDimensions.paddingS),
+      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingS - 2 : AppDimensions.paddingS),
       decoration: BoxDecoration(
         color: AppColors.background,
         borderRadius: BorderRadius.circular(AppDimensions.radiusS),
@@ -338,8 +376,8 @@ class _StudentFeesTabState extends ConsumerState<StudentFeesTab> {
               children: [
                 Text(
                   '\$${payment.amount.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    fontSize: 14,
+                  style: TextStyle(
+                    fontSize: isSmallScreen ? 13 : 14,
                     fontWeight: FontWeight.w600,
                     color: AppColors.textPrimary,
                   ),
@@ -347,10 +385,12 @@ class _StudentFeesTabState extends ConsumerState<StudentFeesTab> {
                 const SizedBox(height: 4),
                 Text(
                   '${DateFormat('dd MMM, yyyy').format(payment.paidDate)}${payment.payeeDisplayName != null ? ' • ${payment.payeeDisplayName}' : ''}${payment.paymentMethod != null ? ' • ${payment.paymentMethod}' : ''}',
-                  style: const TextStyle(
-                    fontSize: 11,
+                  style: TextStyle(
+                    fontSize: isSmallScreen ? 10 : 11,
                     color: AppColors.textSecondary,
                   ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -358,6 +398,8 @@ class _StudentFeesTabState extends ConsumerState<StudentFeesTab> {
           IconButton(
             icon: const Icon(Icons.delete_outline, size: 18),
             color: AppColors.error,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
             onPressed: () => _showDeletePaymentDialog(fee, payment),
           ),
         ],

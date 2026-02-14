@@ -219,6 +219,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   }
 
   Widget _buildFilters(bool isDark) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+    
     final textSecondary = isDark ? AppColors.textSecondary : AppColorsLight.textSecondary;
     final accent = isDark ? AppColors.accent : AppColorsLight.accent;
     final cardBg = isDark ? AppColors.cardBackground : AppColorsLight.cardBackground;
@@ -226,38 +229,38 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final textPrimary = isDark ? AppColors.textPrimary : AppColorsLight.textPrimary;
 
     return NeumorphicContainer(
-      padding: const EdgeInsets.all(AppDimensions.paddingM),
-      margin: const EdgeInsets.all(AppDimensions.paddingL),
+      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingS : AppDimensions.paddingM),
+      margin: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'Filter by Type',
             style: TextStyle(
-              fontSize: 14,
+              fontSize: isSmallScreen ? 12 : 14,
               fontWeight: FontWeight.w600,
               color: textSecondary,
             ),
           ),
-          const SizedBox(height: AppDimensions.spacingS),
+          SizedBox(height: isSmallScreen ? 6 : AppDimensions.spacingS),
           Wrap(
-            spacing: AppDimensions.spacingS,
-            runSpacing: AppDimensions.spacingS,
+            spacing: isSmallScreen ? 6 : AppDimensions.spacingS,
+            runSpacing: isSmallScreen ? 6 : AppDimensions.spacingS,
             children: ['all', 'fee_due', 'attendance', 'announcement', 'general'].map((type) {
               final isSelected = _selectedFilter == type;
               return GestureDetector(
                 onTap: () => setState(() => _selectedFilter = type),
                 child: NeumorphicContainer(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppDimensions.paddingM,
-                    vertical: AppDimensions.spacingS,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isSmallScreen ? AppDimensions.spacingS : AppDimensions.paddingM,
+                    vertical: isSmallScreen ? 6 : AppDimensions.spacingS,
                   ),
                   color: isSelected ? accent : cardBg,
                   borderRadius: AppDimensions.radiusS,
                   child: Text(
                     type == 'all' ? 'All' : type.replaceAll('_', ' ').toUpperCase(),
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: isSmallScreen ? 10 : 12,
                       fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                       color: isSelected ? bg : textPrimary,
                     ),
@@ -266,34 +269,34 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
               );
             }).toList(),
           ),
-          const SizedBox(height: AppDimensions.spacingM),
+          SizedBox(height: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM),
           Text(
             'Filter by Status',
             style: TextStyle(
-              fontSize: 14,
+              fontSize: isSmallScreen ? 12 : 14,
               fontWeight: FontWeight.w600,
               color: textSecondary,
             ),
           ),
-          const SizedBox(height: AppDimensions.spacingS),
+          SizedBox(height: isSmallScreen ? 6 : AppDimensions.spacingS),
           Wrap(
-            spacing: AppDimensions.spacingS,
-            runSpacing: AppDimensions.spacingS,
+            spacing: isSmallScreen ? 6 : AppDimensions.spacingS,
+            runSpacing: isSmallScreen ? 6 : AppDimensions.spacingS,
             children: ['all', 'unread', 'read'].map((status) {
               final isSelected = _readFilter == status;
               return GestureDetector(
                 onTap: () => setState(() => _readFilter = status),
                 child: NeumorphicContainer(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppDimensions.paddingM,
-                    vertical: AppDimensions.spacingS,
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isSmallScreen ? AppDimensions.spacingS : AppDimensions.paddingM,
+                    vertical: isSmallScreen ? 6 : AppDimensions.spacingS,
                   ),
                   color: isSelected ? accent : cardBg,
                   borderRadius: AppDimensions.radiusS,
                   child: Text(
                     status == 'all' ? 'All' : status.toUpperCase(),
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: isSmallScreen ? 10 : 12,
                       fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                       color: isSelected ? bg : textPrimary,
                     ),

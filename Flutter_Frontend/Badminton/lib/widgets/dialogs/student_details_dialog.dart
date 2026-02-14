@@ -227,12 +227,15 @@ class _TabButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isVerySmall = screenWidth < 400;
+    
     return InkWell(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(
+        padding: EdgeInsets.symmetric(
           vertical: AppDimensions.spacingS,
-          horizontal: AppDimensions.spacingXs,
+          horizontal: isVerySmall ? 4 : AppDimensions.spacingXs,
         ),
         decoration: BoxDecoration(
           color: isActive ? AppColors.accent.withOpacity(0.2) : Colors.transparent,
@@ -243,21 +246,23 @@ class _TabButton extends StatelessWidget {
           children: [
             Icon(
               icon,
-              size: 16,
+              size: isVerySmall ? 18 : 16,
               color: isActive ? AppColors.accent : AppColors.textSecondary,
             ),
-            const SizedBox(width: 4),
-            Flexible(
-              child: Text(
-                label,
-                style: TextStyle(
-                  color: isActive ? AppColors.accent : AppColors.textSecondary,
-                  fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                  fontSize: 12,
+            if (!isVerySmall) ...[
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: isActive ? AppColors.accent : AppColors.textSecondary,
+                    fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                    fontSize: 12,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
-                overflow: TextOverflow.ellipsis,
               ),
-            ),
+            ],
           ],
         ),
       ),
