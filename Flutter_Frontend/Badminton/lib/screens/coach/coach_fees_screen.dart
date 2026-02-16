@@ -201,6 +201,7 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
               }
             }
 
+
             return NeumorphicContainer(
               padding: const EdgeInsets.all(AppDimensions.paddingM),
               margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
@@ -209,109 +210,94 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
                   _selectedBatchId = batchId;
                 });
               },
-              child: Row(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(
-                    Icons.groups,
-                    color: AppColors.textSecondary,
-                    size: 20,
-                  ),
-                  const SizedBox(width: AppDimensions.spacingS),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          batchName,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                          ),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.accent.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(AppDimensions.radiusM),
                         ),
-                        if (batch.timeRange.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            batch.timeRange,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 4),
-                        Wrap(
-                          spacing: AppDimensions.spacingM,
+                        child: const Icon(
+                          Icons.groups_rounded,
+                          color: AppColors.accent,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: AppDimensions.spacingM),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (batchPending > 0)
-                              Text(
-                                '\$${batchPending.toStringAsFixed(0)} pending',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.warning,
-                                ),
+                            Text(
+                              batchName,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary,
                               ),
-                            if (batchPaid > 0)
-                              Text(
-                                '\$${batchPaid.toStringAsFixed(0)} paid',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.success,
-                                ),
-                              ),
-                            if (batchOverdue > 0)
-                              Text(
-                                '\$${batchOverdue.toStringAsFixed(0)} overdue',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppColors.error,
+                            ),
+                            if (batch.timeRange.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.access_time, size: 14, color: AppColors.textSecondary),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      batch.timeRange,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                           ],
                         ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppDimensions.spacingS,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.cardBackground,
-                      borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                    ),
-                    child: Text(
-                      '${studentFees.length} student${studentFees.length != 1 ? 's' : ''}',
-                      style: const TextStyle(
-                        fontSize: 12,
+                      ),
+                      const Icon(
+                        Icons.chevron_right_rounded,
                         color: AppColors.textSecondary,
                       ),
-                    ),
+                    ],
                   ),
-                  const SizedBox(width: AppDimensions.spacingS),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppDimensions.spacingS,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.accent.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                    ),
-                    child: Text(
-                      '\$${batchFeeAmount.toStringAsFixed(0)}/student',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppColors.accent,
-                        fontWeight: FontWeight.w600,
+                  const SizedBox(height: AppDimensions.spacingM),
+                  Row(
+                    children: [
+                      _buildInfoTag(
+                        '${studentFees.length} students',
+                        Icons.person_outline_rounded,
+                        AppColors.textSecondary.withValues(alpha: 0.1),
+                        AppColors.textSecondary,
                       ),
-                    ),
+                      const SizedBox(width: AppDimensions.spacingS),
+                      _buildInfoTag(
+                        '\$${batchFeeAmount.toStringAsFixed(0)}/student',
+                        Icons.payments_outlined,
+                        AppColors.accent.withValues(alpha: 0.1),
+                        AppColors.accent,
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: AppDimensions.spacingS),
-                  const Icon(
-                    Icons.chevron_right,
-                    color: AppColors.textSecondary,
+                  const SizedBox(height: AppDimensions.spacingM),
+                  const Divider(height: 1, color: AppColors.textSecondary, thickness: 0.15),
+                  const SizedBox(height: AppDimensions.spacingM),
+                  Wrap(
+                    spacing: AppDimensions.spacingS,
+                    runSpacing: AppDimensions.spacingS,
+                    children: [
+                      if (batchPaid > 0)
+                        _buildStatusChip('Paid', '\$${batchPaid.toStringAsFixed(0)}', AppColors.success),
+                      if (batchPending > 0)
+                        _buildStatusChip('Pending', '\$${batchPending.toStringAsFixed(0)}', AppColors.warning),
+                      if (batchOverdue > 0)
+                        _buildStatusChip('Overdue', '\$${batchOverdue.toStringAsFixed(0)}', AppColors.error),
+                    ],
                   ),
                 ],
               ),
@@ -319,6 +305,74 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
           }).toList(),
         );
       },
+    );
+  }
+
+
+  Widget _buildInfoTag(String label, IconData icon, Color bgColor, Color textColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: textColor),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: textColor,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusChip(String label, String amount, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+        border: Border.all(color: color.withValues(alpha: 0.2), width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: color,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            amount,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
