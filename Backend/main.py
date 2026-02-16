@@ -1978,7 +1978,7 @@ class CalendarEventCreate(BaseModel):
     date: str  # Format: "YYYY-MM-DD"
     end_date: Optional[str] = None  # Format: "YYYY-MM-DD" (for date ranges)
     description: Optional[str] = None
-    created_by: int
+    created_by: Optional[int] = None
     creator_type: str = "coach"  # "coach" or "owner"
     related_leave_request_id: Optional[int] = None  # Link to leave request if this is a leave event
     related_tournament_id: Optional[int] = None     # Link to tournament
@@ -1992,7 +1992,7 @@ class CalendarEvent(BaseModel):
     date: str
     end_date: Optional[str] = None
     description: Optional[str] = None
-    created_by: int
+    created_by: Optional[int] = None
     creator_type: str = "coach"  # "coach" or "owner"
     related_leave_request_id: Optional[int] = None
     related_tournament_id: Optional[int] = None

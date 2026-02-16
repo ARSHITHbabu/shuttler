@@ -266,28 +266,20 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
               const SizedBox(height: AppDimensions.spacingM),
 
               statsAsync.when(
-                data: (stats) => NeumorphicContainer(
-                  padding: const EdgeInsets.all(AppDimensions.paddingM),
-                  child: Column(
-                    children: [
-                      _StatRow(
-                        label: 'Total Batches Assigned',
-                        value: stats.assignedBatches.toString(),
-                      ),
-                      const Divider(),
-                      _StatRow(
-                        label: 'Total Students',
-                        value: stats.totalStudents.toString(),
-                      ),
-                      const Divider(),
-                      _StatRow(
-                        label: 'Attendance Rate',
-                        value: '${stats.attendanceRate.toStringAsFixed(1)}%',
-                      ),
-                    ],
-                  ),
+                data: (stats) => GridView.count(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 1.6,
+                  children: [
+                    _buildStatCard('Assigned Batches', stats.assignedBatches.toString(), Icons.groups_outlined, isDark),
+                    _buildStatCard('Total Students', stats.totalStudents.toString(), Icons.person_outline, isDark),
+                    _buildStatCard('Attendance Rate', '${stats.attendanceRate.toStringAsFixed(1)}%', Icons.check_circle_outline, isDark),
+                  ],
                 ),
-                loading: () => const Center(child: ListSkeleton(itemCount: 3)),
+                loading: () => const Center(child: DashboardSkeleton()),
                 error: (error, stack) => const SizedBox(),
               ),
 
@@ -453,6 +445,49 @@ class _CoachProfileScreenState extends ConsumerState<CoachProfileScreen> {
         setState(() => _isSaving = false);
       }
     }
+  }
+
+  Widget _buildStatCard(String label, String value, IconData icon, bool isDark) {
+    return NeumorphicContainer(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: isDark ? AppColors.accent : AppColorsLight.accent,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
 }
