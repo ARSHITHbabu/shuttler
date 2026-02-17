@@ -155,56 +155,33 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
   }
 
   Widget _buildReportTypeSelector() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          "Report Type",
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-        ),
-        const SizedBox(height: AppDimensions.spacingS),
-        Row(
-          children: ReportType.values.map((type) {
-            bool isSelected = _reportType == type;
-            IconData icon = type == ReportType.attendance 
-                ? Icons.how_to_reg_outlined 
-                : Icons.trending_up;
-            
-            return Expanded(
-              child: Padding(
-                padding: EdgeInsets.only(right: type == ReportType.values.first ? 8 : 0, left: type == ReportType.values.last ? 8 : 0),
-                child: NeumorphicContainer(
-                  onTap: () => setState(() {
-                    _reportType = type;
-                    _reportData = null;
-                  }),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  color: isSelected ? AppColors.accent.withValues(alpha: 0.1) : null,
-                  border: isSelected ? Border.all(color: AppColors.accent, width: 2) : null,
-                  child: Column(
-                    children: [
-                      Icon(
-                        icon,
-                        color: isSelected ? AppColors.accent : AppColors.textSecondary,
-                        size: 24,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        type.name.capitalize(),
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                          color: isSelected ? AppColors.accent : AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: ReportType.values.map((type) {
+           bool isSelected = _reportType == type;
+           return Padding(
+             padding: const EdgeInsets.only(right: 8.0),
+             child: ChoiceChip(
+               label: Text(type.name.toUpperCase()),
+               selected: isSelected,
+                onSelected: (val) {
+                  if (val) {
+                    setState(() {
+                      _reportType = type;
+                      _reportData = null; // Clear previous report data
+                    });
+                  }
+                },
+                selectedColor: AppColors.accent,
+                labelStyle: TextStyle(
+                  color: isSelected ? Colors.white : AppColors.textPrimary,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 ),
               ),
             );
-          }).toList(),
-        ),
-      ],
+        }).toList(),
+      ),
     );
   }
 
@@ -214,19 +191,14 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            "Selection Period",
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-          ),
-          const SizedBox(height: AppDimensions.spacingM),
-          
           // Filter Type Toggle
           Container(
+            width: double.infinity,
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
-              color: AppColors.background,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.textSecondary.withValues(alpha: 0.1)),
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.border),
             ),
             child: Row(
               children: FilterType.values.map((type) {
@@ -236,7 +208,7 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
                     onTap: () {
                       setState(() {
                         _filterType = type;
-                        _filterBatches();
+                        _filterBatches(); // Re-filter batches logic
                         _reportData = null;
                       });
                     },
@@ -244,15 +216,14 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       decoration: BoxDecoration(
                         color: isSelected ? AppColors.accent : Colors.transparent,
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(6),
                       ),
                       alignment: Alignment.center,
                       child: Text(
-                        type.name.capitalize(),
+                        type.name.substring(0, 1).toUpperCase() + type.name.substring(1),
                         style: TextStyle(
                           color: isSelected ? Colors.white : AppColors.textPrimary,
-                          fontSize: 13,
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ),
@@ -261,7 +232,7 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
               }).toList(),
             ),
           ),
-          const SizedBox(height: AppDimensions.spacingL),
+          const SizedBox(height: AppDimensions.spacingM),
           
           if (_filterType == FilterType.season)
              _buildSeasonDropdown(),
@@ -270,8 +241,36 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
           if (_filterType == FilterType.month)
              _buildMonthSelector(),
              
-          const SizedBox(height: AppDimensions.spacingL),
-          _buildBatchSelector(),
+          const SizedBox(height: AppDimensions.spacingM),
+          
+          Text("Batch", style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              border: Border.all(color: AppColors.border),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: _selectedBatchId,
+                isExpanded: true,
+                items: [
+                  const DropdownMenuItem(value: "all", child: Text("All Batches")),
+                  ..._filteredBatches.map((b) => DropdownMenuItem(
+                    value: b.id.toString(),
+                    child: Text(b.batchName ?? "Batch ${b.id}"),
+                  )),
+                ],
+                onChanged: (val) {
+                  if (val != null) setState(() {
+                    _selectedBatchId = val;
+                    _reportData = null;
+                  });
+                },
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -281,10 +280,14 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text("Season", style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-        const SizedBox(height: 6),
-        NeumorphicContainer(
+        Text("Select Season", style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+        const SizedBox(height: 4),
+        Container(
           padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            border: Border.all(color: AppColors.border),
+            borderRadius: BorderRadius.circular(8),
+          ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: _selectedSeasonId,
@@ -318,10 +321,14 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text("Year", style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-        const SizedBox(height: 6),
-        NeumorphicContainer(
+        Text("Select Year", style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+        const SizedBox(height: 4),
+        Container(
             padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              border: Border.all(color: AppColors.border),
+              borderRadius: BorderRadius.circular(8),
+            ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<int>(
                 value: _selectedYear,
@@ -418,50 +425,19 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
     );
   }
 
-  Widget _buildBatchSelector() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text("Batch", style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
-        const SizedBox(height: 6),
-        NeumorphicContainer(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: _selectedBatchId,
-              isExpanded: true,
-              items: [
-                const DropdownMenuItem(value: "all", child: Text("All Batches")),
-                ..._filteredBatches.map((b) => DropdownMenuItem(
-                  value: b.id.toString(),
-                  child: Text(b.batchName ?? "Batch ${b.id}"),
-                )),
-              ],
-              onChanged: (val) {
-                if (val != null) setState(() {
-                  _selectedBatchId = val;
-                  _reportData = null;
-                });
-              },
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildGenerateButton() {
-    return NeumorphicContainer(
-      onTap: _isLoading ? null : _generateReport,
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      color: AppColors.accent,
-      child: Center(
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.accent,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        onPressed: _isLoading ? null : _generateReport,
         child: _isLoading 
           ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-          : const Text(
-              "Generate Report", 
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)
-            ),
+          : const Text("Generate Report", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
       ),
     );
   }
@@ -470,14 +446,14 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.textSecondary.withValues(alpha: 0.1)),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
       ),
       child: Row(
         children: [
-          Expanded(child: _tabButton("Generate", 0)),
-          Expanded(child: _tabButton("View History", 1)),
+          Expanded(child: _tabButton("Generate Report", 0)),
+          Expanded(child: _tabButton("History", 1)),
         ],
       ),
     );
@@ -549,7 +525,6 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
       itemBuilder: (context, index) {
         final item = _historyData[index];
         final date = DateTime.tryParse(item['generated_on'] ?? '') ?? DateTime.now();
-        final reportType = item['report_type']?.toString().toLowerCase() ?? 'report';
         
         return NeumorphicContainer(
           padding: const EdgeInsets.all(16),
@@ -557,66 +532,33 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
           child: Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: (reportType == 'attendance' ? AppColors.accent : Colors.purple).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  reportType == 'attendance' ? Icons.fact_check_rounded : Icons.insights_rounded,
-                  color: reportType == 'attendance' ? AppColors.accent : Colors.purple,
-                  size: 24,
-                ),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: AppColors.accent.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                child: Icon(Icons.description, color: AppColors.accent),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      reportType.toUpperCase(),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        letterSpacing: 0.5,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
+                    Text(item['report_type']?.toString().toUpperCase() ?? 'REPORT', style: const TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 4),
-                    Text(
-                      item['filter_summary'] ?? '',
-                      style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        const Icon(Icons.calendar_today, size: 10, color: AppColors.textTertiary),
-                        const SizedBox(width: 4),
-                        Text(
-                          DateFormat('dd MMM yyyy, hh:mm a').format(date),
-                          style: const TextStyle(color: AppColors.textTertiary, fontSize: 11),
-                        ),
-                      ],
-                    ),
+                    Text(item['filter_summary'] ?? '', style: TextStyle(color: AppColors.textSecondary, fontSize: 12)),
+                    Text(DateFormat('dd MMM yyyy, hh:mm a').format(date), style: TextStyle(color: AppColors.textSecondary, fontSize: 10)),
                   ],
                 ),
               ),
-              Column(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.file_download_outlined, color: AppColors.accent),
-                    onPressed: () {
-                      setState(() {
-                        _reportData = Map<String, dynamic>.from(item['report_data']);
-                        try {
-                          _reportType = ReportType.values.firstWhere((e) => e.name == item['report_type']);
-                        } catch (_) {}
-                      });
-                      _downloadReport(isHistory: true);
-                    },
-                    tooltip: 'Download PDF',
-                  ),
-                ],
+              IconButton(
+                icon: const Icon(Icons.download, color: AppColors.accent),
+                onPressed: () {
+                   setState(() {
+                     _reportData = Map<String, dynamic>.from(item['report_data']);
+                     try {
+                        _reportType = ReportType.values.firstWhere((e) => e.name == item['report_type']);
+                     } catch (_) {}
+                   });
+                   _downloadReport(isHistory: true);
+                },
               ),
             ],
           ),
@@ -655,7 +597,7 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
         type: _reportType.name,
         filterType: _filterType.name,
         filterValue: filterValue,
-        batchId: _selectedBatchId,
+        batchId: _selectedBatchId == 'all' ? null : _selectedBatchId,
       );
 
       if (mounted) {
@@ -741,63 +683,39 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Report Summary',
+                      'Overview',
                       style: TextStyle(
                         color: AppColors.textPrimary,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                     const SizedBox(height: AppDimensions.spacingM),
-                    GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        childAspectRatio: 2.2,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                      ),
-                      itemCount: (_reportData!['overview'] as Map<String, dynamic>).length,
-                      itemBuilder: (context, index) {
-                        final entry = (_reportData!['overview'] as Map<String, dynamic>).entries.elementAt(index);
-                        return Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: AppColors.background.withValues(alpha: 0.5),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.textSecondary.withValues(alpha: 0.1)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                entry.key.replaceAll('_', ' ').capitalize(),
-                                style: const TextStyle(
-                                  color: AppColors.textTertiary,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                    ...(_reportData!['overview'] as Map<String, dynamic>).entries.map((entry) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: AppDimensions.spacingS),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              entry.key.replaceAll('_', ' ').capitalize(),
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 14,
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                entry.value.toString(),
-                                style: TextStyle(
-                                  color: entry.value.toString().contains('%') 
-                                      ? AppColors.accent 
-                                      : AppColors.textPrimary,
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                            ),
+                            Text(
+                              entry.value.toString(),
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
                               ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
                   ],
                 ),
             ],
