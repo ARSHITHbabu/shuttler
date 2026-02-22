@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,7 +17,6 @@ import '../../widgets/common/success_snackbar.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/session.dart';
-import 'package:fl_chart/fl_chart.dart';
 import '../../models/batch.dart';
 
 // Placeholder for web download helper
@@ -171,7 +169,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         _reportData = data;
       });
     } catch (e) {
-      SuccessSnackbar.showError(context, 'Failed to generate report: $e');
+      if (mounted) SuccessSnackbar.showError(context, 'Failed to generate report: $e');
     } finally {
       setState(() => _isLoading = false);
     }
@@ -607,7 +605,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
             children: [
               Container(
                 padding: EdgeInsets.all(isSmallScreen ? 8 : 10),
-                decoration: BoxDecoration(color: AppColors.accent.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                decoration: BoxDecoration(color: AppColors.accent.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
                 child: Icon(Icons.description, color: AppColors.accent, size: isSmallScreen ? 20 : 24),
               ),
               SizedBox(width: isSmallScreen ? 12 : 16),
@@ -669,7 +667,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   Container(
                     padding: EdgeInsets.all(isSmallScreen ? 10 : 12),
                     decoration: BoxDecoration(
-                      color: AppColors.accent.withOpacity(0.1),
+                      color: AppColors.accent.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
@@ -720,92 +718,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     );
   }
 
-  Widget _infoRow(IconData icon, String label, String value) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: AppColors.textSecondary),
-        const SizedBox(width: 8),
-        Text("$label: ", style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
-      ],
-    );
-  }
-
-  Widget _buildChart() {
-    final chartData = _reportData!['chart_data'];
-    if (chartData == null || (chartData['labels'] as List).isEmpty) {
-      return const Center(child: Text("No data for chart"));
-    }
-
-    final List<String> labels = List<String>.from(chartData['labels']);
-    final List<double> values = (chartData['values'] as List).map((e) => (e as num).toDouble()).toList();
-
-    return BarChart(
-      BarChartData(
-        alignment: BarChartAlignment.spaceAround,
-        maxY: values.isEmpty ? 100 : (values.reduce((a, b) => a > b ? a : b) * 1.2).clamp(10, double.infinity),
-        barTouchData: BarTouchData(enabled: true),
-        titlesData: FlTitlesData(
-          show: true,
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              getTitlesWidget: (value, meta) {
-                if (value.toInt() >= 0 && value.toInt() < labels.length) {
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 8.0),
-                    child: Text(
-                      labels[value.toInt()].length > 8 
-                        ? labels[value.toInt()].substring(0, 6) + '..' 
-                        : labels[value.toInt()],
-                      style: const TextStyle(fontSize: 10),
-                    ),
-                  );
-                }
-                return const SizedBox();
-              },
-              reservedSize: 30,
-            ),
-          ),
-          leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-        ),
-        gridData: const FlGridData(show: false),
-        borderData: FlBorderData(show: false),
-        barGroups: values.asMap().entries.map((entry) {
-          return BarChartGroupData(
-            x: entry.key,
-            barRods: [
-              BarChartRodData(
-                toY: entry.value,
-                color: AppColors.accent,
-                width: 16,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-              ),
-            ],
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _statRow(String label, String value, {Color? color, bool isBold = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label),
-          Text(value, style: TextStyle(
-            color: color ?? AppColors.textPrimary,
-            fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-          )),
-        ],
-      ),
-    );
-  }
-
   pw.Widget _buildPdfHeader(pw.Context context, String academyName, String address, String ownerName) {
       return pw.Column(
          crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -847,7 +759,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   // Use _reportData['filter_summary'] if available to be independent of state
                   pw.Text("Coverage: ${_reportData!['filter_summary'] ?? 'Report'}", style: const pw.TextStyle(fontSize: 10)),
                   pw.SizedBox(height: 4),
-                  pw.Text("Generated On: ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())}", style: const pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
+                  pw.Text("Generated On: ${DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now())}", style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
                 ]
               )
             ),
@@ -935,8 +847,8 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       if (students.isEmpty) {
         content.add(pw.Padding(
           padding: const pw.EdgeInsets.only(left: 20, top: 10, bottom: 20),
-          child: pw.Text("No student performance data recorded for this batch in the selected period.", 
-            style: const pw.TextStyle(fontSize: 9, fontStyle: pw.FontStyle.italic, color: PdfColors.grey600)),
+          child: pw.Text("No student performance data recorded for this batch in the selected period.",
+            style: pw.TextStyle(fontSize: 9, fontStyle: pw.FontStyle.italic, color: PdfColors.grey600)),
         ));
       } else {
         // Build rows of student performance
@@ -1011,7 +923,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
               }).toList(),
             )
           else
-             pw.Text("No skill-wise ratings recorded in this period.", style: const pw.TextStyle(fontSize: 8, fontStyle: pw.FontStyle.italic, color: PdfColors.grey500)),
+             pw.Text("No skill-wise ratings recorded in this period.", style: pw.TextStyle(fontSize: 8, fontStyle: pw.FontStyle.italic, color: PdfColors.grey500)),
         ],
       ),
     );
@@ -1159,7 +1071,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           color: PdfColors.red,
           drawPoints: true,
           pointSize: 2,
-          data: List.generate(values.length, (i) => pw.LineChartValue(i.toDouble(), values[i])),
+          data: List.generate(values.length, (i) => pw.PointChartValue(i.toDouble(), values[i])),
         ),
       ],
     );
@@ -1218,7 +1130,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           List.generate(labels.length, (i) => i.toDouble()),
           format: (v) {
              final label = labels[v.toInt()];
-             return label.length > 8 ? label.substring(0, 7) + ".." : label;
+             return label.length > 8 ? '${label.substring(0, 7)}..' : label;
           },
           textStyle: const pw.TextStyle(fontSize: 6),
           angle: labels.length > 5 ? 0.3 : 0, // Slight slant if many
@@ -1232,7 +1144,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         pw.BarDataSet(
           color: PdfColors.blue,
           width: (250 / (labels.length * 1.5).clamp(1, 50)), // Better width calc
-          data: List.generate(sanitizedValues.length, (i) => pw.LineChartValue(i.toDouble(), sanitizedValues[i])),
+          data: List.generate(sanitizedValues.length, (i) => pw.PointChartValue(i.toDouble(), sanitizedValues[i])),
         ),
       ],
     );
@@ -1279,7 +1191,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
   pw.Widget _buildOverviewTable(Map<String, dynamic> overview) {
     if (_reportType == ReportType.attendance) {
-       return pw.Table.fromTextArray(
+       return pw.TableHelper.fromTextArray(
          headers: ['Metric', 'Value'],
          data: [
             ['Total Students', '${overview['total_students']}'],
@@ -1294,7 +1206,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         );
     } else if (_reportType == ReportType.fee) {
        // Fee
-       return pw.Table.fromTextArray(
+       return pw.TableHelper.fromTextArray(
          headers: ['Metric', 'Value'],
          data: [
            ['Total Students', '${overview['total_students']}'],
@@ -1309,7 +1221,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
        );
     } else {
        // Performance
-       return pw.Table.fromTextArray(
+       return pw.TableHelper.fromTextArray(
          headers: ['Metric', 'Value'],
          data: [
            ['Total Students', '${overview['total_students']}'],
@@ -1326,7 +1238,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
   pw.Widget _buildBreakdownTable(List breakdown) {
     if (_reportType == ReportType.attendance) {
-      return pw.Table.fromTextArray(
+      return pw.TableHelper.fromTextArray(
         headers: ['Batch Name', 'Students', 'Classes', 'Att. Rate'],
         data: breakdown.map((b) => [
           b['name'],
@@ -1338,7 +1250,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
       );
     } else if (_reportType == ReportType.fee) {
-      return pw.Table.fromTextArray(
+      return pw.TableHelper.fromTextArray(
         headers: ['Batch Name', 'Students', 'Expected', 'Collected', 'Pending Ct'],
         data: breakdown.map((b) => [
           b['name'],
@@ -1351,7 +1263,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
       );
     } else {
-      return pw.Table.fromTextArray(
+      return pw.TableHelper.fromTextArray(
         headers: ['Batch Name', 'Students', 'Reviews', 'Avg Rating'],
         data: breakdown.map((b) => [
           b['name'],
@@ -1367,7 +1279,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
   pw.Widget _buildStudentDetailsTable(List details) {
     if (_reportType == ReportType.attendance) {
-      return pw.Table.fromTextArray(
+      return pw.TableHelper.fromTextArray(
         headers: ['Name', 'Phone', 'Assigned', 'Attended', 'Absent', '%'],
         columnWidths: {
           0: const pw.FlexColumnWidth(2), 
@@ -1386,7 +1298,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
       );
     } else if (_reportType == ReportType.fee) {
-      return pw.Table.fromTextArray(
+      return pw.TableHelper.fromTextArray(
         headers: ['Name', 'Phone', 'Total Fee', 'Paid', 'Pending', 'Status'],
         columnWidths: {
           0: const pw.FlexColumnWidth(2), 
@@ -1405,7 +1317,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
       );
     } else {
-      return pw.Table.fromTextArray(
+      return pw.TableHelper.fromTextArray(
         headers: ['Name', 'Phone', 'Reviews', 'Avg Rating', 'Last Review'],
         columnWidths: {
           0: const pw.FlexColumnWidth(2), 
@@ -1510,7 +1422,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
              );
            }
          } catch (e) {
-           print("History save error: $e");
+           debugPrint("History save error: $e");
          }
       }
 
@@ -1530,60 +1442,5 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     return d < 0 ? 0.0 : d;
   }
 
-  Widget _buildFlutterOverviewTable(Map<String, dynamic> overview) {
-    List<MapEntry<String, String>> metrics = [];
-
-    if (_reportType == ReportType.attendance) {
-       metrics = [
-          MapEntry('Total Students', '${overview['total_students']}'),
-          MapEntry('Classes Conducted', '${overview['total_conducted']}'),
-          MapEntry('Present Count', '${overview['present_count']}'),
-          MapEntry('Absent Count', '${overview['absent_count']}'),
-          MapEntry('Attendance Rate', '${overview['attendance_rate']}%'),
-       ];
-    } else if (_reportType == ReportType.fee) {
-       metrics = [
-           MapEntry('Total Students', '${overview['total_students']}'),
-           MapEntry('Expected Revenue', '${overview['total_expected']}'), 
-           MapEntry('Collected Revenue', '${overview['total_collected']}'),
-           MapEntry('Pending Amount', '${overview['pending_amount']}'),
-           MapEntry('Overdue Amount', '${overview['overdue_amount']}'),
-       ];
-    } else {
-       metrics = [
-           MapEntry('Total Students', '${overview['total_students']}'),
-           MapEntry('Total Reviews', '${overview['reviews_count']}'),
-           MapEntry('Students Reviewed', '${overview['students_reviewed']}'),
-           MapEntry('Average Rating', '${overview['average_rating']} / 5.0'),
-       ];
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: AppColors.border),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        children: metrics.asMap().entries.map((entry) {
-          final index = entry.key;
-          final metric = entry.value;
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: index % 2 == 0 ? AppColors.surface : Colors.transparent,
-              border: index != metrics.length - 1 ? Border(bottom: BorderSide(color: AppColors.border.withOpacity(0.5))) : null,
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(metric.key, style: const TextStyle(fontWeight: FontWeight.w500)),
-                Text(metric.value, style: const TextStyle(fontWeight: FontWeight.bold)),
-              ],
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
 }
 
