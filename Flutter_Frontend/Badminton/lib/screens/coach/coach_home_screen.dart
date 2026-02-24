@@ -182,6 +182,7 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
                           MaterialPageRoute(
                             builder: (context) => const CoachAttendanceScreen(
                               initialMode: AttendanceViewMode.personal,
+                              isPage: true,
                             ),
                           ),
                         );

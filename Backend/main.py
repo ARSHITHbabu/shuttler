@@ -1098,6 +1098,12 @@ def migrate_database_schema(engine):
             check_and_add_column(engine, 'calendar_events', 'related_schedule_id', 'INTEGER', nullable=True)
             print(" calendar_events table schema updated for multi-table support")
         
+        # Migrate coach_attendance table
+        if 'coach_attendance' in tables:
+            check_and_add_column(engine, 'coach_attendance', 'marked_by', 'VARCHAR(255)', nullable=True)
+            check_and_add_column(engine, 'coach_attendance', 'remarks', 'TEXT', nullable=True)
+            print(" coach_attendance table schema verified")
+        
         print("Database schema migration completed!")
     except Exception as e:
         print(f"Migration error: {e}")
@@ -8578,9 +8584,9 @@ if __name__ == "__main__":
     
     print("Starting Badminton Academy Management System API...")
     print("API Documentation (Local): http://127.0.0.1:8001/docs")
-    print("API Documentation (Network): http://192.168.1.4:8001/docs")
+    print("API Documentation (Network): http://192.168.1.11:8001/docs")
     print("Alternative Docs: http://127.0.0.1:8001/redoc")
-    print("Mobile devices can connect to: http://192.168.1.4:8001")
+    print("Mobile devices can connect to: http://192.168.1.11:8001")
     # host="0.0.0.0" allows connections from any device on the network
     
     # Start background cleanup scheduler

@@ -10,13 +10,13 @@ class ApiEndpoints {
     }
     // Use your computer's local network IP address
     // Run get_local_ip.ps1 to find your current IP address
-    // Current IP: 192.168.1.4 (updated automatically)
-    return 'http://192.168.1.4:8001';
+    // Current IP: 192.168.1.11 (updated automatically)
+    return 'http://192.168.1.11:8001';
   }
 
   // Authentication
-  static const String login = '/api/auth/login';
-  static const String register = '/api/auth/register';
+  static const String login = '/auth/login';
+  static const String register = '/auth/register';
   static const String changePassword = '/auth/change-password';
   static const String forgotPassword = '/auth/forgot-password';
   static const String resetPassword = '/auth/reset-password';

@@ -13,6 +13,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/batch_provider.dart';
 import '../../providers/coach_provider.dart';
 import '../../providers/calendar_provider.dart';
+import '../../providers/announcement_provider.dart';
 import '../../models/schedule.dart';
 import '../../models/batch.dart';
 import 'package:intl/intl.dart';

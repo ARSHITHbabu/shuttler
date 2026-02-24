@@ -356,6 +356,7 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
                               return _AttendanceRecordCard(
                                 record: record,
                                 isDark: isDark,
+                                isSmallScreen: isSmallScreen,
                               );
                             },
                             childCount: filteredRecords.length,
@@ -376,6 +377,7 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
                               return _AttendanceRecordCard(
                                 record: record,
                                 isDark: isDark,
+                                isSmallScreen: isSmallScreen,
                               );
                             },
                             childCount: filteredRecords.length,
@@ -396,6 +398,7 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
                               return _AttendanceRecordCard(
                                 record: record,
                                 isDark: isDark,
+                                isSmallScreen: isSmallScreen,
                               );
                             },
                             childCount: filteredRecords.length,
@@ -992,6 +995,7 @@ class _AttendanceRecordCard extends StatelessWidget {
   const _AttendanceRecordCard({
     required this.record,
     required this.isDark,
+    required this.isSmallScreen,
   });
 
   @override
