@@ -110,6 +110,15 @@ class ApiEndpoints {
   static const String calendarEvents = '/api/calendar-events/';
   static String calendarEventById(int id) => '/api/calendar-events/$id';
 
+  // Video streaming and handling (Modified to support Range requests)
+  static String videoStreamUrl(String videoPath) {
+    if (videoPath.startsWith('/uploads/')) {
+      final filename = videoPath.replaceFirst('/uploads/', '');
+      return '/video-stream/$filename';
+    }
+    return videoPath;
+  }
+
   // Image Upload (NEW)
   static const String uploadImage = '/api/upload/image';
   static String imageUrl(String filename) => '/uploads/$filename';

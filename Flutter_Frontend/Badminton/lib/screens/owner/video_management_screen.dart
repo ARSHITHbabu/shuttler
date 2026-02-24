@@ -16,7 +16,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/constants/api_endpoints.dart';
-import '../../widgets/video/video_player_dialog.dart';
+import '../../widgets/video/video_player_page.dart';
 import '../../utils/file_download_helper_stub.dart'
     if (dart.library.html) '../../utils/file_download_helper_web.dart';
 import '../../utils/path_helper.dart';
@@ -303,14 +303,17 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
   }
 
   void _playVideo(VideoResource video) {
-    final fullUrl = '${ApiEndpoints.baseUrl}${video.url}';
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => VideoPlayerDialog(
-        videoUrl: fullUrl,
-        title: video.displayTitle,
-        remarks: video.remarks,
+    debugPrint('PLAY VIDEO BUTTON PRESSED for video: ${video.id}');
+    final streamPath = ApiEndpoints.videoStreamUrl(video.url);
+    final fullUrl = '${ApiEndpoints.baseUrl}$streamPath';
+    debugPrint('Full Video URL passed to page: $fullUrl');
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => VideoPlayerPage(
+          videoUrl: fullUrl,
+          title: video.displayTitle,
+          remarks: video.remarks,
+        ),
       ),
     );
   }
