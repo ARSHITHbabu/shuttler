@@ -6,7 +6,6 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../providers/auth_provider.dart';
 import 'coach_announcements_screen.dart';
-import 'coach_attendance_screen.dart';
 import 'coach_schedule_screen.dart';
 import 'coach_settings_screen.dart';
 import 'coach_video_management_screen.dart';

@@ -8,7 +8,6 @@ import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../providers/coach_provider.dart';
 import '../../providers/auth_provider.dart';
-import '../../providers/batch_provider.dart';
 import '../../models/schedule.dart';
 import '../../providers/owner_provider.dart';
 import '../../widgets/forms/add_student_dialog.dart';

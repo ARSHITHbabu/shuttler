@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/constants/legal_content.dart';
-import '../../widgets/common/neumorphic_container.dart';
 
 /// Terms and Conditions Screen - Displays the app's terms of service
 /// This screen is shared across all portals (Owner, Coach, Student)

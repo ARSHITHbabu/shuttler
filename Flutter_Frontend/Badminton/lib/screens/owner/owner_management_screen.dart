@@ -2,13 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
-import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/service_providers.dart';
-import '../../core/services/api_service.dart';
 
 class OwnerManagementScreen extends ConsumerStatefulWidget {
   const OwnerManagementScreen({super.key});

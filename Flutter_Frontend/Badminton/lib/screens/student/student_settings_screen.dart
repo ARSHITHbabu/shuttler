@@ -11,7 +11,6 @@ import '../../providers/theme_provider.dart';
 import '../../widgets/settings/shuttlecock_theme_toggle.dart';
 import '../common/privacy_policy_screen.dart';
 import '../common/terms_conditions_screen.dart';
-import '../common/help_support_screen.dart';
 import '../../widgets/common/app_logo.dart';
 import '../../widgets/forms/change_password_dialog.dart';
 import '../../providers/owner_provider.dart';

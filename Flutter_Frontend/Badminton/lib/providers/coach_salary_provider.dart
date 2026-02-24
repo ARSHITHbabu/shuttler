@@ -1,5 +1,4 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import '../core/services/coach_salary_service.dart';
 import '../models/coach_salary.dart';
 import '../models/coach.dart';
 import 'service_providers.dart';

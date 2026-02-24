@@ -485,7 +485,7 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
             'Batches in ${session.name}',
             style: const TextStyle(color: AppColors.textPrimary),
           ),
-          content: Container(
+          content: SizedBox(
             width: double.maxFinite,
             child: seasonBatches.isEmpty
                 ? const Text(

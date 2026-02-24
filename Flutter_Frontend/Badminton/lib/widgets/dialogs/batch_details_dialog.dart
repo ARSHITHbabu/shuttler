@@ -114,8 +114,9 @@ class _BatchDetailsDialogState extends ConsumerState<BatchDetailsDialog> {
         final period = match.group(3)?.toUpperCase();
         
         if (period != null) {
-          if (period == 'PM' && hour != 12) hour += 12;
-          else if (period == 'AM' && hour == 12) hour = 0;
+          if (period == 'PM' && hour != 12) {
+            hour += 12;
+          } else if (period == 'AM' && hour == 12) hour = 0;
         }
         return TimeOfDay(hour: hour, minute: minute);
       }
@@ -654,8 +655,11 @@ class _BatchDetailsDialogState extends ConsumerState<BatchDetailsDialog> {
         selected: _selectedDays.contains(day),
         onSelected: (selected) {
           setState(() {
-            if (selected) _selectedDays.add(day);
-            else _selectedDays.remove(day);
+            if (selected) {
+              _selectedDays.add(day);
+            } else {
+              _selectedDays.remove(day);
+            }
           });
         },
         selectedColor: AppColors.accent,
@@ -703,7 +707,7 @@ class _BatchDetailsDialogState extends ConsumerState<BatchDetailsDialog> {
           NeumorphicContainer(
             padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
             child: DropdownButtonFormField<int>(
-              value: _selectedSessionId,
+              initialValue: _selectedSessionId,
               decoration: const InputDecoration(border: InputBorder.none),
               dropdownColor: AppColors.cardBackground,
               items: [

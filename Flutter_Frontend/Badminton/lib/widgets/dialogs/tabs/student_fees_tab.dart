@@ -12,8 +12,7 @@ import '../../../providers/fee_provider.dart';
 import '../../../models/fee.dart';
 import '../../../models/fee_payment.dart';
 import '../../../models/student.dart';
-import '../../../models/student_with_batch_fee.dart'; // Keep this if used, otherwise remove
-import '../../../models/batch.dart';
+// Keep this if used, otherwise remove
 import '../../../providers/batch_provider.dart';
 import '../../../providers/dashboard_provider.dart';
 import 'package:intl/intl.dart';

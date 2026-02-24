@@ -80,9 +80,9 @@ class VideoService {
       final additionalData = <String, dynamic>{
         'audience_type': audienceType,
         'target_ids': targetIds.join(','),
-        if (title != null) 'title': title,
-        if (remarks != null) 'remarks': remarks,
-        if (uploadedBy != null) 'uploaded_by': uploadedBy,
+        'title': ?title,
+        'remarks': ?remarks,
+        'uploaded_by': ?uploadedBy,
       };
 
       final response = await _apiService.uploadFile(
@@ -113,9 +113,9 @@ class VideoService {
       final additionalData = <String, dynamic>{
         'audience_type': audienceType,
         'target_ids': targetIds.join(','),
-        if (title != null) 'title': title,
-        if (remarks != null) 'remarks': remarks,
-        if (uploadedBy != null) 'uploaded_by': uploadedBy,
+        'title': ?title,
+        'remarks': ?remarks,
+        'uploaded_by': ?uploadedBy,
       };
 
       Response response;
