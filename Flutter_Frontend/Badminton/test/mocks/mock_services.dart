@@ -394,6 +394,7 @@ class MockDataFactory {
       return Performance(
         id: index + 1,
         studentId: index + 1,
+        batchId: index + 1,
         date: DateTime.now().subtract(Duration(days: index * 7)),
         serve: baseRating,
         smash: baseRating,
