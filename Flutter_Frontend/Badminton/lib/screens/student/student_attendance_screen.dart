@@ -297,7 +297,7 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
                             ],
                           );
                         },
-                        error: (_, __) {
+                        error: (_, _) {
                           final attendanceStats = _calculateStats(attendanceRecords);
                           return Column(
                             children: [
@@ -318,7 +318,7 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
                 // Attendance Records List
                 attendanceAsync.when(
                   loading: () => const SliverToBoxAdapter(child: SizedBox()),
-                  error: (_, __) => const SliverToBoxAdapter(child: SizedBox()),
+                  error: (_, _) => const SliverToBoxAdapter(child: SizedBox()),
                   data: (attendanceRecords) {
                     return batchesAsync.when(
                       data: (batches) {
@@ -384,7 +384,7 @@ class _StudentAttendanceScreenState extends ConsumerState<StudentAttendanceScree
                           ),
                         );
                       },
-                      error: (_, __) {
+                      error: (_, _) {
                         final filteredRecords = _filterRecords(attendanceRecords);
                         if (filteredRecords.isEmpty) {
                           return SliverToBoxAdapter(

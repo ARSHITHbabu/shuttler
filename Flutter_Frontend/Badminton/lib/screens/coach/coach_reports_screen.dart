@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,7 +17,6 @@ import '../../widgets/common/success_snackbar.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/session.dart';
-import 'package:fl_chart/fl_chart.dart';
 import '../../models/batch.dart';
 
 // Placeholder for web download helper
@@ -535,7 +533,7 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
             children: [
               Container(
                 padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: AppColors.accent.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                decoration: BoxDecoration(color: AppColors.accent.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
                 child: Icon(Icons.description, color: AppColors.accent),
               ),
               const SizedBox(width: 16),
@@ -637,7 +635,7 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
                    Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppColors.accent.withOpacity(0.1),
+                      color: AppColors.accent.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
@@ -807,7 +805,7 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
              );
            }
          } catch (e) {
-           print("History save error: $e");
+           debugPrint("History save error: $e");
          }
       }
 
@@ -967,8 +965,8 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
       if (students.isEmpty) {
         content.add(pw.Padding(
           padding: const pw.EdgeInsets.only(left: 20, top: 10, bottom: 20),
-          child: pw.Text("No student performance data recorded for this batch in the selected period.", 
-            style: const pw.TextStyle(fontSize: 9, fontStyle: pw.FontStyle.italic, color: PdfColors.grey600)),
+          child: pw.Text("No student performance data recorded for this batch in the selected period.",
+            style: pw.TextStyle(fontSize: 9, fontStyle: pw.FontStyle.italic, color: PdfColors.grey600)),
         ));
       } else {
         // Build rows of student performance
@@ -1043,7 +1041,7 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
               }).toList(),
             )
           else
-             pw.Text("No skill-wise ratings recorded in this period.", style: const pw.TextStyle(fontSize: 8, fontStyle: pw.FontStyle.italic, color: PdfColors.grey500)),
+             pw.Text("No skill-wise ratings recorded in this period.", style: pw.TextStyle(fontSize: 8, fontStyle: pw.FontStyle.italic, color: PdfColors.grey500)),
         ],
       ),
     );
