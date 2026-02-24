@@ -279,7 +279,7 @@ class _StudentFeesViewState extends ConsumerState<StudentFeesView> {
             if (filteredStudents.isEmpty)
               const Center(child: Padding(padding: EdgeInsets.all(32), child: Text('No students match filter', style: TextStyle(color: AppColors.textSecondary))))
             else
-              ...filteredStudents.map((s) => _buildStudentFeeRow(s)).toList(),
+              ...filteredStudents.map((s) => _buildStudentFeeRow(s)),
           ],
         );
       },

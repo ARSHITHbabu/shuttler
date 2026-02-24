@@ -1,6 +1,5 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../models/student.dart';
-import '../models/owner.dart';
 import '../models/coach.dart';
 import '../models/schedule.dart';
 import '../utils/batch_time_utils.dart';

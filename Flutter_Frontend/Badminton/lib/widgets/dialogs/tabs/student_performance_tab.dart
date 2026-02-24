@@ -212,7 +212,7 @@ class _StudentPerformanceTabState extends ConsumerState<StudentPerformanceTab> {
                   const SizedBox(height: AppDimensions.spacingL),
                 ],
               );
-            }).toList(),
+            }),
           ],
         );
       },

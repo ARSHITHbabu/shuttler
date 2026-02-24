@@ -12,7 +12,6 @@ import '../../providers/coach_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/attendance_provider.dart';
 import '../../providers/service_providers.dart';
-import '../../models/student.dart';
 import '../../models/batch.dart';
 import '../../models/attendance.dart';
 

@@ -8,9 +8,7 @@ import '../../widgets/common/neumorphic_button.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/success_snackbar.dart';
-import '../../providers/auth_provider.dart';
 import '../../providers/service_providers.dart';
-import '../../core/services/student_registration_request_service.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/app_logo.dart';
 

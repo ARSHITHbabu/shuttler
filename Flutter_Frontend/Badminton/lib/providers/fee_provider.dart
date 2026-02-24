@@ -1,12 +1,9 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../models/fee.dart';
 import '../models/student_with_batch_fee.dart';
-import '../models/student.dart';
-import '../models/batch.dart';
 import '../models/batch_fee_group.dart';
 import 'service_providers.dart';
 import 'dashboard_provider.dart';
-import 'batch_provider.dart';
 
 part 'fee_provider.g.dart';
 

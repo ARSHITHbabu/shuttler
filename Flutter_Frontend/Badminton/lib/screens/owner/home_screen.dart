@@ -9,7 +9,6 @@ import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/forms/add_student_dialog.dart';
 import '../../widgets/forms/add_coach_dialog.dart';
 import '../../providers/dashboard_provider.dart';
-import '../../providers/batch_provider.dart';
 import 'students_screen.dart';
 import 'coaches_screen.dart';
 import 'fees_screen.dart';

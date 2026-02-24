@@ -34,7 +34,7 @@ class VideoManagementScreen extends ConsumerStatefulWidget {
 }
 
 class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
-  String _targetType = 'student'; // 'student', 'batch', 'session'
+  final String _targetType = 'student'; // 'student', 'batch', 'session'
   int? _selectedBatchId;
   List<int> _selectedTargetIds = [];
   String _audienceType = 'student'; // 'all', 'batch', 'student'
@@ -240,7 +240,7 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
     }
 
     if (_audienceType != 'all' && _selectedTargetIds.isEmpty) {
-      SuccessSnackbar.showError(context, 'Please select at least one ${_audienceType}');
+      SuccessSnackbar.showError(context, 'Please select at least one $_audienceType');
       return;
     }
 
@@ -743,9 +743,9 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
               onSelected: (selected) {
                 setState(() {
                   if (selected) {
-                    _selectedTargetIds.add(session.id!);
+                    _selectedTargetIds.add(session.id);
                   } else {
-                    _selectedTargetIds.remove(session.id!);
+                    _selectedTargetIds.remove(session.id);
                   }
                 });
               },
@@ -767,7 +767,7 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
         NeumorphicContainer(
           padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
           child: DropdownButtonFormField<int>(
-            value: _selectedBatchId,
+            initialValue: _selectedBatchId,
             decoration: const InputDecoration(border: InputBorder.none, hintText: 'Select a batch'),
             dropdownColor: AppColors.cardBackground,
             items: _batches.map((batch) => DropdownMenuItem(value: batch.id, child: Text(batch.name))).toList(),

@@ -992,7 +992,6 @@ class _AttendanceRecordCard extends StatelessWidget {
   const _AttendanceRecordCard({
     required this.record,
     required this.isDark,
-    this.isSmallScreen = false,
   });
 
   @override

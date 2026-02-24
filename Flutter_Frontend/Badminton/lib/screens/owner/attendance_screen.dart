@@ -612,7 +612,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                   });
                 },
               );
-            }).toList(),
+            }),
           ],
         );
       },

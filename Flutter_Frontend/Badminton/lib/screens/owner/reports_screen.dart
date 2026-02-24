@@ -718,6 +718,92 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     );
   }
 
+  Widget _infoRow(IconData icon, String label, String value) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: AppColors.textSecondary),
+        const SizedBox(width: 8),
+        Text("$label: ", style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
+      ],
+    );
+  }
+
+  Widget _buildChart() {
+    final chartData = _reportData!['chart_data'];
+    if (chartData == null || (chartData['labels'] as List).isEmpty) {
+      return const Center(child: Text("No data for chart"));
+    }
+
+    final List<String> labels = List<String>.from(chartData['labels']);
+    final List<double> values = (chartData['values'] as List).map((e) => (e as num).toDouble()).toList();
+
+    return BarChart(
+      BarChartData(
+        alignment: BarChartAlignment.spaceAround,
+        maxY: values.isEmpty ? 100 : (values.reduce((a, b) => a > b ? a : b) * 1.2).clamp(10, double.infinity),
+        barTouchData: BarTouchData(enabled: true),
+        titlesData: FlTitlesData(
+          show: true,
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              getTitlesWidget: (value, meta) {
+                if (value.toInt() >= 0 && value.toInt() < labels.length) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: Text(
+                      labels[value.toInt()].length > 8 
+                        ? '${labels[value.toInt()].substring(0, 6)}..' 
+                        : labels[value.toInt()],
+                      style: const TextStyle(fontSize: 10),
+                    ),
+                  );
+                }
+                return const SizedBox();
+              },
+              reservedSize: 30,
+            ),
+          ),
+          leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+        ),
+        gridData: const FlGridData(show: false),
+        borderData: FlBorderData(show: false),
+        barGroups: values.asMap().entries.map((entry) {
+          return BarChartGroupData(
+            x: entry.key,
+            barRods: [
+              BarChartRodData(
+                toY: entry.value,
+                color: AppColors.accent,
+                width: 16,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+              ),
+            ],
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _statRow(String label, String value, {Color? color, bool isBold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label),
+          Text(value, style: TextStyle(
+            color: color ?? AppColors.textPrimary,
+            fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+          )),
+        ],
+      ),
+    );
+  }
+
   pw.Widget _buildPdfHeader(pw.Context context, String academyName, String address, String ownerName) {
       return pw.Column(
          crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -1130,7 +1216,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           List.generate(labels.length, (i) => i.toDouble()),
           format: (v) {
              final label = labels[v.toInt()];
-             return label.length > 8 ? '${label.substring(0, 7)}..' : label;
+             return label.length > 8 ? "${label.substring(0, 7)}.." : label;
           },
           textStyle: const pw.TextStyle(fontSize: 6),
           angle: labels.length > 5 ? 0.3 : 0, // Slight slant if many

@@ -6,7 +6,6 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/neumorphic_button.dart';
 import '../../providers/service_providers.dart';
-import '../../core/services/student_registration_request_service.dart';
 
 class RegistrationPendingScreen extends ConsumerStatefulWidget {
   final String email;

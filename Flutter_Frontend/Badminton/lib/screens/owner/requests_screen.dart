@@ -1201,7 +1201,7 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
             Text(
               _selectedFilter == 'all'
                   ? 'No leave requests have been submitted yet'
-                  : 'No ${_selectedFilter} leave requests',
+                  : 'No $_selectedFilter leave requests',
               style: TextStyle(
                 fontSize: 14,
                 color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
@@ -1239,7 +1239,7 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
             Text(
               _selectedFilter == 'all'
                   ? 'No registration requests have been submitted yet'
-                  : 'No ${_selectedFilter} registration requests',
+                  : 'No $_selectedFilter registration requests',
               style: TextStyle(
                 fontSize: 14,
                 color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,

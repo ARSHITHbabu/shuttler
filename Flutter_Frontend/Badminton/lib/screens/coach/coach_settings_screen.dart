@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
@@ -14,7 +13,6 @@ import '../../providers/theme_provider.dart';
 import '../../widgets/settings/shuttlecock_theme_toggle.dart';
 import '../common/privacy_policy_screen.dart';
 import '../common/terms_conditions_screen.dart';
-import '../common/help_support_screen.dart';
 import '../../widgets/forms/change_password_dialog.dart';
 import '../common/academy_info_screen.dart';
 import '../../widgets/common/app_logo.dart';

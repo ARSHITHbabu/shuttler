@@ -32,7 +32,7 @@ class InvitationService {
             'student_phone': studentPhone.trim(),
           if (studentEmail != null && studentEmail.trim().isNotEmpty)
             'student_email': studentEmail.trim(),
-          if (batchId != null) 'batch_id': batchId,
+          'batch_id': ?batchId,
         },
       );
 
@@ -139,7 +139,7 @@ class InvitationService {
             'coach_phone': coachPhone.trim(),
           if (coachEmail != null && coachEmail.trim().isNotEmpty)
             'coach_email': coachEmail.trim(),
-          if (experienceYears != null) 'experience_years': experienceYears,
+          'experience_years': ?experienceYears,
         },
       );
 
