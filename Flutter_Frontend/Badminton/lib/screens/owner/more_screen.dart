@@ -145,7 +145,7 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
             _MenuItem(
               icon: Icons.access_time_outlined,
               title: 'Practice Sessions',
-              subtitle: 'Manage practice sessions',
+              subtitle: 'Manage practice, tournaments, and camps',
               isDark: isDark,
               onTap: () {
                 Navigator.of(context).push(

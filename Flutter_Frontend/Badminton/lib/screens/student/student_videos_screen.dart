@@ -11,7 +11,7 @@ import '../../core/constants/dimensions.dart';
 import '../../core/constants/api_endpoints.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/success_snackbar.dart';
-import '../../widgets/video/video_player_dialog.dart';
+import '../../widgets/video/video_player_page.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/video_resource.dart';
@@ -145,14 +145,17 @@ class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
   }
 
   void _playVideo(VideoResource video) {
-    final fullUrl = '${ApiEndpoints.baseUrl}${video.url}';
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => VideoPlayerDialog(
-        videoUrl: fullUrl,
-        title: video.displayTitle,
-        remarks: video.remarks,
+    debugPrint('PLAY VIDEO BUTTON PRESSED for video: ${video.id}');
+    final streamPath = ApiEndpoints.videoStreamUrl(video.url);
+    final fullUrl = '${ApiEndpoints.baseUrl}$streamPath';
+    debugPrint('Full Video URL passed to page: $fullUrl');
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => VideoPlayerPage(
+          videoUrl: fullUrl,
+          title: video.displayTitle,
+          remarks: video.remarks,
+        ),
       ),
     );
   }

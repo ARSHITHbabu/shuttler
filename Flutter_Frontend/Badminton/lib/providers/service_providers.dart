@@ -1,4 +1,5 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import '../core/constants/api_endpoints.dart';
 import '../core/services/api_service.dart';
 import '../core/services/auth_service.dart';
 import '../core/services/storage_service.dart';
@@ -216,7 +217,7 @@ RequestQueue requestQueue(RequestQueueRef ref) {
   final connectivityService = ref.watch(connectivityServiceProvider);
   // Create a new Dio instance for the queue
   // Note: This will need to be configured with the actual base URL when integrated
-  final dio = Dio(BaseOptions(baseUrl: 'http://localhost')); // Will be overridden by actual requests
+  final dio = Dio(BaseOptions(baseUrl: ApiEndpoints.baseUrl)); 
   return RequestQueue(
     connectivityService: connectivityService,
     dio: dio,

@@ -21,7 +21,8 @@ enum AttendanceViewMode { student, personal }
 /// Matches Owner Attendance Screen UI and workflow
 class CoachAttendanceScreen extends ConsumerStatefulWidget {
   final AttendanceViewMode? initialMode;
-  const CoachAttendanceScreen({super.key, this.initialMode});
+  final bool isPage;
+  const CoachAttendanceScreen({super.key, this.initialMode, this.isPage = false});
 
   @override
   ConsumerState<CoachAttendanceScreen> createState() => _CoachAttendanceScreenState();
@@ -88,11 +89,13 @@ class _CoachAttendanceScreenState extends ConsumerState<CoachAttendanceScreen> {
   Widget _buildContent(int coachId) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final backgroundColor = isDark ? AppColors.background : AppColorsLight.background;
+    final gradient = isDark ? AppColors.backgroundGradient : AppColorsLight.backgroundGradient;
 
-    return LayoutBuilder(
+    final content = LayoutBuilder(
       builder: (context, constraints) {
         return SingleChildScrollView(
-          physics: const ClampingScrollPhysics(),
+          physics: const AlwaysScrollableScrollPhysics(),
           child: ConstrainedBox(
             constraints: BoxConstraints(minHeight: constraints.maxHeight),
             child: Padding(
@@ -105,14 +108,24 @@ class _CoachAttendanceScreenState extends ConsumerState<CoachAttendanceScreen> {
                 children: [
                   // Header
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        'Attendance',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w600,
-                          color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                      if (widget.isPage)
+                        IconButton(
+                          icon: Icon(
+                            Icons.arrow_back,
+                            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                          ),
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                      if (widget.isPage) const SizedBox(width: AppDimensions.spacingS),
+                      Expanded(
+                        child: Text(
+                          'Attendance',
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                          ),
                         ),
                       ),
                       if (_viewMode == AttendanceViewMode.personal)
@@ -142,6 +155,18 @@ class _CoachAttendanceScreenState extends ConsumerState<CoachAttendanceScreen> {
         );
       },
     );
+
+    if (widget.isPage) {
+      return Scaffold(
+        backgroundColor: backgroundColor,
+        body: Container(
+          decoration: BoxDecoration(gradient: gradient),
+          child: SafeArea(child: content),
+        ),
+      );
+    }
+
+    return content;
   }
 
   Widget _buildModeToggle(bool isDark) {
