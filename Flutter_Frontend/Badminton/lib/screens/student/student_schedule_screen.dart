@@ -12,8 +12,8 @@ import '../../providers/batch_provider.dart';
 import '../../models/schedule.dart';
 import '../../models/batch.dart';
 
-/// Student Schedule Screen - READ-ONLY view of session schedules
-/// Students can view their batch schedules and upcoming sessions
+/// Student Schedule Screen - READ-ONLY view of practice session schedules
+/// Students can view their batch schedules and upcoming practice sessions
 class StudentScheduleScreen extends ConsumerStatefulWidget {
   final VoidCallback? onBack;
 
@@ -237,7 +237,7 @@ class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
 
         const SizedBox(height: AppDimensions.spacingL),
 
-        // Selected Day Sessions
+        // Selected Day Practice Sessions
         _buildSelectedDaySessions(isDark, schedules),
       ],
     );
@@ -394,7 +394,7 @@ class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '$dayName Sessions',
+            '$dayName Practice Sessions',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w600,
@@ -512,7 +512,7 @@ class _ScheduleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final batchName = schedule.batchName ?? 'Training Session';
+    final batchName = schedule.batchName ?? 'Practice Session';
     final startTime = schedule.startTime ?? '';
     final endTime = schedule.endTime ?? '';
     final location = schedule.location ?? '';

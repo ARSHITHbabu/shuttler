@@ -166,8 +166,8 @@ class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
             const SizedBox(height: AppDimensions.spacingS),
             _MenuItem(
               icon: Icons.calendar_today_outlined,
-              title: 'Schedule',
-              subtitle: 'View your session schedule',
+              title: 'Practice Sessions',
+              subtitle: 'View your practice session schedule',
               isDark: isDark,
               onTap: () {
                 Navigator.of(context).push(

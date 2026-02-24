@@ -89,7 +89,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
 
                   const SizedBox(height: AppDimensions.spacingL),
 
-                  // Upcoming Sessions
+                  // Upcoming Practice Sessions
                   _buildUpcomingSessions(isDark, dashboardData.upcomingSessions),
 
                   const SizedBox(height: AppDimensions.spacingL),
@@ -207,7 +207,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Upcoming Sessions',
+            'Upcoming Practice Sessions',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w600,
@@ -230,7 +230,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                           ),
                           const SizedBox(height: AppDimensions.spacingM),
                           Text(
-                            'No upcoming sessions',
+                            'No upcoming practice sessions',
                             style: TextStyle(
                               fontSize: 14,
                               color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,

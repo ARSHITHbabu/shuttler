@@ -486,7 +486,7 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
           children: [
             _buildAudienceChip('Everyone', 'all'),
             const SizedBox(width: AppDimensions.spacingS),
-            _buildAudienceChip('Sessions', 'session'),
+            _buildAudienceChip('Practice Sessions', 'session'),
             const SizedBox(width: AppDimensions.spacingS),
             _buildAudienceChip('Batches', 'batch'),
             const SizedBox(width: AppDimensions.spacingS),
@@ -705,7 +705,7 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Select Sessions:', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+        const Text('Select Practice Sessions:', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8,

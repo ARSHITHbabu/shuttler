@@ -126,7 +126,7 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
         backgroundColor: AppColors.background,
         elevation: 0,
         title: const Text(
-          'Schedule',
+          'Practice Sessions',
           style: TextStyle(
             color: AppColors.textPrimary,
             fontSize: 20,

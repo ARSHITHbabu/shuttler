@@ -165,7 +165,7 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "Today's Sessions",
+                      "Today's Practice Sessions",
                       style: TextStyle(
                         fontSize: 14,
                         color: context.textSecondaryColor,
@@ -178,7 +178,7 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
                           return Padding(
                             padding: const EdgeInsets.all(AppDimensions.spacingM),
                             child: Text(
-                              'No sessions scheduled for today',
+                              'No practice sessions scheduled for today',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: context.textSecondaryColor,
