@@ -11,7 +11,7 @@ class StudentService {
   /// Get all students
   Future<List<Student>> getStudents() async {
     try {
-      final response = await _apiService.get(ApiEndpoints.students);
+      final response = await _apiService.get('${ApiEndpoints.students}?include_deleted=true');
       if (response.data is List) {
         return (response.data as List)
             .map((json) => Student.fromJson(json as Map<String, dynamic>))
@@ -59,12 +59,49 @@ class StudentService {
     }
   }
 
-  /// Delete a student
+  /// Delete a student (Soft delete - logic check might vary by app context, but we use deactivate for soft delete)
   Future<void> deleteStudent(int id) async {
     try {
       await _apiService.delete(ApiEndpoints.studentById(id));
     } catch (e) {
       throw Exception('Failed to delete student: ${_apiService.getErrorMessage(e)}');
+    }
+  }
+
+  /// Deactivate a student (Soft delete)
+  Future<void> deactivateStudent(int id) async {
+    try {
+      await _apiService.post(ApiEndpoints.deactivateStudent(id));
+    } catch (e) {
+      throw Exception('Failed to deactivate student: ${_apiService.getErrorMessage(e)}');
+    }
+  }
+
+  /// Remove a student permanently (Hard delete)
+  Future<void> removeStudentPermanently(int id) async {
+    try {
+      await _apiService.delete(ApiEndpoints.removeStudent(id));
+    } catch (e) {
+      throw Exception('Failed to remove student permanently: ${_apiService.getErrorMessage(e)}');
+    }
+  }
+
+  /// Request to rejoin
+  Future<Map<String, dynamic>> requestRejoin(int id) async {
+    try {
+      final response = await _apiService.post(ApiEndpoints.requestRejoin(id));
+      return response.data as Map<String, dynamic>;
+    } catch (e) {
+      throw Exception('Failed to request rejoin: ${_apiService.getErrorMessage(e)}');
+    }
+  }
+
+  /// Approve rejoin request
+  Future<void> approveRejoin(int id) async {
+    try {
+      await _apiService.post(ApiEndpoints.approveRejoin(id));
+    } catch (e) {
+      throw Exception('Failed to approve rejoin request: ${_apiService.getErrorMessage(e)}');
     }
   }
 }

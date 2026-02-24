@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
+import 'package:url_launcher/url_launcher.dart';
 // Conditional import for File/Directory (only on non-web platforms)
 import 'dart:io' if (dart.library.html) '../../utils/dart_io_stub.dart';
 import '../../core/constants/colors.dart';
@@ -207,59 +208,58 @@ class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
           SuccessSnackbar.show(context, 'Video download started');
         }
       } else {
-        // Mobile/Desktop download: save to file system
-        final directoryPath = await getApplicationDocumentsPath();
-        if (directoryPath == null) {
-          // Fallback: shouldn't happen on mobile/desktop, but handle gracefully
+        // Mobile/Desktop download: Use url_launcher to hand off to system browser
+        // This is the most reliable way to get the file into the public Downloads folder
+        final Uri videoUri = Uri.parse(fullUrl);
+        
+        if (await canLaunchUrl(videoUri)) {
+          await launchUrl(videoUri, mode: LaunchMode.externalApplication);
           if (mounted) {
             setState(() {
               _isDownloading = false;
               _downloadingVideoId = null;
             });
-            SuccessSnackbar.showError(context, 'Download directory not available');
+            SuccessSnackbar.show(context, 'Opening download in browser...');
           }
-          return;
-        }
-
-        // Sanitize filename to remove invalid characters
-        final sanitizedFileName = _sanitizeFileName(fileName);
-        final directory = Directory(directoryPath);
-        
-        // Ensure directory exists
-        if (!await directory.exists()) {
-          await directory.create(recursive: true);
-        }
-
-        final filePath = '${directory.path}/$sanitizedFileName';
-
-        await dio.download(
-          fullUrl,
-          filePath,
-          onReceiveProgress: (received, total) {
-            if (total != -1 && mounted) {
+        } else {
+          // Fallback to private storage download if browser fails
+          final directoryPath = await getApplicationDocumentsPath();
+          if (directoryPath == null) {
+            if (mounted) {
               setState(() {
-                _downloadProgress = received / total;
+                _isDownloading = false;
+                _downloadingVideoId = null;
               });
+              SuccessSnackbar.showError(context, 'Download directory not available');
             }
-          },
-        );
+            return;
+          }
 
-        if (mounted) {
-          setState(() {
-            _isDownloading = false;
-            _downloadingVideoId = null;
-          });
-          
-          // Show user-friendly success message
-          final displayPath = directoryPath.contains('Download') 
-              ? 'Downloads folder' 
-              : directoryPath.contains('Documents')
-                  ? 'Documents folder'
-                  : 'device storage';
-          SuccessSnackbar.show(
-            context, 
-            'Video downloaded successfully!\nSaved to: $displayPath',
+          final sanitizedFileName = _sanitizeFileName(fileName);
+          final directory = Directory(directoryPath);
+          if (!await directory.exists()) await directory.create(recursive: true);
+          final filePath = '${directory.path}/$sanitizedFileName';
+
+          await dio.download(
+            fullUrl,
+            filePath,
+            onReceiveProgress: (received, total) {
+              if (total != -1 && mounted) {
+                setState(() => _downloadProgress = received / total);
+              }
+            },
           );
+
+          if (mounted) {
+            setState(() {
+              _isDownloading = false;
+              _downloadingVideoId = null;
+            });
+            SuccessSnackbar.show(
+              context, 
+              'Video saved to app storage. Tap PLAY to view.',
+            );
+          }
         }
       }
     } catch (e) {
@@ -386,7 +386,7 @@ class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
           child: NeumorphicContainer(
             padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
             child: DropdownButtonFormField<int?>(
-              value: _selectedYear,
+              initialValue: _selectedYear,
               decoration: InputDecoration(
                 border: InputBorder.none,
                 hintText: 'All Years',
@@ -416,7 +416,7 @@ class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
           child: NeumorphicContainer(
             padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
             child: DropdownButtonFormField<int?>(
-              value: _selectedMonth,
+              initialValue: _selectedMonth,
               decoration: InputDecoration(
                 border: InputBorder.none,
                 hintText: 'All Months',

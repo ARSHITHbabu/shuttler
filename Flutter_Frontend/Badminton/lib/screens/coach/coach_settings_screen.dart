@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
@@ -14,8 +13,10 @@ import '../../providers/theme_provider.dart';
 import '../../widgets/settings/shuttlecock_theme_toggle.dart';
 import '../common/privacy_policy_screen.dart';
 import '../common/terms_conditions_screen.dart';
-import '../common/help_support_screen.dart';
 import '../../widgets/forms/change_password_dialog.dart';
+import '../common/academy_info_screen.dart';
+import '../../widgets/common/app_logo.dart';
+import '../../providers/owner_provider.dart';
 import 'coach_profile_screen.dart';
 
 /// Coach Settings Screen - App settings and preferences
@@ -201,6 +202,19 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
                       ),
                       const Divider(height: 1),
                       _buildActionTile(
+                        title: 'Academy Details',
+                        icon: Icons.business_outlined,
+                        isDark: isDark,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const AcademyInfoScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      const Divider(height: 1),
+                      _buildActionTile(
                         title: 'Privacy Policy',
                         icon: Icons.privacy_tip_outlined,
                         isDark: isDark,
@@ -221,19 +235,6 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (context) => const TermsConditionsScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                      const Divider(height: 1),
-                      _buildActionTile(
-                        title: 'Contact Support',
-                        icon: Icons.support_agent_outlined,
-                        isDark: isDark,
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => const HelpSupportScreen(userRole: 'coach'),
                             ),
                           );
                         },
@@ -482,28 +483,30 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
   Widget _buildAppBranding(bool isDark) {
     return Column(
       children: [
-        Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(
-            color: isDark ? AppColors.accent : AppColorsLight.accent,
-            borderRadius: BorderRadius.circular(AppDimensions.radiusL),
-          ),
-          child: const Icon(
-            Icons.sports_tennis,
-            size: 32,
-            color: Colors.white,
-          ),
+        const AppLogo(
+          height: 80,
         ),
         const SizedBox(height: AppDimensions.spacingM),
-        Text(
-          'Shuttler',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-          ),
-        ),
+        ref.watch(activeOwnerProvider).when(
+              data: (owner) => Text(
+                owner?.academyName ?? 'Pursue Badminton',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                ),
+              ),
+              loading: () => const SizedBox(height: 20),
+              error: (_, __) => Text(
+                'Pursue Badminton',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                ),
+              ),
+            ),
+
         Text(
           'Badminton Academy Management',
           style: TextStyle(

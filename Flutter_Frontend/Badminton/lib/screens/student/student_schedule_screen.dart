@@ -1,19 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:table_calendar/table_calendar.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
-import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
-import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/error_widget.dart';
+import '../../widgets/common/skeleton_screen.dart';
+import '../../providers/calendar_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/student_provider.dart';
-import '../../providers/batch_provider.dart';
+import '../../models/calendar_event.dart';
 import '../../models/schedule.dart';
-import '../../models/batch.dart';
+import '../../core/utils/canadian_holidays.dart';
+import 'package:intl/intl.dart';
 
-/// Student Schedule Screen - READ-ONLY view of practice session schedules
-/// Students can view their batch schedules and upcoming practice sessions
+enum ScheduleFilter { all, batches, holidays, tournaments, events, leave }
+
+/// Combined Student Schedule Screen
+/// Shows calendar and events (batches, holidays, tournaments, events)
 class StudentScheduleScreen extends ConsumerStatefulWidget {
   final VoidCallback? onBack;
 
@@ -24,662 +28,561 @@ class StudentScheduleScreen extends ConsumerStatefulWidget {
 }
 
 class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
-  int? _selectedBatchId;
-  DateTime _selectedDate = DateTime.now();
+  DateTime _focusedDay = DateTime.now();
+  DateTime _selectedDay = DateTime.now();
+  CalendarFormat _calendarFormat = CalendarFormat.month;
+  ScheduleFilter _selectedFilter = ScheduleFilter.all;
 
-  // Calendar view mode
-  bool _showCalendarView = true;
+  // Colors based on user requirements
+  static const Color holidayColor = Colors.red;
+  static const Color tournamentColor = Color(0xFF00A86B); // Jade green
+  static const Color eventColor = Color(0xFF00A86B); // Jade green
+  static const Color leaveColor = Color(0xFFFF9800); // Orange/Amber
+  static const Color batchColor = Colors.purple;
 
-  List<Schedule> _filterSchedules(List<Schedule> schedules) {
-    if (_selectedBatchId == null) {
-      return schedules;
+  Map<DateTime, List<dynamic>> _groupItemsByDate(List<CalendarEvent> events, List<Schedule> schedules) {
+    final Map<DateTime, List<dynamic>> grouped = {};
+    
+    // Process events (holidays, tournaments, events)
+    for (var event in events) {
+      final startDate = DateTime(event.date.year, event.date.month, event.date.day);
+      if (event.endDate != null) {
+        final endDate = DateTime(event.endDate!.year, event.endDate!.month, event.endDate!.day);
+        var currentDate = startDate;
+        while (currentDate.isBefore(endDate) || currentDate.isAtSameMomentAs(endDate)) {
+          grouped.putIfAbsent(currentDate, () => []).add(event);
+          currentDate = currentDate.add(const Duration(days: 1));
+        }
+      } else {
+        grouped.putIfAbsent(startDate, () => []).add(event);
+      }
     }
-    return schedules.where((s) => s.batchId == _selectedBatchId).toList();
-  }
 
-  List<Schedule> _getSchedulesForDay(List<Schedule> schedules, DateTime date) {
-    // For now, return all schedules for the selected date
-    // In a real implementation, you'd filter by day of week from batch schedule
-    return schedules.where((schedule) {
-      return schedule.date.year == date.year &&
-             schedule.date.month == date.month &&
-             schedule.date.day == date.day;
-    }).toList();
-  }
+    // Process schedules (batches)
+    for (var schedule in schedules) {
+      final date = DateTime(schedule.date.year, schedule.date.month, schedule.date.day);
+      grouped.putIfAbsent(date, () => []).add(schedule);
+    }
 
-  String _getDayName(int weekday) {
-    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    return days[weekday - 1];
+    return grouped;
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final backgroundColor = isDark ? AppColors.background : AppColorsLight.background;
+    final textPrimary = isDark ? AppColors.textPrimary : AppColorsLight.textPrimary;
+    final textSecondary = isDark ? AppColors.textSecondary : AppColorsLight.textSecondary;
+    final cardBackground = isDark ? AppColors.cardBackground : AppColorsLight.cardBackground;
+    final accentColor = isDark ? AppColors.accent : AppColorsLight.accent;
 
-    // Get user ID from auth provider
-    final authStateAsync = ref.watch(authProvider);
-    
-    return authStateAsync.when(
-      loading: () => Scaffold(
-        backgroundColor: Colors.transparent,
-        body: const Center(child: ListSkeleton(itemCount: 5)),
-      ),
-      error: (error, stack) => Scaffold(
-        backgroundColor: Colors.transparent,
-        body: ErrorDisplay(
-          message: 'Failed to load user data: ${error.toString()}',
-          onRetry: () => ref.invalidate(authProvider),
-        ),
-      ),
-      data: (authState) {
-        if (authState is! Authenticated) {
-          return Scaffold(
-            backgroundColor: Colors.transparent,
-            body: ErrorDisplay(
-              message: 'Please log in to view schedule',
-              onRetry: () => ref.invalidate(authProvider),
-            ),
-          );
-        }
-
-        final userId = authState.userId;
-        final schedulesAsync = ref.watch(studentSchedulesProvider(userId));
-        final batchesAsync = ref.watch(studentBatchesProvider(userId));
-
-        return Scaffold(
-          backgroundColor: Colors.transparent,
-          body: RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(studentSchedulesProvider(userId));
-              ref.invalidate(studentBatchesProvider(userId));
-            },
-            child: CustomScrollView(
-              slivers: [
-                // App Bar
-                SliverAppBar(
-                  backgroundColor: Colors.transparent,
-                  elevation: 0,
-                  pinned: true,
-                  leading: widget.onBack != null
-                      ? IconButton(
-                          icon: Icon(
-                            Icons.arrow_back,
-                            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                          ),
-                          onPressed: widget.onBack,
-                        )
-                      : null,
-                  title: Text(
-                    'My Schedule',
-                    style: TextStyle(
-                      color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  centerTitle: true,
-                  actions: [
-                    IconButton(
-                      icon: Icon(
-                        _showCalendarView ? Icons.view_list : Icons.calendar_month,
-                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _showCalendarView = !_showCalendarView;
-                        });
-                      },
-                    ),
-                  ],
-                ),
-
-                // Content
-                SliverToBoxAdapter(
-                  child: schedulesAsync.when(
-                    loading: () => const SizedBox(
-                      height: 400,
-                      child: ListSkeleton(itemCount: 5),
-                    ),
-                    error: (error, stack) => ErrorDisplay(
-                      message: 'Failed to load schedule: ${error.toString()}',
-                      onRetry: () => ref.invalidate(studentSchedulesProvider(userId)),
-                    ),
-                    data: (schedules) {
-                      final filteredSchedules = _filterSchedules(schedules);
-                      
-                      return batchesAsync.when(
-                        data: (batches) => Column(
-                          children: [
-                            // Batch Filter
-                            if (batches.isNotEmpty) ...[
-                              _buildBatchFilter(isDark, batches),
-                              const SizedBox(height: AppDimensions.spacingM),
-                            ],
-
-                            // Calendar or List View
-                            if (_showCalendarView)
-                              _buildCalendarView(isDark, filteredSchedules)
-                            else
-                              _buildListView(isDark, filteredSchedules),
-                          ],
-                        ),
-                        loading: () => const SizedBox(
-                          height: 200,
-                          child: ListSkeleton(itemCount: 3),
-                        ),
-                        error: (error, stack) => Column(
-                          children: [
-                            if (filteredSchedules.isEmpty)
-                              EmptyState.noEvents()
-                            else
-                              _showCalendarView
-                                  ? _buildCalendarView(isDark, filteredSchedules)
-                                  : _buildListView(isDark, filteredSchedules),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-
-                // Bottom spacing
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: 100),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildBatchFilter(bool isDark, List<Batch> batches) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            _FilterChip(
-              label: 'All Batches',
-              isSelected: _selectedBatchId == null,
-              isDark: isDark,
-              onTap: () => setState(() => _selectedBatchId = null),
-            ),
-            ...batches.map((batch) {
-              return Padding(
-                padding: const EdgeInsets.only(left: AppDimensions.spacingS),
-                child: _FilterChip(
-                  label: batch.name,
-                  isSelected: _selectedBatchId == batch.id,
-                  isDark: isDark,
-                  onTap: () => setState(() => _selectedBatchId = batch.id),
-                ),
-              );
-            }),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCalendarView(bool isDark, List<Schedule> schedules) {
-    return Column(
-      children: [
-        // Week Navigation
-        _buildWeekNavigation(isDark),
-
-        const SizedBox(height: AppDimensions.spacingM),
-
-        // Week Days
-        _buildWeekDays(isDark, schedules),
-
-        const SizedBox(height: AppDimensions.spacingL),
-
-        // Selected Day Practice Sessions
-        _buildSelectedDaySessions(isDark, schedules),
-      ],
-    );
-  }
-
-  Widget _buildWeekNavigation(bool isDark) {
-    final startOfWeek = _selectedDate.subtract(Duration(days: _selectedDate.weekday - 1));
-    final endOfWeek = startOfWeek.add(const Duration(days: 6));
-
-    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
-      child: NeumorphicContainer(
-        padding: const EdgeInsets.all(AppDimensions.paddingM),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            IconButton(
-              icon: Icon(
-                Icons.chevron_left,
-                color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
-              ),
-              onPressed: () {
-                setState(() {
-                  _selectedDate = _selectedDate.subtract(const Duration(days: 7));
-                });
-              },
-            ),
-            Column(
-              children: [
-                Text(
-                  '${months[startOfWeek.month - 1]} ${startOfWeek.day} - ${months[endOfWeek.month - 1]} ${endOfWeek.day}',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                  ),
-                ),
-                Text(
-                  startOfWeek.year.toString(),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-            IconButton(
-              icon: Icon(
-                Icons.chevron_right,
-                color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
-              ),
-              onPressed: () {
-                setState(() {
-                  _selectedDate = _selectedDate.add(const Duration(days: 7));
-                });
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildWeekDays(bool isDark, List<Schedule> schedules) {
-    final startOfWeek = _selectedDate.subtract(Duration(days: _selectedDate.weekday - 1));
-    final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: List.generate(7, (index) {
-          final date = startOfWeek.add(Duration(days: index));
-          final isSelected = date.day == _selectedDate.day &&
-              date.month == _selectedDate.month &&
-              date.year == _selectedDate.year;
-          final isToday = date.day == DateTime.now().day &&
-              date.month == DateTime.now().month &&
-              date.year == DateTime.now().year;
-          final hasSession = _getSchedulesForDay(schedules, date).isNotEmpty;
-
-          return GestureDetector(
-            onTap: () {
-              setState(() {
-                _selectedDate = date;
-              });
-            },
-            child: Container(
-              width: 44,
-              padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
-              decoration: BoxDecoration(
-                color: isSelected
-                    ? (isDark ? AppColors.accent : AppColorsLight.accent)
-                    : isToday
-                        ? (isDark ? AppColors.accent : AppColorsLight.accent).withValues(alpha: 0.2)
-                        : null,
-                borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-              ),
-              child: Column(
-                children: [
-                  Text(
-                    days[index],
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: isSelected
-                          ? Colors.white
-                          : (isDark ? AppColors.textSecondary : AppColorsLight.textSecondary),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    date.day.toString(),
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: isSelected
-                          ? Colors.white
-                          : (isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  if (hasSession)
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? Colors.white
-                            : (isDark ? AppColors.success : AppColorsLight.success),
-                        shape: BoxShape.circle,
-                      ),
-                    )
-                  else
-                    const SizedBox(height: 6),
-                ],
-              ),
-            ),
-          );
-        }),
-      ),
-    );
-  }
-
-  Widget _buildSelectedDaySessions(bool isDark, List<Schedule> schedules) {
-    final sessions = _getSchedulesForDay(schedules, _selectedDate);
-    final dayName = _getDayName(_selectedDate.weekday);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '$dayName Practice Sessions',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-            ),
-          ),
-          const SizedBox(height: AppDimensions.spacingM),
-
-          if (sessions.isEmpty)
-            EmptyState.noEvents()
-          else
-            ...sessions.map((session) => Padding(
-                  padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
-                  child: _ScheduleCard(
-                    schedule: session,
-                    isDark: isDark,
-                  ),
-                )),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildListView(bool isDark, List<Schedule> schedules) {
-    if (schedules.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(AppDimensions.paddingL),
-        child: EmptyState.noEvents(),
+    final authState = ref.watch(authProvider).valueOrNull;
+    if (authState is! Authenticated) {
+      return Scaffold(
+        backgroundColor: backgroundColor,
+        body: const Center(child: Text('Please log in to view schedule')),
       );
     }
 
-    return Padding(
+    final userId = authState.userId;
+    final eventsAsync = ref.watch(yearlyEventsProvider(_focusedDay.year));
+    final schedulesAsync = ref.watch(studentSchedulesProvider(userId));
+
+    return Scaffold(
+      backgroundColor: backgroundColor,
+      appBar: AppBar(
+        backgroundColor: backgroundColor,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back, color: textPrimary),
+          onPressed: widget.onBack ?? () => Navigator.of(context).pop(),
+        ),
+        title: Text(
+          'Schedule',
+          style: TextStyle(
+            color: textPrimary,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(yearlyEventsProvider(_focusedDay.year));
+          ref.invalidate(studentSchedulesProvider(userId));
+        },
+        child: eventsAsync.when(
+          loading: () => const Center(child: DashboardSkeleton()),
+          error: (error, stack) => ErrorDisplay(
+            message: 'Failed to load events: ${error.toString()}',
+            onRetry: () => ref.invalidate(yearlyEventsProvider(_focusedDay.year)),
+          ),
+          data: (events) {
+            return schedulesAsync.when(
+              loading: () => const Center(child: DashboardSkeleton()),
+              error: (error, stack) => ErrorDisplay(
+                message: 'Failed to load schedules: ${error.toString()}',
+                onRetry: () => ref.invalidate(studentSchedulesProvider(userId)),
+              ),
+              data: (schedules) {
+                final groupedItems = _groupItemsByDate(events, schedules);
+                final canadianHolidays = CanadianHolidays.getHolidaysForYear(_focusedDay.year);
+
+                return SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: Column(
+                    children: [
+                      // Calendar
+                      NeumorphicContainer(
+                        margin: const EdgeInsets.all(AppDimensions.paddingL),
+                        padding: const EdgeInsets.all(AppDimensions.paddingM),
+                        child: TableCalendar<dynamic>(
+                          firstDay: DateTime.utc(2020, 1, 1),
+                          lastDay: DateTime.utc(2030, 12, 31),
+                          focusedDay: _focusedDay,
+                          selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+                          calendarFormat: _calendarFormat,
+                          availableCalendarFormats: const {
+                            CalendarFormat.month: 'Month',
+                            CalendarFormat.twoWeeks: '2 Weeks',
+                            CalendarFormat.week: 'Week',
+                          },
+                          eventLoader: (day) {
+                            final date = DateTime(day.year, day.month, day.day);
+                            return _getFilteredItems(groupedItems[date] ?? []);
+                          },
+                          startingDayOfWeek: StartingDayOfWeek.monday,
+                          calendarStyle: CalendarStyle(
+                            outsideDaysVisible: false,
+                            weekendTextStyle: TextStyle(color: textSecondary),
+                            defaultTextStyle: TextStyle(color: textPrimary),
+                            selectedDecoration: BoxDecoration(
+                              color: accentColor,
+                              shape: BoxShape.circle,
+                            ),
+                            todayDecoration: BoxDecoration(
+                              color: accentColor.withOpacity(0.3),
+                              shape: BoxShape.circle,
+                            ),
+                            markersMaxCount: 4,
+                            markerDecoration: const BoxDecoration(
+                              color: Colors.transparent,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          headerStyle: HeaderStyle(
+                            formatButtonVisible: true,
+                            titleCentered: true,
+                            formatButtonShowsNext: false,
+                            formatButtonDecoration: BoxDecoration(
+                              color: cardBackground,
+                              borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                            ),
+                            formatButtonTextStyle: TextStyle(color: textPrimary),
+                            leftChevronIcon: Icon(Icons.chevron_left, color: textPrimary),
+                            rightChevronIcon: Icon(Icons.chevron_right, color: textPrimary),
+                            titleTextStyle: TextStyle(
+                              color: textPrimary,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          calendarBuilders: CalendarBuilders(
+                            defaultBuilder: (context, date, focusedDay) {
+                              final dateKey = DateTime(date.year, date.month, date.day);
+                              final isHoliday = canadianHolidays.containsKey(dateKey) || 
+                                              events.any((e) => isSameDay(e.date, date) && e.isHoliday);
+                              
+                              if (isHoliday) {
+                                return Center(
+                                  child: Text(
+                                    '${date.day}',
+                                    style: const TextStyle(
+                                      color: Colors.red,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                );
+                              }
+                              return null;
+                            },
+                            selectedBuilder: (context, date, focusedDay) {
+                              final dateKey = DateTime(date.year, date.month, date.day);
+                              final isHoliday = canadianHolidays.containsKey(dateKey) || 
+                                              events.any((e) => isSameDay(e.date, date) && e.isHoliday);
+                              
+                              return Container(
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: isHoliday ? Colors.red.withOpacity(0.15) : accentColor,
+                                  shape: BoxShape.circle,
+                                  border: isHoliday ? Border.all(color: Colors.red, width: 1) : null,
+                                ),
+                                child: Text(
+                                  '${date.day}',
+                                  style: TextStyle(
+                                    color: isHoliday ? Colors.red : Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              );
+                            },
+                            todayBuilder: (context, date, focusedDay) {
+                              final dateKey = DateTime(date.year, date.month, date.day);
+                              final isHoliday = canadianHolidays.containsKey(dateKey) || 
+                                              events.any((e) => isSameDay(e.date, date) && e.isHoliday);
+                              
+                              return Container(
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  color: accentColor.withOpacity(0.1),
+                                  shape: BoxShape.circle,
+                                  border: isHoliday ? Border.all(color: Colors.red, width: 1) : null,
+                                ),
+                                child: Text(
+                                  '${date.day}',
+                                  style: TextStyle(
+                                    color: isHoliday ? Colors.red : textPrimary,
+                                    fontWeight: isHoliday ? FontWeight.bold : FontWeight.normal,
+                                  ),
+                                ),
+                              );
+                            },
+                            markerBuilder: (context, date, events) {
+                              if (events.isEmpty) return null;
+                              
+                              final dateKey = DateTime(date.year, date.month, date.day);
+                              final hasholiday = canadianHolidays.containsKey(dateKey) || 
+                                events.any((e) => e is CalendarEvent && e.isHoliday);
+                              final hasTournament = events.any((e) => e is CalendarEvent && e.eventType.toLowerCase() == 'tournament');
+                              final hasEvent = events.any((e) => e is CalendarEvent && e.eventType.toLowerCase() == 'event');
+                              final hasBatch = events.any((e) => e is Schedule);
+    final hasLeave = events.any((e) => e is CalendarEvent && e.isLeave);
+
+    List<Widget> markers = [];
+    if (hasholiday) markers.add(_buildMarkerCircle(holidayColor));
+    if (hasTournament) markers.add(_buildMarkerCircle(tournamentColor));
+    if (hasEvent) markers.add(_buildMarkerCircle(eventColor));
+    if (hasBatch) markers.add(_buildMarkerCircle(batchColor));
+    if (hasLeave) markers.add(_buildMarkerCircle(leaveColor));
+
+                              return Positioned(
+                                bottom: 1,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: markers.map((m) => Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 1),
+                                    child: m,
+                                  )).toList(),
+                                ),
+                              );
+                            },
+                          ),
+                          onDaySelected: (selectedDay, focusedDay) {
+                            setState(() {
+                              _selectedDay = selectedDay;
+                              _focusedDay = focusedDay;
+                            });
+                          },
+                          onFormatChanged: (format) {
+                            setState(() => _calendarFormat = format);
+                          },
+                          onPageChanged: (focusedDay) {
+                            setState(() => _focusedDay = focusedDay);
+                          },
+                        ),
+                      ),
+
+                      // Filter Options
+                      _buildFilters(isDark),
+
+                      const SizedBox(height: AppDimensions.spacingM),
+
+                      // Selected Day Content
+                      _buildSelectedDayContent(groupedItems, canadianHolidays, isDark),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMarkerCircle(Color color) {
+    return Container(
+      width: 6,
+      height: 6,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+      ),
+    );
+  }
+
+  List<dynamic> _getFilteredItems(List<dynamic> items) {
+    if (_selectedFilter == ScheduleFilter.all) return items;
+    
+    return items.where((item) {
+      if (item is Schedule) return _selectedFilter == ScheduleFilter.batches;
+      if (item is CalendarEvent) {
+        if (item.isHoliday) return _selectedFilter == ScheduleFilter.holidays;
+        if (item.eventType.toLowerCase() == 'tournament') return _selectedFilter == ScheduleFilter.tournaments;
+        if (item.eventType.toLowerCase() == 'event') return _selectedFilter == ScheduleFilter.events;
+      }
+      return false;
+    }).toList();
+  }
+
+  Widget _buildFilters(bool isDark) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+      child: Row(
+        children: [
+          _buildFilterChip('All', ScheduleFilter.all, isDark),
+          _buildFilterChip('Batches', ScheduleFilter.batches, isDark),
+          _buildFilterChip('Holidays', ScheduleFilter.holidays, isDark),
+          _buildFilterChip('Tournaments', ScheduleFilter.tournaments, isDark),
+          _buildFilterChip('Events', ScheduleFilter.events, isDark),
+          _buildFilterChip('Leave', ScheduleFilter.leave, isDark),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String label, ScheduleFilter filter, bool isDark) {
+    final isSelected = _selectedFilter == filter;
+    final accentColor = isDark ? AppColors.accent : AppColorsLight.accent;
+    final cardBg = isDark ? AppColors.cardBackground : AppColorsLight.cardBackground;
+    final textP = isDark ? AppColors.textPrimary : AppColorsLight.textPrimary;
+
+    return Padding(
+      padding: const EdgeInsets.only(right: AppDimensions.spacingS),
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedFilter = filter),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? accentColor : cardBg,
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: isSelected ? null : [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              )
+            ],
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: isSelected ? Colors.white : textP,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              fontSize: 13,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSelectedDayContent(Map<DateTime, List<dynamic>> groupedItems, Map<DateTime, String> canadianHolidays, bool isDark) {
+    final date = DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day);
+    final items = _getFilteredItems(groupedItems[date] ?? []);
+    final holidayName = CanadianHolidays.getHolidayName(date);
+    
+    final textPrimary = isDark ? AppColors.textPrimary : AppColorsLight.textPrimary;
+
+    // Check if we should show holiday if filter is All or Holidays
+    final showHoliday = (holidayName != null) && 
+        (_selectedFilter == ScheduleFilter.all || _selectedFilter == ScheduleFilter.holidays);
+
+    return Padding(
+      padding: const EdgeInsets.all(AppDimensions.paddingL),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Weekly Schedule',
+            DateFormat('EEEE, MMMM dd, yyyy').format(_selectedDay),
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w600,
-              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+              color: textPrimary,
             ),
           ),
-          const SizedBox(height: AppDimensions.spacingM),
-
-          ...schedules.map((schedule) => Padding(
-                padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
-                child: _ScheduleCard(
-                  schedule: schedule,
-                  isDark: isDark,
-                  showDays: true,
-                ),
-              )),
+          const SizedBox(height: AppDimensions.spacingL),
+          
+          if (items.isEmpty && !showHoliday)
+            const Center(child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: Text('No entries for this date'),
+            ))
+          else
+            _buildGroupedList(items, holidayName, isDark),
         ],
       ),
     );
   }
-}
 
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final bool isSelected;
-  final bool isDark;
-  final VoidCallback onTap;
+  Widget _buildGroupedList(List<dynamic> items, String? holidayName, bool isDark) {
+    final batches = items.whereType<Schedule>().toList();
+    final tournaments = items.whereType<CalendarEvent>().where((e) => e.eventType.toLowerCase() == 'tournament').toList();
+    final events = items.whereType<CalendarEvent>().where((e) => e.eventType.toLowerCase() == 'event').toList();
+    final leaveEvents = items.whereType<CalendarEvent>().where((e) => e.isLeave).toList();
+    final holidays = items.whereType<CalendarEvent>().where((e) => e.isHoliday).toList();
 
-  const _FilterChip({
-    required this.label,
-    required this.isSelected,
-    required this.isDark,
-    required this.onTap,
-  });
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_selectedFilter == ScheduleFilter.all || _selectedFilter == ScheduleFilter.batches)
+          if (batches.isNotEmpty) ...[
+            _buildSectionHeader('Batches', batchColor, isDark),
+            ...batches.map((b) => _buildBatchCard(b, isDark)),
+            const SizedBox(height: AppDimensions.spacingL),
+          ],
 
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppDimensions.paddingM,
-          vertical: AppDimensions.spacingS,
-        ),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? (isDark ? AppColors.accent : AppColorsLight.accent)
-              : (isDark ? AppColors.cardBackground : AppColorsLight.cardBackground),
-          borderRadius: BorderRadius.circular(AppDimensions.radiusL),
-          boxShadow: isSelected ? null : NeumorphicStyles.getElevatedShadow(),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-            color: isSelected
-                ? Colors.white
-                : (isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
+        if (_selectedFilter == ScheduleFilter.all || _selectedFilter == ScheduleFilter.holidays)
+          if (holidays.isNotEmpty || holidayName != null) ...[
+            _buildSectionHeader('Holidays', holidayColor, isDark),
+            if (holidayName != null) _buildSimpleCard(holidayName, 'Canadian Government Holiday', holidayColor, Icons.celebration, isDark),
+            ...holidays.map((h) => _buildSimpleCard(h.title, h.description ?? 'Academy Holiday', holidayColor, Icons.celebration, isDark)),
+            const SizedBox(height: AppDimensions.spacingL),
+          ],
+
+        if (_selectedFilter == ScheduleFilter.all || _selectedFilter == ScheduleFilter.tournaments)
+          if (tournaments.isNotEmpty) ...[
+            _buildSectionHeader('Tournaments', tournamentColor, isDark),
+            ...tournaments.map((t) => _buildSimpleCard(t.title, t.description ?? '', tournamentColor, Icons.emoji_events, isDark)),
+            const SizedBox(height: AppDimensions.spacingL),
+          ],
+
+        if (_selectedFilter == ScheduleFilter.all || _selectedFilter == ScheduleFilter.events)
+          if (events.isNotEmpty) ...[
+            _buildSectionHeader('Events', eventColor, isDark),
+            ...events.map((e) => _buildSimpleCard(e.title, e.description ?? '', eventColor, Icons.event, isDark)),
+            const SizedBox(height: AppDimensions.spacingL),
+          ],
+
+        if (_selectedFilter == ScheduleFilter.all || _selectedFilter == ScheduleFilter.leave)
+          if (leaveEvents.isNotEmpty) ...[
+            _buildSectionHeader('Leave', leaveColor, isDark),
+            ...leaveEvents.map((e) => _buildSimpleCard(e.title, e.description ?? '', leaveColor, Icons.airplane_ticket, isDark)),
+            const SizedBox(height: AppDimensions.spacingL),
+          ],
+      ],
+    );
+  }
+
+  Widget _buildSectionHeader(String title, Color color, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
+      child: Row(
+        children: [
+          Container(
+            width: 4,
+            height: 16,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
-        ),
+          const SizedBox(width: 8),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+            ),
+          ),
+        ],
       ),
     );
   }
-}
 
-class _ScheduleCard extends StatelessWidget {
-  final Schedule schedule;
-  final bool isDark;
-  final bool showDays;
-
-  const _ScheduleCard({
-    required this.schedule,
-    required this.isDark,
-    this.showDays = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final batchName = schedule.batchName ?? 'Practice Session';
-    final startTime = schedule.startTime ?? '';
-    final endTime = schedule.endTime ?? '';
-    final location = schedule.location ?? '';
-    final activityType = schedule.sessionType;
-    final notes = schedule.description ?? '';
-    final coachName = schedule.coachName ?? '';
+  Widget _buildBatchCard(Schedule schedule, bool isDark) {
+    final textPrimary = isDark ? AppColors.textPrimary : AppColorsLight.textPrimary;
+    final textSecondary = isDark ? AppColors.textSecondary : AppColorsLight.textSecondary;
 
     return NeumorphicContainer(
+      margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
       padding: const EdgeInsets.all(AppDimensions.paddingM),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          // Header
-          Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: (isDark ? AppColors.accent : AppColorsLight.accent).withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-                ),
-                child: Icon(
-                  Icons.sports_tennis,
-                  size: 24,
-                  color: isDark ? AppColors.accent : AppColorsLight.accent,
-                ),
-              ),
-              const SizedBox(width: AppDimensions.spacingM),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      batchName,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                      ),
-                    ),
-                    Text(
-                      activityType,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: AppDimensions.spacingM),
-
-          // Details
           Container(
-            padding: const EdgeInsets.all(AppDimensions.paddingS),
+            padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: isDark ? AppColors.background : AppColorsLight.background,
-              borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-              boxShadow: NeumorphicStyles.getSmallInsetShadow(),
+              color: batchColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
             ),
-            child: Column(
-              children: [
-                if (startTime.isNotEmpty) ...[
-                  _DetailRow(
-                    icon: Icons.access_time,
-                    label: 'Time',
-                    value: endTime.isNotEmpty ? '$startTime - $endTime' : startTime,
-                    isDark: isDark,
-                  ),
-                  const SizedBox(height: AppDimensions.spacingS),
-                ],
-                if (location.isNotEmpty)
-                  _DetailRow(
-                    icon: Icons.location_on,
-                    label: 'Location',
-                    value: location,
-                    isDark: isDark,
-                  ),
-                if (coachName.isNotEmpty) ...[
-                  const SizedBox(height: AppDimensions.spacingS),
-                  _DetailRow(
-                    icon: Icons.person,
-                    label: 'Coach',
-                    value: coachName,
-                    isDark: isDark,
-                  ),
-                ],
-              ],
-            ),
+            child: const Icon(Icons.sports_tennis, color: batchColor, size: 24),
           ),
-
-          if (notes.isNotEmpty) ...[
-            const SizedBox(height: AppDimensions.spacingM),
-            Row(
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  Icons.notes,
-                  size: 14,
-                  color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
+                Text(
+                  schedule.batchName ?? 'Training Session',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: textPrimary),
                 ),
-                const SizedBox(width: AppDimensions.spacingS),
-                Expanded(
-                  child: Text(
-                    notes,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontStyle: FontStyle.italic,
-                      color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-                    ),
+                Text(
+                  '${schedule.startTime ?? ""} - ${schedule.endTime ?? ""}',
+                  style: TextStyle(fontSize: 14, color: textSecondary),
+                ),
+                if (schedule.location != null)
+                  Text(
+                    schedule.location!,
+                    style: TextStyle(fontSize: 12, color: textSecondary, fontStyle: FontStyle.italic),
                   ),
-                ),
               ],
             ),
-          ],
+          ),
         ],
       ),
     );
   }
-}
 
-class _DetailRow extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-  final bool isDark;
+  Widget _buildSimpleCard(String title, String subtitle, Color color, IconData icon, bool isDark) {
+    final textPrimary = isDark ? AppColors.textPrimary : AppColorsLight.textPrimary;
+    final textSecondary = isDark ? AppColors.textSecondary : AppColorsLight.textSecondary;
 
-  const _DetailRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.isDark,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(
-          icon,
-          size: 14,
-          color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
-        ),
-        const SizedBox(width: AppDimensions.spacingS),
-        Text(
-          '$label: ',
-          style: TextStyle(
-            fontSize: 12,
-            color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+    return NeumorphicContainer(
+      margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
+      padding: const EdgeInsets.all(AppDimensions.paddingM),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
             ),
-            textAlign: TextAlign.right,
+            child: Icon(icon, color: color, size: 24),
           ),
-        ),
-      ],
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: textPrimary),
+                ),
+                if (subtitle.isNotEmpty)
+                  Text(
+                    subtitle,
+                    style: TextStyle(fontSize: 14, color: textSecondary),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

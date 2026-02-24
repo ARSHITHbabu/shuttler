@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../core/utils/contact_utils.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
+import '../../core/utils/canadian_holidays.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/student_provider.dart';
+import '../../providers/owner_provider.dart';
 import 'student_attendance_screen.dart';
 import 'student_performance_screen.dart';
 import 'student_bmi_screen.dart';
@@ -31,6 +32,8 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
 
     // Get user ID from auth provider
     final authStateAsync = ref.watch(authProvider);
@@ -77,7 +80,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Header
-                  _buildHeader(isDark, dashboardData.studentName),
+                  _buildHeader(isDark, dashboardData.studentName, isSmallScreen),
 
                   // Stats Grid
                   _buildStatsGrid(
@@ -85,17 +88,18 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                     isDark,
                     dashboardData.attendanceRate,
                     dashboardData.performanceScore,
+                    isSmallScreen,
                   ),
 
                   const SizedBox(height: AppDimensions.spacingL),
 
-                  // Upcoming Practice Sessions
-                  _buildUpcomingSessions(isDark, dashboardData.upcomingSessions),
+                  // Upcoming Sessions
+                  _buildUpcomingSessions(isDark, dashboardData.upcomingSessions, isSmallScreen),
 
                   const SizedBox(height: AppDimensions.spacingL),
 
                   // Quick Actions
-                  _buildQuickActions(context, isDark, userId),
+                  _buildQuickActions(context, isDark, userId, isSmallScreen),
 
                   const SizedBox(height: 100), // Space for bottom nav
                 ],
@@ -107,9 +111,9 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
     );
   }
 
-  Widget _buildHeader(bool isDark, String studentName) {
+  Widget _buildHeader(bool isDark, String studentName, bool isSmallScreen) {
     return Padding(
-      padding: const EdgeInsets.all(AppDimensions.paddingL),
+      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -120,15 +124,31 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
               color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
             ),
           ),
-          const SizedBox(height: 4),
           Text(
             studentName,
             style: TextStyle(
-              fontSize: 24,
+              fontSize: isSmallScreen ? 20 : 24,
               fontWeight: FontWeight.w600,
               color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
             ),
           ),
+          ref.watch(activeOwnerProvider).when(
+                data: (owner) => owner?.academyName != null
+                    ? Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          owner!.academyName!,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: isDark ? AppColors.accent : AppColorsLight.accent,
+                          ),
+                        ),
+                      )
+                    : const SizedBox.shrink(),
+                loading: () => const SizedBox.shrink(),
+                error: (_, __) => const SizedBox.shrink(),
+              ),
           const SizedBox(height: 4),
           Text(
             _getFormattedDate(),
@@ -137,6 +157,33 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
               color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
             ),
           ),
+          // Holiday Indicator
+          if (CanadianHolidays.isHoliday(DateTime.now())) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                border: Border.all(color: Colors.red.withOpacity(0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.celebration, size: 16, color: Colors.red),
+                  const SizedBox(width: 8),
+                  Text(
+                    CanadianHolidays.getHolidayName(DateTime.now())!,
+                    style: const TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -147,23 +194,25 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
     bool isDark,
     double attendanceRate,
     double performanceScore,
+    bool isSmallScreen,
   ) {
-
+    // Grid for stats
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
       child: GridView.count(
         crossAxisCount: 2,
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
-        crossAxisSpacing: AppDimensions.spacingM,
-        mainAxisSpacing: AppDimensions.spacingM,
-        childAspectRatio: 0.85,
+        crossAxisSpacing: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM,
+        mainAxisSpacing: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM,
+        childAspectRatio: isSmallScreen ? 1.0 : 0.85,
         children: [
           _StatCard(
             icon: Icons.check_circle_outline,
             value: '${attendanceRate.toStringAsFixed(0)}%',
             label: 'Attendance Rate',
             isDark: isDark,
+            isSmallScreen: isSmallScreen,
             valueColor: _getAttendanceColor(attendanceRate, isDark),
             onTap: () {
               Navigator.push(
@@ -182,6 +231,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
             value: performanceScore > 0 ? '${performanceScore.toStringAsFixed(1)}/5' : 'N/A',
             label: 'Performance',
             isDark: isDark,
+            isSmallScreen: isSmallScreen,
             onTap: () {
               Navigator.push(
                 context,
@@ -200,9 +250,9 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
   }
 
 
-  Widget _buildUpcomingSessions(bool isDark, List<Map<String, dynamic>> upcomingSessions) {
+  Widget _buildUpcomingSessions(bool isDark, List<Map<String, dynamic>> upcomingSessions, bool isSmallScreen) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+      padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -250,6 +300,9 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                             batchName: session['batch_name'] ?? 'Unknown Batch',
                             time: session['time'] ?? '',
                             location: session['location'] ?? '',
+                            date: session['date'] != null 
+                              ? _formatSessionDate(DateTime.parse(session['date']))
+                              : null,
                             isDark: isDark,
                           ),
                           if (!isLast)
@@ -267,16 +320,16 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
     );
   }
 
-  Widget _buildQuickActions(BuildContext context, bool isDark, int studentId) {
+  Widget _buildQuickActions(BuildContext context, bool isDark, int studentId, bool isSmallScreen) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+      padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'Quick Actions',
             style: TextStyle(
-              fontSize: 18,
+              fontSize: isSmallScreen ? 16 : 18,
               fontWeight: FontWeight.w600,
               color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
             ),
@@ -289,6 +342,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                   icon: Icons.person_outline,
                   label: 'Contact Owner',
                   isDark: isDark,
+                  isSmallScreen: isSmallScreen,
                   onTap: () => _showContactDialog(context, isDark, 'Owner', studentId),
                 ),
               ),
@@ -298,6 +352,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                   icon: Icons.sports_tennis_outlined,
                   label: 'Contact Coach',
                   isDark: isDark,
+                  isSmallScreen: isSmallScreen,
                   onTap: () => _showContactDialog(context, isDark, 'Coach', studentId),
                 ),
               ),
@@ -311,6 +366,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                   icon: Icons.monitor_weight_outlined,
                   label: 'BMI',
                   isDark: isDark,
+                  isSmallScreen: isSmallScreen,
                   onTap: () {
                     Navigator.push(
                       context,
@@ -330,6 +386,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                   icon: Icons.account_balance_wallet_outlined,
                   label: 'Fees',
                   isDark: isDark,
+                  isSmallScreen: isSmallScreen,
                   onTap: () {
                     Navigator.push(
                       context,
@@ -541,6 +598,20 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
     return '${weekdays[now.weekday - 1]}, ${months[now.month - 1]} ${now.day}, ${now.year}';
   }
 
+  String _formatSessionDate(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+    final sessionDate = DateTime(date.year, date.month, date.day);
+
+    if (sessionDate == today) return 'Today';
+    if (sessionDate == tomorrow) return 'Tomorrow';
+    
+    final weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return '${weekdays[date.weekday - 1]}, ${months[date.month - 1]} ${date.day}';
+  }
+
   Color _getAttendanceColor(double rate, bool isDark) {
     if (rate >= 80) {
       return isDark ? AppColors.success : AppColorsLight.success;
@@ -559,6 +630,7 @@ class _StatCard extends StatelessWidget {
   final bool isDark;
   final Color? valueColor;
   final VoidCallback? onTap;
+  final bool isSmallScreen;
 
   const _StatCard({
     required this.icon,
@@ -567,6 +639,7 @@ class _StatCard extends StatelessWidget {
     required this.isDark,
     this.valueColor,
     this.onTap,
+    this.isSmallScreen = false,
   });
 
   @override
@@ -574,14 +647,14 @@ class _StatCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: NeumorphicContainer(
-        padding: const EdgeInsets.all(AppDimensions.paddingM),
+        padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingS : AppDimensions.paddingM),
         child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 40,
-            height: 40,
+            width: isSmallScreen ? 32 : 40,
+            height: isSmallScreen ? 32 : 40,
             decoration: BoxDecoration(
               color: isDark ? AppColors.background : AppColorsLight.background,
               borderRadius: BorderRadius.circular(AppDimensions.radiusM),
@@ -589,7 +662,7 @@ class _StatCard extends StatelessWidget {
             ),
             child: Icon(
               icon,
-              size: 20,
+              size: isSmallScreen ? 16 : 20,
               color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
             ),
           ),
@@ -598,7 +671,7 @@ class _StatCard extends StatelessWidget {
             child: Text(
               value,
               style: TextStyle(
-                fontSize: 22,
+                fontSize: isSmallScreen ? 18 : 22,
                 fontWeight: FontWeight.w600,
                 color: valueColor ?? (isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
                 height: 1.2,
@@ -629,12 +702,14 @@ class _UpcomingSessionItem extends StatelessWidget {
   final String batchName;
   final String time;
   final String location;
+  final String? date;
   final bool isDark;
 
   const _UpcomingSessionItem({
     required this.batchName,
     required this.time,
     required this.location,
+    this.date,
     required this.isDark,
   });
 
@@ -661,13 +736,27 @@ class _UpcomingSessionItem extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                batchName,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    batchName,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                    ),
+                  ),
+                  if (date != null)
+                    Text(
+                      date!,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? AppColors.accent : AppColorsLight.accent,
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(height: 2),
               Text(
@@ -698,12 +787,14 @@ class _QuickActionButton extends StatelessWidget {
   final String label;
   final bool isDark;
   final VoidCallback onTap;
+  final bool isSmallScreen;
 
   const _QuickActionButton({
     required this.icon,
     required this.label,
     required this.isDark,
     required this.onTap,
+    this.isSmallScreen = false,
   });
 
   @override
@@ -711,19 +802,19 @@ class _QuickActionButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: NeumorphicContainer(
-        padding: const EdgeInsets.all(AppDimensions.paddingM),
+        padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingS : AppDimensions.paddingM),
         child: Column(
           children: [
             Icon(
               icon,
-              size: 24,
+              size: isSmallScreen ? 20 : 24,
               color: isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary,
             ),
             const SizedBox(height: AppDimensions.spacingS),
             Text(
               label,
               style: TextStyle(
-                fontSize: 14,
+                fontSize: isSmallScreen ? 12 : 14,
                 color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
               ),
               textAlign: TextAlign.center,

@@ -330,13 +330,11 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                       color: AppColors.accent,
                       shape: BoxShape.circle,
                     ),
-                    todayDecoration: BoxDecoration(
-                      color: AppColors.accent.withOpacity(0.3),
-                      shape: BoxShape.circle,
+                      todayDecoration: BoxDecoration(
+                        color: AppColors.accent.withOpacity(0.3),
+                        shape: BoxShape.circle,
+                      ),
                     ),
-                    // Hide marker dots - using colored date numbers instead
-                    markersMaxCount: 0,
-                  ),
                   headerStyle: HeaderStyle(
                     formatButtonVisible: true,
                     titleCentered: true,
@@ -373,82 +371,38 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                   calendarBuilders: CalendarBuilders(
                     defaultBuilder: (context, date, focusedDay) {
                       final dateKey = DateTime(date.year, date.month, date.day);
-                      final isHoliday = canadianHolidays.containsKey(dateKey);
-                      final isSelected = isSameDay(_selectedDay, date);
-                      final isToday = isSameDay(DateTime.now(), date);
-
-                      // Check if events contain holiday, leave, or other events
-                      final hasHolidayEvent = groupedEvents[dateKey]?.any((e) => e.isHoliday) ?? false;
-                      final hasLeaveEvent = groupedEvents[dateKey]?.any((e) => e.isLeave) ?? false;
-                      final hasOtherEvent = groupedEvents[dateKey]?.any((e) => !e.isHoliday && !e.isLeave) ?? false;
-
-                      if (!isSelected && !isToday) {
-                        // Canadian holidays or holiday events - show in red (highest priority)
-                        if (isHoliday || hasHolidayEvent) {
-                          return Center(
-                            child: Text(
-                              '${date.day}',
-                              style: const TextStyle(
-                                color: Colors.red,
-                                fontWeight: FontWeight.bold,
-                              ),
+                      final isHoliday = canadianHolidays.containsKey(dateKey) || 
+                                      events.any((e) => isSameDay(e.date, date) && e.isHoliday);
+                      
+                      if (isHoliday) {
+                        return Center(
+                          child: Text(
+                            '${date.day}',
+                            style: const TextStyle(
+                              color: Colors.red,
+                              fontWeight: FontWeight.bold,
                             ),
-                          );
-                        }
-                        // Leave events - show in orange/amber
-                        if (hasLeaveEvent) {
-                          return Center(
-                            child: Text(
-                              '${date.day}',
-                              style: const TextStyle(
-                                color: Color(0xFFFF9800), // Orange/Amber
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          );
-                        }
-                        // Other events (tournament, event) - show in jade green
-                        if (hasOtherEvent) {
-                          return Center(
-                            child: Text(
-                              '${date.day}',
-                              style: const TextStyle(
-                                color: Color(0xFF00A86B), // Jade green
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          );
-                        }
+                          ),
+                        );
                       }
                       return null;
                     },
                     selectedBuilder: (context, date, focusedDay) {
                       final dateKey = DateTime(date.year, date.month, date.day);
-                      final isHoliday = canadianHolidays.containsKey(dateKey);
-                      final hasHolidayEvent = groupedEvents[dateKey]?.any((e) => e.isHoliday) ?? false;
-                      final hasLeaveEvent = groupedEvents[dateKey]?.any((e) => e.isLeave) ?? false;
-                      final hasOtherEvent = groupedEvents[dateKey]?.any((e) => !e.isHoliday && !e.isLeave) ?? false;
-
-                      Color bgColor = AppColors.accent;
-                      if (isHoliday || hasHolidayEvent) {
-                        bgColor = Colors.red;
-                      } else if (hasLeaveEvent) {
-                        bgColor = const Color(0xFFFF9800); // Orange/Amber
-                      } else if (hasOtherEvent) {
-                        bgColor = const Color(0xFF00A86B); // Jade green
-                      }
-
+                      final isHoliday = canadianHolidays.containsKey(dateKey) || 
+                                      events.any((e) => isSameDay(e.date, date) && e.isHoliday);
+                      
                       return Container(
-                        margin: const EdgeInsets.all(4.0),
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: bgColor,
+                          color: isHoliday ? Colors.red.withOpacity(0.15) : AppColors.accent,
                           shape: BoxShape.circle,
+                          border: isHoliday ? Border.all(color: Colors.red, width: 1) : null,
                         ),
                         child: Text(
                           '${date.day}',
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: isHoliday ? Colors.red : Colors.white,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -456,44 +410,55 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                     },
                     todayBuilder: (context, date, focusedDay) {
                       final dateKey = DateTime(date.year, date.month, date.day);
-                      final isHoliday = canadianHolidays.containsKey(dateKey);
-                      final hasHolidayEvent = groupedEvents[dateKey]?.any((e) => e.isHoliday) ?? false;
-                      final hasNonHolidayEvent = groupedEvents[dateKey]?.any((e) => !e.isHoliday) ?? false;
-                      final isSelected = isSameDay(_selectedDay, date);
-
-                      if (isSelected) return null; // Let selectedBuilder handle it
-
-                      Color bgColor = AppColors.accent.withOpacity(0.3);
-                      Color textColor = AppColors.textPrimary;
-                      FontWeight fontWeight = FontWeight.normal;
-
-                      if (isHoliday || hasHolidayEvent) {
-                        bgColor = Colors.red.withOpacity(0.5);
-                        textColor = Colors.red;
-                        fontWeight = FontWeight.bold;
-                      } else if (hasNonHolidayEvent) {
-                        bgColor = const Color(0xFF00A86B).withOpacity(0.3);
-                        textColor = const Color(0xFF00A86B);
-                        fontWeight = FontWeight.bold;
-                      }
-
+                      final isHoliday = canadianHolidays.containsKey(dateKey) || 
+                                      events.any((e) => isSameDay(e.date, date) && e.isHoliday);
+                      
                       return Container(
-                        margin: const EdgeInsets.all(4.0),
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
-                          color: bgColor,
+                          color: AppColors.accent.withOpacity(0.1),
                           shape: BoxShape.circle,
+                          border: isHoliday ? Border.all(color: Colors.red, width: 1) : null,
                         ),
                         child: Text(
                           '${date.day}',
                           style: TextStyle(
-                            color: textColor,
-                            fontWeight: fontWeight,
+                            color: isHoliday ? Colors.red : AppColors.textPrimary,
+                            fontWeight: isHoliday ? FontWeight.bold : FontWeight.normal,
                           ),
                         ),
                       );
                     },
-                    // No marker dots needed - using colored date numbers instead
+                    markerBuilder: (context, date, events) {
+                      final hasCanadianHoliday = CanadianHolidays.isHoliday(date);
+                      final hasAcademyHoliday = events.any((e) => e.isHoliday);
+                      final hasLeave = events.any((e) => e.isLeave);
+                      final hasOther = events.any((e) => !e.isHoliday && !e.isLeave);
+
+                      if (!hasCanadianHoliday && !hasAcademyHoliday && !hasLeave && !hasOther) return null;
+
+                      List<Widget> markers = [];
+                      if (hasCanadianHoliday || hasAcademyHoliday) {
+                        markers.add(_buildMarkerDot(Colors.red));
+                      }
+                      if (hasLeave) {
+                        markers.add(_buildMarkerDot(const Color(0xFFFF9800))); // Orange/Amber
+                      }
+                      if (hasOther) {
+                        markers.add(_buildMarkerDot(const Color(0xFF00A86B))); // Jade green
+                      }
+
+                      return Positioned(
+                        bottom: 1,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: markers.map((m) => Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 1),
+                            child: m,
+                          )).toList(),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
@@ -515,60 +480,32 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
     final date = DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day);
     final dayEvents = groupedEvents[date] ?? [];
     
-    // Check if this is a Canadian holiday
+    // Check for Canadian holiday
     final holidayName = CanadianHolidays.getHolidayName(_selectedDay);
     final hasHoliday = holidayName != null;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
-          child: Text(
-            DateFormat('EEEE, MMMM dd, yyyy').format(_selectedDay),
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
-            ),
-          ),
+    if (dayEvents.isEmpty && !hasHoliday) {
+      return Center(
+        child: EmptyState.noEvents(
+          onAdd: () => setState(() => _showAddForm = true),
         ),
-        const SizedBox(height: AppDimensions.spacingM),
-        Expanded(
-          child: (dayEvents.isEmpty && !hasHoliday)
-              ? EmptyState.noEvents(
-                  onAdd: () => setState(() => _showAddForm = true),
-                )
-              : RefreshIndicator(
-                  onRefresh: () async {
-                    setState(() {});
-                  },
-                  child: ListView.builder(
-                    shrinkWrap: false,
-                    padding: EdgeInsets.only(
-                      left: AppDimensions.paddingL,
-                      right: AppDimensions.paddingL,
-                      bottom: AppDimensions.paddingL + 80, // Extra space for bottom nav
-                    ),
-                    itemCount: (hasHoliday ? 1 : 0) + dayEvents.length,
-                    itemBuilder: (context, index) {
-                      // Show holiday first if it exists
-                      if (hasHoliday && index == 0) {
-                        return _buildHolidayCard(holidayName);
-                      }
-                      // Then show regular events
-                      final eventIndex = hasHoliday ? index - 1 : index;
-                      final event = dayEvents[eventIndex];
-                      return _buildEventCard(event);
-                    },
-                  ),
-                ),
-        ),
-      ],
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+      itemCount: (hasHoliday ? 1 : 0) + dayEvents.length,
+      itemBuilder: (context, index) {
+        if (hasHoliday && index == 0) {
+          return _buildCanadianHolidayCard(holidayName);
+        }
+        final event = dayEvents[hasHoliday ? index - 1 : index];
+        return _buildEventCard(event);
+      },
     );
   }
-  
-  Widget _buildHolidayCard(String holidayName) {
+
+  Widget _buildCanadianHolidayCard(String holidayName) {
     return NeumorphicContainer(
       padding: const EdgeInsets.all(AppDimensions.paddingM),
       margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
@@ -600,7 +537,6 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                           color: AppColors.textPrimary,
                         ),
                       ),
-                      const SizedBox(height: 4),
                       const Text(
                         'Canadian Government Holiday',
                         style: TextStyle(
@@ -616,6 +552,17 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+  
+  Widget _buildMarkerDot(Color color) {
+    return Container(
+      width: 6,
+      height: 6,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
       ),
     );
   }
@@ -824,7 +771,7 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                       label: 'Tournament',
                       value: 'tournament',
                       selected: _selectedEventType,
-                      color: Colors.blue,
+                      color: const Color(0xFF00A86B), // Jade green
                       onTap: () => setState(() => _selectedEventType = 'tournament'),
                     ),
                   ),
@@ -834,7 +781,7 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                       label: 'Event',
                       value: 'event',
                       selected: _selectedEventType,
-                      color: Colors.green,
+                      color: const Color(0xFF00A86B), // Jade green
                       onTap: () => setState(() => _selectedEventType = 'event'),
                     ),
                   ),

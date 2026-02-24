@@ -12,7 +12,7 @@ import '../../providers/service_providers.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/batch_provider.dart';
 import '../../providers/coach_provider.dart';
-import '../../providers/announcement_provider.dart';
+import '../../providers/calendar_provider.dart';
 import '../../models/schedule.dart';
 import '../../models/batch.dart';
 import 'package:intl/intl.dart';
@@ -174,8 +174,12 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
 
       if (_editingSession != null) {
         await scheduleService.updateSchedule(_editingSession!.id, sessionData);
+        // Invalidate calendar for the session year
+        ref.invalidate(yearlyEventsProvider(_editingSession!.date.year));
       } else {
         await scheduleService.createSchedule(sessionData);
+        // Invalidate calendar for the session date year
+        ref.invalidate(yearlyEventsProvider(_selectedDate.year));
       }
 
       if (mounted) {
@@ -850,6 +854,9 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
                     try {
                       final scheduleService = ref.read(scheduleServiceProvider);
                       await scheduleService.deleteSchedule(session.id);
+                      // Invalidate calendar
+                      ref.invalidate(yearlyEventsProvider(session.date.year));
+                      
                       if (mounted) {
                         SuccessSnackbar.show(context, 'Practice Session deleted successfully');
                         setState(() => _selectedSession = null);

@@ -7,7 +7,6 @@ import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../models/fee.dart';
 import '../../models/student_with_batch_fee.dart';
-import '../../models/batch_fee_group.dart';
 import '../../providers/fee_provider.dart';
 
 /// Coach Fees Screen - Read-only view of fees with statistics and details

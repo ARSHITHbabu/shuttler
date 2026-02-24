@@ -8,7 +8,6 @@ import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
-import '../../core/utils/contact_utils.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/student_provider.dart';
 import '../../models/student.dart';
@@ -18,6 +17,7 @@ import '../../models/batch.dart';
 import '../../core/services/fee_service.dart';
 import '../../core/services/batch_enrollment_service.dart';
 import '../../providers/batch_provider.dart';
+import '../../core/utils/string_extensions.dart';
 import 'performance_tracking_screen.dart';
 import 'bmi_tracking_screen.dart';
 import 'fees_screen.dart';
@@ -33,7 +33,7 @@ class StudentsScreen extends ConsumerStatefulWidget {
 
 class _StudentsScreenState extends ConsumerState<StudentsScreen> {
   final TextEditingController _searchController = TextEditingController();
-  String _selectedFilter = 'all'; // 'all', 'active', 'inactive'
+  String _selectedFilter = 'active'; // 'active', 'inactive'
   String _searchQuery = '';
 
   @override
@@ -106,12 +106,6 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                   child: Row(
                     children: [
                       _FilterChip(
-                        label: 'All',
-                        isSelected: _selectedFilter == 'all',
-                        onTap: () => setState(() => _selectedFilter = 'all'),
-                      ),
-                      const SizedBox(width: AppDimensions.spacingS),
-                      _FilterChip(
                         label: 'Active',
                         isSelected: _selectedFilter == 'active',
                         onTap: () => setState(() => _selectedFilter = 'active'),
@@ -146,14 +140,14 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                   } else if (_selectedFilter == 'inactive') {
                     return student.status == 'inactive';
                   }
-                  return true;
+                  return student.status == 'active'; // Fallback
                 }).toList();
 
                 // Sort filtered students alphabetically by name
                 filteredStudents.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
                 if (filteredStudents.isEmpty) {
-                  if (_selectedFilter == 'all' && _searchQuery.isEmpty) {
+                  if (_searchQuery.isEmpty) {
                     return EmptyState.noStudents(
                       onAdd: () => _showAddStudentDialog(context),
                     );
@@ -230,15 +224,36 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                                               : AppColors.error,
                                           borderRadius: BorderRadius.circular(AppDimensions.radiusS),
                                         ),
-                                        child: Text(
-                                          student.status.toUpperCase(),
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
-                                          ),
+                                        child: Row(
+                                          children: [
+                                            Text(
+                                              student.status.toUpperCase(),
+                                              style: const TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                            if (student.rejoinRequestPending) ...[
+                                              const SizedBox(width: 4),
+                                              const Icon(Icons.info_outline, size: 10, color: Colors.white),
+                                            ],
+                                          ],
                                         ),
                                       ),
+                                      if (student.rejoinRequestPending)
+                                        Container(
+                                          margin: const EdgeInsets.only(left: 4),
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.accent,
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: const Text(
+                                            'REJOIN REQUEST',
+                                            style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
                                       PopupMenuButton(
                                         icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
                                         color: AppColors.cardBackground,
@@ -284,7 +299,11 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                                             ),
                                             onTap: () {
                                               Future.delayed(Duration.zero, () {
-                                                _toggleStudentStatus(context, student);
+                                                if (student.status == 'inactive' && student.rejoinRequestPending) {
+                                                  _showApproveRejoinDialog(context, student);
+                                                } else {
+                                                  _toggleStudentStatus(context, student);
+                                                }
                                               });
                                             },
                                           ),
@@ -808,35 +827,189 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
 
 
   void _toggleStudentStatus(BuildContext context, Student student) async {
+    final newStatus = student.status == 'active' ? 'inactive' : 'active';
+    final actionName = newStatus == 'active' ? 'activate' : 'deactivate';
+
+    showDialog(
+      context: context,
+      builder: (context) => ConfirmationDialog(
+        title: '${actionName.capitalize()} Student',
+        message: 'Are you sure you want to $actionName ${student.name}?',
+        confirmText: actionName.capitalize(),
+        isDestructive: newStatus == 'inactive',
+        onConfirm: () async {
+          try {
+            if (newStatus == 'inactive') {
+              await ref.read(studentListProvider.notifier).deactivateStudent(student.id);
+            } else {
+              await ref.read(studentListProvider.notifier).approveRejoin(student.id);
+            }
+            if (mounted) {
+              Navigator.of(context).pop();
+              SuccessSnackbar.show(context, 'Student ${actionName}d successfully');
+            }
+          } catch (e) {
+            if (mounted) {
+              SuccessSnackbar.showError(context, 'Failed to $actionName student: ${e.toString()}');
+            }
+          }
+        },
+      ),
+    );
+  }
+
+  void _showApproveRejoinDialog(BuildContext context, Student student) {
+    showDialog(
+      context: context,
+      builder: (context) => ConfirmationDialog(
+        title: 'Approve Rejoin Request',
+        message: '${student.name} has requested to rejoin. Do you want to approve this request?',
+        confirmText: 'Approve',
+        onConfirm: () async {
+          try {
+            await ref.read(studentListProvider.notifier).approveRejoin(student.id);
+            if (mounted) {
+              Navigator.of(context).pop();
+              SuccessSnackbar.show(context, 'Rejoin request approved for ${student.name}');
+            }
+          } catch (e) {
+            if (mounted) {
+              SuccessSnackbar.showError(context, 'Failed to approve rejoin: ${e.toString()}');
+            }
+          }
+        },
+      ),
+    );
+  }
+
+  void _showDeleteConfirmation(BuildContext context, Student student) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.cardBackground,
+        title: const Text('Delete Student', style: TextStyle(color: AppColors.textPrimary)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Choose how you want to remove ${student.name}:',
+                style: const TextStyle(color: AppColors.textPrimary)),
+            const SizedBox(height: 16),
+            _DeleteOption(
+              title: 'Deactivate (Soft Delete)',
+              description: 'Hide student from UI but keep data for 2 years (reports).',
+              icon: Icons.person_off,
+              color: AppColors.warning,
+              onTap: () {
+                Navigator.pop(context);
+                _deactivateStudent(student);
+              },
+            ),
+            const SizedBox(height: 12),
+            _DeleteOption(
+              title: 'Delete Permanently (Hard Delete)',
+              description: 'Immediately wipe all attendance, fee, and performance data.',
+              icon: Icons.delete_forever,
+              color: AppColors.error,
+              onTap: () {
+                Navigator.pop(context);
+                _removeStudentPermanently(student);
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _deactivateStudent(Student student) async {
     try {
-      final newStatus = student.status == 'active' ? 'inactive' : 'active';
-      await ref.read(studentListProvider.notifier).updateStudent(student.id, {'status': newStatus});
+      await ref.read(studentListProvider.notifier).deactivateStudent(student.id);
       if (mounted) {
-        SuccessSnackbar.show(context, 'Student ${newStatus == 'active' ? 'activated' : 'deactivated'} successfully');
+        SuccessSnackbar.show(context, 'Student deactivated successfully');
       }
     } catch (e) {
       if (mounted) {
-        SuccessSnackbar.showError(context, 'Failed to update student status: ${e.toString()}');
+        SuccessSnackbar.showError(context, 'Failed to deactivate student: ${e.toString()}');
       }
     }
   }
 
-  void _showDeleteConfirmation(BuildContext context, Student student) {
-    ConfirmationDialog.showDelete(
-      context,
-      student.name,
-      onConfirm: () async {
-        try {
-          await ref.read(studentListProvider.notifier).deleteStudent(student.id);
-          if (mounted) {
-            SuccessSnackbar.show(context, 'Student deleted successfully');
+  void _removeStudentPermanently(Student student) async {
+    showDialog(
+      context: context,
+      builder: (context) => ConfirmationDialog(
+        title: 'Permanent Deletion',
+        message: 'This action CANNOT be undone. All data for ${student.name} will be permanently destroyed. Are you absolutely sure?',
+        confirmText: 'Delete Forever',
+        isDestructive: true,
+        onConfirm: () async {
+          try {
+            await ref.read(studentListProvider.notifier).removeStudentPermanently(student.id);
+            if (mounted) {
+              Navigator.of(context).pop();
+              SuccessSnackbar.show(context, 'Student deleted permanently');
+            }
+          } catch (e) {
+            if (mounted) {
+              SuccessSnackbar.showError(context, 'Failed to delete student: ${e.toString()}');
+            }
           }
-        } catch (e) {
-          if (mounted) {
-            SuccessSnackbar.showError(context, 'Failed to delete student: ${e.toString()}');
-          }
-        }
-      },
+        },
+      ),
+    );
+  }
+}
+
+class _DeleteOption extends StatelessWidget {
+  final String title;
+  final String description;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _DeleteOption({
+    required this.title,
+    required this.description,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          border: Border.all(color: color.withOpacity(0.3)),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 14)),
+                  const SizedBox(height: 4),
+                  Text(description, style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, File, UploadFile, Query, Form
 from fastapi.staticfiles import StaticFiles
+from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, Text, Date, DateTime, ForeignKey, JSON, func, and_, or_, select
@@ -7,7 +8,7 @@ from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel, field_validator
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Optional, Dict, Any, Union, Annotated
 from datetime import datetime, date, timedelta
 import json
 import os
@@ -27,7 +28,7 @@ try:
     test_hash = bcrypt.hashpw(b"test", bcrypt.gensalt())
     USE_DIRECT_BCRYPT = True
 except Exception as e:
-    print(f"⚠️  Direct bcrypt test failed: {e}, using passlib")
+    print(f"  Direct bcrypt test failed: {e}, using passlib")
     USE_DIRECT_BCRYPT = False
 
 if USE_DIRECT_BCRYPT:
@@ -77,13 +78,13 @@ load_dotenv()
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not SQLALCHEMY_DATABASE_URL:
-    print("⚠️  WARNING: DATABASE_URL not found in .env file!")
-    print("⚠️  Falling back to SQLite (NOT recommended for production)")
-    print("⚠️  Please update your .env file with PostgreSQL connection string")
+    print("WARNING: DATABASE_URL not found in .env file!")
+    print("Falling back to SQLite (NOT recommended for production)")
+    print("Please update your .env file with PostgreSQL connection string")
     SQLALCHEMY_DATABASE_URL = "sqlite:///./academy_portal.db"
     engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 else:
-    print(f"✅ Connecting to PostgreSQL database...")
+    print(f"Connecting to PostgreSQL database...")
     # PostgreSQL connection with connection pooling for high concurrency
     engine = create_engine(
         SQLALCHEMY_DATABASE_URL,
@@ -93,10 +94,57 @@ else:
         pool_recycle=3600,  # Recycle connections after 1 hour
         echo=False  # Set to True to see SQL queries (for debugging)
     )
-    print("✅ PostgreSQL connection established!")
+    print("PostgreSQL connection established!")
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+def cleanup_inactive_records():
+    """Background task to delete records inactive for > 2 years"""
+    db = SessionLocal()
+    try:
+        two_years_ago = datetime.now() - timedelta(days=730)
+        
+        # 1. Cleanup Students
+        inactive_students = db.query(StudentDB).filter(
+            StudentDB.status == "inactive",
+            StudentDB.inactive_at <= two_years_ago
+        ).all()
+        
+        for student in inactive_students:
+            print(f"[Cleanup] Deleting student {student.id} (inactive since {student.inactive_at})")
+            # Reuse the hard delete logic
+            db.query(AttendanceDB).filter(AttendanceDB.student_id == student.id).delete()
+            db.query(FeeDB).filter(FeeDB.student_id == student.id).delete()
+            db.query(PerformanceDB).filter(PerformanceDB.student_id == student.id).delete()
+            db.query(BatchStudentDB).filter(BatchStudentDB.student_id == student.id).delete()
+            db.query(BMIDB).filter(BMIDB.student_id == student.id).delete()
+            db.query(VideoResourceDB).filter(VideoResourceDB.student_id == student.id).delete()
+            db.query(NotificationDB).filter(NotificationDB.user_id == student.id, NotificationDB.user_type == "student").delete()
+            db.delete(student)
+            
+        # 2. Cleanup Batches
+        inactive_batches = db.query(BatchDB).filter(
+            BatchDB.status == "inactive",
+            BatchDB.inactive_at <= two_years_ago
+        ).all()
+        
+        for batch in inactive_batches:
+            print(f"[Cleanup] Deleting batch {batch.id} (inactive since {batch.inactive_at})")
+            db.query(AttendanceDB).filter(AttendanceDB.batch_id == batch.id).delete()
+            db.query(FeeDB).filter(FeeDB.batch_id == batch.id).delete()
+            db.query(PerformanceDB).filter(PerformanceDB.batch_id == batch.id).delete()
+            db.query(BatchStudentDB).filter(BatchStudentDB.batch_id == batch.id).delete()
+            db.query(BatchCoachDB).filter(BatchCoachDB.batch_id == batch.id).delete()
+            db.query(ScheduleDB).filter(ScheduleDB.batch_id == batch.id).delete()
+            db.delete(batch)
+            
+        db.commit()
+    except Exception as e:
+        print(f"[Cleanup Error] {e}")
+        db.rollback()
+    finally:
+        db.close()
 
 # ==================== Database Models ====================
 
@@ -174,6 +222,8 @@ class BatchDB(Base):
     assigned_coach_id = Column(Integer, nullable=True)
     assigned_coach_name = Column(String, nullable=True)
     session_id = Column(Integer, ForeignKey("sessions.id"), nullable=True)  # Link to session
+    status = Column(String, default="active")  # active, inactive
+    inactive_at = Column(DateTime(timezone=True), nullable=True)
 
 class StudentDB(Base):
     __tablename__ = "students"
@@ -187,7 +237,9 @@ class StudentDB(Base):
     added_by = Column(String, nullable=True)  # Optional for signup
     date_of_birth = Column(String, nullable=True)  # Required for profile completion
     address = Column(Text, nullable=True)  # Required for profile completion
-    status = Column(String, default="active")
+    status = Column(String, default="active") # active, inactive
+    inactive_at = Column(DateTime(timezone=True), nullable=True)
+    rejoin_request_pending = Column(Boolean, default=False)
     t_shirt_size = Column(String, nullable=True)  # Required for profile completion
     blood_group = Column(String, nullable=True)
 
@@ -225,6 +277,7 @@ class CoachAttendanceDB(Base):
     coach_id = Column(Integer, nullable=False)
     date = Column(String, nullable=False)
     status = Column(String, nullable=False)  
+    marked_by = Column(String, nullable=True)
     remarks = Column(Text, nullable=True)
 
 class CoachSalaryDB(Base):
@@ -408,6 +461,9 @@ class CalendarEventDB(Base):
     created_by = Column(Integer, nullable=True)  # Can be coach or owner ID
     creator_type = Column(String(20), default="coach")  # "coach" or "owner"
     related_leave_request_id = Column(Integer, nullable=True)  # Link to leave_requests table if this is a leave event
+    related_tournament_id = Column(Integer, nullable=True)     # Link to tournaments table
+    related_announcement_id = Column(Integer, nullable=True)   # Link to announcements table
+    related_schedule_id = Column(Integer, nullable=True)       # Link to schedules table
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Note: Relationships are handled via creator_type field - use creator_type to determine if created_by refers to coach or owner
@@ -483,6 +539,20 @@ class CoachRegistrationRequestDB(Base):
     reviewed_at = Column(DateTime(timezone=True), nullable=True)
     review_notes = Column(Text, nullable=True)
 
+class ReportHistoryDB(Base):
+    """History of generated reports"""
+    __tablename__ = "report_history"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False)
+    user_role = Column(String(50), nullable=False) # "owner", "coach"
+    report_type = Column(String(50), nullable=False) # "attendance", "fee", "performance"
+    filter_summary = Column(String(255), nullable=True) # e.g. "Season: Winter 2025 | Batch: All"
+    generated_on = Column(DateTime(timezone=True), server_default=func.now())
+    report_data = Column(JSON, nullable=False) # The full JSON data needed to recreate the report
+    key_metrics = Column(JSON, nullable=True) # Optional summary metrics for quick display
+
+
 # ==================== Database Migration Functions ====================
 
 def check_and_add_column(engine, table_name: str, column_name: str, column_type: str, nullable: bool = True, default_value: str = None):
@@ -494,7 +564,7 @@ def check_and_add_column(engine, table_name: str, column_name: str, column_type:
         columns = [col['name'] for col in inspector.get_columns(table_name)]
         
         if column_name not in columns:
-            print(f"⚠️  Column '{column_name}' missing in '{table_name}' table. Adding...")
+            print(f"Column '{column_name}' missing in '{table_name}' table. Adding...")
             try:
                 with engine.begin() as conn:
                     alter_sql = f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"
@@ -503,14 +573,14 @@ def check_and_add_column(engine, table_name: str, column_name: str, column_type:
                     if default_value:
                         alter_sql += f" DEFAULT {default_value}"
                     conn.execute(text(alter_sql))
-                print(f"✅ Added column '{column_name}' to '{table_name}' table")
+                print(f"Added column '{column_name}' to '{table_name}' table")
                 return True
             except Exception as e:
-                print(f"❌ Error adding column '{column_name}': {e}")
+                print(f"Error adding column '{column_name}': {e}")
                 return False
         return False
     except Exception as e:
-        print(f"⚠️  Could not check columns for '{table_name}': {e}")
+        print(f"Could not check columns for '{table_name}': {e}")
         return False
 
 def migrate_database_schema(engine):
@@ -539,6 +609,11 @@ def migrate_database_schema(engine):
             check_and_add_column(engine, 'owners', 'role', 'VARCHAR(20)', nullable=True, default_value="'owner'")
             check_and_add_column(engine, 'owners', 'must_change_password', 'BOOLEAN', nullable=True, default_value="FALSE")
         
+        # Migrate batches table
+        if 'batches' in tables:
+            check_and_add_column(engine, 'batches', 'status', 'VARCHAR(20)', nullable=True, default_value="'active'")
+            check_and_add_column(engine, 'batches', 'inactive_at', 'TIMESTAMP WITH TIME ZONE', nullable=True)
+
         # Migrate students table
         if 'students' in tables:
             # Check existing columns
@@ -549,6 +624,8 @@ def migrate_database_schema(engine):
             check_and_add_column(engine, 'students', 'fcm_token', 'VARCHAR(500)', nullable=True)
             check_and_add_column(engine, 'students', 't_shirt_size', 'VARCHAR', nullable=True)
             check_and_add_column(engine, 'students', 'blood_group', 'VARCHAR(20)', nullable=True)
+            check_and_add_column(engine, 'students', 'inactive_at', 'TIMESTAMP WITH TIME ZONE', nullable=True)
+            check_and_add_column(engine, 'students', 'rejoin_request_pending', 'BOOLEAN', nullable=True, default_value="FALSE")
             
             # Make existing columns nullable if they aren't already
             try:
@@ -571,7 +648,7 @@ def migrate_database_schema(engine):
                         if col_info and not col_info.get('nullable', True):
                             conn.execute(text("ALTER TABLE students ALTER COLUMN added_by DROP NOT NULL"))
             except Exception as alter_error:
-                print(f"⚠️  Warning: Could not alter column constraints: {alter_error}")
+                print(f"Warning: Could not alter column constraints: {alter_error}")
         
         # Migrate announcements table - add creator_type and make created_by nullable
         if 'announcements' in tables:
@@ -604,7 +681,7 @@ def migrate_database_schema(engine):
                             # Drop the foreign key constraint
                             drop_fk_sql = text(f"ALTER TABLE announcements DROP CONSTRAINT IF EXISTS {fk_name}")
                             conn.execute(drop_fk_sql)
-                            print(f"✅ Dropped foreign key constraint {fk_name} from announcements.created_by")
+                            print(f" Dropped foreign key constraint {fk_name} from announcements.created_by")
                             break
                     
                     # Also try to find and drop any foreign key constraint on created_by column
@@ -623,9 +700,9 @@ def migrate_database_schema(engine):
                         fk_name = fk_row[0]
                         drop_fk_sql = text(f"ALTER TABLE announcements DROP CONSTRAINT IF EXISTS {fk_name}")
                         conn.execute(drop_fk_sql)
-                        print(f"✅ Dropped foreign key constraint {fk_name} from announcements.created_by")
+                        print(f" Dropped foreign key constraint {fk_name} from announcements.created_by")
             except Exception as alter_error:
-                print(f"⚠️  Warning: Could not alter announcements.created_by constraint: {alter_error}")
+                print(f"  Warning: Could not alter announcements.created_by constraint: {alter_error}")
         
         # Migrate calendar_events table - add creator_type and make created_by nullable
         if 'calendar_events' in tables:
@@ -657,7 +734,7 @@ def migrate_database_schema(engine):
                             # Drop the foreign key constraint
                             drop_fk_sql = text(f"ALTER TABLE calendar_events DROP CONSTRAINT IF EXISTS {fk_name}")
                             conn.execute(drop_fk_sql)
-                            print(f"✅ Dropped foreign key constraint {fk_name} from calendar_events.created_by")
+                            print(f" Dropped foreign key constraint {fk_name} from calendar_events.created_by")
                             break
                     
                     # Also try to find and drop any foreign key constraint on created_by column
@@ -675,9 +752,9 @@ def migrate_database_schema(engine):
                         fk_name = fk_row[0]
                         drop_fk_sql = text(f"ALTER TABLE calendar_events DROP CONSTRAINT IF EXISTS {fk_name}")
                         conn.execute(drop_fk_sql)
-                        print(f"✅ Dropped foreign key constraint {fk_name} from calendar_events.created_by")
+                        print(f" Dropped foreign key constraint {fk_name} from calendar_events.created_by")
             except Exception as alter_error:
-                print(f"⚠️  Warning: Could not alter calendar_events.created_by constraint: {alter_error}")
+                print(f"  Warning: Could not alter calendar_events.created_by constraint: {alter_error}")
 
         # Migrate video_resources table - add batch_id and session_id, make student_id nullable
         if 'video_resources' in tables:
@@ -692,9 +769,9 @@ def migrate_database_schema(engine):
                         col_info = next((col for col in inspector.get_columns('video_resources') if col['name'] == 'student_id'), None)
                         if col_info and not col_info.get('nullable', True):
                             conn.execute(text("ALTER TABLE video_resources ALTER COLUMN student_id DROP NOT NULL"))
-                            print("✅ Made video_resources.student_id nullable")
+                            print(" Made video_resources.student_id nullable")
             except Exception as e:
-                print(f"⚠️  Warning: Could not alter video_resources.student_id constraint: {e}")
+                print(f"  Warning: Could not alter video_resources.student_id constraint: {e}")
             check_and_add_column(engine, 'calendar_events', 'creator_type', 'VARCHAR(20)', nullable=True, default_value="'coach'")
             # Make created_by nullable and remove foreign key constraint (since it can reference either coaches or owners)
             try:
@@ -723,7 +800,7 @@ def migrate_database_schema(engine):
                             # Drop the foreign key constraint
                             drop_fk_sql = text(f"ALTER TABLE calendar_events DROP CONSTRAINT IF EXISTS {fk_name}")
                             conn.execute(drop_fk_sql)
-                            print(f"✅ Dropped foreign key constraint {fk_name} from calendar_events.created_by")
+                            print(f" Dropped foreign key constraint {fk_name} from calendar_events.created_by")
                             break
                     
                     # Also try to find and drop any foreign key constraint on created_by column
@@ -741,9 +818,9 @@ def migrate_database_schema(engine):
                         fk_name = fk_row[0]
                         drop_fk_sql = text(f"ALTER TABLE calendar_events DROP CONSTRAINT IF EXISTS {fk_name}")
                         conn.execute(drop_fk_sql)
-                        print(f"✅ Dropped foreign key constraint {fk_name} from calendar_events.created_by")
+                        print(f"Dropped foreign key constraint {fk_name} from calendar_events.created_by")
             except Exception as alter_error:
-                print(f"⚠️  Warning: Could not alter calendar_events.created_by constraint: {alter_error}")
+                print(f"Warning: Could not alter calendar_events.created_by constraint: {alter_error}")
 
         # Migrate student_registration_requests table
         if 'student_registration_requests' in tables:
@@ -786,17 +863,17 @@ def migrate_database_schema(engine):
                             REFERENCES students(id)
                         """)
                         conn.execute(fk_sql)
-                        print("✅ Added foreign key constraint for fees.payee_student_id")
+                        print("Added foreign key constraint for fees.payee_student_id")
             except Exception as fk_error:
                 # Foreign key might already exist or constraint name might be different
-                print(f"⚠️  Note: Foreign key constraint check: {fk_error}")
+                print(f"Note: Foreign key constraint check: {fk_error}")
         
         # Verify fee_payments table exists (should be created by Base.metadata.create_all)
         if 'fee_payments' not in tables:
-            print("⚠️  fee_payments table not found. It should be created automatically.")
-            print("⚠️  If this persists, check that FeePaymentDB model is properly defined.")
+            print("fee_payments table not found. It should be created automatically.")
+            print("If this persists, check that FeePaymentDB model is properly defined.")
         else:
-            print("✅ fee_payments table exists")
+            print("fee_payments table exists")
             # Migrate fee_payments table - add payee_name column
             check_and_add_column(engine, 'fee_payments', 'payee_name', 'VARCHAR(255)', nullable=True)
         
@@ -806,7 +883,7 @@ def migrate_database_schema(engine):
         
         # Migrate sessions table - create if it doesn't exist
         if 'sessions' not in tables:
-            print("⚠️  Table 'sessions' missing. Creating...")
+            print("Table 'sessions' missing. Creating...")
             try:
                 with engine.begin() as conn:
                     sessions_table_sql = text("""
@@ -821,17 +898,17 @@ def migrate_database_schema(engine):
                         )
                     """)
                     conn.execute(sessions_table_sql)
-                print("✅ Created table 'sessions'")
+                print("Created table 'sessions'")
             except Exception as e:
-                print(f"⚠️  Error creating sessions table: {e}")
+                print(f"Error creating sessions table: {e}")
         else:
-            print("✅ Table 'sessions' already exists")
+            print("Table 'sessions' already exists")
         
         # Migrate batches table - add session_id column
         if 'batches' in tables:
             columns = [col['name'] for col in inspector.get_columns('batches')]
             if 'session_id' not in columns:
-                print("⚠️  Column 'session_id' missing in 'batches' table. Adding...")
+                print("Column 'session_id' missing in 'batches' table. Adding...")
                 try:
                     with engine.begin() as conn:
                         # First, ensure sessions table exists (should already be created above)
@@ -842,7 +919,7 @@ def migrate_database_schema(engine):
                             REFERENCES sessions(id) ON DELETE SET NULL
                         """)
                         conn.execute(alter_sql)
-                        print("✅ Added column 'session_id' to 'batches' table")
+                        print("Added column 'session_id' to 'batches' table")
                         
                         # Create index on session_id for better query performance
                         index_check = text("""
@@ -855,11 +932,11 @@ def migrate_database_schema(engine):
                         if index_result == 0:
                             create_index_sql = text("CREATE INDEX idx_batches_session_id ON batches(session_id)")
                             conn.execute(create_index_sql)
-                            print("✅ Created index 'idx_batches_session_id' on 'batches' table")
+                            print("Created index 'idx_batches_session_id' on 'batches' table")
                 except Exception as e:
-                    print(f"⚠️  Error adding session_id column: {e}")
+                    print(f"Error adding session_id column: {e}")
             else:
-                print("✅ Column 'session_id' already exists in 'batches' table")
+                print("Column 'session_id' already exists in 'batches' table")
         
         # Migrate invitations table - add invite_token and make columns nullable
         if 'invitations' in tables:
@@ -874,17 +951,17 @@ def migrate_database_schema(engine):
                         
                         # Add column as nullable first (to handle existing rows)
                         conn.execute(text("ALTER TABLE invitations ADD COLUMN invite_token VARCHAR(255)"))
-                        print("✅ Added invite_token column to invitations table")
+                        print(" Added invite_token column to invitations table")
                         
                         # If there are existing rows, generate tokens for them
                         if row_count > 0:
-                            print(f"⚠️  Found {row_count} existing invitation(s), generating tokens...")
+                            print(f"  Found {row_count} existing invitation(s), generating tokens...")
                             rows = conn.execute(text("SELECT id FROM invitations WHERE invite_token IS NULL")).fetchall()
                             for row in rows:
                                 token = secrets.token_urlsafe(32)
                                 conn.execute(text("UPDATE invitations SET invite_token = :token WHERE id = :id"), 
                                            {"token": token, "id": row[0]})
-                            print(f"✅ Generated tokens for {row_count} existing invitation(s)")
+                            print(f" Generated tokens for {row_count} existing invitation(s)")
                         
                         # Now make it NOT NULL
                         conn.execute(text("ALTER TABLE invitations ALTER COLUMN invite_token SET NOT NULL"))
@@ -899,7 +976,7 @@ def migrate_database_schema(engine):
                         result = conn.execute(constraint_check).scalar()
                         if result == 0:
                             conn.execute(text("ALTER TABLE invitations ADD CONSTRAINT invitations_invite_token_key UNIQUE (invite_token)"))
-                            print("✅ Added unique constraint for invitations.invite_token")
+                            print(" Added unique constraint for invitations.invite_token")
                         
                         # Create index if it doesn't exist
                         index_check = text("""
@@ -911,9 +988,9 @@ def migrate_database_schema(engine):
                         index_result = conn.execute(index_check).scalar()
                         if index_result == 0:
                             conn.execute(text("CREATE INDEX ix_invitations_invite_token ON invitations (invite_token)"))
-                            print("✅ Added index for invitations.invite_token")
+                            print(" Added index for invitations.invite_token")
                 except Exception as constraint_error:
-                    print(f"⚠️  Error adding invite_token column: {constraint_error}")
+                    print(f"  Error adding invite_token column: {constraint_error}")
             
             # Make student_phone, student_email, and batch_id nullable if they aren't already
             try:
@@ -922,26 +999,26 @@ def migrate_database_schema(engine):
                         col_info = next((col for col in inspector.get_columns('invitations') if col['name'] == 'student_phone'), None)
                         if col_info and not col_info.get('nullable', True):
                             conn.execute(text("ALTER TABLE invitations ALTER COLUMN student_phone DROP NOT NULL"))
-                            print("✅ Made student_phone nullable in invitations table")
+                            print(" Made student_phone nullable in invitations table")
                     
                     if 'student_email' in columns:
                         col_info = next((col for col in inspector.get_columns('invitations') if col['name'] == 'student_email'), None)
                         if col_info and not col_info.get('nullable', True):
                             conn.execute(text("ALTER TABLE invitations ALTER COLUMN student_email DROP NOT NULL"))
-                            print("✅ Made student_email nullable in invitations table")
+                            print(" Made student_email nullable in invitations table")
                     
                     if 'batch_id' in columns:
                         col_info = next((col for col in inspector.get_columns('invitations') if col['name'] == 'batch_id'), None)
                         if col_info and not col_info.get('nullable', True):
                             conn.execute(text("ALTER TABLE invitations ALTER COLUMN batch_id DROP NOT NULL"))
-                            print("✅ Made batch_id nullable in invitations table")
+                            print(" Made batch_id nullable in invitations table")
             except Exception as alter_error:
-                print(f"⚠️  Warning: Could not alter column constraints: {alter_error}")
+                print(f"  Warning: Could not alter column constraints: {alter_error}")
 
         # Migrate video_resources table - add new columns for student video feature
         if 'video_resources' in tables:
             video_columns = [col['name'] for col in inspector.get_columns('video_resources')]
-            print(f"📹 video_resources table found with columns: {video_columns}")
+            print(f"video_resources table found with columns: {video_columns}")
 
             # Ensure student_id is nullable (for multi-target support)
             try:
@@ -949,20 +1026,20 @@ def migrate_database_schema(engine):
                     col_info = next((col for col in inspector.get_columns('video_resources') if col['name'] == 'student_id'), None)
                     if col_info and not col_info.get('nullable', True):
                         conn.execute(text("ALTER TABLE video_resources ALTER COLUMN student_id DROP NOT NULL"))
-                        print("✅ Made video_resources.student_id nullable")
+                        print("Made video_resources.student_id nullable")
             except Exception as e:
-                print(f"⚠️  Note: video_resources.student_id nullable migration: {e}")
+                print(f"Note: video_resources.student_id nullable migration: {e}")
 
             # Add new columns
             check_and_add_column(engine, 'video_resources', 'remarks', 'TEXT', nullable=True)
             check_and_add_column(engine, 'video_resources', 'uploaded_by', 'INTEGER', nullable=True)
             check_and_add_column(engine, 'video_resources', 'audience_type', 'VARCHAR(50)', nullable=True, default_value="'student'")
             check_and_add_column(engine, 'video_resources', 'created_at', 'TIMESTAMP WITH TIME ZONE', nullable=True, default_value='NOW()')
-            print("✅ video_resources table schema verified")
+            print(" video_resources table schema verified")
 
         # Migrate video_targets table
         if 'video_targets' not in tables:
-            print("⚠️  Table 'video_targets' missing. Creating...")
+            print("  Table 'video_targets' missing. Creating...")
             try:
                 with engine.begin() as conn:
                     conn.execute(text("""
@@ -973,54 +1050,57 @@ def migrate_database_schema(engine):
                         )
                     """))
                     conn.execute(text("CREATE INDEX idx_video_targets_video_id ON video_targets(video_id)"))
-                print("✅ Created table 'video_targets'")
+                print(" Created table 'video_targets'")
             except Exception as e:
-                print(f"⚠️  Error creating video_targets table: {e}")
+                print(f"  Error creating video_targets table: {e}")
         else:
-            print("📹 video_resources table will be created by SQLAlchemy")
+            print(" video_resources table will be created by SQLAlchemy")
 
         # Check if leave_requests table exists
         if 'leave_requests' not in tables:
-            print("⚠️  leave_requests table not found. Creating...")
+            print("  leave_requests table not found. Creating...")
             try:
                 LeaveRequestDB.__table__.create(bind=engine)
-                print("✅ leave_requests table created!")
+                print(" leave_requests table created!")
             except Exception as e:
-                print(f"❌ Error creating leave_requests table: {e}")
+                print(f" Error creating leave_requests table: {e}")
         else:
-            print("✅ leave_requests table exists")
+            print(" leave_requests table exists")
         
         # Check if student_registration_requests table exists
         if 'student_registration_requests' not in tables:
-            print("⚠️  student_registration_requests table not found. Creating...")
+            print("  student_registration_requests table not found. Creating...")
             try:
                 StudentRegistrationRequestDB.__table__.create(bind=engine)
-                print("✅ student_registration_requests table created!")
+                print(" student_registration_requests table created!")
             except Exception as e:
-                print(f"❌ Error creating student_registration_requests table: {e}")
+                print(f" Error creating student_registration_requests table: {e}")
         else:
-            print("✅ student_registration_requests table exists")
+            print(" student_registration_requests table exists")
         
         # Check if coach_registration_requests table exists
         if 'coach_registration_requests' not in tables:
-            print("⚠️  coach_registration_requests table not found. Creating...")
+            print("  coach_registration_requests table not found. Creating...")
             try:
                 CoachRegistrationRequestDB.__table__.create(bind=engine)
-                print("✅ coach_registration_requests table created!")
+                print(" coach_registration_requests table created!")
             except Exception as e:
-                print(f"❌ Error creating coach_registration_requests table: {e}")
+                print(f" Error creating coach_registration_requests table: {e}")
         else:
-            print("✅ coach_registration_requests table exists")
+            print(" coach_registration_requests table exists")
         
         # Migrate calendar_events table - add end_date and related_leave_request_id columns
         if 'calendar_events' in tables:
             check_and_add_column(engine, 'calendar_events', 'end_date', 'DATE', nullable=True)
             check_and_add_column(engine, 'calendar_events', 'related_leave_request_id', 'INTEGER', nullable=True)
-            print("✅ calendar_events table schema updated for leave support")
+            check_and_add_column(engine, 'calendar_events', 'related_tournament_id', 'INTEGER', nullable=True)
+            check_and_add_column(engine, 'calendar_events', 'related_announcement_id', 'INTEGER', nullable=True)
+            check_and_add_column(engine, 'calendar_events', 'related_schedule_id', 'INTEGER', nullable=True)
+            print(" calendar_events table schema updated for multi-table support")
         
-        print("✅ Database schema migration completed!")
+        print("Database schema migration completed!")
     except Exception as e:
-        print(f"⚠️  Migration error: {e}")
+        print(f"Migration error: {e}")
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -1028,7 +1108,7 @@ Base.metadata.create_all(bind=engine)
 # Run migration to add missing columns
 migrate_database_schema(engine)
 
-print("✅ Database tables created/verified!")
+print("Database tables created/verified!")
 
 # ==================== Pydantic Models ====================
 
@@ -1213,6 +1293,8 @@ class Batch(BaseModel):
     assigned_coach_ids: Optional[List[int]] = None  # New: list of coach IDs
     assigned_coaches: Optional[List[CoachInfo]] = None  # New: list of coach info objects
     session_id: Optional[int] = None
+    status: str = "active"
+    inactive_at: Optional[datetime] = None
     
     class Config:
         from_attributes = True
@@ -1229,6 +1311,8 @@ class BatchUpdate(BaseModel):
     assigned_coach_name: Optional[str] = None  # Deprecated: kept for backward compatibility
     assigned_coach_ids: Optional[List[int]] = None  # New: supports multiple coaches
     session_id: Optional[int] = None
+    status: Optional[str] = None
+    inactive_at: Optional[datetime] = None
 
 # Student Models
 class StudentCreate(BaseModel):
@@ -1260,6 +1344,8 @@ class Student(BaseModel):
     blood_group: Optional[str] = None
     profile_photo: Optional[str] = None
     fcm_token: Optional[str] = None
+    inactive_at: Optional[datetime] = None
+    rejoin_request_pending: bool = False
 
     class Config:
         from_attributes = True
@@ -1281,6 +1367,8 @@ class StudentUpdate(BaseModel):
     blood_group: Optional[str] = None
     status: Optional[str] = None
     profile_photo: Optional[str] = None
+    inactive_at: Optional[datetime] = None
+    rejoin_request_pending: Optional[bool] = None
 
 # Attendance Models
 class AttendanceCreate(BaseModel):
@@ -1290,6 +1378,9 @@ class AttendanceCreate(BaseModel):
     status: str
     marked_by: str
     remarks: Optional[str] = None
+
+class AttendanceBulkCreate(BaseModel):
+    attendances: List[AttendanceCreate]
 
 class Attendance(BaseModel):
     id: int
@@ -1307,6 +1398,7 @@ class CoachAttendanceCreate(BaseModel):
     coach_id: int
     date: str
     status: str
+    marked_by: Optional[str] = None
     remarks: Optional[str] = None
 
 class CoachAttendance(BaseModel):
@@ -1314,6 +1406,7 @@ class CoachAttendance(BaseModel):
     coach_id: int
     date: str
     status: str
+    marked_by: Optional[str] = None
     remarks: Optional[str] = None
     
     class Config:
@@ -1552,7 +1645,7 @@ def create_notification(db, user_id: int, user_type: str, title: str, body: str,
         db.refresh(notification)
         return notification
     except Exception as e:
-        print(f"❌ Error creating notification: {e}")
+        print(f" Error creating notification: {e}")
         traceback.print_exc()
         return None
 
@@ -1888,6 +1981,9 @@ class CalendarEventCreate(BaseModel):
     created_by: int
     creator_type: str = "coach"  # "coach" or "owner"
     related_leave_request_id: Optional[int] = None  # Link to leave request if this is a leave event
+    related_tournament_id: Optional[int] = None     # Link to tournament
+    related_announcement_id: Optional[int] = None   # Link to announcement
+    related_schedule_id: Optional[int] = None       # Link to schedule
 
 class CalendarEvent(BaseModel):
     id: int
@@ -1899,6 +1995,9 @@ class CalendarEvent(BaseModel):
     created_by: int
     creator_type: str = "coach"  # "coach" or "owner"
     related_leave_request_id: Optional[int] = None
+    related_tournament_id: Optional[int] = None
+    related_announcement_id: Optional[int] = None
+    related_schedule_id: Optional[int] = None
     created_at: str
 
     class Config:
@@ -1927,7 +2026,7 @@ app.add_middleware(
 # Create uploads directory for image storage
 UPLOAD_DIR = Path("./uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
-print(f"✅ Upload directory ready at: {UPLOAD_DIR.absolute()}")
+print(f" Upload directory ready at: {UPLOAD_DIR.absolute()}")
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 def get_db():
@@ -1988,12 +2087,15 @@ def create_coach(coach: CoachCreate):
         db.commit()
         db.refresh(db_coach)
         
+        # Convert to Pydantic model before closing session
+        coach_response = Coach.model_validate(db_coach)
+        
         # Verify it was saved to coaches table by querying it back
         verify_coach = db.query(CoachDB).filter(CoachDB.id == db_coach.id).first()
         if not verify_coach:
             raise HTTPException(status_code=500, detail="Error: Coach was not saved to coaches table")
         
-        return db_coach
+        return coach_response
     except IntegrityError as e:
         db.rollback()
         error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
@@ -2012,7 +2114,7 @@ def get_coaches():
     try:
         # Get all coaches (owners are in separate table)
         coaches = db.query(CoachDB).all()
-        return coaches
+        return [Coach.model_validate(c) for c in coaches]
     finally:
         db.close()
 
@@ -2023,7 +2125,7 @@ def get_coach(coach_id: int):
         coach = db.query(CoachDB).filter(CoachDB.id == coach_id).first()
         if not coach:
             raise HTTPException(status_code=404, detail="Coach not found")
-        return coach
+        return Coach.model_validate(coach)
     finally:
         db.close()
 
@@ -2041,7 +2143,7 @@ def update_coach(coach_id: int, coach_update: CoachUpdate):
         
         db.commit()
         db.refresh(coach)
-        return coach
+        return Coach.model_validate(coach)
     finally:
         db.close()
 
@@ -2092,7 +2194,11 @@ def unified_login(login_data: UnifiedLoginRequest):
                         "phone": owner.phone,
                         "role": owner.role,
                         "must_change_password": owner.must_change_password,
-                        "profile_photo": owner.profile_photo
+                        "profile_photo": owner.profile_photo,
+                        "academy_name": owner.academy_name,
+                        "academy_address": owner.academy_address,
+                        "academy_contact": owner.academy_contact,
+                        "academy_email": owner.academy_email
                     }
                 }
 
@@ -2146,10 +2252,18 @@ def unified_login(login_data: UnifiedLoginRequest):
                     'guardian_phone': student.guardian_phone,
                     'date_of_birth': student.date_of_birth,
                     'address': student.address,
-                    'profile_photo': student.profile_photo,
                     't_shirt_size': student.t_shirt_size,
                 }
                 profile_complete = all(v is not None and str(v).strip() != '' for v in required_profile_fields.values())
+                
+                if student.status == "inactive":
+                    return {
+                        "success": False,
+                        "message": "Your account is currently inactive.",
+                        "account_inactive": True,
+                        "rejoin_request_pending": student.rejoin_request_pending,
+                        "student_id": student.id
+                    }
                 
                 return {
                     "success": True,
@@ -2447,15 +2561,17 @@ def create_owner(owner: OwnerCreate):
             raise HTTPException(status_code=500, detail="Internal error: Owner not mapped to owners table")
         
         db.add(db_owner)
-        db.commit()
         db.refresh(db_owner)
+        
+        # Convert to Pydantic model before closing session
+        owner_response = Owner.model_validate(db_owner)
         
         # Verify it was saved to owners table by querying it back
         verify_owner = db.query(OwnerDB).filter(OwnerDB.id == db_owner.id).first()
         if not verify_owner:
             raise HTTPException(status_code=500, detail="Error: Owner was not saved to owners table")
         
-        return db_owner
+        return owner_response
     except IntegrityError as e:
         db.rollback()
         error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
@@ -2481,7 +2597,7 @@ def get_owners():
     db = SessionLocal()
     try:
         owners = db.query(OwnerDB).all()
-        return owners
+        return [Owner.model_validate(o) for o in owners]
     finally:
         db.close()
 
@@ -2493,7 +2609,7 @@ def get_owner(owner_id: int):
         owner = db.query(OwnerDB).filter(OwnerDB.id == owner_id).first()
         if not owner:
             raise HTTPException(status_code=404, detail="Owner not found")
-        return owner
+        return Owner.model_validate(owner)
     finally:
         db.close()
 
@@ -2521,7 +2637,7 @@ def update_owner(owner_id: int, owner_update: OwnerUpdate):
         
         db.commit()
         db.refresh(owner)
-        return owner
+        return Owner.model_validate(owner)
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error updating owner: {str(e)}")
@@ -2591,7 +2707,11 @@ def login_owner(login_data: OwnerLogin):
                     "status": owner.status,
                     "role": owner.role,
                     "must_change_password": owner.must_change_password,
-                    "profile_photo": owner.profile_photo
+                    "profile_photo": owner.profile_photo,
+                    "academy_name": owner.academy_name,
+                    "academy_address": owner.academy_address,
+                    "academy_contact": owner.academy_contact,
+                    "academy_email": owner.academy_email
                 }
             }
         else:
@@ -2742,12 +2862,18 @@ def create_batch(batch: BatchCreate):
         db.close()
 
 @app.get("/batches/", response_model=List[Batch])
-def get_batches():
+def get_batches(status: Optional[str] = Query(None)):
     db = SessionLocal()
     try:
         # Try normal query first
         try:
-            batches_db = db.query(BatchDB).all()
+            query = db.query(BatchDB)
+            if status and status.lower() != 'all':
+                query = query.filter(BatchDB.status == status)
+            elif not status:
+                query = query.filter(BatchDB.status == "active")
+            
+            batches_db = query.all()
             batches = []
             for batch_db in batches_db:
                 # Get coaches from junction table
@@ -2781,6 +2907,9 @@ def get_batches():
                 result = db.execute(text("""
                     SELECT id, batch_name, capacity, fees, start_date, timing, period, 
                            location, created_by, assigned_coach_id, assigned_coach_name
+                    SELECT id, batch_name, capacity, fees, start_date, timing, period, 
+                           location, created_by, assigned_coach_id, assigned_coach_name,
+                           status, inactive_at
                     FROM batches
                 """))
                 batches = []
@@ -2806,12 +2935,48 @@ def get_batches():
                         assigned_coach_ids=coach_ids_list,
                         assigned_coaches=coaches,
                         session_id=None,  # Default to None if column doesn't exist
+                        status=row[11] if len(row) > 11 else "active",
+                        inactive_at=row[12] if len(row) > 12 else None
                     )
                     batches.append(batch)
                 return batches
             else:
                 # Re-raise if it's a different error
                 raise
+    finally:
+        db.close()
+
+@app.get("/batches/inactive/", response_model=List[Batch])
+def get_inactive_batches():
+    """Get all deactivated batches"""
+    db = SessionLocal()
+    try:
+        batches_db = db.query(BatchDB).filter(BatchDB.status == "inactive").all()
+        batches = []
+        for batch_db in batches_db:
+            coaches = _get_batch_coaches(db, batch_db.id)
+            coach_ids_list = [c.id for c in coaches]
+            
+            batch = Batch(
+                id=batch_db.id,
+                batch_name=batch_db.batch_name,
+                capacity=batch_db.capacity,
+                fees=batch_db.fees,
+                start_date=batch_db.start_date,
+                timing=batch_db.timing,
+                period=batch_db.period,
+                location=batch_db.location,
+                created_by=batch_db.created_by,
+                assigned_coach_id=coach_ids_list[0] if coach_ids_list else None,
+                assigned_coach_name=coaches[0].name if coaches else None,
+                assigned_coach_ids=coach_ids_list,
+                assigned_coaches=coaches,
+                session_id=batch_db.session_id,
+                status=batch_db.status,
+                inactive_at=batch_db.inactive_at
+            )
+            batches.append(batch)
+        return batches
     finally:
         db.close()
 
@@ -2890,6 +3055,9 @@ def get_coach_batches(coach_id: int):
                     result = db.execute(text("""
                         SELECT id, batch_name, capacity, fees, start_date, timing, period, 
                                location, created_by, assigned_coach_id, assigned_coach_name
+                        SELECT id, batch_name, capacity, fees, start_date, timing, period, 
+                               location, created_by, assigned_coach_id, assigned_coach_name,
+                               status, inactive_at
                         FROM batches
                         WHERE assigned_coach_id = :coach_id
                     """), {"coach_id": coach_id})
@@ -2914,6 +3082,8 @@ def get_coach_batches(coach_id: int):
                             assigned_coach_ids=coach_ids_list,
                             assigned_coaches=coaches,
                             session_id=None,
+                            status=row[11] if len(row) > 11 else "active",
+                            inactive_at=row[12] if len(row) > 12 else None
                         )
                         batches.append(batch)
                     return batches
@@ -2940,6 +3110,9 @@ def update_batch(batch_id: int, batch_update: BatchUpdate):
                 result = db.execute(text("""
                     SELECT id, batch_name, capacity, fees, start_date, timing, period, 
                            location, created_by, assigned_coach_id, assigned_coach_name
+                    SELECT id, batch_name, capacity, fees, start_date, timing, period, 
+                           location, created_by, assigned_coach_id, assigned_coach_name,
+                           status, inactive_at
                     FROM batches
                     WHERE id = :batch_id
                 """), {"batch_id": batch_id})
@@ -3030,7 +3203,8 @@ def update_batch(batch_id: int, batch_update: BatchUpdate):
             from sqlalchemy import text
             result = db.execute(text("""
                 SELECT id, batch_name, capacity, fees, start_date, timing, period, 
-                       location, created_by, assigned_coach_id, assigned_coach_name
+                       location, created_by, assigned_coach_id, assigned_coach_name,
+                       status, inactive_at
                 FROM batches
                 WHERE id = :batch_id
             """), {"batch_id": batch_id})
@@ -3045,7 +3219,9 @@ def update_batch(batch_id: int, batch_update: BatchUpdate):
                 'period': row[6],
                 'location': row[7],
                 'created_by': row[8],
-                'session_id': None
+                'session_id': None,
+                'status': row[11] if len(row) > 11 else "active",
+                'inactive_at': row[12] if len(row) > 12 else None
             }
         
         # Build response
@@ -3080,6 +3256,46 @@ def delete_batch(batch_id: int):
         db.delete(batch)
         db.commit()
         return {"message": "Batch deleted"}
+    finally:
+        db.close()
+
+@app.post("/batches/{batch_id}/deactivate")
+def deactivate_batch(batch_id: int):
+    """Soft delete a batch - moves to inactive list, keeps data for 2 years"""
+    db = SessionLocal()
+    try:
+        batch = db.query(BatchDB).filter(BatchDB.id == batch_id).first()
+        if not batch:
+            raise HTTPException(status_code=404, detail="Batch not found")
+        
+        batch.status = "inactive"
+        batch.inactive_at = datetime.now()
+        db.commit()
+        return {"message": "Batch deactivated successfully"}
+    finally:
+        db.close()
+
+@app.delete("/batches/{batch_id}/remove")
+def remove_batch_permanently(batch_id: int):
+    """Hard delete a batch and all related records (cascading)"""
+    db = SessionLocal()
+    try:
+        batch = db.query(BatchDB).filter(BatchDB.id == batch_id).first()
+        if not batch:
+            raise HTTPException(status_code=404, detail="Batch not found")
+            
+        # Manually delete related records if not handled by SQL CASCADE
+        # Note: Some models might not have batch_id as an FK with CASCADE
+        db.query(AttendanceDB).filter(AttendanceDB.batch_id == batch_id).delete()
+        db.query(FeeDB).filter(FeeDB.batch_id == batch_id).delete()
+        db.query(PerformanceDB).filter(PerformanceDB.batch_id == batch_id).delete()
+        db.query(BatchStudentDB).filter(BatchStudentDB.batch_id == batch_id).delete()
+        db.query(BatchCoachDB).filter(BatchCoachDB.batch_id == batch_id).delete()
+        db.query(ScheduleDB).filter(ScheduleDB.batch_id == batch_id).delete()
+        
+        db.delete(batch)
+        db.commit()
+        return {"message": "Batch and all related records deleted permanently"}
     finally:
         db.close()
 
@@ -3192,16 +3408,19 @@ def create_student(student: StudentCreate):
         db.add(db_student)
         db.commit()
         db.refresh(db_student)
-        return db_student
+        return Student.model_validate(db_student)
     finally:
         db.close()
 
 @app.get("/students/", response_model=List[Student])
-def get_students():
+def get_students(include_deleted: bool = Query(False, description="Include deleted students")):
     db = SessionLocal()
     try:
-        students = db.query(StudentDB).all()
-        return students
+        query = db.query(StudentDB)
+        if not include_deleted:
+            query = query.filter(StudentDB.status == "active")
+        students = query.all()
+        return [Student.model_validate(s) for s in students]
     finally:
         db.close()
 
@@ -3212,7 +3431,7 @@ def get_student(student_id: int):
         student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
         if not student:
             raise HTTPException(status_code=404, detail="Student not found")
-        return student
+        return Student.model_validate(student)
     finally:
         db.close()
 
@@ -3230,20 +3449,139 @@ def update_student(student_id: int, student_update: StudentUpdate):
         
         db.commit()
         db.refresh(student)
-        return student
+        return Student.model_validate(student)
     finally:
         db.close()
 
 @app.delete("/students/{student_id}")
 def delete_student(student_id: int):
+    """Soft delete a student (mark as deleted)"""
+    db = SessionLocal()
+    try:
+        # Move to inactive instead of hard deleting by default
+        student.status = "inactive"
+        student.inactive_at = datetime.now()
+        
+        db.commit()
+        return {"message": "Student marked as inactive"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.get("/students/inactive/", response_model=List[Student])
+def get_inactive_students():
+    """Get all deactivated students"""
+    db = SessionLocal()
+    try:
+        query = db.query(StudentDB).filter(StudentDB.status == "inactive")
+        students = query.all()
+        return [Student.model_validate(s) for s in students]
+    finally:
+        db.close()
+
+@app.get("/students/rejoin-requests/", response_model=List[Student])
+def get_rejoin_requests():
+    """Get students who have requested to rejoin"""
+    db = SessionLocal()
+    try:
+        query = db.query(StudentDB).filter(StudentDB.rejoin_request_pending == True)
+        requests = query.all()
+        return [Student.model_validate(s) for s in requests]
+    finally:
+        db.close()
+
+@app.post("/students/{student_id}/deactivate")
+def deactivate_student(student_id: int):
+    """Soft delete a student - moves to inactive list, keeps data for 2 years"""
     db = SessionLocal()
     try:
         student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
         if not student:
             raise HTTPException(status_code=404, detail="Student not found")
+        
+        student.status = "inactive"
+        student.inactive_at = datetime.now()
+        student.rejoin_request_pending = False # Reset if it was pending
+        db.commit()
+        return {"message": "Student deactivated successfully"}
+    finally:
+        db.close()
+
+@app.post("/students/{student_id}/request-rejoin")
+def request_rejoin(student_id: int):
+    """Student requests to rejoin after being inactive"""
+    db = SessionLocal()
+    try:
+        student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found")
+        
+        if student.status != "inactive":
+            raise HTTPException(status_code=400, detail="Only inactive students can request to rejoin")
+            
+        student.rejoin_request_pending = True
+        db.commit()
+        
+        # Notify Owner
+        # In a real app, you'd find the owner(s) and send them a notification
+        return {"message": "Rejoin request sent to owner"}
+    finally:
+        db.close()
+
+@app.post("/students/{student_id}/approve-rejoin")
+def approve_rejoin(student_id: int):
+    """Owner approves a rejoin request"""
+    db = SessionLocal()
+    try:
+        student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found")
+            
+        student.status = "active"
+        student.inactive_at = None
+        student.rejoin_request_pending = False
+        db.commit()
+        
+        # Notify Student
+        create_notification(
+            db=db,
+            user_id=student.id,
+            user_type="student",
+            title="Rejoin Request Approved",
+            body="Your request to rejoin has been approved. Welcome back!",
+            type="general"
+        )
+        
+        return {"message": "Rejoin request approved"}
+    finally:
+        db.close()
+
+@app.delete("/students/{student_id}/remove")
+def remove_student_permanently(student_id: int):
+    """Hard delete a student and all related records (cascading)"""
+    db = SessionLocal()
+    try:
+        student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found")
+            
+        # Manually delete related records if not handled by SQL CASCADE
+        db.query(AttendanceDB).filter(AttendanceDB.student_id == student_id).delete()
+        db.query(FeeDB).filter(FeeDB.student_id == student_id).delete()
+        db.query(PerformanceDB).filter(PerformanceDB.student_id == student_id).delete()
+        db.query(BatchStudentDB).filter(BatchStudentDB.student_id == student_id).delete()
+        db.query(BMIDB).filter(BMIDB.student_id == student_id).delete()
+        db.query(VideoResourceDB).filter(VideoResourceDB.student_id == student_id).delete()
+        db.query(NotificationDB).filter(NotificationDB.user_id == student_id, NotificationDB.user_type == "student").delete()
+        
         db.delete(student)
         db.commit()
-        return {"message": "Student deleted"}
+        return {"message": "Student and all related records deleted permanently"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
 
@@ -3265,7 +3603,6 @@ def check_profile_complete(student_id: int):
             'guardian_phone': student.guardian_phone,
             'date_of_birth': student.date_of_birth,
             'address': student.address,
-            'profile_photo': student.profile_photo,
             't_shirt_size': student.t_shirt_size,
         }
         
@@ -3309,6 +3646,15 @@ def login_student(login_data: StudentLogin):
                     student.password = hash_password(login_data.password)
                     db.commit()
             
+                if student.status == "inactive":
+                    return {
+                        "success": False,
+                        "message": "Your account is currently inactive.",
+                        "account_inactive": True,
+                        "rejoin_request_pending": student.rejoin_request_pending,
+                        "student_id": student.id
+                    }
+                
             if not password_valid:
                 return {
                     "success": False,
@@ -3326,7 +3672,6 @@ def login_student(login_data: StudentLogin):
                 'guardian_phone': student.guardian_phone,
                 'date_of_birth': student.date_of_birth,
                 'address': student.address,
-                'profile_photo': student.profile_photo,
                 't_shirt_size': student.t_shirt_size,
             }
             
@@ -3350,6 +3695,8 @@ def login_student(login_data: StudentLogin):
                     "t_shirt_size": student.t_shirt_size,
                     "status": student.status,
                     "profile_photo": student.profile_photo,
+                    "rejoin_request_pending": student.rejoin_request_pending,
+                    "inactive_at": student.inactive_at,
                     "is_linked": len(approved_batches) > 0
                 },
                 "profile_complete": profile_complete
@@ -3496,6 +3843,18 @@ def remove_student_from_batch(batch_id: int, student_id: int):
 
 # ==================== Attendance Routes ====================
 
+def attendance_db_to_response(attn_db: AttendanceDB) -> Attendance:
+    """Convert AttendanceDB to Attendance response model"""
+    return Attendance(
+        id=attn_db.id,
+        batch_id=attn_db.batch_id,
+        student_id=attn_db.student_id,
+        date=attn_db.date,
+        status=attn_db.status,
+        marked_by=attn_db.marked_by,
+        remarks=attn_db.remarks
+    )
+
 @app.get("/attendance/", response_model=List[Attendance])
 def get_attendance(
     date: Optional[str] = None,
@@ -3528,7 +3887,7 @@ def get_attendance(
             query = query.filter(AttendanceDB.student_id == student_id)
         
         attendance = query.order_by(AttendanceDB.date.desc()).all()
-        return attendance
+        return [attendance_db_to_response(a) for a in attendance]
     finally:
         db.close()
 
@@ -3562,7 +3921,7 @@ def mark_attendance(attendance: AttendanceCreate):
             except Exception as e:
                 print(f"Error sending attendance update notification: {e}")
                 
-            return existing
+            return attendance_db_to_response(existing)
         else:
             db_attendance = AttendanceDB(**attendance.model_dump())
             db.add(db_attendance)
@@ -3583,7 +3942,60 @@ def mark_attendance(attendance: AttendanceCreate):
             except Exception as e:
                 print(f"Error sending attendance notification: {e}")
                 
-            return db_attendance
+            return attendance_db_to_response(db_attendance)
+    finally:
+        db.close()
+
+@app.post("/attendance/bulk/", response_model=List[Attendance])
+def mark_attendance_bulk(bulk: AttendanceBulkCreate):
+    db = SessionLocal()
+    results = []
+    try:
+        for attendance in bulk.attendances:
+            existing = db.query(AttendanceDB).filter(
+                AttendanceDB.batch_id == attendance.batch_id,
+                AttendanceDB.student_id == attendance.student_id,
+                AttendanceDB.date == attendance.date
+            ).first()
+            
+            if existing:
+                for key, value in attendance.model_dump().items():
+                    setattr(existing, key, value)
+                db.commit()
+                db.refresh(existing)
+                results.append(attendance_db_to_response(existing))
+                
+                # Notify Student (Optional: could be throttled for bulk)
+                create_notification(
+                    db=db,
+                    user_id=existing.student_id,
+                    user_type="student",
+                    title="Attendance Updated",
+                    body=f"Your attendance for {existing.date} has been updated to: {existing.status}",
+                    type="attendance",
+                    data={"attendance_id": existing.id}
+                )
+            else:
+                db_attendance = AttendanceDB(**attendance.model_dump())
+                db.add(db_attendance)
+                db.commit()
+                db.refresh(db_attendance)
+                results.append(attendance_db_to_response(db_attendance))
+                
+                # Notify Student
+                create_notification(
+                    db=db,
+                    user_id=db_attendance.student_id,
+                    user_type="student",
+                    title="Attendance Marked",
+                    body=f"Your attendance for {db_attendance.date} has been marked as: {db_attendance.status}",
+                    type="attendance",
+                    data={"attendance_id": db_attendance.id}
+                )
+        return results
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
     finally:
         db.close()
 
@@ -3595,7 +4007,7 @@ def get_batch_attendance(batch_id: int, date: str):
             AttendanceDB.batch_id == batch_id,
             AttendanceDB.date == date
         ).all()
-        return attendance
+        return [attendance_db_to_response(a) for a in attendance]
     finally:
         db.close()
 
@@ -3604,9 +4016,20 @@ def get_student_attendance(student_id: int):
     db = SessionLocal()
     try:
         attendance = db.query(AttendanceDB).filter(AttendanceDB.student_id == student_id).all()
-        return attendance
+        return [attendance_db_to_response(a) for a in attendance]
     finally:
         db.close()
+
+def coach_attendance_db_to_response(attn_db: CoachAttendanceDB) -> CoachAttendance:
+    """Convert CoachAttendanceDB to CoachAttendance response model"""
+    return CoachAttendance(
+        id=attn_db.id,
+        coach_id=attn_db.coach_id,
+        date=attn_db.date,
+        status=attn_db.status,
+        marked_by=attn_db.marked_by,
+        remarks=attn_db.remarks
+    )
 
 # Coach Attendance Routes
 @app.post("/coach-attendance/", response_model=CoachAttendance)
@@ -3623,13 +4046,13 @@ def mark_coach_attendance(attendance: CoachAttendanceCreate):
                 setattr(existing, key, value)
             db.commit()
             db.refresh(existing)
-            return existing
+            return coach_attendance_db_to_response(existing)
         else:
             db_attendance = CoachAttendanceDB(**attendance.model_dump())
             db.add(db_attendance)
             db.commit()
             db.refresh(db_attendance)
-            return db_attendance
+            return coach_attendance_db_to_response(db_attendance)
     finally:
         db.close()
 
@@ -3638,7 +4061,7 @@ def get_coach_attendance_history(coach_id: int):
     db = SessionLocal()
     try:
         attendance = db.query(CoachAttendanceDB).filter(CoachAttendanceDB.coach_id == coach_id).all()
-        return attendance
+        return [coach_attendance_db_to_response(a) for a in attendance]
     finally:
         db.close()
 
@@ -3647,7 +4070,7 @@ def get_all_coach_attendance(date: str):
     db = SessionLocal()
     try:
         attendance = db.query(CoachAttendanceDB).filter(CoachAttendanceDB.date == date).all()
-        return attendance
+        return [coach_attendance_db_to_response(a) for a in attendance]
     finally:
         db.close()
 
@@ -4262,7 +4685,7 @@ def get_batch_students(batch_id: int):
         
         # Get student details
         students = db.query(StudentDB).filter(StudentDB.id.in_(student_ids)).all()
-        return students
+        return [Student.model_validate(s) for s in students]
     finally:
         db.close()
 
@@ -4312,7 +4735,7 @@ def get_student_performance(student_id: int):
     db = SessionLocal()
     try:
         performance = db.query(PerformanceDB).filter(PerformanceDB.student_id == student_id).all()
-        return performance
+        return [Performance.model_validate(p) for p in performance]
     finally:
         db.close()
 
@@ -4982,7 +5405,7 @@ def create_enquiry(enquiry: EnquiryCreate):
         db.add(db_enquiry)
         db.commit()
         db.refresh(db_enquiry)
-        return db_enquiry
+        return Enquiry.model_validate(db_enquiry)
     finally:
         db.close()
 
@@ -4991,7 +5414,7 @@ def get_enquiries():
     db = SessionLocal()
     try:
         enquiries = db.query(EnquiryDB).all()
-        return enquiries
+        return [Enquiry.model_validate(e) for e in enquiries]
     finally:
         db.close()
 
@@ -5000,7 +5423,7 @@ def get_assigned_enquiries(assigned_to: str):
     db = SessionLocal()
     try:
         enquiries = db.query(EnquiryDB).filter(EnquiryDB.assigned_to == assigned_to).all()
-        return enquiries
+        return [Enquiry.model_validate(e) for e in enquiries]
     finally:
         db.close()
 
@@ -5018,7 +5441,7 @@ def update_enquiry(enquiry_id: int, enquiry_update: EnquiryUpdate):
         
         db.commit()
         db.refresh(enquiry)
-        return enquiry
+        return Enquiry.model_validate(enquiry)
     finally:
         db.close()
 
@@ -5041,11 +5464,29 @@ def delete_enquiry(enquiry_id: int):
 def create_schedule(schedule: ScheduleCreate):
     db = SessionLocal()
     try:
-        db_schedule = ScheduleDB(**schedule.dict())
+        db_schedule = ScheduleDB(**schedule.model_dump())
         db.add(db_schedule)
         db.commit()
         db.refresh(db_schedule)
-        return db_schedule
+        
+        # Sync with CalendarEvent
+        try:
+            schedule_date = datetime.strptime(db_schedule.date, "%Y-%m-%d").date()
+            calendar_event = CalendarEventDB(
+                title=f"Session: {db_schedule.activity}",
+                event_type="event",
+                date=schedule_date,
+                description=db_schedule.description,
+                creator_type="coach", # Default to coach context for schedules
+                related_schedule_id=db_schedule.id
+            )
+            db.add(calendar_event)
+            db.commit()
+        except Exception as e:
+            print(f"Error syncing schedule to calendar: {e}")
+            
+        # Convert to Pydantic model before closing session to avoid DetachedInstanceError
+        return Schedule.model_validate(db_schedule)
     finally:
         db.close()
 
@@ -5054,7 +5495,7 @@ def get_batch_schedules(batch_id: int):
     db = SessionLocal()
     try:
         schedules = db.query(ScheduleDB).filter(ScheduleDB.batch_id == batch_id).all()
-        return schedules
+        return [Schedule.model_validate(s) for s in schedules]
     finally:
         db.close()
 
@@ -5063,7 +5504,7 @@ def get_schedules_by_date(date: str):
     db = SessionLocal()
     try:
         schedules = db.query(ScheduleDB).filter(ScheduleDB.date == date).all()
-        return schedules
+        return [Schedule.model_validate(s) for s in schedules]
     finally:
         db.close()
 
@@ -5074,6 +5515,12 @@ def delete_schedule(schedule_id: int):
         schedule = db.query(ScheduleDB).filter(ScheduleDB.id == schedule_id).first()
         if not schedule:
             raise HTTPException(status_code=404, detail="Schedule not found")
+            
+        # Remove linked calendar event
+        try:
+            db.query(CalendarEventDB).filter(CalendarEventDB.related_schedule_id == schedule_id).delete()
+        except: pass
+            
         db.delete(schedule)
         db.commit()
         return {"message": "Schedule deleted"}
@@ -5086,11 +5533,29 @@ def delete_schedule(schedule_id: int):
 def create_tournament(tournament: TournamentCreate):
     db = SessionLocal()
     try:
-        db_tournament = TournamentDB(**tournament.dict())
+        db_tournament = TournamentDB(**tournament.model_dump())
         db.add(db_tournament)
         db.commit()
         db.refresh(db_tournament)
-        return db_tournament
+        
+        # Sync with CalendarEvent
+        try:
+            tournament_date = datetime.strptime(db_tournament.date, "%Y-%m-%d").date()
+            calendar_event = CalendarEventDB(
+                title=f"Tournament: {db_tournament.name}",
+                event_type="tournament",
+                date=tournament_date,
+                description=db_tournament.description,
+                creator_type="owner",
+                related_tournament_id=db_tournament.id
+            )
+            db.add(calendar_event)
+            db.commit()
+        except Exception as e:
+            print(f"Error syncing tournament to calendar: {e}")
+            
+        # Convert to Pydantic model before closing session to avoid DetachedInstanceError
+        return Tournament.model_validate(db_tournament)
     finally:
         db.close()
 
@@ -5099,7 +5564,7 @@ def get_tournaments():
     db = SessionLocal()
     try:
         tournaments = db.query(TournamentDB).all()
-        return tournaments
+        return [Tournament.model_validate(t) for t in tournaments]
     finally:
         db.close()
 
@@ -5109,7 +5574,7 @@ def get_upcoming_tournaments():
     try:
         today = datetime.now().strftime("%Y-%m-%d")
         tournaments = db.query(TournamentDB).filter(TournamentDB.date >= today).all()
-        return tournaments
+        return [Tournament.model_validate(t) for t in tournaments]
     finally:
         db.close()
 
@@ -5120,6 +5585,12 @@ def delete_tournament(tournament_id: int):
         tournament = db.query(TournamentDB).filter(TournamentDB.id == tournament_id).first()
         if not tournament:
             raise HTTPException(status_code=404, detail="Tournament not found")
+            
+        # Remove linked calendar event
+        try:
+            db.query(CalendarEventDB).filter(CalendarEventDB.related_tournament_id == tournament_id).delete()
+        except: pass
+            
         db.delete(tournament)
         db.commit()
         return {"message": "Tournament deleted"}
@@ -5660,7 +6131,7 @@ def get_student_invitations(student_email: str):
         invitations = db.query(InvitationDB).filter(
             InvitationDB.student_email == student_email
         ).all()
-        return invitations
+        return [Invitation.model_validate(i) for i in invitations]
     finally:
         db.close()
 
@@ -5669,7 +6140,7 @@ def get_coach_invitations(coach_id: int):
     db = SessionLocal()
     try:
         invitations = db.query(InvitationDB).filter(InvitationDB.coach_id == coach_id).all()
-        return invitations
+        return [Invitation.model_validate(i) for i in invitations]
     finally:
         db.close()
 
@@ -5707,7 +6178,7 @@ def update_invitation(invitation_id: int, invitation_update: InvitationUpdate):
         
         db.commit()
         db.refresh(invitation)
-        return invitation
+        return Invitation.model_validate(invitation)
     finally:
         db.close()
 
@@ -5865,6 +6336,27 @@ def create_announcement(announcement: AnnouncementCreate):
         db.commit()
         db.refresh(db_announcement)
         
+        # Sync with CalendarEvent
+        try:
+            # If scheduled_at is provided, use its date, otherwise use today's date
+            event_date = date.today()
+            if db_announcement.scheduled_at:
+                event_date = db_announcement.scheduled_at.date()
+            
+            calendar_event = CalendarEventDB(
+                title=f"Announcement: {db_announcement.title}",
+                event_type="event",
+                date=event_date,
+                description=db_announcement.message,
+                created_by=db_announcement.created_by,
+                creator_type=db_announcement.creator_type,
+                related_announcement_id=db_announcement.id
+            )
+            db.add(calendar_event)
+            db.commit()
+        except Exception as e:
+            print(f"Error syncing announcement to calendar: {e}")
+        
         # Notify Target Audience
         try:
             target_users = []
@@ -5955,6 +6447,24 @@ def update_announcement(announcement_id: int, announcement: AnnouncementUpdate):
 
         db.commit()
         db.refresh(db_announcement)
+        
+        # Sync with CalendarEvent
+        try:
+            calendar_event = db.query(CalendarEventDB).filter(CalendarEventDB.related_announcement_id == announcement_id).first()
+            if calendar_event:
+                if 'title' in update_data:
+                    calendar_event.title = f"Announcement: {db_announcement.title}"
+                if 'message' in update_data:
+                    calendar_event.description = db_announcement.message
+                if 'scheduled_at' in update_data:
+                    if db_announcement.scheduled_at:
+                        calendar_event.date = db_announcement.scheduled_at.date()
+                    else:
+                        calendar_event.date = date.today()
+                db.commit()
+        except Exception as e:
+            print(f"Error updating announcement in calendar: {e}")
+            
         return _db_announcement_to_pydantic(db_announcement)
     except Exception as e:
         db.rollback()
@@ -5971,6 +6481,11 @@ def delete_announcement(announcement_id: int):
         if not db_announcement:
             raise HTTPException(status_code=404, detail="Announcement not found")
 
+        # Remove linked calendar event
+        try:
+            db.query(CalendarEventDB).filter(CalendarEventDB.related_announcement_id == announcement_id).delete()
+        except: pass
+            
         db.delete(db_announcement)
         db.commit()
         return {"message": "Announcement deleted successfully"}
@@ -5994,6 +6509,9 @@ def _db_event_to_pydantic(db_event: CalendarEventDB) -> CalendarEvent:
         created_by=db_event.created_by,
         creator_type=db_event.creator_type or "coach",
         related_leave_request_id=db_event.related_leave_request_id,
+        related_tournament_id=db_event.related_tournament_id,
+        related_announcement_id=db_event.related_announcement_id,
+        related_schedule_id=db_event.related_schedule_id,
         created_at=db_event.created_at.isoformat() if hasattr(db_event.created_at, 'isoformat') else str(db_event.created_at),
     )
 
@@ -6062,7 +6580,7 @@ def create_calendar_event(event: CalendarEventCreate):
         # Log the full error for debugging
         import traceback
         error_trace = traceback.format_exc()
-        print(f"❌ Error creating calendar event: {error_trace}")
+        print(f" Error creating calendar event: {error_trace}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
     finally:
         db.close()
@@ -6679,9 +7197,30 @@ def submit_leave_modification(request_id: int, modification: LeaveRequestModific
         db.commit()
         db.refresh(db_request)
         
-        # Determine effective response values
+        # Determine effective response values for notifications
         mod_start = db_request.modification_start_date.strftime("%Y-%m-%d") if db_request.modification_start_date else None
         mod_end = db_request.modification_end_date.strftime("%Y-%m-%d") if db_request.modification_end_date else None
+        
+        # Notify Owners about the modification request
+        try:
+            owners = db.query(OwnerDB).filter(OwnerDB.role == "owner").all()
+            for owner in owners:
+                create_notification(
+                    db=db,
+                    user_id=owner.id,
+                    user_type="owner",
+                    title="Leave Modification Request",
+                    body=f"Coach {db_request.coach_name} has requested to modify their {db_request.leave_type} leave from {mod_start} to {mod_end}. Reason: {modification.reason}",
+                    type="general",
+                    data={
+                        "leave_request_id": db_request.id,
+                        "modification_status": "pending",
+                        "original_dates": f"{db_request.start_date} to {db_request.end_date}",
+                        "new_dates": f"{mod_start} to {mod_end}"
+                    }
+                )
+        except Exception as e:
+            print(f"Error sending leave modification notifications: {e}")
         
         return LeaveRequest(
             id=db_request.id,
@@ -6782,6 +7321,37 @@ def review_modification_request(request_id: int, review: LeaveRequestModificatio
         # Prepare response
         mod_start = db_request.modification_start_date.strftime("%Y-%m-%d") if db_request.modification_start_date else None
         mod_end = db_request.modification_end_date.strftime("%Y-%m-%d") if db_request.modification_end_date else None
+        
+        # Notify Coach about the modification review
+        try:
+            if review.action == "approve":
+                notif_title = "Leave Modification Approved"
+                notif_body = f"Your modification request for {db_request.leave_type} leave has been approved. New dates: {mod_start} to {mod_end}"
+            elif review.action == "reject_modification":
+                notif_title = "Leave Modification Rejected"
+                notif_body = f"Your modification request for {db_request.leave_type} leave has been rejected. Original leave dates remain: {db_request.start_date} to {db_request.end_date}"
+            elif review.action == "reject_all":
+                notif_title = "Leave Request Cancelled"
+                notif_body = f"Your {db_request.leave_type} leave request and modification have been rejected."
+            else:
+                notif_title = "Leave Modification Update"
+                notif_body = f"Your leave modification request has been reviewed."
+            
+            create_notification(
+                db=db,
+                user_id=db_request.coach_id,
+                user_type="coach",
+                title=notif_title,
+                body=notif_body,
+                type="general",
+                data={
+                    "leave_request_id": db_request.id,
+                    "action": review.action,
+                    "modification_status": db_request.modification_status
+                }
+            )
+        except Exception as e:
+            print(f"Error sending modification review notification: {e}")
         
         return LeaveRequest(
             id=db_request.id,
@@ -7518,6 +8088,478 @@ def delete_notification(notification_id: int):
         db.close()
 
 
+# ==================== Report Models & Endpoints ====================
+
+class ReportFilter(BaseModel):
+    type: str  # attendance, fee, performance
+    filter_type: str  # season, year, month
+    filter_value: str  # season_id, year, or YYYY-MM
+    batch_id: str  # batch_id or 'all'
+    generated_by_name: Optional[str] = "Admin"
+    generated_by_role: Optional[str] = "Owner"
+
+@app.post("/api/reports/generate")
+def generate_report(filter: ReportFilter):
+    """Generate standardized reports for Attendance and Fees"""
+    db = SessionLocal()
+    try:
+        # 1. Determine Date Range & Context
+        start_date = None
+        end_date = None
+        filter_summary = ""
+        season_ids = [] # List of season IDs relevant to the filter
+        
+        if filter.filter_type == 'season':
+            session = db.query(SessionDB).filter(SessionDB.id == int(filter.filter_value)).first()
+            if not session:
+                raise HTTPException(status_code=404, detail="Season not found")
+            start_date = session.start_date
+            end_date = session.end_date
+            season_ids = [session.id]
+            filter_summary = f"Season: {session.name}"
+            
+        elif filter.filter_type == 'year':
+            year = filter.filter_value
+            start_date = f"{year}-01-01"
+            end_date = f"{year}-12-31"
+            # Find seasons in this year
+            sessions = db.query(SessionDB).filter(
+                or_(
+                    SessionDB.start_date.like(f"{year}%"),
+                    SessionDB.end_date.like(f"{year}%")
+                )
+            ).all()
+            season_ids = [s.id for s in sessions]
+            filter_summary = f"Year: {year}"
+            
+        elif filter.filter_type == 'month':
+            # invalid format handling needed in prod, assuming YYYY-MM
+            y, m = filter.filter_value.split('-')
+            import calendar
+            last_day = calendar.monthrange(int(y), int(m))[1]
+            start_date = f"{filter.filter_value}-01"
+            end_date = f"{filter.filter_value}-{last_day}"
+            filter_summary = f"Month: {filter.filter_value}"
+            # Find active seasons overlap (optional)
+            
+        # 2. Determine Batches
+        target_batch_ids = []
+        batch_map = {} # id -> name
+        
+        if str(filter.batch_id).lower() == 'all':
+            query = db.query(BatchDB)
+            if filter.filter_type == 'season':
+                query = query.filter(BatchDB.session_id == int(filter.filter_value))
+            # For year/month, filter by seasons if found
+            if season_ids and filter.filter_type == 'year':
+                query = query.filter(BatchDB.session_id.in_(season_ids))
+            
+            batches = query.all()
+            target_batch_ids = [b.id for b in batches]
+            batch_map = {b.id: b.batch_name for b in batches}
+            filter_summary += " | All Batches"
+        else:
+            b_id = int(filter.batch_id)
+            batch = db.query(BatchDB).filter(BatchDB.id == b_id).first()
+            if batch:
+                target_batch_ids = [b_id]
+                batch_map = {b_id: batch.batch_name}
+                filter_summary += f" | Batch: {batch.batch_name}"
+
+        # 3. Generate Data
+        overview = {}
+        breakdown = []
+        student_details = []
+
+        if filter.type == 'attendance':
+            # ATTENDANCE LOGIC
+            query = db.query(AttendanceDB).filter(
+                AttendanceDB.date >= start_date,
+                AttendanceDB.date <= end_date,
+                AttendanceDB.batch_id.in_(target_batch_ids)
+            )
+            records = query.all()
+            
+            total_recs = len(records)
+            present = sum(1 for r in records if r.status.lower() == 'present')
+            absent = sum(1 for r in records if r.status.lower() == 'absent')
+            
+            student_count_query = db.query(BatchStudentDB).filter(
+                BatchStudentDB.batch_id.in_(target_batch_ids),
+                BatchStudentDB.status.in_(['approved', 'active'])
+            )
+            total_students = student_count_query.count()
+            
+            overview = {
+                "total_students": total_students,
+                "total_conducted": len(set(r.date + str(r.batch_id) for r in records)), 
+                "present_count": present,
+                "absent_count": absent,
+                "attendance_rate": round((present / total_recs * 100) if total_recs > 0 else 0, 1)
+            }
+            
+            # Breakdown by Batch
+            for b_id in target_batch_ids:
+                b_recs = [r for r in records if r.batch_id == b_id]
+                b_present = sum(1 for r in b_recs if r.status.lower() == 'present')
+                b_total = len(b_recs)
+                b_stud_count = db.query(BatchStudentDB).filter(
+                    BatchStudentDB.batch_id == b_id,
+                    BatchStudentDB.status.in_(['approved', 'active'])
+                ).count()
+                
+                breakdown.append({
+                    "name": batch_map.get(b_id, "Unknown"),
+                    "total_students": b_stud_count,
+                    "classes_conducted": len(set(r.date for r in b_recs)),
+                    "attendance_rate": round((b_present / b_total * 100) if b_total > 0 else 0, 1)
+                })
+                
+            # Student Details (Only if specific batch)
+            if str(filter.batch_id).lower() != 'all':
+                students = db.query(
+                    StudentDB.name, StudentDB.phone, StudentDB.email, StudentDB.id
+                ).join(BatchStudentDB, BatchStudentDB.student_id == StudentDB.id)\
+                 .filter(BatchStudentDB.batch_id == int(filter.batch_id)).all()
+                 
+                for s in students:
+                    s_recs = [r for r in records if r.student_id == s.id]
+                    s_present = sum(1 for r in s_recs if r.status.lower() == 'present')
+                    s_total = len(s_recs)
+                    student_details.append({
+                        "name": s.name,
+                        "phone": s.phone,
+                        "email": s.email,
+                        "classes_assigned": s_total, 
+                        "classes_attended": s_present,
+                        "classes_absent": s_total - s_present,
+                        "attendance_percentage": round((s_present / s_total * 100) if s_total > 0 else 0, 1)
+                    })
+
+        elif filter.type == 'fee':
+            # FEE LOGIC
+            query = db.query(FeeDB).filter(
+                FeeDB.due_date >= start_date,
+                FeeDB.due_date <= end_date,
+                FeeDB.batch_id.in_(target_batch_ids)
+            )
+            fees = query.all()
+            
+            total_expected = sum(f.amount for f in fees)
+            fee_ids = [f.id for f in fees]
+            payments = db.query(FeePaymentDB).filter(FeePaymentDB.fee_id.in_(fee_ids)).all()
+            total_collected = sum(p.amount for p in payments)
+            
+            pending_amount = total_expected - total_collected
+            if pending_amount < 0: pending_amount = 0
+            
+            overdue_amt = sum(f.amount for f in fees if f.status == 'overdue') 
+            
+            student_count_query = db.query(BatchStudentDB).filter(
+                BatchStudentDB.batch_id.in_(target_batch_ids),
+                BatchStudentDB.status.in_(['approved', 'active'])
+            )
+            total_students = student_count_query.count()
+
+            overview = {
+                "total_students": total_students,
+                "total_expected": total_expected,
+                "total_collected": total_collected,
+                "pending_amount": pending_amount,
+                "overdue_amount": overdue_amt
+            }
+            
+            # Breakdown by Batch
+            for b_id in target_batch_ids:
+                b_fees = [f for f in fees if f.batch_id == b_id]
+                b_fee_ids = [f.id for f in b_fees]
+                b_payments = [p for p in payments if p.fee_id in b_fee_ids]
+                
+                b_expected = sum(f.amount for f in b_fees)
+                b_collected = sum(p.amount for p in b_payments)
+                b_pending_count = sum(1 for f in b_fees if f.status != 'paid')
+                
+                b_stud_count = db.query(BatchStudentDB).filter(
+                    BatchStudentDB.batch_id == b_id,
+                    BatchStudentDB.status.in_(['approved', 'active'])
+                ).count()
+
+                breakdown.append({
+                    "name": batch_map.get(b_id, "Unknown"),
+                    "total_students": b_stud_count,
+                    "expected": b_expected,
+                    "collected": b_collected,
+                    "pending_count": b_pending_count
+                })
+
+            # Student Details
+            if str(filter.batch_id).lower() != 'all':
+                students = db.query(
+                    StudentDB.name, StudentDB.phone, StudentDB.email, StudentDB.id
+                ).join(BatchStudentDB, BatchStudentDB.student_id == StudentDB.id)\
+                 .filter(BatchStudentDB.batch_id == int(filter.batch_id)).all()
+                 
+                for s in students:
+                    s_fees = [f for f in fees if f.student_id == s.id]
+                    s_expected = sum(f.amount for f in s_fees)
+                    s_collected_ids = [f.id for f in s_fees]
+                    s_collected = sum(p.amount for p in payments if p.fee_id in s_collected_ids)
+                    
+                    s_status = "Paid"
+                    if s_collected < s_expected:
+                        s_status = "Pending"
+                        if any(f.status == 'overdue' for f in s_fees):
+                             s_status = "Overdue"
+                    if s_expected == 0:
+                        s_status = "N/A"
+
+                    student_details.append({
+                        "name": s.name,
+                        "phone": s.phone,
+                        "email": s.email,
+                        "total_fee": s_expected,
+                        "amount_paid": s_collected,
+                        "pending_amount": max(0, s_expected - s_collected),
+                        "payment_status": s_status
+                    })
+
+        elif filter.type == 'performance':
+            # PERFORMANCE LOGIC
+            from sqlalchemy import func
+            query = db.query(PerformanceDB).filter(
+                PerformanceDB.date >= start_date,
+                PerformanceDB.date <= end_date,
+                PerformanceDB.batch_id.in_(target_batch_ids)
+            )
+            reviews = query.all()
+            
+            # Average Ratings (Overall for the selection)
+            avg_overall = db.query(func.avg(PerformanceDB.rating)).filter(
+                PerformanceDB.date >= start_date,
+                PerformanceDB.date <= end_date,
+                PerformanceDB.batch_id.in_(target_batch_ids)
+            ).scalar() or 0
+            
+            # Group reviews by (batch_id, student_id)
+            student_reviews_map = {}
+            for r in reviews:
+                key = (r.batch_id, r.student_id)
+                if key not in student_reviews_map:
+                    student_reviews_map[key] = []
+                student_reviews_map[key].append(r)
+
+            # Get students for each batch
+            batch_students = db.query(BatchStudentDB, StudentDB).join(
+                StudentDB, StudentDB.id == BatchStudentDB.student_id
+            ).filter(
+                BatchStudentDB.batch_id.in_(target_batch_ids),
+                BatchStudentDB.status.in_(['approved', 'active'])
+            ).all()
+
+            # Process all students by batch
+            batch_results = {} # batch_id -> list of student performances
+            for bs, s in batch_students:
+                if bs.batch_id not in batch_results:
+                    batch_results[bs.batch_id] = []
+                
+                s_recs = student_reviews_map.get((bs.batch_id, s.id), [])
+                
+                # Aggregate by skill
+                skill_scores = {}
+                for r in s_recs:
+                    if r.skill not in skill_scores:
+                        skill_scores[r.skill] = []
+                    skill_scores[r.skill].append(r.rating)
+                
+                skill_averages = {skill: round(sum(scores)/len(scores), 1) for skill, scores in skill_scores.items()}
+                # Map standard skill names if they exist, or just use what we have
+                # Standard skills from frontend: Serve, Smash, Footwork, Defense, Stamina
+                
+                overall_avg = round(sum(r.rating for r in s_recs)/len(s_recs), 1) if s_recs else 0
+                
+                batch_results[bs.batch_id].append({
+                    "id": s.id,
+                    "name": s.name,
+                    "phone": s.phone,
+                    "email": s.email,
+                    "skill_breakdown": skill_averages,
+                    "average_rating": overall_avg,
+                    "reviews_count": len(s_recs),
+                    "last_review": s_recs[-1].date if s_recs else "N/A"
+                })
+
+            # Overview (For summary count context)
+            all_skill_scores = {}
+            for r in reviews:
+                if r.skill not in all_skill_scores:
+                    all_skill_scores[r.skill] = []
+                all_skill_scores[r.skill].append(r.rating)
+            
+            skill_averages_overall = {skill: round(sum(scores)/len(scores), 1) for skill, scores in all_skill_scores.items()}
+
+            overview = {
+                "total_students": len(batch_students),
+                "reviews_count": len(reviews),
+                "students_reviewed": len(student_reviews_map),
+                "average_rating": round(float(avg_overall), 1),
+                "skill_averages": skill_averages_overall
+            }
+            
+            # Breakdown (Batch summaries + student details)
+            breakdown = []
+            for b_id in target_batch_ids:
+                b_studs = batch_results.get(b_id, [])
+                if not b_studs: continue
+                
+                reviewed_studs = [s for s in b_studs if s['reviews_count'] > 0]
+                b_avg = sum(s['average_rating'] for s in reviewed_studs) / len(reviewed_studs) if reviewed_studs else 0
+                
+                breakdown.append({
+                    "id": b_id,
+                    "name": batch_map.get(b_id, "Unknown"),
+                    "total_students": len(b_studs),
+                    "reviews_count": sum(s['reviews_count'] for s in b_studs),
+                    "average_rating": round(b_avg, 1),
+                    "students": b_studs 
+                })
+
+            # Flat student details for Backward Compatibility
+            if str(filter.batch_id).lower() != 'all':
+                student_details = batch_results.get(int(filter.batch_id), [])
+            else:
+                for b_id in target_batch_ids:
+                    student_details.extend(batch_results.get(b_id, []))
+
+        # 4. Generate Trend Data (Time Series for Line Chart)
+        trend_data = {"labels": [], "values": []}
+        if filter.filter_type in ['year', 'season']:
+            monthly_groups = {} # YYYY-MM -> stats
+            
+            if filter.type == 'attendance':
+                for r in records:
+                    m = r.date[:7]
+                    if m not in monthly_groups: monthly_groups[m] = {"p": 0, "t": 0}
+                    monthly_groups[m]["t"] += 1
+                    if r.status.lower() == 'present': monthly_groups[m]["p"] += 1
+                
+                sorted_months = sorted(monthly_groups.keys())
+                trend_data = {
+                    "labels": sorted_months,
+                    "values": [round((monthly_groups[m]["p"] / monthly_groups[m]["t"] * 100), 1) for m in sorted_months]
+                }
+            elif filter.type == 'fee':
+                for f in fees:
+                    m = f.due_date[:7]
+                    if m not in monthly_groups: monthly_groups[m] = {"c": 0}
+                    # Get payments for this fee and check their dates? 
+                    # For simplicity, we use fee due date month and aggregate its collected amount
+                    f_payments = [p.amount for p in payments if p.fee_id == f.id]
+                    monthly_groups[m]["c"] += sum(f_payments)
+                
+                sorted_months = sorted(monthly_groups.keys())
+                trend_data = {
+                    "labels": sorted_months,
+                    "values": [monthly_groups[m]["c"] for m in sorted_months]
+                }
+            elif filter.type == 'performance':
+                for r in reviews:
+                    m = r.date[:7]
+                    if m not in monthly_groups: monthly_groups[m] = {"r": 0, "c": 0}
+                    monthly_groups[m]["r"] += r.rating
+                    monthly_groups[m]["c"] += 1
+                
+                sorted_months = sorted(monthly_groups.keys())
+                trend_data = {
+                    "labels": sorted_months,
+                    "values": [round(monthly_groups[m]["r"] / monthly_groups[m]["c"], 1) for m in sorted_months]
+                }
+
+        # 5. Final Response Construction
+        generated_by = f"{filter.generated_by_name} ({filter.generated_by_role})"
+        
+        return {
+            "period": filter_summary,
+            "generated_on": datetime.now().strftime("%d %b %Y, %I:%M %p"),
+            "generated_by": generated_by,
+            "filter_summary": filter_summary,
+            "overview": overview,
+            "breakdown": breakdown,
+            "student_details": student_details,
+            "report_type": filter.type,
+            "chart_data": {
+                "labels": [b['name'] for b in breakdown],
+                "values": [b.get('attendance_rate') or b.get('collected') or b.get('average_rating') or 0 for b in breakdown]
+            },
+            "trend_data": trend_data
+        }
+
+    except Exception as e:
+        print(f"Error generating report: {e}")
+        data = traceback.format_exc()
+        print(data)
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+# ==================== Server ====================
+
+
+# ==================== Report History Endpoints ====================
+
+class SaveReportHistoryRequest(BaseModel):
+    report_type: str
+    filter_summary: str
+    report_data: Dict[str, Any]
+    key_metrics: Optional[Dict[str, Any]] = None
+    user_id: int
+    user_role: str
+
+@app.post("/api/reports/history")
+def save_report_history(request: SaveReportHistoryRequest):
+    """Save generated report to history"""
+    db = SessionLocal()
+    try:
+        history_entry = ReportHistoryDB(
+            user_id=request.user_id,
+            user_role=request.user_role,
+            report_type=request.report_type,
+            filter_summary=request.filter_summary,
+            report_data=request.report_data,
+            key_metrics=request.key_metrics
+        )
+        
+        db.add(history_entry)
+        db.commit()
+        db.refresh(history_entry)
+        
+        return {"status": "success", "id": history_entry.id}
+    except Exception as e:
+        db.rollback()
+        print(f"Error saving report history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.get("/api/reports/history")
+def get_report_history(
+    user_id: int = Query(..., description="User ID to fetch history for"),
+    user_role: str = Query(..., description="User Role (owner, coach)")
+):
+    """Get report history for specific user"""
+    db = SessionLocal()
+    try:
+        history = db.query(ReportHistoryDB).filter(
+            ReportHistoryDB.user_id == user_id,
+            ReportHistoryDB.user_role == user_role
+        ).order_by(ReportHistoryDB.generated_on.desc()).all()
+        return history
+    except Exception as e:
+        print(f"Error fetching report history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
 # ==================== Server ====================
 
 if __name__ == "__main__":
@@ -7534,10 +8576,19 @@ if __name__ == "__main__":
         # Don't crash if watcher fails
         print(f"[Schema Watcher] Could not start: {e}")
     
-    print("🚀 Starting Badminton Academy Management System API...")
-    print("📖 API Documentation (Local): http://127.0.0.1:8001/docs")
-    print("📖 API Documentation (Network): http://192.168.1.4:8001/docs")
-    print("📊 Alternative Docs: http://127.0.0.1:8001/redoc")
-    print("📱 Mobile devices can connect to: http://192.168.1.4:8001")
+    print("Starting Badminton Academy Management System API...")
+    print("API Documentation (Local): http://127.0.0.1:8001/docs")
+    print("API Documentation (Network): http://192.168.1.4:8001/docs")
+    print("Alternative Docs: http://127.0.0.1:8001/redoc")
+    print("Mobile devices can connect to: http://192.168.1.4:8001")
     # host="0.0.0.0" allows connections from any device on the network
+    
+    # Start background cleanup scheduler
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(cleanup_inactive_records, 'interval', days=1)
+    scheduler.start()
+    print("Background cleanup scheduler started (Daily).")
+    
     uvicorn.run(app, host="0.0.0.0", port=8001)
+
+

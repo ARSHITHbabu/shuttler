@@ -182,6 +182,9 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
   }
 
   Widget _buildAddForm() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -210,7 +213,7 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppDimensions.paddingL),
+        padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -363,12 +366,15 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
   Widget _buildSessionList() {
     final statusFilter = _selectedTab == 'active' ? 'active' : 'archived';
     final sessionsAsync = ref.watch(sessionListProvider(status: statusFilter));
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
 
     return Column(
       children: [
         // Tabs
         Container(
-          margin: const EdgeInsets.all(AppDimensions.paddingL),
+          margin: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
+          padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
             color: AppColors.cardBackground,
             borderRadius: BorderRadius.circular(AppDimensions.radiusM),
@@ -382,6 +388,7 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
                   onTap: () => setState(() => _selectedTab = 'active'),
                 ),
               ),
+              const SizedBox(width: 4),
               Expanded(
                 child: _TabButton(
                   label: 'Archived',
@@ -438,7 +445,7 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
                 }
 
                 return ListView.builder(
-                  padding: const EdgeInsets.all(AppDimensions.paddingL),
+                  padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
                   itemCount: sessions.length,
                   itemBuilder: (context, index) {
                     final session = sessions[index];
@@ -478,7 +485,7 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
             'Batches in ${session.name}',
             style: const TextStyle(color: AppColors.textPrimary),
           ),
-          content: Container(
+          content: SizedBox(
             width: double.maxFinite,
             child: seasonBatches.isEmpty
                 ? const Text(
@@ -626,8 +633,11 @@ class _SeasonCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+    
     return NeumorphicContainer(
-      padding: const EdgeInsets.all(AppDimensions.paddingM),
+      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingS : AppDimensions.paddingM),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -639,8 +649,8 @@ class _SeasonCard extends StatelessWidget {
                   children: [
                     Text(
                       session.name,
-                      style: const TextStyle(
-                        fontSize: 18,
+                      style: TextStyle(
+                        fontSize: isSmallScreen ? 16 : 18,
                         fontWeight: FontWeight.w600,
                         color: AppColors.textPrimary,
                       ),
@@ -648,17 +658,20 @@ class _SeasonCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       '${DateFormat('dd MMM, yyyy').format(session.startDate)} - ${DateFormat('dd MMM, yyyy').format(session.endDate)}',
-                      style: const TextStyle(
-                        fontSize: 14,
+                      style: TextStyle(
+                        fontSize: isSmallScreen ? 12 : 14,
                         color: AppColors.textSecondary,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppDimensions.spacingS,
+                padding: EdgeInsets.symmetric(
+                  horizontal: isSmallScreen ? 6 : AppDimensions.spacingS,
                   vertical: 4,
                 ),
                 decoration: BoxDecoration(
@@ -676,18 +689,26 @@ class _SeasonCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: AppDimensions.spacingM),
+          SizedBox(height: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM),
           Wrap(
             alignment: WrapAlignment.end,
-            spacing: AppDimensions.spacingS,
-            runSpacing: AppDimensions.spacingS,
+            spacing: isSmallScreen ? 4 : AppDimensions.spacingS,
+            runSpacing: isSmallScreen ? 4 : AppDimensions.spacingS,
             children: [
               TextButton.icon(
                 onPressed: onViewBatches,
                 icon: const Icon(Icons.list, size: 16, color: AppColors.textSecondary),
-                label: const Text(
-                  'View Batches',
-                  style: TextStyle(color: AppColors.textSecondary),
+                label: Text(
+                  isSmallScreen ? 'Batches' : 'View Batches',
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                ),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isSmallScreen ? 6 : 8,
+                    vertical: 4,
+                  ),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
               ),
               TextButton.icon(
@@ -695,7 +716,15 @@ class _SeasonCard extends StatelessWidget {
                 icon: const Icon(Icons.edit, size: 16, color: AppColors.accent),
                 label: const Text(
                   'Edit',
-                  style: TextStyle(color: AppColors.accent),
+                  style: TextStyle(color: AppColors.accent, fontSize: 12),
+                ),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isSmallScreen ? 6 : 8,
+                    vertical: 4,
+                  ),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
               ),
               TextButton.icon(
@@ -703,7 +732,15 @@ class _SeasonCard extends StatelessWidget {
                 icon: const Icon(Icons.delete, size: 16, color: AppColors.error),
                 label: const Text(
                   'Delete',
-                  style: TextStyle(color: AppColors.error),
+                  style: TextStyle(color: AppColors.error, fontSize: 12),
+                ),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isSmallScreen ? 6 : 8,
+                    vertical: 4,
+                  ),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
               ),
             ],

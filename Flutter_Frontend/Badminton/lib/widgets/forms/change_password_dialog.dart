@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
-import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/utils/validators.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/neumorphic_button.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/success_snackbar.dart';
-import '../../providers/auth_provider.dart';
 import '../../providers/service_providers.dart';
 
 /// Reusable dialog for changing password
@@ -205,12 +203,15 @@ class _ChangePasswordDialogState extends ConsumerState<ChangePasswordDialog> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        'Change Password',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
-                          color: textPrimaryColor,
+                      Expanded(
+                        child: Text(
+                          'Change Password',
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w600,
+                            color: textPrimaryColor,
+                          ),
                         ),
                       ),
                       IconButton(

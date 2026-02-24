@@ -13,6 +13,7 @@ import '../../providers/auth_provider.dart';
 import 'dart:io' if (dart.library.html) '../../utils/dart_io_stub.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/constants/api_endpoints.dart';
 import '../../widgets/video/video_player_dialog.dart';
 import '../../utils/file_download_helper_stub.dart'
@@ -35,7 +36,7 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
   List<int> _selectedTargetIds = [];
   String _audienceType = 'student'; // 'all', 'batch', 'student'
   List<Student> _batchStudents = [];
-  List<Batch> _batches = [];
+  final List<Batch> _batches = [];
   List<VideoResource> _videos = [];
   Map<int, String> _uploaderNames = {}; 
   bool _loadingStudents = false;
@@ -321,38 +322,53 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
           SuccessSnackbar.show(context, 'Video download started');
         }
       } else {
-        final directoryPath = await getApplicationDocumentsPath();
-        if (directoryPath == null) {
+        // Mobile/Desktop download: Use url_launcher to hand off to system browser
+        final Uri videoUri = Uri.parse(fullUrl);
+        
+        if (await canLaunchUrl(videoUri)) {
+          await launchUrl(videoUri, mode: LaunchMode.externalApplication);
           if (mounted) {
             setState(() {
               _isDownloading = false;
               _downloadingVideoId = null;
             });
-            SuccessSnackbar.showError(context, 'Download directory not available');
+            SuccessSnackbar.show(context, 'Opening download in browser...');
           }
-          return;
-        }
-
-        final directory = Directory(directoryPath);
-        if (!await directory.exists()) await directory.create(recursive: true);
-        final filePath = '${directory.path}/$fileName';
-
-        await dio.download(
-          fullUrl,
-          filePath,
-          onReceiveProgress: (received, total) {
-            if (total != -1 && mounted) {
-              setState(() => _downloadProgress = received / total);
+        } else {
+          // Fallback to internal storage
+          final directoryPath = await getApplicationDocumentsPath();
+          if (directoryPath == null) {
+            if (mounted) {
+              setState(() {
+                _isDownloading = false;
+                _downloadingVideoId = null;
+              });
+              SuccessSnackbar.showError(context, 'Download directory not available');
             }
-          },
-        );
+            return;
+          }
 
-        if (mounted) {
-          setState(() {
-            _isDownloading = false;
-            _downloadingVideoId = null;
-          });
-          SuccessSnackbar.show(context, 'Video downloaded to $directoryPath');
+          final directory = Directory(directoryPath);
+          if (!await directory.exists()) await directory.create(recursive: true);
+          final filePath = '${directory.path}/$fileName';
+
+          await dio.download(
+            fullUrl,
+            filePath,
+            onReceiveProgress: (received, total) {
+              if (total != -1 && mounted) {
+                setState(() => _downloadProgress = received / total);
+              }
+            },
+          );
+
+          if (mounted) {
+            setState(() {
+              _isDownloading = false;
+              _downloadingVideoId = null;
+            });
+            SuccessSnackbar.show(context, 'Video saved to $directoryPath');
+          }
         }
       }
     } catch (e) {
@@ -751,7 +767,7 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
           data: (batches) => NeumorphicContainer(
             padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
             child: DropdownButtonFormField<int>(
-              value: _selectedBatchId,
+              initialValue: _selectedBatchId,
               decoration: const InputDecoration(border: InputBorder.none, hintText: 'Select a batch'),
               dropdownColor: isDark ? AppColors.cardBackground : AppColorsLight.cardBackground,
               items: batches.map((batch) => DropdownMenuItem(value: batch.id, child: Text(batch.name))).toList(),

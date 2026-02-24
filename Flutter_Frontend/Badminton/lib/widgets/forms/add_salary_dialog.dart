@@ -101,124 +101,158 @@ class _AddSalaryDialogState extends State<AddSalaryDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isSmallScreen = screenWidth < 600;
+    final dialogPadding = isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL;
+    
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppDimensions.radiusM)),
-      child: Padding(
-        padding: const EdgeInsets.all(AppDimensions.paddingL),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Record Salary Payment',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
+      insetPadding: EdgeInsets.symmetric(
+        horizontal: isSmallScreen ? 16 : 40,
+        vertical: 24,
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: screenHeight * 0.85,
+          maxWidth: isSmallScreen ? screenWidth - 32 : 500,
+        ),
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(dialogPadding),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Record Salary Payment',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                    fontSize: isSmallScreen ? 18 : 22,
+                  ),
                 ),
-              ),
-              const SizedBox(height: AppDimensions.spacingS),
-              Text(
-                'For Coach: ${widget.coachName}',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              if (widget.initialAmount != null && widget.initialAmount! > 0) ...[
                 const SizedBox(height: AppDimensions.spacingS),
                 Text(
-                  'Suggested: \$${widget.initialAmount!.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    color: AppColors.primary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                  'For Coach: ${widget.coachName}',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppColors.textSecondary,
+                    fontSize: isSmallScreen ? 13 : 14,
                   ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ],
-              const SizedBox(height: AppDimensions.spacingL),
-              
-              // Amount Field
-              CustomTextField(
-                controller: _amountController,
-                label: 'Amount (\$)',
-                hint: 'Enter amount',
-                keyboardType: TextInputType.number,
-                prefixIcon: Icons.attach_money,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter amount';
-                  }
-                  if (double.tryParse(value) == null) {
-                    return 'Please enter a valid number';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: AppDimensions.spacingM),
-              
-              // Date Picker
-              InkWell(
-                onTap: () => _selectDate(context),
-                borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppDimensions.paddingM,
-                    vertical: AppDimensions.paddingM,
-                  ),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.border),
-                    borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.calendar_today, size: 20, color: AppColors.textSecondary),
-                      const SizedBox(width: AppDimensions.spacingM),
-                      Text(
-                        DateFormat('dd MMM, yyyy').format(_selectedDate),
-                        style: const TextStyle(color: AppColors.textPrimary),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: AppDimensions.spacingM),
-              
-              // Remarks
-              CustomTextField(
-                controller: _remarksController,
-                label: 'Remarks (Optional)',
-                hint: 'Add any notes',
-                maxLines: 2,
-              ),
-              const SizedBox(height: AppDimensions.spacingL),
-              
-              // Actions
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
-                  const SizedBox(width: AppDimensions.spacingM),
-                  ElevatedButton(
-                    onPressed: _isSubmitting ? null : _handleSubmit,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
+                if (widget.initialAmount != null && widget.initialAmount! > 0) ...[
+                  const SizedBox(height: AppDimensions.spacingS),
+                  Text(
+                    'Suggested: \$${widget.initialAmount!.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      color: AppColors.primary,
+                      fontSize: isSmallScreen ? 11 : 12,
+                      fontWeight: FontWeight.w600,
                     ),
-                    child: _isSubmitting 
-                      ? const SizedBox(
-                          width: 20, 
-                          height: 20, 
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)
-                        )
-                      : const Text('Save Record'),
                   ),
                 ],
-              ),
-            ],
+                SizedBox(height: isSmallScreen ? AppDimensions.spacingM : AppDimensions.spacingL),
+                
+                // Amount Field
+                CustomTextField(
+                  controller: _amountController,
+                  label: 'Amount (\$)',
+                  hint: 'Enter amount',
+                  keyboardType: TextInputType.number,
+                  prefixIcon: Icons.attach_money,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter amount';
+                    }
+                    if (double.tryParse(value) == null) {
+                      return 'Please enter a valid number';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: AppDimensions.spacingM),
+                
+                // Date Picker
+                InkWell(
+                  onTap: () => _selectDate(context),
+                  borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isSmallScreen ? AppDimensions.paddingS : AppDimensions.paddingM,
+                      vertical: isSmallScreen ? AppDimensions.paddingS : AppDimensions.paddingM,
+                    ),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.calendar_today, size: 20, color: AppColors.textSecondary),
+                        const SizedBox(width: AppDimensions.spacingM),
+                        Flexible(
+                          child: Text(
+                            DateFormat('dd MMM, yyyy').format(_selectedDate),
+                            style: TextStyle(
+                              color: AppColors.textPrimary,
+                              fontSize: isSmallScreen ? 14 : 16,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppDimensions.spacingM),
+                
+                // Remarks
+                CustomTextField(
+                  controller: _remarksController,
+                  label: 'Remarks (Optional)',
+                  hint: 'Add any notes',
+                  maxLines: 2,
+                ),
+                SizedBox(height: isSmallScreen ? AppDimensions.spacingM : AppDimensions.spacingL),
+                
+                // Actions
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text(
+                        'Cancel',
+                        style: TextStyle(fontSize: isSmallScreen ? 13 : 14),
+                      ),
+                    ),
+                    SizedBox(width: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM),
+                    ElevatedButton(
+                      onPressed: _isSubmitting ? null : _handleSubmit,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: isSmallScreen ? 12 : 16,
+                          vertical: isSmallScreen ? 8 : 12,
+                        ),
+                      ),
+                      child: _isSubmitting 
+                        ? const SizedBox(
+                            width: 20, 
+                            height: 20, 
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)
+                          )
+                        : Text(
+                            'Save Record',
+                            style: TextStyle(fontSize: isSmallScreen ? 13 : 14),
+                          ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

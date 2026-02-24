@@ -6,6 +6,7 @@ import 'routes/app_router.dart';
 import 'providers/theme_provider.dart';
 import 'providers/service_providers.dart';
 import 'widgets/common/offline_indicator.dart';
+import 'widgets/common/app_logo.dart';
 
 void main() async {
   // Ensure Flutter is initialized
@@ -42,7 +43,7 @@ class _MyAppState extends ConsumerState<MyApp> {
 
     return OfflineIndicator(
       child: MaterialApp.router(
-        title: 'Badminton Academy',
+        title: 'Pursue Badminton',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,
@@ -64,14 +65,12 @@ class PlaceholderScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.sports_tennis,
-              size: 80,
-              color: Theme.of(context).colorScheme.primary,
+            const AppLogo(
+              height: 120,
             ),
             const SizedBox(height: 24),
             Text(
-              'Badminton Academy',
+              'Pursue Badminton',
               style: Theme.of(context).textTheme.displaySmall,
             ),
             const SizedBox(height: 16),

@@ -12,7 +12,9 @@ class BatchList extends _$BatchList {
   @override
   Future<List<Batch>> build() async {
     final batchService = ref.watch(batchServiceProvider);
-    return batchService.getBatches();
+    final batches = await batchService.getBatches(status: 'all');
+    // Sort by ID descending (latest first)
+    return batches..sort((a, b) => b.id.compareTo(a.id));
   }
 
   /// Refresh batch list
@@ -20,7 +22,9 @@ class BatchList extends _$BatchList {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
       final batchService = ref.read(batchServiceProvider);
-      return batchService.getBatches();
+      final batches = await batchService.getBatches(status: 'all');
+      // Sort by ID descending (latest first)
+      return batches..sort((a, b) => b.id.compareTo(a.id));
     });
   }
 
@@ -46,7 +50,7 @@ class BatchList extends _$BatchList {
     }
   }
 
-  /// Delete a batch
+  /// Delete a batch (Soft delete - logic varies, we use deactivate for soft delete)
   Future<void> deleteBatch(int id) async {
     try {
       final batchService = ref.read(batchServiceProvider);
@@ -54,6 +58,47 @@ class BatchList extends _$BatchList {
       await refresh();
     } catch (e) {
       throw Exception('Failed to delete batch: $e');
+    }
+  }
+
+  /// Deactivate a batch (Soft delete)
+  Future<void> deactivateBatch(int id) async {
+    try {
+      final batchService = ref.read(batchServiceProvider);
+      await batchService.deactivateBatch(id);
+      
+      ref.invalidate(dashboardStatsProvider);
+      await refresh();
+    } catch (e) {
+      throw Exception('Failed to deactivate batch: $e');
+    }
+  }
+
+  /// Remove a batch permanently (Hard delete)
+  Future<void> removeStudentPermanently(int id) async {
+    // Note: I named it removeStudentPermanently in frontend for students, 
+    // it should be removeBatchPermanently here for consistency with the backend service.
+    try {
+      final batchService = ref.read(batchServiceProvider);
+      await batchService.removeBatchPermanently(id);
+      
+      ref.invalidate(dashboardStatsProvider);
+      await refresh();
+    } catch (e) {
+      throw Exception('Failed to remove batch permanently: $e');
+    }
+  }
+
+  /// Remove a batch permanently (Hard delete) - Correct name
+  Future<void> removeBatchPermanently(int id) async {
+    try {
+      final batchService = ref.read(batchServiceProvider);
+      await batchService.removeBatchPermanently(id);
+      
+      ref.invalidate(dashboardStatsProvider);
+      await refresh();
+    } catch (e) {
+      throw Exception('Failed to remove batch permanently: $e');
     }
   }
 
@@ -103,9 +148,10 @@ Future<List<Student>> batchStudents(BatchStudentsRef ref, int batchId) async {
   return batchService.getBatchStudents(batchId);
 }
 
-/// Provider for student batches (batches a student is enrolled in)
 @riverpod
 Future<List<Batch>> studentBatches(StudentBatchesRef ref, int studentId) async {
   final batchService = ref.watch(batchServiceProvider);
-  return batchService.getStudentBatches(studentId);
+  final batches = await batchService.getStudentBatches(studentId);
+  // Sort by ID descending (latest first)
+  return batches..sort((a, b) => b.id.compareTo(a.id));
 }

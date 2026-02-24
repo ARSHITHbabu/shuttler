@@ -4,7 +4,7 @@ import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../providers/service_providers.dart';
-import '../../providers/student_provider.dart';
+import '../../providers/owner_provider.dart';
 import '../../core/utils/contact_utils.dart';
 
 class AcademyInfoScreen extends ConsumerWidget {

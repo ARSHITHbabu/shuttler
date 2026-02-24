@@ -247,7 +247,13 @@ class _StudentFeesViewState extends ConsumerState<StudentFeesView> {
                   const SizedBox(width: 8),
                   const Text('/', style: TextStyle(color: AppColors.textTertiary)),
                   const SizedBox(width: 8),
-                  Text(group.batchName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary)),
+                  Flexible(
+                    child: Text(
+                      group.batchName,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -273,7 +279,7 @@ class _StudentFeesViewState extends ConsumerState<StudentFeesView> {
             if (filteredStudents.isEmpty)
               const Center(child: Padding(padding: EdgeInsets.all(32), child: Text('No students match filter', style: TextStyle(color: AppColors.textSecondary))))
             else
-              ...filteredStudents.map((s) => _buildStudentFeeRow(s)).toList(),
+              ...filteredStudents.map((s) => _buildStudentFeeRow(s)),
           ],
         );
       },

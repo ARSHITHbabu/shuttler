@@ -1,6 +1,5 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../models/student.dart';
-import '../models/owner.dart';
 import '../models/coach.dart';
 import '../models/schedule.dart';
 import '../utils/batch_time_utils.dart';
@@ -63,7 +62,7 @@ class StudentList extends _$StudentList {
     }
   }
 
-  /// Delete a student
+  /// Delete a student (Soft delete - logic varies, we use deactivate for soft delete)
   Future<void> deleteStudent(int id) async {
     try {
       final studentService = ref.read(studentServiceProvider);
@@ -77,6 +76,70 @@ class StudentList extends _$StudentList {
       await refresh();
     } catch (e) {
       throw Exception('Failed to delete student: $e');
+    }
+  }
+
+  /// Deactivate a student (Soft delete)
+  Future<void> deactivateStudent(int id) async {
+    try {
+      final studentService = ref.read(studentServiceProvider);
+      await studentService.deactivateStudent(id);
+
+      // Invalidate related providers
+      ref.invalidate(studentByIdProvider(id));
+      ref.invalidate(dashboardStatsProvider);
+
+      await refresh();
+    } catch (e) {
+      throw Exception('Failed to deactivate student: $e');
+    }
+  }
+
+  /// Remove a student permanently (Hard delete)
+  Future<void> removeStudentPermanently(int id) async {
+    try {
+      final studentService = ref.read(studentServiceProvider);
+      await studentService.removeStudentPermanently(id);
+
+      // Invalidate related providers
+      ref.invalidate(studentByIdProvider(id));
+      ref.invalidate(studentBatchesProvider(id));
+      ref.invalidate(dashboardStatsProvider);
+
+      await refresh();
+    } catch (e) {
+      throw Exception('Failed to remove student permanently: $e');
+    }
+  }
+
+  /// Request to rejoin
+  Future<void> requestRejoin(int id) async {
+    try {
+      final studentService = ref.read(studentServiceProvider);
+      await studentService.requestRejoin(id);
+      
+      // Since this is called during login, we don't necessarily need to refresh 
+      // the list for the owner, but it's good practice
+      ref.invalidate(studentByIdProvider(id));
+      await refresh();
+    } catch (e) {
+      throw Exception('Failed to request rejoin: $e');
+    }
+  }
+
+  /// Approve rejoin request
+  Future<void> approveRejoin(int id) async {
+    try {
+      final studentService = ref.read(studentServiceProvider);
+      await studentService.approveRejoin(id);
+
+      // Invalidate related providers
+      ref.invalidate(studentByIdProvider(id));
+      ref.invalidate(dashboardStatsProvider);
+
+      await refresh();
+    } catch (e) {
+      throw Exception('Failed to approve rejoin request: $e');
     }
   }
 }
@@ -327,16 +390,6 @@ Future<List<Schedule>> studentSchedules(
   return allSchedules;
 }
 
-/// Provider for the active owner
-@riverpod
-Future<Owner?> activeOwner(ActiveOwnerRef ref) async {
-  final ownerService = ref.watch(ownerServiceProvider);
-  final owners = await ownerService.getOwners();
-  if (owners.isNotEmpty) {
-    return owners.first; // Return the first owner for now
-  }
-  return null;
-}
 
 /// Provider for student's coaches
 @riverpod

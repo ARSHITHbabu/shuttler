@@ -10,7 +10,7 @@ import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/profile_image_picker.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/service_providers.dart';
-import '../../providers/student_provider.dart';
+import '../../providers/owner_provider.dart';
 import 'package:dio/dio.dart';
 
 /// Academy Setup Screen - Initial academy configuration

@@ -710,25 +710,6 @@ class _StudentSchedulesProviderElement
   int get studentId => (origin as StudentSchedulesProvider).studentId;
 }
 
-String _$activeOwnerHash() => r'e65c9d28770bb1d88721700290f88983170fa7a5';
-
-/// Provider for the active owner
-///
-/// Copied from [activeOwner].
-@ProviderFor(activeOwner)
-final activeOwnerProvider = AutoDisposeFutureProvider<Owner?>.internal(
-  activeOwner,
-  name: r'activeOwnerProvider',
-  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
-      ? null
-      : _$activeOwnerHash,
-  dependencies: null,
-  allTransitiveDependencies: null,
-);
-
-@Deprecated('Will be removed in 3.0. Use Ref instead')
-// ignore: unused_element
-typedef ActiveOwnerRef = AutoDisposeFutureProviderRef<Owner?>;
 String _$studentCoachesHash() => r'e7b1968d320002b42381dc181e3d11be957435c0';
 
 /// Provider for student's coaches
@@ -861,7 +842,7 @@ class _StudentCoachesProviderElement
   int get studentId => (origin as StudentCoachesProvider).studentId;
 }
 
-String _$studentListHash() => r'34ee8a637f622f49796dd3b3f756b2629273a38d';
+String _$studentListHash() => r'ddfb84c1761b1083a67f708c72ddd15a950a84ae';
 
 /// Provider for student list state
 ///
