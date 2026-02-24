@@ -7,7 +7,6 @@ import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
-import '../../core/utils/contact_utils.dart';
 import '../../providers/coach_provider.dart';
 import '../../providers/batch_provider.dart';
 import '../../models/coach.dart';

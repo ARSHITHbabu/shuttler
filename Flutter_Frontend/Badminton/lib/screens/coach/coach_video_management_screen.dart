@@ -36,7 +36,7 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
   List<int> _selectedTargetIds = [];
   String _audienceType = 'student'; // 'all', 'batch', 'student'
   List<Student> _batchStudents = [];
-  List<Batch> _batches = [];
+  final List<Batch> _batches = [];
   List<VideoResource> _videos = [];
   Map<int, String> _uploaderNames = {}; 
   bool _loadingStudents = false;
@@ -767,7 +767,7 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
           data: (batches) => NeumorphicContainer(
             padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
             child: DropdownButtonFormField<int>(
-              value: _selectedBatchId,
+              initialValue: _selectedBatchId,
               decoration: const InputDecoration(border: InputBorder.none, hintText: 'Select a batch'),
               dropdownColor: isDark ? AppColors.cardBackground : AppColorsLight.cardBackground,
               items: batches.map((batch) => DropdownMenuItem(value: batch.id, child: Text(batch.name))).toList(),

@@ -9,7 +9,6 @@ import '../../../providers/service_providers.dart';
 import '../../../providers/student_provider.dart';
 import '../../../providers/batch_provider.dart';
 import '../../../models/student.dart';
-import '../../../core/services/fee_service.dart';
 import '../../../core/services/batch_enrollment_service.dart';
 import '../../common/error_widget.dart';
 import '../../common/skeleton_screen.dart';

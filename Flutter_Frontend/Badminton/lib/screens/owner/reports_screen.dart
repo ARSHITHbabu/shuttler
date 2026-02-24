@@ -756,7 +756,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                     padding: const EdgeInsets.only(top: 8.0),
                     child: Text(
                       labels[value.toInt()].length > 8 
-                        ? labels[value.toInt()].substring(0, 6) + '..' 
+                        ? '${labels[value.toInt()].substring(0, 6)}..' 
                         : labels[value.toInt()],
                       style: const TextStyle(fontSize: 10),
                     ),
@@ -1218,7 +1218,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
           List.generate(labels.length, (i) => i.toDouble()),
           format: (v) {
              final label = labels[v.toInt()];
-             return label.length > 8 ? label.substring(0, 7) + ".." : label;
+             return label.length > 8 ? "${label.substring(0, 7)}.." : label;
           },
           textStyle: const pw.TextStyle(fontSize: 6),
           angle: labels.length > 5 ? 0.3 : 0, // Slight slant if many

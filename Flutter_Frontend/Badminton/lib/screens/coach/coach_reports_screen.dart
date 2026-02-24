@@ -263,10 +263,12 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
                   )),
                 ],
                 onChanged: (val) {
-                  if (val != null) setState(() {
+                  if (val != null) {
+                    setState(() {
                     _selectedBatchId = val;
                     _reportData = null;
                   });
+                  }
                 },
               ),
             ),

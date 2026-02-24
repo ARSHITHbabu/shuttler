@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../core/utils/contact_utils.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
@@ -9,11 +8,9 @@ import '../../core/utils/canadian_holidays.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/error_widget.dart';
-import '../../models/schedule.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/student_provider.dart';
 import '../../providers/owner_provider.dart';
-import '../../providers/service_providers.dart';
 import 'student_attendance_screen.dart';
 import 'student_performance_screen.dart';
 import 'student_bmi_screen.dart';

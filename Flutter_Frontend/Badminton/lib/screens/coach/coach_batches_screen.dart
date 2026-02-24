@@ -6,15 +6,11 @@ import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
-import '../../widgets/common/success_snackbar.dart';
 import '../../providers/coach_provider.dart';
 import '../../providers/auth_provider.dart';
-import '../../providers/batch_provider.dart';
-import '../../providers/student_provider.dart';
 import '../../widgets/dialogs/batch_details_dialog.dart';
 import '../../widgets/batch/batch_students_sheet.dart';
 import '../../models/batch.dart';
-import '../../models/student.dart';
 
 /// Coach Batches Screen - View assigned batches (READ-ONLY)
 class CoachBatchesScreen extends ConsumerStatefulWidget {
