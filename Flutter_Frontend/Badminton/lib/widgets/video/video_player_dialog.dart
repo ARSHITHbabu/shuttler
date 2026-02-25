@@ -34,11 +34,13 @@ class _VideoPlayerDialogState extends State<VideoPlayerDialog> {
 
   Future<void> _initializePlayer() async {
     try {
+      debugPrint('Initializing VideoPlayer with URL: ${widget.videoUrl}');
       _controller = VideoPlayerController.networkUrl(
         Uri.parse(widget.videoUrl),
       );
 
       await _controller.initialize();
+      debugPrint('VideoPlayer initialized successfully');
 
       if (mounted) {
         setState(() => _isInitialized = true);
@@ -47,7 +49,9 @@ class _VideoPlayerDialogState extends State<VideoPlayerDialog> {
         // Add listener for playback state
         _controller.addListener(_onVideoStateChange);
       }
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('VIDEO PLAYER INITIALIZATION ERROR: $e');
+      debugPrint('STACK TRACE: $stack');
       if (mounted) {
         setState(() {
           _hasError = true;

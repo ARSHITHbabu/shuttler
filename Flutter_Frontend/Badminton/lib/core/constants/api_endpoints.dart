@@ -10,13 +10,15 @@ class ApiEndpoints {
     }
     // Use your computer's local network IP address
     // Run get_local_ip.ps1 to find your current IP address
+    // Current IP: 192.168.1.11 (updated automatically)
+    return 'http://192.168.1.11:8001';
     // Current IP: 192.168.1.7 (updated automatically)
     return 'http://192.168.1.7:8001';
   }
 
   // Authentication
-  static const String login = '/api/auth/login';
-  static const String register = '/api/auth/register';
+  static const String login = '/auth/login';
+  static const String register = '/auth/register';
   static const String changePassword = '/auth/change-password';
   static const String forgotPassword = '/auth/forgot-password';
   static const String resetPassword = '/auth/reset-password';
@@ -109,6 +111,15 @@ class ApiEndpoints {
   // Calendar Events (NEW)
   static const String calendarEvents = '/api/calendar-events/';
   static String calendarEventById(int id) => '/api/calendar-events/$id';
+
+  // Video streaming and handling (Modified to support Range requests)
+  static String videoStreamUrl(String videoPath) {
+    if (videoPath.startsWith('/uploads/')) {
+      final filename = videoPath.replaceFirst('/uploads/', '');
+      return '/video-stream/$filename';
+    }
+    return videoPath;
+  }
 
   // Image Upload (NEW)
   static const String uploadImage = '/api/upload/image';

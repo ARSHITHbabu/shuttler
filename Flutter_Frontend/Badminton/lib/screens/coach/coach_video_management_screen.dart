@@ -15,7 +15,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/constants/api_endpoints.dart';
-import '../../widgets/video/video_player_dialog.dart';
+import '../../widgets/video/video_player_page.dart';
 import '../../utils/file_download_helper_stub.dart'
     if (dart.library.html) '../../utils/file_download_helper_web.dart';
 import '../../utils/path_helper.dart';
@@ -278,14 +278,17 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
   }
 
   void _playVideo(VideoResource video) {
-    final fullUrl = '${ApiEndpoints.baseUrl}${video.url}';
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => VideoPlayerDialog(
-        videoUrl: fullUrl,
-        title: video.displayTitle,
-        remarks: video.remarks,
+    debugPrint('PLAY VIDEO BUTTON PRESSED for video: ${video.id}');
+    final streamPath = ApiEndpoints.videoStreamUrl(video.url);
+    final fullUrl = '${ApiEndpoints.baseUrl}$streamPath';
+    debugPrint('Full Video URL passed to page: $fullUrl');
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => VideoPlayerPage(
+          videoUrl: fullUrl,
+          title: video.displayTitle,
+          remarks: video.remarks,
+        ),
       ),
     );
   }
@@ -322,11 +325,19 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
           SuccessSnackbar.show(context, 'Video download started');
         }
       } else {
-        // Mobile/Desktop download: Use url_launcher to hand off to system browser
+        // Mobile/Desktop download: Attempt to hand off to system browser, fallback to manual download if it fails
         final Uri videoUri = Uri.parse(fullUrl);
         
-        if (await canLaunchUrl(videoUri)) {
-          await launchUrl(videoUri, mode: LaunchMode.externalApplication);
+        bool launched = false;
+        try {
+          if (await canLaunchUrl(videoUri)) {
+            launched = await launchUrl(videoUri, mode: LaunchMode.externalApplication);
+          }
+        } catch (e) {
+          debugPrint('url_launcher failed: $e');
+        }
+
+        if (launched) {
           if (mounted) {
             setState(() {
               _isDownloading = false;

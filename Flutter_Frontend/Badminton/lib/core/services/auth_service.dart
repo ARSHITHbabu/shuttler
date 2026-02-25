@@ -82,7 +82,7 @@ class AuthService {
   }) async {
     try {
       final response = await _apiService.post(
-        '/auth/login',
+        ApiEndpoints.login,
         data: {
           'email': email,
           'password': password,
