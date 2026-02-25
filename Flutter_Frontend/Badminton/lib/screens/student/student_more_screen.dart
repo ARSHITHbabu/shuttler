@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../providers/auth_provider.dart';
@@ -16,6 +15,8 @@ import 'student_videos_screen.dart';
 import '../common/academy_info_screen.dart';
 import '../owner/notifications_screen.dart';
 import '../../providers/owner_provider.dart';
+import '../../core/utils/theme_colors.dart';
+import '../../widgets/common/standard_page_header.dart';
 
 /// Student More Screen - Navigation hub for additional features
 /// All features are READ-ONLY for students
@@ -31,139 +32,112 @@ class _StudentMoreScreenState extends ConsumerState<StudentMoreScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
     if (_currentView != null) {
       return _buildSubScreen();
     }
 
     return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(AppDimensions.paddingL),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            Text(
-              'More',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
-                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-              ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          StandardPageHeader(
+            title: 'More',
+            subtitle: ref.watch(activeOwnerProvider).maybeWhen(
+              data: (owner) => owner?.academyName,
+              orElse: () => null,
             ),
-            ref.watch(activeOwnerProvider).when(
-                  data: (owner) => owner?.academyName != null
-                      ? Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            owner!.academyName!,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: isDark ? AppColors.accent : AppColorsLight.accent,
-                            ),
-                          ),
-                        )
-                      : const SizedBox.shrink(),
-                  loading: () => const SizedBox.shrink(),
-                  error: (_, __) => const SizedBox.shrink(),
+          ),
+
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: AppDimensions.getScreenPadding(context)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Information Section (READ-ONLY)
+                const _SectionTitle(title: 'Information'),
+                const SizedBox(height: AppDimensions.spacingM),
+                _MenuItem(
+                  icon: Icons.campaign_outlined,
+                  title: 'Announcements',
+                  subtitle: 'View academy announcements',
+                  onTap: () => setState(() => _currentView = 'announcements'),
                 ),
-            const SizedBox(height: AppDimensions.spacingL),
+                const SizedBox(height: AppDimensions.spacingS),
+                _MenuItem(
+                  icon: Icons.notifications_none_outlined,
+                  title: 'Notifications',
+                  subtitle: 'View your alerts and updates',
+                  onTap: () => setState(() => _currentView = 'notifications'),
+                ),
+                const SizedBox(height: AppDimensions.spacingS),
+                _MenuItem(
+                  icon: Icons.business_outlined,
+                  title: 'Academy Details',
+                  subtitle: 'View academy and owner information',
+                  onTap: () => setState(() => _currentView = 'academy'),
+                ),
+                const SizedBox(height: AppDimensions.spacingS),
+                _MenuItem(
+                  icon: Icons.monitor_weight_outlined,
+                  title: 'BMI Tracker',
+                  subtitle: 'View your BMI history and health tips',
+                  onTap: () => setState(() => _currentView = 'bmi'),
+                ),
+                const SizedBox(height: AppDimensions.spacingS),
+                _MenuItem(
+                  icon: Icons.payments_outlined,
+                  title: 'Fee Status',
+                  subtitle: 'View your fee records and payment history',
+                  onTap: () => setState(() => _currentView = 'fees'),
+                ),
+                const SizedBox(height: AppDimensions.spacingS),
+                _MenuItem(
+                  icon: Icons.calendar_today_outlined,
+                  title: 'Schedule',
+                  subtitle: 'View your session schedule',
+                  onTap: () => setState(() => _currentView = 'schedule'),
+                ),
+                const SizedBox(height: AppDimensions.spacingS),
+                _MenuItem(
+                  icon: Icons.group_outlined,
+                  title: 'Batches',
+                  subtitle: 'View your enrolled batches',
+                  onTap: () => setState(() => _currentView = 'batches'),
+                ),
+                const SizedBox(height: AppDimensions.spacingS),
+                _MenuItem(
+                  icon: Icons.video_library_outlined,
+                  title: 'Training Videos',
+                  subtitle: 'View videos uploaded by your coach',
+                  onTap: () => setState(() => _currentView = 'videos'),
+                ),
 
-            // Information Section (READ-ONLY)
-            _SectionTitle(title: 'Information', isDark: isDark),
-            const SizedBox(height: AppDimensions.spacingM),
-            _MenuItem(
-              icon: Icons.campaign_outlined,
-              title: 'Announcements',
-              subtitle: 'View academy announcements',
-              isDark: isDark,
-              onTap: () => setState(() => _currentView = 'announcements'),
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.notifications_none_outlined,
-              title: 'Notifications',
-              subtitle: 'View your alerts and updates',
-              isDark: isDark,
-              onTap: () => setState(() => _currentView = 'notifications'),
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.business_outlined,
-              title: 'Academy Details',
-              subtitle: 'View academy and owner information',
-              isDark: isDark,
-              onTap: () => setState(() => _currentView = 'academy'),
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.monitor_weight_outlined,
-              title: 'BMI Tracker',
-              subtitle: 'View your BMI history and health tips',
-              isDark: isDark,
-              onTap: () => setState(() => _currentView = 'bmi'),
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.payments_outlined,
-              title: 'Fee Status',
-              subtitle: 'View your fee records and payment history',
-              isDark: isDark,
-              onTap: () => setState(() => _currentView = 'fees'),
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.calendar_today_outlined,
-              title: 'Schedule',
-              subtitle: 'View your session schedule',
-              isDark: isDark,
-              onTap: () => setState(() => _currentView = 'schedule'),
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.group_outlined,
-              title: 'Batches',
-              subtitle: 'View your enrolled batches',
-              isDark: isDark,
-              onTap: () => setState(() => _currentView = 'batches'),
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.video_library_outlined,
-              title: 'Training Videos',
-              subtitle: 'View videos uploaded by your coach',
-              isDark: isDark,
-              onTap: () => setState(() => _currentView = 'videos'),
-            ),
+                const SizedBox(height: AppDimensions.spacingL),
 
-            const SizedBox(height: AppDimensions.spacingL),
+                // App Section
+                const _SectionTitle(title: 'App'),
+                const SizedBox(height: AppDimensions.spacingM),
+                _MenuItem(
+                  icon: Icons.settings_outlined,
+                  title: 'Settings',
+                  subtitle: 'App preferences and notifications',
+                  onTap: () => setState(() => _currentView = 'settings'),
+                ),
+                const SizedBox(height: AppDimensions.spacingS),
+                _MenuItem(
+                  icon: Icons.logout,
+                  title: 'Logout',
+                  subtitle: 'Sign out of your account',
+                  isDestructive: true,
+                  onTap: () => _showLogoutConfirmation(),
+                ),
 
-            // App Section
-            _SectionTitle(title: 'App', isDark: isDark),
-            const SizedBox(height: AppDimensions.spacingM),
-            _MenuItem(
-              icon: Icons.settings_outlined,
-              title: 'Settings',
-              subtitle: 'App preferences and notifications',
-              isDark: isDark,
-              onTap: () => setState(() => _currentView = 'settings'),
+                const SizedBox(height: 100), // Space for bottom nav
+              ],
             ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.logout,
-              title: 'Logout',
-              subtitle: 'Sign out of your account',
-              isDark: isDark,
-              isDestructive: true,
-              onTap: () => _showLogoutConfirmation(isDark),
-            ),
-
-            const SizedBox(height: 100), // Space for bottom nav
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -216,31 +190,25 @@ class _StudentMoreScreenState extends ConsumerState<StudentMoreScreen> {
     }
   }
 
-  void _showLogoutConfirmation(bool isDark) {
+  void _showLogoutConfirmation() {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: isDark ? AppColors.cardBackground : AppColorsLight.cardBackground,
+        backgroundColor: context.cardBackgroundColor,
         title: Text(
           'Logout',
-          style: TextStyle(
-            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-          ),
+          style: TextStyle(color: context.textPrimaryColor),
         ),
         content: Text(
           'Are you sure you want to logout?',
-          style: TextStyle(
-            color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-          ),
+          style: TextStyle(color: context.textSecondaryColor),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
             child: Text(
               'Cancel',
-              style: TextStyle(
-                color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-              ),
+              style: TextStyle(color: context.textSecondaryColor),
             ),
           ),
           TextButton(
@@ -255,9 +223,7 @@ class _StudentMoreScreenState extends ConsumerState<StudentMoreScreen> {
             },
             child: Text(
               'Logout',
-              style: TextStyle(
-                color: isDark ? AppColors.error : AppColorsLight.error,
-              ),
+              style: TextStyle(color: context.errorColor),
             ),
           ),
         ],
@@ -268,17 +234,16 @@ class _StudentMoreScreenState extends ConsumerState<StudentMoreScreen> {
 
 class _SectionTitle extends StatelessWidget {
   final String title;
-  final bool isDark;
 
-  const _SectionTitle({required this.title, required this.isDark});
+  const _SectionTitle({required this.title});
 
   @override
   Widget build(BuildContext context) {
     return Text(
       title,
       style: TextStyle(
-        fontSize: 14,
-        color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+        fontSize: AppDimensions.getSectionTitleSize(context),
+        color: context.textSecondaryColor,
         fontWeight: FontWeight.w500,
       ),
     );
@@ -289,7 +254,6 @@ class _MenuItem extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
-  final bool isDark;
   final VoidCallback onTap;
   final bool isDestructive;
 
@@ -297,7 +261,6 @@ class _MenuItem extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.subtitle,
-    required this.isDark,
     required this.onTap,
     this.isDestructive = false,
   });
@@ -314,15 +277,15 @@ class _MenuItem extends StatelessWidget {
             height: 40,
             decoration: BoxDecoration(
               color: isDestructive
-                  ? (isDark ? AppColors.error : AppColorsLight.error).withValues(alpha: 0.1)
-                  : (isDark ? AppColors.accent : AppColorsLight.accent).withValues(alpha: 0.1),
+                  ? context.errorColor.withValues(alpha: 0.1)
+                  : context.accentColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(AppDimensions.radiusM),
             ),
             child: Icon(
               icon,
               color: isDestructive
-                  ? (isDark ? AppColors.error : AppColorsLight.error)
-                  : (isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary),
+                  ? context.errorColor
+                  : context.iconPrimaryColor,
               size: 20,
             ),
           ),
@@ -337,15 +300,15 @@ class _MenuItem extends StatelessWidget {
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
                     color: isDestructive
-                        ? (isDark ? AppColors.error : AppColorsLight.error)
-                        : (isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
+                        ? context.errorColor
+                        : context.textPrimaryColor,
                   ),
                 ),
                 Text(
                   subtitle,
                   style: TextStyle(
                     fontSize: 12,
-                    color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                    color: context.textSecondaryColor,
                   ),
                 ),
               ],
@@ -353,7 +316,7 @@ class _MenuItem extends StatelessWidget {
           ),
           Icon(
             Icons.chevron_right,
-            color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
+            color: context.textTertiaryColor,
             size: 20,
           ),
         ],

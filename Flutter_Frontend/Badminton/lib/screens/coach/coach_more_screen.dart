@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../providers/auth_provider.dart';
@@ -16,6 +15,8 @@ import 'leave_request_screen.dart';
 import 'coach_reports_screen.dart';
 import '../owner/notifications_screen.dart';
 import '../../providers/owner_provider.dart';
+import '../../core/utils/theme_colors.dart';
+import '../../widgets/common/standard_page_header.dart';
 
 /// Coach More Screen - Navigation hub for additional features
 class CoachMoreScreen extends ConsumerStatefulWidget {
@@ -28,233 +29,199 @@ class CoachMoreScreen extends ConsumerStatefulWidget {
 class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
     return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(AppDimensions.paddingL),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            Text(
-              'More',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
-                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-              ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header
+          StandardPageHeader(
+            title: 'More',
+            subtitle: ref.watch(activeOwnerProvider).maybeWhen(
+              data: (owner) => owner?.academyName,
+              orElse: () => null,
             ),
-            ref.watch(activeOwnerProvider).when(
-                  data: (owner) => owner?.academyName != null
-                      ? Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            owner!.academyName!,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: isDark ? AppColors.accent : AppColorsLight.accent,
-                            ),
-                          ),
-                        )
-                      : const SizedBox.shrink(),
-                  loading: () => const SizedBox.shrink(),
-                  error: (_, __) => const SizedBox.shrink(),
+          ),
+
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: AppDimensions.getScreenPadding(context)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Information Section
+                const _SectionTitle(title: 'Information'),
+                const SizedBox(height: AppDimensions.spacingM),
+                _MenuItem(
+                  icon: Icons.campaign_outlined,
+                  title: 'Announcements',
+                  subtitle: 'View academy announcements',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const CoachAnnouncementsScreen(),
+                      ),
+                    );
+                  },
                 ),
-            const SizedBox(height: AppDimensions.spacingL),
+                const SizedBox(height: AppDimensions.spacingS),
+                _MenuItem(
+                  icon: Icons.notifications_none_outlined,
+                  title: 'Notifications',
+                  subtitle: 'View your alerts and updates',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const NotificationsScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: AppDimensions.spacingS),
+                _MenuItem(
+                  icon: Icons.monitor_weight_outlined,
+                  title: 'BMI Tracking',
+                  subtitle: 'Track student BMI records',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const BMITrackingScreen(),
+                      ),
+                    );
+                  },
+                ),
 
-            // Information Section
-            _SectionTitle(title: 'Information', isDark: isDark),
-            const SizedBox(height: AppDimensions.spacingM),
-            _MenuItem(
-              icon: Icons.campaign_outlined,
-              title: 'Announcements',
-              subtitle: 'View academy announcements',
-              isDark: isDark,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const CoachAnnouncementsScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.notifications_none_outlined,
-              title: 'Notifications',
-              subtitle: 'View your alerts and updates',
-              isDark: isDark,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const NotificationsScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.monitor_weight_outlined,
-              title: 'BMI Tracking',
-              subtitle: 'Track student BMI records',
-              isDark: isDark,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const BMITrackingScreen(),
-                  ),
-                );
-              },
-            ),
+                const SizedBox(height: AppDimensions.spacingS),
+                _MenuItem(
+                  icon: Icons.payments_outlined,
+                  title: 'Fees Management',
+                  subtitle: 'Manage student fees',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const CoachFeesScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: AppDimensions.spacingS),
+                _MenuItem(
+                  icon: Icons.trending_up_outlined,
+                  title: 'Performance Tracking',
+                  subtitle: 'Track student performance',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const PerformanceTrackingScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: AppDimensions.spacingS),
+                _MenuItem(
+                  icon: Icons.calendar_today_outlined,
+                  title: 'Schedule',
+                  subtitle: 'View sessions, holidays, and academy events',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const CoachScheduleScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: AppDimensions.spacingS),
+                _MenuItem(
+                  icon: Icons.video_library_outlined,
+                  title: 'Video Management',
+                  subtitle: 'Upload and manage training videos',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const CoachVideoManagementScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: AppDimensions.spacingS),
+                _MenuItem(
+                  icon: Icons.event_busy_outlined,
+                  title: 'Requests',
+                  subtitle: 'Submit and view leave requests',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const LeaveRequestScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: AppDimensions.spacingS),
+                _MenuItem(
+                  icon: Icons.assessment_outlined,
+                  title: 'Reports',
+                  subtitle: 'Generate attendance and performance reports',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const CoachReportsScreen(),
+                      ),
+                    );
+                  },
+                ),
 
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.payments_outlined,
-              title: 'Fees Management',
-              subtitle: 'Manage student fees',
-              isDark: isDark,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const CoachFeesScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.trending_up_outlined,
-              title: 'Performance Tracking',
-              subtitle: 'Track student performance',
-              isDark: isDark,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const PerformanceTrackingScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.calendar_today_outlined,
-              title: 'Schedule',
-              subtitle: 'View sessions, holidays, and academy events',
-              isDark: isDark,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const CoachScheduleScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.video_library_outlined,
-              title: 'Video Management',
-              subtitle: 'Upload and manage training videos',
-              isDark: isDark,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const CoachVideoManagementScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.event_busy_outlined,
-              title: 'Requests',
-              subtitle: 'Submit and view leave requests',
-              isDark: isDark,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const LeaveRequestScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.assessment_outlined,
-              title: 'Reports',
-              subtitle: 'Generate attendance and performance reports',
-              isDark: isDark,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const CoachReportsScreen(),
-                  ),
-                );
-              },
-            ),
+                const SizedBox(height: AppDimensions.spacingL),
 
-            const SizedBox(height: AppDimensions.spacingL),
+                // App Section
+                const _SectionTitle(title: 'App'),
+                const SizedBox(height: AppDimensions.spacingM),
+                _MenuItem(
+                  icon: Icons.settings_outlined,
+                  title: 'Settings',
+                  subtitle: 'App preferences and notifications',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const CoachSettingsScreen(),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: AppDimensions.spacingS),
+                _MenuItem(
+                  icon: Icons.logout,
+                  title: 'Logout',
+                  subtitle: 'Sign out of your account',
+                  isDestructive: true,
+                  onTap: () => _showLogoutConfirmation(),
+                ),
 
-            // App Section
-            _SectionTitle(title: 'App', isDark: isDark),
-            const SizedBox(height: AppDimensions.spacingM),
-            _MenuItem(
-              icon: Icons.settings_outlined,
-              title: 'Settings',
-              subtitle: 'App preferences and notifications',
-              isDark: isDark,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const CoachSettingsScreen(),
-                  ),
-                );
-              },
+                const SizedBox(height: 100), // Space for bottom nav
+              ],
             ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.logout,
-              title: 'Logout',
-              subtitle: 'Sign out of your account',
-              isDark: isDark,
-              isDestructive: true,
-              onTap: () => _showLogoutConfirmation(isDark),
-            ),
-
-            const SizedBox(height: 100), // Space for bottom nav
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  void _showLogoutConfirmation(bool isDark) {
+  void _showLogoutConfirmation() {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: isDark ? AppColors.cardBackground : AppColorsLight.cardBackground,
+        backgroundColor: context.cardBackgroundColor,
         title: Text(
           'Logout',
-          style: TextStyle(
-            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-          ),
+          style: TextStyle(color: context.textPrimaryColor),
         ),
         content: Text(
           'Are you sure you want to logout?',
-          style: TextStyle(
-            color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-          ),
+          style: TextStyle(color: context.textSecondaryColor),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
             child: Text(
               'Cancel',
-              style: TextStyle(
-                color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-              ),
+              style: TextStyle(color: context.textSecondaryColor),
             ),
           ),
           TextButton(
@@ -269,9 +236,7 @@ class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
             },
             child: Text(
               'Logout',
-              style: TextStyle(
-                color: isDark ? AppColors.error : AppColorsLight.error,
-              ),
+              style: TextStyle(color: context.errorColor),
             ),
           ),
         ],
@@ -282,17 +247,16 @@ class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
 
 class _SectionTitle extends StatelessWidget {
   final String title;
-  final bool isDark;
 
-  const _SectionTitle({required this.title, required this.isDark});
+  const _SectionTitle({required this.title});
 
   @override
   Widget build(BuildContext context) {
     return Text(
       title,
       style: TextStyle(
-        fontSize: 14,
-        color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+        fontSize: AppDimensions.getSectionTitleSize(context),
+        color: context.textSecondaryColor,
         fontWeight: FontWeight.w500,
       ),
     );
@@ -303,7 +267,6 @@ class _MenuItem extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
-  final bool isDark;
   final VoidCallback onTap;
   final bool isDestructive;
 
@@ -311,7 +274,6 @@ class _MenuItem extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.subtitle,
-    required this.isDark,
     required this.onTap,
     this.isDestructive = false,
   });
@@ -328,15 +290,15 @@ class _MenuItem extends StatelessWidget {
             height: 40,
             decoration: BoxDecoration(
               color: isDestructive
-                  ? (isDark ? AppColors.error : AppColorsLight.error).withValues(alpha: 0.1)
-                  : (isDark ? AppColors.accent : AppColorsLight.accent).withValues(alpha: 0.1),
+                  ? context.errorColor.withValues(alpha: 0.1)
+                  : context.accentColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(AppDimensions.radiusM),
             ),
             child: Icon(
               icon,
               color: isDestructive
-                  ? (isDark ? AppColors.error : AppColorsLight.error)
-                  : (isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary),
+                  ? context.errorColor
+                  : context.iconPrimaryColor,
               size: 20,
             ),
           ),
@@ -351,15 +313,15 @@ class _MenuItem extends StatelessWidget {
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
                     color: isDestructive
-                        ? (isDark ? AppColors.error : AppColorsLight.error)
-                        : (isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
+                        ? context.errorColor
+                        : context.textPrimaryColor,
                   ),
                 ),
                 Text(
                   subtitle,
                   style: TextStyle(
                     fontSize: 12,
-                    color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                    color: context.textSecondaryColor,
                   ),
                 ),
               ],
@@ -367,7 +329,7 @@ class _MenuItem extends StatelessWidget {
           ),
           Icon(
             Icons.chevron_right,
-            color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
+            color: context.textTertiaryColor,
             size: 20,
           ),
         ],

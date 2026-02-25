@@ -29,8 +29,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final statsAsync = ref.watch(dashboardStatsProvider);
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isSmallScreen = screenWidth < 600;
+    final padding = AppDimensions.getScreenPadding(context);
+    final titleSize = AppDimensions.getPageTitleSize(context);
+    final sectionTitleSize = AppDimensions.getSectionTitleSize(context);
+    final isSmallScreen = MediaQuery.of(context).size.width < 600;
 
     return RefreshIndicator(
       onRefresh: () async {
@@ -39,87 +41,87 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       },
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Padding(
-            padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Welcome back,',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: context.textSecondaryColor,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Standardized Header Section
+            Padding(
+              padding: EdgeInsets.all(padding),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Welcome back,',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: context.textSecondaryColor,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                ref.watch(activeOwnerProvider).when(
-                      data: (owner) => Text(
-                        owner?.academyName ?? 'Pursue Badminton',
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 20 : 24,
-                          fontWeight: FontWeight.w600,
-                          color: context.textPrimaryColor,
-                        ),
-                      ),
-                      loading: () => Container(
-                        height: 28,
-                        width: 150,
-                        decoration: BoxDecoration(
-                          color: context.cardBackgroundColor,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                      error: (_, __) => Text(
-                        'Pursue Badminton',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w600,
-                          color: context.textPrimaryColor,
-                        ),
+                  const SizedBox(height: 4),
+                  ref.watch(activeOwnerProvider).when(
+                    data: (owner) => Text(
+                      owner?.academyName ?? 'Pursue Badminton',
+                      style: TextStyle(
+                        fontSize: titleSize,
+                        fontWeight: FontWeight.w600,
+                        color: context.textPrimaryColor,
                       ),
                     ),
-                const SizedBox(height: 4),
-                Text(
-                  _getFormattedDate(),
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: context.textSecondaryColor,
-                  ),
-                ),
-                // Holiday Indicator
-                if (CanadianHolidays.isHoliday(DateTime.now())) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: context.errorColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-                      border: Border.all(color: context.errorColor.withOpacity(0.3)),
+                    loading: () => Container(
+                      height: 28,
+                      width: 150,
+                      decoration: BoxDecoration(
+                        color: context.cardBackgroundColor,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.celebration, size: 16, color: context.errorColor),
-                        const SizedBox(width: 8),
-                        Text(
-                          CanadianHolidays.getHolidayName(DateTime.now())!,
-                          style: TextStyle(
-                            color: context.errorColor,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
+                    error: (_, __) => Text(
+                      'Pursue Badminton',
+                      style: TextStyle(
+                        fontSize: titleSize,
+                        fontWeight: FontWeight.w600,
+                        color: context.textPrimaryColor,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _getFormattedDate(),
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: context.textSecondaryColor,
+                    ),
+                  ),
+                  // Holiday Indicator
+                  if (CanadianHolidays.isHoliday(DateTime.now())) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: context.errorColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                        border: Border.all(color: context.errorColor.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.celebration, size: 16, color: context.errorColor),
+                          const SizedBox(width: 8),
+                          Text(
+                            CanadianHolidays.getHolidayName(DateTime.now())!,
+                            style: TextStyle(
+                              color: context.errorColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
 
           // Stats Grid
           statsAsync.when(

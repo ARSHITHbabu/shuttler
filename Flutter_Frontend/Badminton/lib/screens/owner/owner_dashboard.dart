@@ -5,12 +5,14 @@ import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/owner_navigation_provider.dart';
+import '../../widgets/common/standard_bottom_nav.dart';
 import '../../widgets/owner/force_change_password_dialog.dart';
 import 'home_screen.dart';
 import 'batches_screen.dart';
 import 'attendance_screen.dart';
 import 'fees_screen.dart';
 import 'more_screen.dart';
+import '../../core/utils/theme_colors.dart';
 
 /// Owner Dashboard with bottom navigation
 /// Matches React reference: OwnerDashboard.tsx
@@ -52,31 +54,24 @@ class _OwnerDashboardState extends ConsumerState<OwnerDashboard> {
     const MoreScreen(),
   ];
 
-  final List<_BottomNavItem> _navItems = [
-    _BottomNavItem(icon: Icons.home, label: 'Home'),
-    _BottomNavItem(icon: Icons.groups, label: 'Batches'),
-    _BottomNavItem(icon: Icons.check_circle_outline, label: 'Attendance'),
-    _BottomNavItem(icon: Icons.payments_outlined, label: 'Fees'),
-    _BottomNavItem(icon: Icons.more_horiz, label: 'More'),
+  final List<StandardBottomNavItem> _navItems = [
+    StandardBottomNavItem(icon: Icons.home, label: 'Home'),
+    StandardBottomNavItem(icon: Icons.groups, label: 'Batches'),
+    StandardBottomNavItem(icon: Icons.check_circle_outline, label: 'Attendance'),
+    StandardBottomNavItem(icon: Icons.payments_outlined, label: 'Fees'),
+    StandardBottomNavItem(icon: Icons.more_horiz, label: 'More'),
   ];
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isSmallScreen = screenWidth < 600;
-
     final currentIndex = ref.watch(ownerBottomNavIndexProvider);
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final backgroundColor = theme.scaffoldBackgroundColor;
-    final surfaceColor = isDark ? AppColors.surfaceLight : AppColorsLight.surfaceLight;
-    final shadowColor = isDark ? AppColors.shadowDark : AppColorsLight.shadowDark;
+    final isDark = context.isDarkMode;
 
     return Scaffold(
-      backgroundColor: backgroundColor,
+      backgroundColor: context.backgroundColor,
       body: Container(
         decoration: BoxDecoration(
-          gradient: isDark ? AppColors.backgroundGradient : AppColorsLight.backgroundGradient,
+          gradient: context.backgroundGradient,
         ),
         child: SafeArea(
           child: Column(
@@ -88,96 +83,16 @@ class _OwnerDashboardState extends ConsumerState<OwnerDashboard> {
                 ),
               ),
 
-              // Bottom Navigation
-              Container(
-                decoration: BoxDecoration(
-                  color: backgroundColor,
-                  border: Border(
-                    top: BorderSide(
-                      color: surfaceColor,
-                      width: 1,
-                    ),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: shadowColor.withValues(alpha: 0.5),
-                      offset: const Offset(0, -4),
-                      blurRadius: 16,
-                    ),
-                  ],
-                ),
-                child: SafeArea(
-                  top: false,
-                  child: Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: AppDimensions.spacingXs,
-                      vertical: isSmallScreen ? 4 : AppDimensions.spacingS,
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: List.generate(
-                        _navItems.length,
-                        (index) => Expanded(
-                          child: _buildNavItem(index, currentIndex, isSmallScreen),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+              // Standardized Bottom Navigation
+              StandardBottomNav(
+                currentIndex: currentIndex,
+                items: _navItems,
+                onTap: (index) {
+                  ref.read(ownerBottomNavIndexProvider.notifier).state = index;
+                },
               ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavItem(int index, int currentIndex, bool isSmallScreen) {
-    final item = _navItems[index];
-    final isActive = currentIndex == index;
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final cardColor = isDark ? AppColors.cardBackground : AppColorsLight.cardBackground;
-    final activeColor = isDark ? AppColors.iconActive : AppColorsLight.iconActive;
-    final inactiveColor = isDark ? AppColors.textTertiary : AppColorsLight.textTertiary;
-
-    return GestureDetector(
-      onTap: () {
-        ref.read(ownerBottomNavIndexProvider.notifier).state = index;
-      },
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: isSmallScreen ? 4 : AppDimensions.paddingXs,
-          vertical: isSmallScreen ? 4 : AppDimensions.spacingXs,
-        ),
-        decoration: BoxDecoration(
-          color: isActive ? cardColor : Colors.transparent,
-          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-          boxShadow: isActive ? NeumorphicStyles.getPressedShadow() : null,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              item.icon,
-              size: 20,
-              color: isActive ? activeColor : inactiveColor,
-            ),
-            const SizedBox(height: 2),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                item.label,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: isActive ? activeColor : inactiveColor,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
         ),
       ),
     );

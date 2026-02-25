@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 /// App spacing and sizing constants
 class AppDimensions {
   // Spacing
@@ -65,6 +67,22 @@ class AppDimensions {
   // Max widths (for responsive design)
   static const double maxContentWidth = 600.0;
   static const double maxDialogWidth = 400.0;
+
+  // Responsive Helpers
+  static double getScreenPadding(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    return width < 600 ? paddingM : paddingL;
+  }
+
+  static double getPageTitleSize(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    return width < 600 ? 20.0 : 24.0;
+  }
+
+  static double getSectionTitleSize(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    return width < 600 ? 16.0 : 18.0;
+  }
 
   // Animation durations (milliseconds)
   static const int animationDurationFast = 200;

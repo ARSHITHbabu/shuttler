@@ -16,6 +16,8 @@ import 'video_management_screen.dart';
 import 'settings_screen.dart';
 import 'notifications_screen.dart';
 import 'requests_screen.dart';
+import '../../core/utils/theme_colors.dart';
+import '../../widgets/common/standard_page_header.dart';
 
 /// More Screen - Settings and additional features
 /// Matches React reference: MoreScreen.tsx
@@ -31,204 +33,200 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final padding = AppDimensions.getScreenPadding(context);
 
     if (_currentView != null) {
       return _buildSubScreen();
     }
 
     return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(AppDimensions.paddingL),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            Text(
-              'More',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
-                color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-              ),
-            ),
-            const SizedBox(height: AppDimensions.spacingL),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Standardized Header
+          const StandardPageHeader(title: 'More'),
 
-            // Information Section
-            _SectionTitle(title: 'Information', isDark: isDark),
-            const SizedBox(height: AppDimensions.spacingM),
-            _MenuItem(
-              icon: Icons.campaign_outlined,
-              title: 'Announcements',
-              subtitle: 'Manage academy announcements',
-              isDark: isDark,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const AnnouncementManagementScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.monitor_weight_outlined,
-              title: 'BMI Tracking',
-              subtitle: 'Track student BMI records',
-              isDark: isDark,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const BMITrackingScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.calendar_today_outlined,
-              title: 'Calendar',
-              subtitle: 'View academy calendar events',
-              isDark: isDark,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const CalendarViewScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.notifications_outlined,
-              title: 'Notifications',
-              subtitle: 'View and manage notifications',
-              isDark: isDark,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const NotificationsScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.trending_up_outlined,
-              title: 'Performance Tracking',
-              subtitle: 'Track student performance metrics',
-              isDark: isDark,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const PerformanceTrackingScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.video_library_outlined,
-              title: 'Videos',
-              subtitle: 'Manage training videos',
-              isDark: isDark,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const VideoManagementScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.access_time_outlined,
-              title: 'Practice Sessions',
-              subtitle: 'Manage practice, tournaments, and camps',
-              isDark: isDark,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const SessionManagementScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.description_outlined,
-              title: 'Reports',
-              subtitle: 'View academy reports and analytics',
-              isDark: isDark,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const ReportsScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.event_note_outlined,
-              title: 'Season Management',
-              subtitle: 'Manage academy seasons',
-              isDark: isDark,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const SessionSeasonManagementScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.assignment_outlined,
-              title: 'Requests',
-              subtitle: 'View and approve leave requests',
-              isDark: isDark,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const RequestsScreen(),
-                  ),
-                );
-              },
-            ),
+          const SizedBox(height: AppDimensions.spacingM),
 
-            const SizedBox(height: AppDimensions.spacingL),
+          // Information Section
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: padding),
+            child: const _SectionTitle(title: 'Information'),
+          ),
+          const SizedBox(height: AppDimensions.spacingM),
+          _MenuItem(
+            padding: padding,
+            icon: Icons.campaign_outlined,
+            title: 'Announcements',
+            subtitle: 'Manage academy announcements',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const AnnouncementManagementScreen(),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: AppDimensions.spacingS),
+          _MenuItem(
+            padding: padding,
+            icon: Icons.monitor_weight_outlined,
+            title: 'BMI Tracking',
+            subtitle: 'Track student BMI records',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const BMITrackingScreen(),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: AppDimensions.spacingS),
+          _MenuItem(
+            padding: padding,
+            icon: Icons.calendar_today_outlined,
+            title: 'Calendar',
+            subtitle: 'View academy calendar events',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const CalendarViewScreen(),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: AppDimensions.spacingS),
+          _MenuItem(
+            padding: padding,
+            icon: Icons.notifications_outlined,
+            title: 'Notifications',
+            subtitle: 'View and manage notifications',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const NotificationsScreen(),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: AppDimensions.spacingS),
+          _MenuItem(
+            padding: padding,
+            icon: Icons.trending_up_outlined,
+            title: 'Performance Tracking',
+            subtitle: 'Track student performance metrics',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const PerformanceTrackingScreen(),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: AppDimensions.spacingS),
+          _MenuItem(
+            padding: padding,
+            icon: Icons.video_library_outlined,
+            title: 'Videos',
+            subtitle: 'Manage training videos',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const VideoManagementScreen(),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: AppDimensions.spacingS),
+          _MenuItem(
+            padding: padding,
+            icon: Icons.access_time_outlined,
+            title: 'Practice Sessions',
+            subtitle: 'Manage practice, tournaments, and camps',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const SessionManagementScreen(),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: AppDimensions.spacingS),
+          _MenuItem(
+            padding: padding,
+            icon: Icons.description_outlined,
+            title: 'Reports',
+            subtitle: 'View academy reports and analytics',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const ReportsScreen(),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: AppDimensions.spacingS),
+          _MenuItem(
+            padding: padding,
+            icon: Icons.event_note_outlined,
+            title: 'Season Management',
+            subtitle: 'Manage academy seasons',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const SessionSeasonManagementScreen(),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: AppDimensions.spacingS),
+          _MenuItem(
+            padding: padding,
+            icon: Icons.assignment_outlined,
+            title: 'Requests',
+            subtitle: 'View and approve leave requests',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const RequestsScreen(),
+                ),
+              );
+            },
+          ),
 
-            // App Section
-            _SectionTitle(title: 'App', isDark: isDark),
-            const SizedBox(height: AppDimensions.spacingM),
-            _MenuItem(
-              icon: Icons.settings_outlined,
-              title: 'Settings',
-              subtitle: 'App preferences and notifications',
-              isDark: isDark,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const SettingsScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.logout,
-              title: 'Logout',
-              subtitle: 'Sign out of your account',
-              isDark: isDark,
-              isDestructive: true,
-              onTap: () => _showLogoutConfirmation(isDark),
-            ),
+          const SizedBox(height: AppDimensions.spacingL),
 
-            const SizedBox(height: 100), // Space for bottom nav
-          ],
-        ),
+          // App Section
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: padding),
+            child: const _SectionTitle(title: 'App'),
+          ),
+          const SizedBox(height: AppDimensions.spacingM),
+          _MenuItem(
+            padding: padding,
+            icon: Icons.settings_outlined,
+            title: 'Settings',
+            subtitle: 'App preferences and notifications',
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const SettingsScreen(),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: AppDimensions.spacingS),
+          _MenuItem(
+            padding: padding,
+            icon: Icons.logout,
+            title: 'Logout',
+            subtitle: 'Sign out of your account',
+            isDestructive: true,
+            onTap: () => _showLogoutConfirmation(),
+          ),
+
+          const SizedBox(height: 100), // Space for bottom nav
+        ],
       ),
     );
   }
@@ -251,39 +249,26 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
             });
           },
         );
-      // These are now handled via navigation, but keeping for backward compatibility
-      case 'sessions':
-      case 'announcements':
-      case 'calendar':
-      case 'settings':
-        return _PlaceholderView(
-          title: _currentView!.replaceFirst(_currentView![0], _currentView![0].toUpperCase()),
-          onBack: () {
-            setState(() {
-              _currentView = null;
-            });
-          },
-        );
       default:
         return const SizedBox();
     }
   }
 
-  void _showLogoutConfirmation(bool isDark) {
+  void _showLogoutConfirmation() {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        backgroundColor: isDark ? AppColors.cardBackground : AppColorsLight.cardBackground,
+        backgroundColor: context.cardBackgroundColor,
         title: Text(
           'Logout',
           style: TextStyle(
-            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+            color: context.textPrimaryColor,
           ),
         ),
         content: Text(
           'Are you sure you want to logout?',
           style: TextStyle(
-            color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+            color: context.textSecondaryColor,
           ),
         ),
         actions: [
@@ -292,15 +277,14 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
             child: Text(
               'Cancel',
               style: TextStyle(
-                color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                color: context.textSecondaryColor,
               ),
             ),
           ),
           TextButton(
             onPressed: () async {
-              final navigator = Navigator.of(dialogContext);
               final router = GoRouter.of(context);
-              navigator.pop();
+              Navigator.of(dialogContext).pop();
               await ref.read(authProvider.notifier).logout();
               if (mounted) {
                 router.go('/');
@@ -309,7 +293,7 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
             child: Text(
               'Logout',
               style: TextStyle(
-                color: isDark ? AppColors.error : AppColorsLight.error,
+                color: context.errorColor,
               ),
             ),
           ),
@@ -321,9 +305,8 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
 
 class _SectionTitle extends StatelessWidget {
   final String title;
-  final bool isDark;
 
-  const _SectionTitle({required this.title, required this.isDark});
+  const _SectionTitle({required this.title});
 
   @override
   Widget build(BuildContext context) {
@@ -331,7 +314,7 @@ class _SectionTitle extends StatelessWidget {
       title,
       style: TextStyle(
         fontSize: 14,
-        color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+        color: context.textSecondaryColor,
         fontWeight: FontWeight.w500,
       ),
     );
@@ -342,74 +325,75 @@ class _MenuItem extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
-  final bool isDark;
   final VoidCallback onTap;
   final bool isDestructive;
+  final double padding;
 
   const _MenuItem({
     required this.icon,
     required this.title,
     required this.subtitle,
-    required this.isDark,
     required this.onTap,
+    required this.padding,
     this.isDestructive = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return NeumorphicContainer(
-      padding: const EdgeInsets.all(AppDimensions.paddingM),
-      onTap: onTap,
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: isDestructive
-                  ? (isDark ? AppColors.error : AppColorsLight.error).withValues(alpha: 0.1)
-                  : (isDark ? AppColors.accent : AppColorsLight.accent).withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+    return Padding(
+      padding: EdgeInsets.fromLTRB(padding, 0, padding, AppDimensions.spacingS),
+      child: NeumorphicContainer(
+        padding: const EdgeInsets.all(AppDimensions.paddingM),
+        onTap: onTap,
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: isDestructive
+                    ? context.errorColor.withOpacity(0.1)
+                    : context.accentColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+              ),
+              child: Icon(
+                icon,
+                color: isDestructive ? context.errorColor : context.accentColor,
+                size: 20,
+              ),
             ),
-            child: Icon(
-              icon,
-              color: isDestructive
-                  ? (isDark ? AppColors.error : AppColorsLight.error)
-                  : (isDark ? AppColors.iconPrimary : AppColorsLight.iconPrimary),
+            const SizedBox(width: AppDimensions.spacingM),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: isDestructive
+                          ? context.errorColor
+                          : context.textPrimaryColor,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: context.textSecondaryColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right,
+              color: context.textTertiaryColor,
               size: 20,
             ),
-          ),
-          const SizedBox(width: AppDimensions.spacingM),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: isDestructive
-                        ? (isDark ? AppColors.error : AppColorsLight.error)
-                        : (isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
-                  ),
-                ),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Icon(
-            Icons.chevron_right,
-            color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
-            size: 20,
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -430,21 +414,21 @@ class _ProfileView extends StatelessWidget {
           children: [
             TextButton(
               onPressed: onBack,
-              child: const Text(
+              child: Text(
                 '← Back',
                 style: TextStyle(
                   fontSize: 14,
-                  color: AppColors.textSecondary,
+                  color: context.textSecondaryColor,
                 ),
               ),
             ),
             const SizedBox(height: AppDimensions.spacingM),
-            const Text(
+            Text(
               'Profile',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
+                color: context.textPrimaryColor,
               ),
             ),
             const SizedBox(height: AppDimensions.spacingL),
@@ -456,33 +440,33 @@ class _ProfileView extends StatelessWidget {
                     width: 80,
                     height: 80,
                     decoration: BoxDecoration(
-                      color: AppColors.background,
+                      color: context.backgroundColor,
                       shape: BoxShape.circle,
                     ),
-                    child: const Center(
+                    child: Center(
                       child: Text(
                         'A',
                         style: TextStyle(
                           fontSize: 32,
-                          color: AppColors.iconPrimary,
+                          color: context.iconPrimaryColor,
                         ),
                       ),
                     ),
                   ),
                   const SizedBox(height: AppDimensions.spacingM),
-                  const Text(
+                  Text(
                     'Admin Owner',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+                      color: context.textPrimaryColor,
                     ),
                   ),
-                  const Text(
+                  Text(
                     'Owner',
                     style: TextStyle(
                       fontSize: 14,
-                      color: AppColors.textSecondary,
+                      color: context.textSecondaryColor,
                     ),
                   ),
                 ],
@@ -511,30 +495,30 @@ class _AcademyView extends StatelessWidget {
           children: [
             TextButton(
               onPressed: onBack,
-              child: const Text(
+              child: Text(
                 '← Back',
                 style: TextStyle(
                   fontSize: 14,
-                  color: AppColors.textSecondary,
+                  color: context.textSecondaryColor,
                 ),
               ),
             ),
             const SizedBox(height: AppDimensions.spacingM),
-            const Text(
+            Text(
               'Academy Details',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
+                color: context.textPrimaryColor,
               ),
             ),
             const SizedBox(height: AppDimensions.spacingL),
-            const Center(
+            Center(
               child: Text(
                 'Navigate to Academy Details from Settings',
                 style: TextStyle(
                   fontSize: 16,
-                  color: AppColors.textSecondary,
+                  color: context.textSecondaryColor,
                 ),
               ),
             ),
@@ -565,30 +549,30 @@ class _PlaceholderView extends StatelessWidget {
           children: [
             TextButton(
               onPressed: onBack,
-              child: const Text(
+              child: Text(
                 '← Back',
                 style: TextStyle(
                   fontSize: 14,
-                  color: AppColors.textSecondary,
+                  color: context.textSecondaryColor,
                 ),
               ),
             ),
             const SizedBox(height: AppDimensions.spacingM),
             Text(
               title,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
+                color: context.textPrimaryColor,
               ),
             ),
             const SizedBox(height: AppDimensions.spacingL),
-            const Center(
+            Center(
               child: Text(
                 'Coming in Phase 4',
                 style: TextStyle(
                   fontSize: 16,
-                  color: AppColors.textSecondary,
+                  color: context.textSecondaryColor,
                 ),
               ),
             ),

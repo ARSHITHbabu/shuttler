@@ -15,6 +15,8 @@ import 'student_attendance_screen.dart';
 import 'student_performance_screen.dart';
 import 'student_bmi_screen.dart';
 import 'student_fees_screen.dart';
+import '../../core/utils/theme_colors.dart';
+import '../../widgets/common/standard_page_header.dart';
 
 /// Student Home Screen - Dashboard overview
 /// READ-ONLY view of student's personal statistics and upcoming sessions
@@ -80,7 +82,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Header
-                  _buildHeader(isDark, dashboardData.studentName, isSmallScreen),
+                  _buildHeader(dashboardData.studentName, isSmallScreen),
 
                   // Stats Grid
                   _buildStatsGrid(
@@ -111,71 +113,42 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
     );
   }
 
-  Widget _buildHeader(bool isDark, String studentName, bool isSmallScreen) {
-    return Padding(
-      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Welcome back,',
-            style: TextStyle(
-              fontSize: 14,
-              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-            ),
+  Widget _buildHeader(String studentName, bool isSmallScreen) {
+    final padding = AppDimensions.getScreenPadding(context);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        StandardPageHeader(
+          pretitle: 'Welcome back,',
+          title: studentName,
+          subtitle: ref.watch(activeOwnerProvider).when(
+            data: (owner) => '${owner?.academyName ?? ""} • ${_getFormattedDate()}',
+            loading: () => _getFormattedDate(),
+            error: (_, __) => _getFormattedDate(),
           ),
-          Text(
-            studentName,
-            style: TextStyle(
-              fontSize: isSmallScreen ? 20 : 24,
-              fontWeight: FontWeight.w600,
-              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-            ),
-          ),
-          ref.watch(activeOwnerProvider).when(
-                data: (owner) => owner?.academyName != null
-                    ? Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          owner!.academyName!,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: isDark ? AppColors.accent : AppColorsLight.accent,
-                          ),
-                        ),
-                      )
-                    : const SizedBox.shrink(),
-                loading: () => const SizedBox.shrink(),
-                error: (_, __) => const SizedBox.shrink(),
-              ),
-          const SizedBox(height: 4),
-          Text(
-            _getFormattedDate(),
-            style: TextStyle(
-              fontSize: 14,
-              color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
-            ),
-          ),
-          // Holiday Indicator
-          if (CanadianHolidays.isHoliday(DateTime.now())) ...[
-            const SizedBox(height: 8),
-            Container(
+        ),
+
+        // Holiday Indicator
+        if (CanadianHolidays.isHoliday(DateTime.now()))
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: padding),
+            child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.1),
+                color: context.errorColor.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-                border: Border.all(color: Colors.red.withOpacity(0.3)),
+                border: Border.all(color: context.errorColor.withOpacity(0.3)),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.celebration, size: 16, color: Colors.red),
+                  Icon(Icons.celebration, size: 16, color: context.errorColor),
                   const SizedBox(width: 8),
                   Text(
                     CanadianHolidays.getHolidayName(DateTime.now())!,
-                    style: const TextStyle(
-                      color: Colors.red,
+                    style: TextStyle(
+                      color: context.errorColor,
                       fontWeight: FontWeight.bold,
                       fontSize: 12,
                     ),
@@ -183,9 +156,8 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
                 ],
               ),
             ),
-          ],
-        ],
-      ),
+          ),
+      ],
     );
   }
 

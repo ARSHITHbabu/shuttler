@@ -14,6 +14,7 @@ import '../../widgets/forms/add_student_dialog.dart';
 import 'coach_schedule_screen.dart';
 import 'coach_students_screen.dart';
 import 'coach_attendance_screen.dart';
+import '../../widgets/common/standard_page_header.dart';
 import '../../core/utils/canadian_holidays.dart';
 
 /// Coach Home Screen - Dashboard overview
@@ -57,8 +58,8 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
   }
 
   Widget _buildContent(int coachId, String coachName, bool isSmallScreen) {
-
     final coachStatsAsync = ref.watch(coachStatsProvider(coachId));
+    final padding = AppDimensions.getScreenPadding(context);
 
     return RefreshIndicator(
       onRefresh: () async {
@@ -70,56 +71,22 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
-            Padding(
-              padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Welcome back,',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: context.textSecondaryColor,
-                    ),
-                  ),
-                  Text(
-                    coachName,
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w600,
-                      color: context.textPrimaryColor,
-                    ),
-                  ),
-                  ref.watch(activeOwnerProvider).when(
-                        data: (owner) => owner?.academyName != null
-                            ? Padding(
-                                padding: const EdgeInsets.only(top: 2),
-                                child: Text(
-                                  owner!.academyName!,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                    color: context.accentColor,
-                                  ),
-                                ),
-                              )
-                            : const SizedBox.shrink(),
-                        loading: () => const SizedBox.shrink(),
-                        error: (_, __) => const SizedBox.shrink(),
-                      ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _getFormattedDate(),
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: context.textSecondaryColor,
-                    ),
-                  ),
-                  // Holiday Indicator
-                  if (CanadianHolidays.isHoliday(DateTime.now())) ...[
-                    const SizedBox(height: 8),
-                    Container(
+            // Standardized Header Section
+            StandardPageHeader(
+              pretitle: 'Welcome back,',
+              title: coachName,
+              subtitle: ref.watch(activeOwnerProvider).when(
+                data: (owner) => '${owner?.academyName ?? ""} • ${_getFormattedDate()}',
+                loading: () => _getFormattedDate(),
+                error: (_, __) => _getFormattedDate(),
+              ),
+            ),
+
+            // Holiday Indicator
+            if (CanadianHolidays.isHoliday(DateTime.now()))
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: padding),
+                child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: context.errorColor.withOpacity(0.1),
@@ -141,11 +108,8 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
                           ),
                         ],
                       ),
-                    ),
-                  ],
-                ],
+                ),
               ),
-            ),
 
             // Stats Grid
             coachStatsAsync.when(

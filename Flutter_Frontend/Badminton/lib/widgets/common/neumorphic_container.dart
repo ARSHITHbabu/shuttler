@@ -77,6 +77,7 @@ class NeumorphicInsetContainer extends StatelessWidget {
   final Color? color;
   final double borderRadius;
   final Border? border;
+  final VoidCallback? onTap;
 
   const NeumorphicInsetContainer({
     super.key,
@@ -88,6 +89,7 @@ class NeumorphicInsetContainer extends StatelessWidget {
     this.color,
     this.borderRadius = AppDimensions.radiusM,
     this.border,
+    this.onTap,
   });
 
   @override
@@ -96,7 +98,7 @@ class NeumorphicInsetContainer extends StatelessWidget {
     final isDark = theme.brightness == Brightness.dark;
     final containerColor = color ?? (isDark ? AppColors.cardBackground : AppColorsLight.cardBackground);
 
-    return Container(
+    final widget = Container(
       width: width,
       height: height,
       padding: padding ?? const EdgeInsets.all(AppDimensions.paddingM),
@@ -109,5 +111,18 @@ class NeumorphicInsetContainer extends StatelessWidget {
       ),
       child: child,
     );
+
+    if (onTap != null) {
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(borderRadius),
+          child: widget,
+        ),
+      );
+    }
+
+    return widget;
   }
 }

@@ -8,17 +8,10 @@ import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
-import '../../widgets/common/custom_text_field.dart';
 import '../../providers/batch_provider.dart';
-import '../../providers/service_providers.dart';
-import '../../providers/session_provider.dart';
-import '../../providers/student_provider.dart';
+import '../../widgets/common/standard_page_header.dart';
 import '../../widgets/dialogs/batch_details_dialog.dart';
-import '../../widgets/batch/batch_students_sheet.dart';
 import '../../models/batch.dart';
-import '../../models/coach.dart';
-import '../../models/student.dart';
-import '../../core/constants/api_endpoints.dart';
 
 /// Batches Screen - List and manage batches
 /// Matches React reference: BatchesScreen.tsx
@@ -45,7 +38,6 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
   void _openEditForm(Batch batch) {
     BatchDetailsDialog.show(context, batch: batch, isOwner: true);
   }
-
 
   Future<void> _deleteBatch(Batch batch) async {
     showDialog(
@@ -138,6 +130,7 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
   @override
   Widget build(BuildContext context) {
     final batchesAsync = ref.watch(batchListProvider);
+    final padding = AppDimensions.getScreenPadding(context);
 
     return RefreshIndicator(
       onRefresh: () => ref.read(batchListProvider.notifier).refresh(),
@@ -148,31 +141,20 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header
-                Padding(
-                  padding: const EdgeInsets.all(AppDimensions.paddingL),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Batches',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.add, color: AppColors.textPrimary),
-                        onPressed: _openAddForm,
-                      ),
-                    ],
-                  ),
+                // Standardized Header
+                StandardPageHeader(
+                  title: 'Batches',
+                  actions: [
+                    IconButton(
+                      icon: const Icon(Icons.add),
+                      onPressed: _openAddForm,
+                    ),
+                  ],
                 ),
 
                 // Search Bar
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+                  padding: EdgeInsets.symmetric(horizontal: padding),
                   child: NeumorphicInsetContainer(
                     padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
                     child: Row(
@@ -199,7 +181,7 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
 
                 // Status Filter Toggle
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+                  padding: EdgeInsets.symmetric(horizontal: padding),
                   child: NeumorphicContainer(
                     padding: const EdgeInsets.all(4),
                     child: Row(
@@ -229,12 +211,6 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                 // Batches List
                 batchesAsync.when(
                   data: (batches) {
-                    // Debug logging to verify batch statuses
-                    debugPrint('DEBUG: Loaded ${batches.length} batches from backend');
-                    for (var b in batches) {
-                      debugPrint('Batch ${b.id}: ${b.name} [${b.status}]');
-                    }
-
                     final filteredBatches = batches.where((batch) {
                       // Filter by status
                       final status = batch.status.toLowerCase();
@@ -256,7 +232,7 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                     }
 
                     return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+                      padding: EdgeInsets.symmetric(horizontal: padding),
                       child: Column(
                         children: filteredBatches.map((batch) => _BatchCard(
                           batch: batch,
@@ -267,12 +243,12 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                       ),
                     );
                   },
-                  loading: () => const Padding(
-                    padding: EdgeInsets.all(AppDimensions.paddingL),
-                    child: ListSkeleton(itemCount: 5),
+                  loading: () => Padding(
+                    padding: EdgeInsets.all(padding),
+                    child: const ListSkeleton(itemCount: 5),
                   ),
                   error: (error, stack) => Padding(
-                    padding: const EdgeInsets.all(AppDimensions.paddingL),
+                    padding: EdgeInsets.all(padding),
                     child: ErrorDisplay(
                       message: 'Failed to load batches. Please check your connection and try again.',
                       onRetry: () => ref.read(batchListProvider.notifier).refresh(),
