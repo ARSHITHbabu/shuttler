@@ -87,13 +87,52 @@ class ApiService {
       onError: (error, handler) async {
         // Handle 401 Unauthorized - token expired
         if (error.response?.statusCode == 401) {
+          final refreshToken = _storageService.getRefreshToken();
+          if (refreshToken != null && refreshToken.isNotEmpty) {
+            try {
+              // Use a separate Dio instance to avoid interceptor loop
+              final refreshDio = Dio(BaseOptions(baseUrl: ApiEndpoints.baseUrl));
+              final refreshResponse = await refreshDio.post(
+                '/auth/refresh',
+                data: {'refresh_token': refreshToken},
+                options: Options(
+                  headers: {'Content-Type': 'application/json'},
+                ),
+              );
+
+              if (refreshResponse.statusCode == 200) {
+                final data = refreshResponse.data;
+                final newAccessToken = data['access_token'];
+                final newRefreshToken = data['refresh_token'];
+
+                if (newAccessToken != null) {
+                  await _storageService.saveAuthToken(newAccessToken);
+                  if (newRefreshToken != null) {
+                    await _storageService.saveRefreshToken(newRefreshToken);
+                  }
+
+                  // Retry the original request with the new token
+                  final options = error.requestOptions;
+                  options.headers['Authorization'] = 'Bearer $newAccessToken';
+                  
+                  // Use a separate Dio instance to retry the request without triggering interceptors again
+                  final retryDio = Dio(BaseOptions(baseUrl: ApiEndpoints.baseUrl));
+                  final cloneReq = await retryDio.fetch(options);
+                  return handler.resolve(cloneReq);
+                }
+              }
+            } catch (e) {
+              print('🔒 Token refresh failed: $e');
+            }
+          }
+
           print('🔒 Unauthorized - clearing auth data');
           try {
             await _storageService.clearAuthData();
           } catch (e) {
             print('⚠️ Failed to clear auth data: $e');
           }
-          // TODO: Navigate to login screen
+          // The router/app state will detect clearAuthData and redirect to login
         }
 
         // Handle network errors
