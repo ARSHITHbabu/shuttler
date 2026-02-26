@@ -203,8 +203,22 @@ class AuthService {
 
   /// Logout and clear session
   Future<void> logout() async {
+    // Grab tokens before clearing storage
+    final refreshToken = _storageService.getRefreshToken();
+
+    // Revoke tokens on the backend (best-effort — always clear local storage)
     try {
-      // Clear all stored auth data
+      await _apiService.post(
+        ApiEndpoints.logout,
+        data: {
+          if (refreshToken != null) 'refresh_token': refreshToken,
+        },
+      );
+    } catch (_) {
+      // Ignore API errors — proceed to clear local storage regardless
+    }
+
+    try {
       await _storageService.clearAuthData();
     } catch (e) {
       throw Exception('Logout failed: ${e.toString()}');
