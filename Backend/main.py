@@ -144,15 +144,30 @@ def _check_token_revoked(payload: dict) -> None:
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Security(security),
 ) -> dict:
-    """FastAPI dependency that validates a JWT access token.
+    '''FastAPI dependency that validates a JWT access token.
     Usage: current_user: dict = Depends(get_current_user)
     Returns the decoded JWT payload with keys: sub, user_type, email, role, jti.
-    """
+    '''
     payload = decode_token(credentials.credentials)
     if payload.get("type") != "access":
         raise HTTPException(status_code=401, detail="Invalid token type: expected access token")
     _check_token_revoked(payload)
     return payload
+
+def require_owner(current_user: dict = Depends(get_current_user)) -> dict:
+    if current_user.get("user_type") != "owner":
+        raise HTTPException(status_code=403, detail="Not enough permissions: owner required")
+    return current_user
+
+def require_coach(current_user: dict = Depends(get_current_user)) -> dict:
+    if current_user.get("user_type") not in ["owner", "coach"]:
+        raise HTTPException(status_code=403, detail="Not enough permissions: coach or owner required")
+    return current_user
+
+def require_student(current_user: dict = Depends(get_current_user)) -> dict:
+    if current_user.get("user_type") not in ["owner", "coach", "student"]:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    return current_user
 
 # Load environment variables from .env file
 load_dotenv()
@@ -2296,7 +2311,7 @@ def get_db():
 
 # ==================== Routes ====================
 
-@app.get("/")
+@app.get("/", dependencies=[Depends(require_owner)])
 def read_root():
     return {"message": "Badminton Academy Management System API", "version": "2.0"}
 
@@ -2329,7 +2344,7 @@ async def video_stream_options():
         }
     )
 
-@app.get("/video-stream/{filename}")
+@app.get("/video-stream/{filename}", dependencies=[Depends(require_owner)])
 async def stream_video(filename: str, request: Request):
     file_path = UPLOAD_DIR / filename
     if not file_path.exists():
@@ -2397,7 +2412,7 @@ async def stream_video(filename: str, request: Request):
             media_type=content_type
         )
 
-@app.post("/upload")
+@app.post("/upload", dependencies=[Depends(require_owner)])
 async def upload_file(file: UploadFile = File(...)):
     try:
         file_ext = os.path.splitext(file.filename)[1]
@@ -2413,7 +2428,7 @@ async def upload_file(file: UploadFile = File(...)):
 
 # ==================== Coach Routes ====================
 
-@app.post("/coaches/", response_model=Coach)
+@app.post("/coaches/", response_model=Coach, dependencies=[Depends(require_owner)])
 def create_coach(coach: CoachCreate):
     """Create a new coach account - saves to coaches table only"""
     db = SessionLocal()
@@ -2463,7 +2478,7 @@ def create_coach(coach: CoachCreate):
     finally:
         db.close()
 
-@app.get("/coaches/", response_model=List[Coach])
+@app.get("/coaches/", response_model=List[Coach], dependencies=[Depends(require_student)])
 def get_coaches():
     db = SessionLocal()
     try:
@@ -2473,7 +2488,7 @@ def get_coaches():
     finally:
         db.close()
 
-@app.get("/coaches/{coach_id}", response_model=Coach)
+@app.get("/coaches/{coach_id}", response_model=Coach, dependencies=[Depends(require_student)])
 def get_coach(coach_id: int):
     db = SessionLocal()
     try:
@@ -2484,7 +2499,7 @@ def get_coach(coach_id: int):
     finally:
         db.close()
 
-@app.put("/coaches/{coach_id}", response_model=Coach)
+@app.put("/coaches/{coach_id}", response_model=Coach, dependencies=[Depends(require_owner)])
 def update_coach(coach_id: int, coach_update: CoachUpdate):
     db = SessionLocal()
     try:
@@ -2502,7 +2517,7 @@ def update_coach(coach_id: int, coach_update: CoachUpdate):
     finally:
         db.close()
 
-@app.delete("/coaches/{coach_id}")
+@app.delete("/coaches/{coach_id}", dependencies=[Depends(require_owner)])
 def delete_coach(coach_id: int):
     db = SessionLocal()
     try:
@@ -3084,7 +3099,7 @@ def change_password(request: ChangePasswordRequest):
 
 # ==================== Owner Routes ====================
 
-@app.post("/owners/", response_model=Owner)
+@app.post("/owners/", response_model=Owner, dependencies=[Depends(require_owner)])
 def create_owner(owner: OwnerCreate):
     """Create a new owner account - saves to owners table only"""
     db = SessionLocal()
@@ -3151,7 +3166,7 @@ def create_owner(owner: OwnerCreate):
     finally:
         db.close()
 
-@app.get("/owners/", response_model=List[Owner])
+@app.get("/owners/", response_model=List[Owner], dependencies=[Depends(require_owner)])
 def get_owners():
     """Get all owners"""
     db = SessionLocal()
@@ -3161,7 +3176,7 @@ def get_owners():
     finally:
         db.close()
 
-@app.get("/owners/{owner_id}", response_model=Owner)
+@app.get("/owners/{owner_id}", response_model=Owner, dependencies=[Depends(require_owner)])
 def get_owner(owner_id: int):
     """Get a specific owner by ID"""
     db = SessionLocal()
@@ -3173,7 +3188,7 @@ def get_owner(owner_id: int):
     finally:
         db.close()
 
-@app.put("/owners/{owner_id}", response_model=Owner)
+@app.put("/owners/{owner_id}", response_model=Owner, dependencies=[Depends(require_owner)])
 def update_owner(owner_id: int, owner_update: OwnerUpdate):
     """Update owner profile"""
     db = SessionLocal()
@@ -3204,7 +3219,7 @@ def update_owner(owner_id: int, owner_update: OwnerUpdate):
     finally:
         db.close()
 
-@app.delete("/owners/{owner_id}")
+@app.delete("/owners/{owner_id}", dependencies=[Depends(require_owner)])
 def delete_owner(owner_id: int):
     """Delete owner account"""
     db = SessionLocal()
@@ -3282,7 +3297,7 @@ def login_owner(login_data: OwnerLogin):
     finally:
         db.close()
 
-@app.post("/owners/{owner_id}/transfer-ownership")
+@app.post("/owners/{owner_id}/transfer-ownership", dependencies=[Depends(require_owner)])
 def transfer_ownership(owner_id: int, request: TransferOwnershipRequest):
     """
     Transfer primary ownership to another user.
@@ -3371,7 +3386,7 @@ def _get_batch_coaches(db, batch_id: int) -> List[CoachInfo]:
         # If table doesn't exist yet, return empty list
         return []
 
-@app.post("/batches/", response_model=Batch)
+@app.post("/batches/", response_model=Batch, dependencies=[Depends(require_owner)])
 def create_batch(batch: BatchCreate):
     db = SessionLocal()
     try:
@@ -3421,7 +3436,7 @@ def create_batch(batch: BatchCreate):
     finally:
         db.close()
 
-@app.get("/batches/", response_model=List[Batch])
+@app.get("/batches/", response_model=List[Batch], dependencies=[Depends(require_student)])
 def get_batches(status: Optional[str] = Query(None)):
     db = SessionLocal()
     try:
@@ -3506,7 +3521,7 @@ def get_batches(status: Optional[str] = Query(None)):
     finally:
         db.close()
 
-@app.get("/batches/inactive/", response_model=List[Batch])
+@app.get("/batches/inactive/", response_model=List[Batch], dependencies=[Depends(require_student)])
 def get_inactive_batches():
     """Get all deactivated batches"""
     db = SessionLocal()
@@ -3540,7 +3555,7 @@ def get_inactive_batches():
     finally:
         db.close()
 
-@app.get("/batches/coach/{coach_id}", response_model=List[Batch])
+@app.get("/batches/coach/{coach_id}", response_model=List[Batch], dependencies=[Depends(require_student)])
 def get_coach_batches(coach_id: int):
     db = SessionLocal()
     try:
@@ -3652,7 +3667,7 @@ def get_coach_batches(coach_id: int):
     finally:
         db.close()
 
-@app.put("/batches/{batch_id}", response_model=Batch)
+@app.put("/batches/{batch_id}", response_model=Batch, dependencies=[Depends(require_owner)])
 def update_batch(batch_id: int, batch_update: BatchUpdate):
     db = SessionLocal()
     try:
@@ -3806,7 +3821,7 @@ def update_batch(batch_id: int, batch_update: BatchUpdate):
     finally:
         db.close()
 
-@app.delete("/batches/{batch_id}")
+@app.delete("/batches/{batch_id}", dependencies=[Depends(require_owner)])
 def delete_batch(batch_id: int):
     db = SessionLocal()
     try:
@@ -3819,7 +3834,7 @@ def delete_batch(batch_id: int):
     finally:
         db.close()
 
-@app.post("/batches/{batch_id}/deactivate")
+@app.post("/batches/{batch_id}/deactivate", dependencies=[Depends(require_owner)])
 def deactivate_batch(batch_id: int):
     """Soft delete a batch - moves to inactive list, keeps data for 2 years"""
     db = SessionLocal()
@@ -3835,7 +3850,7 @@ def deactivate_batch(batch_id: int):
     finally:
         db.close()
 
-@app.delete("/batches/{batch_id}/remove")
+@app.delete("/batches/{batch_id}/remove", dependencies=[Depends(require_owner)])
 def remove_batch_permanently(batch_id: int):
     """Hard delete a batch and all related records (cascading)"""
     db = SessionLocal()
@@ -3859,7 +3874,7 @@ def remove_batch_permanently(batch_id: int):
     finally:
         db.close()
 
-@app.get("/batches/{batch_id}/available-students")
+@app.get("/batches/{batch_id}/available-students", dependencies=[Depends(require_student)])
 def get_available_students_for_batch(batch_id: int):
     """Get students not yet assigned to this batch"""
     db = SessionLocal()
@@ -3881,7 +3896,7 @@ def get_available_students_for_batch(batch_id: int):
     finally:
         db.close()
 
-@app.post("/batches/{batch_id}/students/{student_id}")
+@app.post("/batches/{batch_id}/students/{student_id}", dependencies=[Depends(require_owner)])
 def assign_student_to_batch(batch_id: int, student_id: int):
     """Assign a student to a batch"""
     db = SessionLocal()
@@ -3925,7 +3940,7 @@ def assign_student_to_batch(batch_id: int, student_id: int):
     finally:
         db.close()
 
-@app.delete("/batches/{batch_id}/students/{student_id}")
+@app.delete("/batches/{batch_id}/students/{student_id}", dependencies=[Depends(require_owner)])
 def remove_student_from_batch(batch_id: int, student_id: int):
     """Remove a student from a batch"""
     db = SessionLocal()
@@ -3947,7 +3962,7 @@ def remove_student_from_batch(batch_id: int, student_id: int):
 
 # ==================== Student Routes ====================
 
-@app.post("/students/", response_model=Student)
+@app.post("/students/", response_model=Student, dependencies=[Depends(require_coach)])
 def create_student(student: StudentCreate):
     db = SessionLocal()
     try:
@@ -3972,7 +3987,7 @@ def create_student(student: StudentCreate):
     finally:
         db.close()
 
-@app.get("/students/", response_model=List[Student])
+@app.get("/students/", response_model=List[Student], dependencies=[Depends(require_student)])
 def get_students(include_deleted: bool = Query(False, description="Include deleted students")):
     db = SessionLocal()
     try:
@@ -3984,7 +3999,7 @@ def get_students(include_deleted: bool = Query(False, description="Include delet
     finally:
         db.close()
 
-@app.get("/students/{student_id}", response_model=Student)
+@app.get("/students/{student_id}", response_model=Student, dependencies=[Depends(require_student)])
 def get_student(student_id: int):
     db = SessionLocal()
     try:
@@ -3995,7 +4010,7 @@ def get_student(student_id: int):
     finally:
         db.close()
 
-@app.put("/students/{student_id}", response_model=Student)
+@app.put("/students/{student_id}", response_model=Student, dependencies=[Depends(require_coach)])
 def update_student(student_id: int, student_update: StudentUpdate):
     db = SessionLocal()
     try:
@@ -4013,7 +4028,7 @@ def update_student(student_id: int, student_update: StudentUpdate):
     finally:
         db.close()
 
-@app.delete("/students/{student_id}")
+@app.delete("/students/{student_id}", dependencies=[Depends(require_coach)])
 def delete_student(student_id: int):
     """Soft delete a student (mark as deleted)"""
     db = SessionLocal()
@@ -4030,7 +4045,7 @@ def delete_student(student_id: int):
     finally:
         db.close()
 
-@app.get("/students/inactive/", response_model=List[Student])
+@app.get("/students/inactive/", response_model=List[Student], dependencies=[Depends(require_student)])
 def get_inactive_students():
     """Get all deactivated students"""
     db = SessionLocal()
@@ -4041,7 +4056,7 @@ def get_inactive_students():
     finally:
         db.close()
 
-@app.get("/students/rejoin-requests/", response_model=List[Student])
+@app.get("/students/rejoin-requests/", response_model=List[Student], dependencies=[Depends(require_student)])
 def get_rejoin_requests():
     """Get students who have requested to rejoin"""
     db = SessionLocal()
@@ -4052,7 +4067,7 @@ def get_rejoin_requests():
     finally:
         db.close()
 
-@app.post("/students/{student_id}/deactivate")
+@app.post("/students/{student_id}/deactivate", dependencies=[Depends(require_coach)])
 def deactivate_student(student_id: int):
     """Soft delete a student - moves to inactive list, keeps data for 2 years"""
     db = SessionLocal()
@@ -4069,7 +4084,7 @@ def deactivate_student(student_id: int):
     finally:
         db.close()
 
-@app.post("/students/{student_id}/request-rejoin")
+@app.post("/students/{student_id}/request-rejoin", dependencies=[Depends(require_coach)])
 def request_rejoin(student_id: int):
     """Student requests to rejoin after being inactive"""
     db = SessionLocal()
@@ -4090,7 +4105,7 @@ def request_rejoin(student_id: int):
     finally:
         db.close()
 
-@app.post("/students/{student_id}/approve-rejoin")
+@app.post("/students/{student_id}/approve-rejoin", dependencies=[Depends(require_coach)])
 def approve_rejoin(student_id: int):
     """Owner approves a rejoin request"""
     db = SessionLocal()
@@ -4118,7 +4133,7 @@ def approve_rejoin(student_id: int):
     finally:
         db.close()
 
-@app.delete("/students/{student_id}/remove")
+@app.delete("/students/{student_id}/remove", dependencies=[Depends(require_coach)])
 def remove_student_permanently(student_id: int):
     """Hard delete a student and all related records (cascading)"""
     db = SessionLocal()
@@ -4145,7 +4160,7 @@ def remove_student_permanently(student_id: int):
     finally:
         db.close()
 
-@app.get("/students/{student_id}/profile-complete")
+@app.get("/students/{student_id}/profile-complete", dependencies=[Depends(require_student)])
 def check_profile_complete(student_id: int):
     """
     Check if student profile is complete.
@@ -4271,7 +4286,7 @@ def login_student(login_data: StudentLogin):
 
 # ==================== Batch-Student Assignment Routes ====================
 
-@app.post("/batch-students/")
+@app.post("/batch-students/", dependencies=[Depends(require_owner)])
 def assign_student_to_batch(assignment: BatchStudentAssign):
     db = SessionLocal()
     try:
@@ -4290,7 +4305,7 @@ def assign_student_to_batch(assignment: BatchStudentAssign):
     finally:
         db.close()
 
-@app.get("/batch-students/{batch_id}")
+@app.get("/batch-students/{batch_id}", dependencies=[Depends(require_owner)])
 def get_batch_students(batch_id: int):
     db = SessionLocal()
     try:
@@ -4304,7 +4319,7 @@ def get_batch_students(batch_id: int):
     finally:
         db.close()
 
-@app.get("/student-batches/{student_id}", response_model=List[Batch])
+@app.get("/student-batches/{student_id}", response_model=List[Batch], dependencies=[Depends(require_owner)])
 def get_student_batches(student_id: int):
     db = SessionLocal()
     try:
@@ -4383,7 +4398,7 @@ def get_student_batches(student_id: int):
     finally:
         db.close()
 
-@app.delete("/batch-students/{batch_id}/{student_id}")
+@app.delete("/batch-students/{batch_id}/{student_id}", dependencies=[Depends(require_owner)])
 def remove_student_from_batch(batch_id: int, student_id: int):
     db = SessionLocal()
     try:
@@ -4415,7 +4430,7 @@ def attendance_db_to_response(attn_db: AttendanceDB) -> Attendance:
         remarks=attn_db.remarks
     )
 
-@app.get("/attendance/", response_model=List[Attendance])
+@app.get("/attendance/", response_model=List[Attendance], dependencies=[Depends(require_student)])
 def get_attendance(
     date: Optional[str] = None,
     start_date: Optional[str] = None,
@@ -4451,7 +4466,7 @@ def get_attendance(
     finally:
         db.close()
 
-@app.post("/attendance/", response_model=Attendance)
+@app.post("/attendance/", response_model=Attendance, dependencies=[Depends(require_coach)])
 def mark_attendance(attendance: AttendanceCreate):
     db = SessionLocal()
     try:
@@ -4506,7 +4521,7 @@ def mark_attendance(attendance: AttendanceCreate):
     finally:
         db.close()
 
-@app.post("/attendance/bulk/", response_model=List[Attendance])
+@app.post("/attendance/bulk/", response_model=List[Attendance], dependencies=[Depends(require_coach)])
 def mark_attendance_bulk(bulk: AttendanceBulkCreate):
     db = SessionLocal()
     results = []
@@ -4559,7 +4574,7 @@ def mark_attendance_bulk(bulk: AttendanceBulkCreate):
     finally:
         db.close()
 
-@app.get("/attendance/batch/{batch_id}/date/{date}")
+@app.get("/attendance/batch/{batch_id}/date/{date}", dependencies=[Depends(require_student)])
 def get_batch_attendance(batch_id: int, date: str):
     db = SessionLocal()
     try:
@@ -4571,7 +4586,7 @@ def get_batch_attendance(batch_id: int, date: str):
     finally:
         db.close()
 
-@app.get("/attendance/student/{student_id}")
+@app.get("/attendance/student/{student_id}", dependencies=[Depends(require_student)])
 def get_student_attendance(student_id: int):
     db = SessionLocal()
     try:
@@ -4592,7 +4607,7 @@ def coach_attendance_db_to_response(attn_db: CoachAttendanceDB) -> CoachAttendan
     )
 
 # Coach Attendance Routes
-@app.post("/coach-attendance/", response_model=CoachAttendance)
+@app.post("/coach-attendance/", response_model=CoachAttendance, dependencies=[Depends(require_coach)])
 def mark_coach_attendance(attendance: CoachAttendanceCreate):
     db = SessionLocal()
     try:
@@ -4616,7 +4631,7 @@ def mark_coach_attendance(attendance: CoachAttendanceCreate):
     finally:
         db.close()
 
-@app.get("/coach-attendance/")
+@app.get("/coach-attendance/", dependencies=[Depends(require_student)])
 def get_coach_attendance(date: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None):
     db = SessionLocal()
     try:
@@ -4633,7 +4648,7 @@ def get_coach_attendance(date: Optional[str] = None, start_date: Optional[str] =
     finally:
         db.close()
 
-@app.get("/coach-attendance/coach/{coach_id}")
+@app.get("/coach-attendance/coach/{coach_id}", dependencies=[Depends(require_student)])
 def get_coach_attendance_history(coach_id: int):
     db = SessionLocal()
     try:
@@ -4642,7 +4657,7 @@ def get_coach_attendance_history(coach_id: int):
     finally:
         db.close()
 
-@app.get("/coach-attendance/date/{date}")
+@app.get("/coach-attendance/date/{date}", dependencies=[Depends(require_student)])
 def get_all_coach_attendance(date: str):
     db = SessionLocal()
     try:
@@ -4755,7 +4770,7 @@ def enrich_fee_with_payments(fee: FeeDB, db) -> dict:
         "payments": payment_list,
     }
 
-@app.post("/fees/", response_model=Fee)
+@app.post("/fees/", response_model=Fee, dependencies=[Depends(require_owner)])
 def create_fee(fee: FeeCreate):
     db = SessionLocal()
     try:
@@ -4775,7 +4790,7 @@ def create_fee(fee: FeeCreate):
     finally:
         db.close()
 
-@app.get("/fees/student/{student_id}")
+@app.get("/fees/student/{student_id}", dependencies=[Depends(require_student)])
 def get_student_fees(student_id: int):
     db = SessionLocal()
     try:
@@ -4788,7 +4803,7 @@ def get_student_fees(student_id: int):
     finally:
         db.close()
 
-@app.get("/fees/batch/{batch_id}")
+@app.get("/fees/batch/{batch_id}", dependencies=[Depends(require_student)])
 def get_batch_fees(batch_id: int):
     db = SessionLocal()
     try:
@@ -4800,7 +4815,7 @@ def get_batch_fees(batch_id: int):
     finally:
         db.close()
 
-@app.get("/fees/", response_model=List[Fee])
+@app.get("/fees/", response_model=List[Fee], dependencies=[Depends(require_student)])
 def get_all_fees(
     student_id: Optional[int] = None,
     batch_id: Optional[int] = None,
@@ -4839,7 +4854,7 @@ def get_all_fees(
     finally:
         db.close()
 
-@app.put("/fees/{fee_id}", response_model=Fee)
+@app.put("/fees/{fee_id}", response_model=Fee, dependencies=[Depends(require_owner)])
 def update_fee(fee_id: int, fee_update: FeeUpdate):
     db = SessionLocal()
     try:
@@ -4865,7 +4880,7 @@ def update_fee(fee_id: int, fee_update: FeeUpdate):
 
 # ==================== Fee Payment Routes ====================
 
-@app.post("/fees/{fee_id}/payments/", response_model=FeePayment)
+@app.post("/fees/{fee_id}/payments/", response_model=FeePayment, dependencies=[Depends(require_owner)])
 def create_fee_payment(fee_id: int, payment: FeePaymentCreate):
     """Add a payment to a fee"""
     db = SessionLocal()
@@ -4923,7 +4938,7 @@ def create_fee_payment(fee_id: int, payment: FeePaymentCreate):
     finally:
         db.close()
 
-@app.get("/fees/{fee_id}/payments/", response_model=List[FeePayment])
+@app.get("/fees/{fee_id}/payments/", response_model=List[FeePayment], dependencies=[Depends(require_student)])
 def get_fee_payments(fee_id: int):
     """Get all payments for a fee"""
     db = SessionLocal()
@@ -4951,7 +4966,7 @@ def get_fee_payments(fee_id: int):
     finally:
         db.close()
 
-@app.delete("/fees/{fee_id}/payments/{payment_id}")
+@app.delete("/fees/{fee_id}/payments/{payment_id}", dependencies=[Depends(require_owner)])
 def delete_fee_payment(fee_id: int, payment_id: int):
     """Delete a payment and recalculate fee status"""
     db = SessionLocal()
@@ -4980,7 +4995,7 @@ def delete_fee_payment(fee_id: int, payment_id: int):
 
 # ==================== Coach Salary Routes ====================
 
-@app.post("/coach-salaries/", response_model=CoachSalary)
+@app.post("/coach-salaries/", response_model=CoachSalary, dependencies=[Depends(require_owner)])
 def create_coach_salary(salary: CoachSalaryCreate):
     """Record a salary payment for a coach"""
     db = SessionLocal()
@@ -5017,7 +5032,7 @@ def create_coach_salary(salary: CoachSalaryCreate):
     finally:
         db.close()
 
-@app.get("/coach-salaries/", response_model=List[CoachSalary])
+@app.get("/coach-salaries/", response_model=List[CoachSalary], dependencies=[Depends(require_owner)])
 def get_coach_salaries(month: Optional[str] = None, coach_id: Optional[int] = None):
     """Get coach salaries, optionally filtered by month or coach"""
     db = SessionLocal()
@@ -5050,7 +5065,7 @@ def get_coach_salaries(month: Optional[str] = None, coach_id: Optional[int] = No
     finally:
         db.close()
 
-@app.put("/coach-salaries/{salary_id}", response_model=CoachSalary)
+@app.put("/coach-salaries/{salary_id}", response_model=CoachSalary, dependencies=[Depends(require_owner)])
 def update_coach_salary(salary_id: int, salary_update: CoachSalaryUpdate):
     """Update a salary record"""
     db = SessionLocal()
@@ -5079,7 +5094,7 @@ def update_coach_salary(salary_id: int, salary_update: CoachSalaryUpdate):
     finally:
         db.close()
 
-@app.delete("/coach-salaries/{salary_id}")
+@app.delete("/coach-salaries/{salary_id}", dependencies=[Depends(require_owner)])
 def delete_coach_salary(salary_id: int):
     """Delete a salary record"""
     db = SessionLocal()
@@ -5096,7 +5111,7 @@ def delete_coach_salary(salary_id: int):
 
 # ==================== Session Routes ====================
 
-@app.post("/sessions/", response_model=Session)
+@app.post("/sessions/", response_model=Session, dependencies=[Depends(require_owner)])
 def create_session(session: SessionCreate):
     """Create a new session/season"""
     db = SessionLocal()
@@ -5121,7 +5136,7 @@ def create_session(session: SessionCreate):
     finally:
         db.close()
 
-@app.get("/sessions/", response_model=List[Session])
+@app.get("/sessions/", response_model=List[Session], dependencies=[Depends(require_student)])
 def get_sessions(status: Optional[str] = None):
     """Get all sessions, optionally filtered by status"""
     db = SessionLocal()
@@ -5145,7 +5160,7 @@ def get_sessions(status: Optional[str] = None):
     finally:
         db.close()
 
-@app.get("/sessions/{session_id}", response_model=Session)
+@app.get("/sessions/{session_id}", response_model=Session, dependencies=[Depends(require_student)])
 def get_session(session_id: int):
     """Get a specific session by ID"""
     db = SessionLocal()
@@ -5165,7 +5180,7 @@ def get_session(session_id: int):
     finally:
         db.close()
 
-@app.put("/sessions/{session_id}", response_model=Session)
+@app.put("/sessions/{session_id}", response_model=Session, dependencies=[Depends(require_owner)])
 def update_session(session_id: int, session_update: SessionUpdate):
     """Update a session"""
     db = SessionLocal()
@@ -5198,7 +5213,7 @@ def update_session(session_id: int, session_update: SessionUpdate):
     finally:
         db.close()
 
-@app.delete("/sessions/{session_id}")
+@app.delete("/sessions/{session_id}", dependencies=[Depends(require_owner)])
 def delete_session(session_id: int):
     """Delete a session (only if no batches are assigned)"""
     db = SessionLocal()
@@ -5226,7 +5241,7 @@ def delete_session(session_id: int):
     finally:
         db.close()
 
-@app.get("/sessions/{session_id}/batches", response_model=List[Batch])
+@app.get("/sessions/{session_id}/batches", response_model=List[Batch], dependencies=[Depends(require_student)])
 def get_session_batches(session_id: int):
     """Get all batches assigned to a session"""
     db = SessionLocal()
@@ -5245,7 +5260,7 @@ def get_session_batches(session_id: int):
     finally:
         db.close()
 
-@app.get("/batches/{batch_id}/students", response_model=List[Student])
+@app.get("/batches/{batch_id}/students", response_model=List[Student], dependencies=[Depends(require_student)])
 def get_batch_students(batch_id: int):
     """Get all approved students enrolled in a batch"""
     db = SessionLocal()
@@ -5266,7 +5281,7 @@ def get_batch_students(batch_id: int):
     finally:
         db.close()
 
-@app.post("/fees/{fee_id}/notify")
+@app.post("/fees/{fee_id}/notify", dependencies=[Depends(require_owner)])
 def notify_student_about_fee(fee_id: int):
     """Send notification to student about overdue fee"""
     db = SessionLocal()
@@ -5307,7 +5322,7 @@ def notify_student_about_fee(fee_id: int):
 
 # ==================== Performance Routes ====================
 
-@app.get("/performance/student/{student_id}")
+@app.get("/performance/student/{student_id}", dependencies=[Depends(require_student)])
 def get_student_performance(student_id: int):
     db = SessionLocal()
     try:
@@ -5316,7 +5331,7 @@ def get_student_performance(student_id: int):
     finally:
         db.close()
 
-@app.get("/performance/grouped/student/{student_id}")
+@app.get("/performance/grouped/student/{student_id}", dependencies=[Depends(require_student)])
 def get_student_performance_grouped(student_id: int):
     """Get student performance records grouped by date"""
     db = SessionLocal()
@@ -5371,7 +5386,7 @@ def get_student_performance_grouped(student_id: int):
     finally:
         db.close()
 
-@app.get("/performance/grouped/all")
+@app.get("/performance/grouped/all", dependencies=[Depends(require_student)])
 def get_all_performance_grouped():
     """Get all performance records grouped by date for owner/coach view"""
     db = SessionLocal()
@@ -5424,7 +5439,7 @@ def get_all_performance_grouped():
     finally:
         db.close()
 
-@app.get("/performance/grouped/coach/{coach_name}")
+@app.get("/performance/grouped/coach/{coach_name}", dependencies=[Depends(require_student)])
 def get_coach_performance_grouped(coach_name: str):
     """Get performance records created by a specific coach"""
     db = SessionLocal()
@@ -5543,7 +5558,7 @@ def transform_performance_to_frontend(records: List[PerformanceDB], db) -> Optio
     
     return result
 
-@app.get("/performance/", response_model=List[PerformanceFrontend])
+@app.get("/performance/", response_model=List[PerformanceFrontend], dependencies=[Depends(require_student)])
 def get_performance_records(
     student_id: Optional[int] = None,
     start_date: Optional[str] = None,
@@ -5584,7 +5599,7 @@ def get_performance_records(
     finally:
         db.close()
 
-@app.get("/performance/{record_id}", response_model=PerformanceFrontend)
+@app.get("/performance/{record_id}", response_model=PerformanceFrontend, dependencies=[Depends(require_student)])
 def get_performance_record(record_id: int):
     """Get a single performance record by ID in frontend format"""
     db = SessionLocal()
@@ -5611,7 +5626,7 @@ def get_performance_record(record_id: int):
     finally:
         db.close()
 
-@app.post("/performance/", response_model=PerformanceFrontend)
+@app.post("/performance/", response_model=PerformanceFrontend, dependencies=[Depends(require_coach)])
 def create_performance_record_v2(performance_data: PerformanceFrontendCreate):
     """Create performance records (frontend-compatible endpoint)"""
     db = SessionLocal()
@@ -5675,7 +5690,7 @@ def create_performance_record_v2(performance_data: PerformanceFrontendCreate):
     finally:
         db.close()
 
-@app.put("/performance/{record_id}", response_model=PerformanceFrontend)
+@app.put("/performance/{record_id}", response_model=PerformanceFrontend, dependencies=[Depends(require_coach)])
 def update_performance_record(record_id: int, performance_update: PerformanceFrontendUpdate):
     """Update performance records (frontend-compatible endpoint)"""
     db = SessionLocal()
@@ -5766,7 +5781,7 @@ def update_performance_record(record_id: int, performance_update: PerformanceFro
     finally:
         db.close()
 
-@app.delete("/performance/{record_id}")
+@app.delete("/performance/{record_id}", dependencies=[Depends(require_coach)])
 def delete_performance_record(record_id: int):
     """Delete performance records (all records for the same date/student)"""
     db = SessionLocal()
@@ -5824,7 +5839,7 @@ def bmi_db_to_response(bmi_db: BMIDB) -> BMI:
         health_status=calculate_health_status(bmi_db.bmi)
     )
 
-@app.post("/bmi/", response_model=BMI)
+@app.post("/bmi/", response_model=BMI, dependencies=[Depends(require_owner)])
 def create_bmi_record(bmi_data: BMICreate):
     db = SessionLocal()
     try:
@@ -5843,7 +5858,7 @@ def create_bmi_record(bmi_data: BMICreate):
     finally:
         db.close()
 
-@app.get("/bmi/student/{student_id}")
+@app.get("/bmi/student/{student_id}", dependencies=[Depends(require_owner)])
 def get_student_bmi(student_id: int):
     db = SessionLocal()
     try:
@@ -5854,7 +5869,7 @@ def get_student_bmi(student_id: int):
 
 # ==================== BMI Records Routes (Frontend Compatible) ====================
 
-@app.get("/bmi-records/", response_model=List[BMI])
+@app.get("/bmi-records/", response_model=List[BMI], dependencies=[Depends(require_student)])
 def get_bmi_records(
     student_id: Optional[int] = None,
     start_date: Optional[str] = None,
@@ -5879,7 +5894,7 @@ def get_bmi_records(
     finally:
         db.close()
 
-@app.get("/bmi-records/{record_id}", response_model=BMI)
+@app.get("/bmi-records/{record_id}", response_model=BMI, dependencies=[Depends(require_student)])
 def get_bmi_record(record_id: int):
     """Get a single BMI record by ID"""
     db = SessionLocal()
@@ -5891,7 +5906,7 @@ def get_bmi_record(record_id: int):
     finally:
         db.close()
 
-@app.post("/bmi-records/", response_model=BMI)
+@app.post("/bmi-records/", response_model=BMI, dependencies=[Depends(require_coach)])
 def create_bmi_record_v2(bmi_data: BMICreate):
     """Create a new BMI record (frontend compatible endpoint)"""
     db = SessionLocal()
@@ -5914,7 +5929,7 @@ def create_bmi_record_v2(bmi_data: BMICreate):
     finally:
         db.close()
 
-@app.put("/bmi-records/{record_id}", response_model=BMI)
+@app.put("/bmi-records/{record_id}", response_model=BMI, dependencies=[Depends(require_coach)])
 def update_bmi_record(record_id: int, bmi_update: BMIUpdate):
     """Update a BMI record"""
     db = SessionLocal()
@@ -5949,7 +5964,7 @@ def update_bmi_record(record_id: int, bmi_update: BMIUpdate):
     finally:
         db.close()
 
-@app.delete("/bmi-records/{record_id}")
+@app.delete("/bmi-records/{record_id}", dependencies=[Depends(require_coach)])
 def delete_bmi_record(record_id: int):
     """Delete a BMI record"""
     db = SessionLocal()
@@ -5971,7 +5986,7 @@ def delete_bmi_record(record_id: int):
 
 # ==================== Enquiry Routes ====================
 
-@app.post("/enquiries/", response_model=Enquiry)
+@app.post("/enquiries/", response_model=Enquiry, dependencies=[Depends(require_owner)])
 def create_enquiry(enquiry: EnquiryCreate):
     db = SessionLocal()
     try:
@@ -5986,7 +6001,7 @@ def create_enquiry(enquiry: EnquiryCreate):
     finally:
         db.close()
 
-@app.get("/enquiries/", response_model=List[Enquiry])
+@app.get("/enquiries/", response_model=List[Enquiry], dependencies=[Depends(require_owner)])
 def get_enquiries():
     db = SessionLocal()
     try:
@@ -5995,7 +6010,7 @@ def get_enquiries():
     finally:
         db.close()
 
-@app.get("/enquiries/assigned/{assigned_to}")
+@app.get("/enquiries/assigned/{assigned_to}", dependencies=[Depends(require_owner)])
 def get_assigned_enquiries(assigned_to: str):
     db = SessionLocal()
     try:
@@ -6004,7 +6019,7 @@ def get_assigned_enquiries(assigned_to: str):
     finally:
         db.close()
 
-@app.put("/enquiries/{enquiry_id}", response_model=Enquiry)
+@app.put("/enquiries/{enquiry_id}", response_model=Enquiry, dependencies=[Depends(require_owner)])
 def update_enquiry(enquiry_id: int, enquiry_update: EnquiryUpdate):
     db = SessionLocal()
     try:
@@ -6022,7 +6037,7 @@ def update_enquiry(enquiry_id: int, enquiry_update: EnquiryUpdate):
     finally:
         db.close()
 
-@app.delete("/enquiries/{enquiry_id}")
+@app.delete("/enquiries/{enquiry_id}", dependencies=[Depends(require_owner)])
 def delete_enquiry(enquiry_id: int):
     db = SessionLocal()
     try:
@@ -6037,7 +6052,7 @@ def delete_enquiry(enquiry_id: int):
 
 # ==================== Schedule Routes ====================
 
-@app.post("/schedules/", response_model=Schedule)
+@app.post("/schedules/", response_model=Schedule, dependencies=[Depends(require_coach)])
 def create_schedule(schedule: ScheduleCreate):
     db = SessionLocal()
     try:
@@ -6067,7 +6082,7 @@ def create_schedule(schedule: ScheduleCreate):
     finally:
         db.close()
 
-@app.get("/schedules/batch/{batch_id}")
+@app.get("/schedules/batch/{batch_id}", dependencies=[Depends(require_student)])
 def get_batch_schedules(batch_id: int):
     db = SessionLocal()
     try:
@@ -6076,7 +6091,7 @@ def get_batch_schedules(batch_id: int):
     finally:
         db.close()
 
-@app.get("/schedules/date/{date}")
+@app.get("/schedules/date/{date}", dependencies=[Depends(require_student)])
 def get_schedules_by_date(date: str):
     db = SessionLocal()
     try:
@@ -6085,7 +6100,7 @@ def get_schedules_by_date(date: str):
     finally:
         db.close()
 
-@app.delete("/schedules/{schedule_id}")
+@app.delete("/schedules/{schedule_id}", dependencies=[Depends(require_coach)])
 def delete_schedule(schedule_id: int):
     db = SessionLocal()
     try:
@@ -6106,7 +6121,7 @@ def delete_schedule(schedule_id: int):
 
 # ==================== Tournament Routes ====================
 
-@app.post("/tournaments/", response_model=Tournament)
+@app.post("/tournaments/", response_model=Tournament, dependencies=[Depends(require_coach)])
 def create_tournament(tournament: TournamentCreate):
     db = SessionLocal()
     try:
@@ -6136,7 +6151,7 @@ def create_tournament(tournament: TournamentCreate):
     finally:
         db.close()
 
-@app.get("/tournaments/", response_model=List[Tournament])
+@app.get("/tournaments/", response_model=List[Tournament], dependencies=[Depends(require_student)])
 def get_tournaments():
     db = SessionLocal()
     try:
@@ -6145,7 +6160,7 @@ def get_tournaments():
     finally:
         db.close()
 
-@app.get("/tournaments/upcoming")
+@app.get("/tournaments/upcoming", dependencies=[Depends(require_student)])
 def get_upcoming_tournaments():
     db = SessionLocal()
     try:
@@ -6155,7 +6170,7 @@ def get_upcoming_tournaments():
     finally:
         db.close()
 
-@app.delete("/tournaments/{tournament_id}")
+@app.delete("/tournaments/{tournament_id}", dependencies=[Depends(require_coach)])
 def delete_tournament(tournament_id: int):
     db = SessionLocal()
     try:
@@ -6176,7 +6191,7 @@ def delete_tournament(tournament_id: int):
 
 # ==================== Video Resource Routes ====================
 
-@app.post("/video-resources/upload")
+@app.post("/video-resources/upload", dependencies=[Depends(require_coach)])
 async def upload_video(
     audience_type: str = Form("student"), # "all", "batch", "student"
     target_ids: Optional[str] = Form(None), # Comma-separated IDs
@@ -6258,7 +6273,7 @@ async def upload_video(
     finally:
         db.close()
 
-@app.get("/video-resources/")
+@app.get("/video-resources/", dependencies=[Depends(require_student)])
 def get_video_resources(student_id: Optional[int] = None):
     """Get video resources. If student_id provided, returns videos targeted to them directly, via their batches, or to everyone."""
     db = SessionLocal()
@@ -6352,7 +6367,7 @@ def get_video_resources(student_id: Optional[int] = None):
     finally:
         db.close()
 
-@app.get("/video-resources/{video_id}")
+@app.get("/video-resources/{video_id}", dependencies=[Depends(require_student)])
 def get_video_resource_by_id(video_id: int):
     """Get a specific video resource by ID"""
     db = SessionLocal()
@@ -6376,7 +6391,7 @@ def get_video_resource_by_id(video_id: int):
     finally:
         db.close()
 
-@app.delete("/video-resources/{video_id}")
+@app.delete("/video-resources/{video_id}", dependencies=[Depends(require_coach)])
 def delete_video_resource(video_id: int):
     """Delete a video resource and its file"""
     db = SessionLocal()
@@ -6402,7 +6417,7 @@ def delete_video_resource(video_id: int):
 
 # ==================== Coach Invitation Routes ====================
 
-@app.post("/coach-invitations/", response_model=CoachInvitation)
+@app.post("/coach-invitations/", response_model=CoachInvitation, dependencies=[Depends(require_owner)])
 def create_coach_invitation(invitation: CoachInvitationCreate):
     """Create a coach invitation - at least phone or email must be provided"""
     # Validate that at least phone or email is provided
@@ -6463,7 +6478,7 @@ def create_coach_invitation(invitation: CoachInvitationCreate):
     finally:
         db.close()
 
-@app.get("/coach-invitations/", response_model=List[CoachInvitation])
+@app.get("/coach-invitations/", response_model=List[CoachInvitation], dependencies=[Depends(require_owner)])
 def get_all_coach_invitations(owner_id: Optional[int] = None):
     """Get all coach invitations, optionally filtered by owner_id"""
     db = SessionLocal()
@@ -6495,7 +6510,7 @@ def get_all_coach_invitations(owner_id: Optional[int] = None):
     finally:
         db.close()
 
-@app.get("/coach-invitations/{coach_email}")
+@app.get("/coach-invitations/{coach_email}", dependencies=[Depends(require_owner)])
 def get_coach_invitations_by_email(coach_email: str):
     """Get coach invitations by email address"""
     db = SessionLocal()
@@ -6526,7 +6541,7 @@ def get_coach_invitations_by_email(coach_email: str):
     finally:
         db.close()
 
-@app.get("/coach-invitations/token/{invite_token}")
+@app.get("/coach-invitations/token/{invite_token}", dependencies=[Depends(require_owner)])
 def get_coach_invitation_by_token(invite_token: str):
     """Get coach invitation by invite token"""
     db = SessionLocal()
@@ -6557,7 +6572,7 @@ def get_coach_invitation_by_token(invite_token: str):
     finally:
         db.close()
 
-@app.put("/coach-invitations/{invitation_id}")
+@app.put("/coach-invitations/{invitation_id}", dependencies=[Depends(require_owner)])
 def update_coach_invitation(invitation_id: int, invitation_update: CoachInvitationUpdate):
     """Update coach invitation status"""
     db = SessionLocal()
@@ -6619,7 +6634,7 @@ def update_coach_invitation(invitation_id: int, invitation_update: CoachInvitati
     finally:
         db.close()
 
-@app.post("/invitations/", response_model=Invitation)
+@app.post("/invitations/", response_model=Invitation, dependencies=[Depends(require_owner)])
 def create_invitation(invitation: InvitationCreate):
     # Validate that at least phone or email is provided
     phone = (invitation.student_phone or '').strip()
@@ -6671,7 +6686,7 @@ def create_invitation(invitation: InvitationCreate):
         db.close()
 
 
-@app.get("/invitations/pending", response_model=List[Invitation])
+@app.get("/invitations/pending", response_model=List[Invitation], dependencies=[Depends(require_owner)])
 def get_pending_invitations():
     """Get all pending invitations (waiting for student registration) - owner only"""
     db = SessionLocal()
@@ -6701,7 +6716,7 @@ def get_pending_invitations():
     finally:
         db.close()
 
-@app.get("/invitations/student/{student_email}")
+@app.get("/invitations/student/{student_email}", dependencies=[Depends(require_owner)])
 def get_student_invitations(student_email: str):
     db = SessionLocal()
     try:
@@ -6712,7 +6727,7 @@ def get_student_invitations(student_email: str):
     finally:
         db.close()
 
-@app.get("/invitations/coach/{coach_id}")
+@app.get("/invitations/coach/{coach_id}", dependencies=[Depends(require_owner)])
 def get_coach_invitations(coach_id: int):
     db = SessionLocal()
     try:
@@ -6721,7 +6736,7 @@ def get_coach_invitations(coach_id: int):
     finally:
         db.close()
 
-@app.put("/invitations/{invitation_id}")
+@app.put("/invitations/{invitation_id}", dependencies=[Depends(require_owner)])
 def update_invitation(invitation_id: int, invitation_update: InvitationUpdate):
     db = SessionLocal()
     try:
@@ -6761,7 +6776,7 @@ def update_invitation(invitation_id: int, invitation_update: InvitationUpdate):
 
 # ==================== Analytics Routes ====================
 
-@app.get("/analytics/dashboard")
+@app.get("/analytics/dashboard", dependencies=[Depends(require_owner)])
 def get_analytics_dashboard():
     db = SessionLocal()
     try:
@@ -6817,7 +6832,7 @@ def get_analytics_dashboard():
     finally:
         db.close()
 
-@app.get("/analytics/coach/{coach_id}")
+@app.get("/analytics/coach/{coach_id}", dependencies=[Depends(require_owner)])
 def get_coach_analytics(coach_id: int):
     db = SessionLocal()
     try:
@@ -6878,7 +6893,7 @@ def _db_announcement_to_pydantic(db_announcement: AnnouncementDB) -> Announcemen
         is_sent=db_announcement.is_sent
     )
 
-@app.post("/api/announcements/", response_model=Announcement)
+@app.post("/api/announcements/", response_model=Announcement, dependencies=[Depends(require_coach)])
 def create_announcement(announcement: AnnouncementCreate):
     """Create a new announcement"""
     db = SessionLocal()
@@ -6968,7 +6983,7 @@ def create_announcement(announcement: AnnouncementCreate):
     finally:
         db.close()
 
-@app.get("/api/announcements/", response_model=List[Announcement])
+@app.get("/api/announcements/", response_model=List[Announcement], dependencies=[Depends(require_student)])
 def get_announcements(
     target_audience: Optional[str] = Query(None, description="Filter by target audience"),
     priority: Optional[str] = Query(None, description="Filter by priority"),
@@ -6989,7 +7004,7 @@ def get_announcements(
     finally:
         db.close()
 
-@app.get("/api/announcements/{announcement_id}", response_model=Announcement)
+@app.get("/api/announcements/{announcement_id}", response_model=Announcement, dependencies=[Depends(require_student)])
 def get_announcement(announcement_id: int):
     """Get a specific announcement by ID"""
     db = SessionLocal()
@@ -7001,7 +7016,7 @@ def get_announcement(announcement_id: int):
     finally:
         db.close()
 
-@app.put("/api/announcements/{announcement_id}", response_model=Announcement)
+@app.put("/api/announcements/{announcement_id}", response_model=Announcement, dependencies=[Depends(require_coach)])
 def update_announcement(announcement_id: int, announcement: AnnouncementUpdate):
     """Update an announcement"""
     db = SessionLocal()
@@ -7049,7 +7064,7 @@ def update_announcement(announcement_id: int, announcement: AnnouncementUpdate):
     finally:
         db.close()
 
-@app.delete("/api/announcements/{announcement_id}")
+@app.delete("/api/announcements/{announcement_id}", dependencies=[Depends(require_coach)])
 def delete_announcement(announcement_id: int):
     """Delete an announcement"""
     db = SessionLocal()
@@ -7092,7 +7107,7 @@ def _db_event_to_pydantic(db_event: CalendarEventDB) -> CalendarEvent:
         created_at=db_event.created_at.isoformat() if hasattr(db_event.created_at, 'isoformat') else str(db_event.created_at),
     )
 
-@app.post("/api/calendar-events/", response_model=CalendarEvent)
+@app.post("/api/calendar-events/", response_model=CalendarEvent, dependencies=[Depends(require_coach)])
 def create_calendar_event(event: CalendarEventCreate):
     """Create a new calendar event"""
     db = SessionLocal()
@@ -7162,7 +7177,7 @@ def create_calendar_event(event: CalendarEventCreate):
     finally:
         db.close()
 
-@app.get("/api/calendar-events/", response_model=List[CalendarEvent])
+@app.get("/api/calendar-events/", response_model=List[CalendarEvent], dependencies=[Depends(require_student)])
 def get_calendar_events(start_date: Optional[str] = None, end_date: Optional[str] = None, event_type: Optional[str] = None):
     """Get calendar events, optionally filtered by date range and event type"""
     from sqlalchemy import or_
@@ -7226,7 +7241,7 @@ def get_calendar_events(start_date: Optional[str] = None, end_date: Optional[str
     finally:
         db.close()
 
-@app.get("/api/calendar-events/{event_id}", response_model=CalendarEvent)
+@app.get("/api/calendar-events/{event_id}", response_model=CalendarEvent, dependencies=[Depends(require_student)])
 def get_calendar_event(event_id: int):
     """Get a specific calendar event by ID"""
     db = SessionLocal()
@@ -7238,7 +7253,7 @@ def get_calendar_event(event_id: int):
     finally:
         db.close()
 
-@app.put("/api/calendar-events/{event_id}", response_model=CalendarEvent)
+@app.put("/api/calendar-events/{event_id}", response_model=CalendarEvent, dependencies=[Depends(require_coach)])
 def update_calendar_event(event_id: int, event: CalendarEventUpdate):
     """Update a calendar event"""
     db = SessionLocal()
@@ -7271,7 +7286,7 @@ def update_calendar_event(event_id: int, event: CalendarEventUpdate):
     finally:
         db.close()
 
-@app.delete("/api/calendar-events/{event_id}")
+@app.delete("/api/calendar-events/{event_id}", dependencies=[Depends(require_coach)])
 def delete_calendar_event(event_id: int):
     """Delete a calendar event"""
     db = SessionLocal()
@@ -7291,7 +7306,7 @@ def delete_calendar_event(event_id: int):
 
 # ==================== Leave Request Routes ====================
 
-@app.post("/leave-requests/", response_model=LeaveRequest)
+@app.post("/leave-requests/", response_model=LeaveRequest, dependencies=[Depends(require_coach)])
 def create_leave_request(request: LeaveRequestCreate):
     """Create a leave request - coaches can submit leave requests"""
     db = SessionLocal()
@@ -7366,7 +7381,7 @@ def create_leave_request(request: LeaveRequestCreate):
     finally:
         db.close()
 
-@app.get("/leave-requests/", response_model=List[LeaveRequest])
+@app.get("/leave-requests/", response_model=List[LeaveRequest], dependencies=[Depends(require_coach)])
 def get_leave_requests(
     coach_id: Optional[int] = None,
     status: Optional[str] = None,
@@ -7502,7 +7517,7 @@ def get_leave_requests(
     finally:
         db.close()
 
-@app.get("/leave-requests/{request_id}", response_model=LeaveRequest)
+@app.get("/leave-requests/{request_id}", response_model=LeaveRequest, dependencies=[Depends(require_coach)])
 def get_leave_request(request_id: int):
     """Get a specific leave request by ID"""
     db = SessionLocal()
@@ -7535,7 +7550,7 @@ def get_leave_request(request_id: int):
     finally:
         db.close()
 
-@app.put("/leave-requests/{request_id}", response_model=LeaveRequest)
+@app.put("/leave-requests/{request_id}", response_model=LeaveRequest, dependencies=[Depends(require_owner)])
 def update_leave_request(request_id: int, update: LeaveRequestUpdate, owner_id: int):
     """Update leave request status - only owners can approve/reject"""
     db = SessionLocal()
@@ -7645,7 +7660,7 @@ def update_leave_request(request_id: int, update: LeaveRequestUpdate, owner_id: 
     finally:
         db.close()
 
-@app.patch("/leave-requests/{request_id}", response_model=LeaveRequest)
+@app.patch("/leave-requests/{request_id}", response_model=LeaveRequest, dependencies=[Depends(require_owner)])
 def patch_leave_request(request_id: int, update: LeaveRequestUpdateCoach, coach_id: int):
     """Edit a pending leave request (coaches only)"""
     db = SessionLocal()
@@ -7705,7 +7720,7 @@ def patch_leave_request(request_id: int, update: LeaveRequestUpdateCoach, coach_
     finally:
         db.close()
 
-@app.delete("/leave-requests/{request_id}")
+@app.delete("/leave-requests/{request_id}", dependencies=[Depends(require_owner)])
 def delete_leave_request(request_id: int, coach_id: int):
     """Delete a leave request - only the coach who created it can delete (if pending)"""
     db = SessionLocal()
@@ -7734,7 +7749,7 @@ def delete_leave_request(request_id: int, coach_id: int):
     finally:
         db.close()
 
-@app.post("/leave-requests/{request_id}/modify", response_model=LeaveRequest)
+@app.post("/leave-requests/{request_id}/modify", response_model=LeaveRequest, dependencies=[Depends(require_coach)])
 def submit_leave_modification(request_id: int, modification: LeaveRequestModificationCreate):
     """Submit a modification to an approved leave request"""
     db = SessionLocal()
@@ -7829,7 +7844,7 @@ def submit_leave_modification(request_id: int, modification: LeaveRequestModific
     finally:
         db.close()
 
-@app.put("/leave-requests/{request_id}/review-modification", response_model=LeaveRequest)
+@app.put("/leave-requests/{request_id}/review-modification", response_model=LeaveRequest, dependencies=[Depends(require_owner)])
 def review_modification_request(request_id: int, review: LeaveRequestModificationReview):
     """Review a leave modification request (approve mod, reject mod, or reject all)"""
     db = SessionLocal()
@@ -7963,7 +7978,7 @@ def review_modification_request(request_id: int, review: LeaveRequestModificatio
 
 # ==================== Student Registration Request Routes ====================
 
-@app.post("/students/registration-request", response_model=StudentRegistrationRequest)
+@app.post("/students/registration-request", response_model=StudentRegistrationRequest, dependencies=[Depends(require_coach)])
 def create_student_registration_request(request: StudentRegistrationRequestCreate):
     """Create a student registration request - requires owner approval"""
     db = SessionLocal()
@@ -8074,7 +8089,7 @@ def create_student_registration_request(request: StudentRegistrationRequestCreat
     finally:
         db.close()
 
-@app.get("/student-registration-requests/", response_model=List[StudentRegistrationRequest])
+@app.get("/student-registration-requests/", response_model=List[StudentRegistrationRequest], dependencies=[Depends(require_owner)])
 def get_student_registration_requests(
     status: Optional[str] = Query(None, description="Filter by status: pending, approved, rejected")
 ):
@@ -8120,7 +8135,7 @@ def get_student_registration_requests(
     finally:
         db.close()
 
-@app.get("/student-registration-requests/{request_id}", response_model=StudentRegistrationRequest)
+@app.get("/student-registration-requests/{request_id}", response_model=StudentRegistrationRequest, dependencies=[Depends(require_owner)])
 def get_student_registration_request(request_id: int):
     """Get a specific registration request"""
     db = SessionLocal()
@@ -8150,7 +8165,7 @@ def get_student_registration_request(request_id: int):
     finally:
         db.close()
 
-@app.put("/student-registration-requests/{request_id}", response_model=StudentRegistrationRequest)
+@app.put("/student-registration-requests/{request_id}", response_model=StudentRegistrationRequest, dependencies=[Depends(require_owner)])
 def update_registration_request_status(
     request_id: int,
     update: StudentRegistrationRequestUpdate,
@@ -8230,7 +8245,7 @@ def update_registration_request_status(
     finally:
         db.close()
 
-@app.get("/students/check-registration-status/{email}")
+@app.get("/students/check-registration-status/{email}", dependencies=[Depends(require_student)])
 def check_registration_status(email: str):
     """Check if a registration request exists for an email"""
     db = SessionLocal()
@@ -8254,7 +8269,7 @@ def check_registration_status(email: str):
 
 # ==================== Coach Registration Request Routes ====================
 
-@app.post("/coaches/registration-request", response_model=CoachRegistrationRequest)
+@app.post("/coaches/registration-request", response_model=CoachRegistrationRequest, dependencies=[Depends(require_owner)])
 def create_coach_registration_request(request: CoachRegistrationRequestCreate):
     """Create a coach registration request - requires owner approval"""
     db = SessionLocal()
@@ -8327,7 +8342,7 @@ def create_coach_registration_request(request: CoachRegistrationRequestCreate):
     finally:
         db.close()
 
-@app.get("/coach-registration-requests/", response_model=List[CoachRegistrationRequest])
+@app.get("/coach-registration-requests/", response_model=List[CoachRegistrationRequest], dependencies=[Depends(require_owner)])
 def get_coach_registration_requests(
     status: Optional[str] = Query(None, description="Filter by status: pending, approved, rejected")
 ):
@@ -8359,7 +8374,7 @@ def get_coach_registration_requests(
     finally:
         db.close()
 
-@app.get("/coach-registration-requests/{request_id}", response_model=CoachRegistrationRequest)
+@app.get("/coach-registration-requests/{request_id}", response_model=CoachRegistrationRequest, dependencies=[Depends(require_owner)])
 def get_coach_registration_request(request_id: int):
     """Get a specific coach registration request"""
     db = SessionLocal()
@@ -8386,7 +8401,7 @@ def get_coach_registration_request(request_id: int):
     finally:
         db.close()
 
-@app.put("/coach-registration-requests/{request_id}", response_model=CoachRegistrationRequest)
+@app.put("/coach-registration-requests/{request_id}", response_model=CoachRegistrationRequest, dependencies=[Depends(require_owner)])
 def update_coach_registration_request_status(
     request_id: int,
     update: CoachRegistrationRequestUpdate,
@@ -8459,7 +8474,7 @@ def update_coach_registration_request_status(
     finally:
         db.close()
 
-@app.get("/coaches/check-registration-status/{email}")
+@app.get("/coaches/check-registration-status/{email}", dependencies=[Depends(require_student)])
 def check_coach_registration_status(email: str):
     """Check if a coach registration request exists for an email"""
     db = SessionLocal()
@@ -8483,7 +8498,7 @@ def check_coach_registration_status(email: str):
 
 # ==================== Image Upload Endpoints ====================
 
-@app.post("/api/upload/image")
+@app.post("/api/upload/image", dependencies=[Depends(require_owner)])
 async def upload_image(file: UploadFile = File(...)):
     """Upload an image file (for profile photos, etc.)"""
     try:
@@ -8508,7 +8523,7 @@ async def upload_image(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/uploads/{filename}")
+@app.get("/uploads/{filename}", dependencies=[Depends(require_owner)])
 async def get_uploaded_image(filename: str):
     """Serve uploaded images"""
     file_path = UPLOAD_DIR / filename
@@ -8570,7 +8585,7 @@ def check_and_create_fee_notifications(db, user_id: int, user_type: str):
     except Exception as e:
         print(f"Error checking fee notifications: {e}")
 
-@app.get("/api/notifications/{user_id}", response_model=List[Notification])
+@app.get("/api/notifications/{user_id}", response_model=List[Notification], dependencies=[Depends(require_student)])
 def get_user_notifications(
     user_id: int, 
     user_type: str = Query(..., regex="^(student|coach|owner)$"),
@@ -8615,7 +8630,7 @@ def get_user_notifications(
     finally:
         db.close()
 
-@app.put("/api/notifications/{notification_id}/read")
+@app.put("/api/notifications/{notification_id}/read", dependencies=[Depends(require_student)])
 def mark_notification_read(notification_id: int):
     """Mark a notification as read"""
     db = SessionLocal()
@@ -8630,7 +8645,7 @@ def mark_notification_read(notification_id: int):
     finally:
         db.close()
 
-@app.put("/api/notifications/read-all")
+@app.put("/api/notifications/read-all", dependencies=[Depends(require_student)])
 def mark_all_notifications_read(request: Dict[str, Any]):
     """Mark multiple notifications as read"""
     # Expects {"ids": [1, 2, 3]}
@@ -8649,7 +8664,7 @@ def mark_all_notifications_read(request: Dict[str, Any]):
     finally:
         db.close()
 
-@app.delete("/api/notifications/{notification_id}")
+@app.delete("/api/notifications/{notification_id}", dependencies=[Depends(require_coach)])
 def delete_notification(notification_id: int):
     """Delete a notification"""
     db = SessionLocal()
@@ -8675,7 +8690,7 @@ class ReportFilter(BaseModel):
     generated_by_name: Optional[str] = "Admin"
     generated_by_role: Optional[str] = "Owner"
 
-@app.post("/api/reports/generate")
+@app.post("/api/reports/generate", dependencies=[Depends(require_coach)])
 def generate_report(filter: ReportFilter):
     """Generate standardized reports for Attendance and Fees"""
     db = SessionLocal()
@@ -9092,7 +9107,7 @@ class SaveReportHistoryRequest(BaseModel):
     user_id: int
     user_role: str
 
-@app.post("/api/reports/history")
+@app.post("/api/reports/history", dependencies=[Depends(require_coach)])
 def save_report_history(request: SaveReportHistoryRequest):
     """Save generated report to history"""
     db = SessionLocal()
@@ -9118,7 +9133,7 @@ def save_report_history(request: SaveReportHistoryRequest):
     finally:
         db.close()
 
-@app.get("/api/reports/history")
+@app.get("/api/reports/history", dependencies=[Depends(require_coach)])
 def get_report_history(
     user_id: int = Query(..., description="User ID to fetch history for"),
     user_role: str = Query(..., description="User Role (owner, coach)")

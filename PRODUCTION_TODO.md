@@ -40,11 +40,11 @@
 - [x] 🔴 On refresh token expiry: clear all stored data and redirect to login screen
 - [x] 🔴 Clear all secure storage on logout
 
-### A3 · Role-Based Authorization (Backend)
-- [ ] 🔴 Create `get_current_user` dependency that validates JWT and returns user
-- [ ] 🔴 Create `require_owner`, `require_coach`, `require_student` dependency functions
-- [ ] 🔴 Apply role guards to ALL 100+ endpoints — owner-only, coach-only, student read-only
-- [ ] 🔴 Return HTTP 403 (not 401) for valid token but insufficient role
+### A3 · Role-Based Authorization (Backend) ✅ COMPLETE
+- [x] 🔴 Create `get_current_user` dependency that validates JWT and returns user
+- [x] 🔴 Create `require_owner`, `require_coach`, `require_student` dependency functions
+- [x] 🔴 Apply role guards to ALL 100+ endpoints — owner-only, coach-only, student read-only
+- [x] 🔴 Return HTTP 403 (not 401) for valid token but insufficient role
 
 ### A4 · IDOR / Ownership Enforcement
 - [ ] 🔴 Audit every `GET /attendance/student/{id}`, `GET /fees/student/{id}`, `GET /performance/student/{id}`, `GET /bmi/student/{id}` — students can only see their own data
