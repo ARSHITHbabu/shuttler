@@ -32,13 +32,13 @@
 - [x] 🔴 Token revocation list (`revoked_tokens` DB table) for logout; per-token JTI blacklist
 - [x] 🔴 Invalidate ALL tokens on password change (`jwt_invalidated_at` timestamp on user tables)
 
-### A2 · Secure Token Storage (Flutter)
-- [ ] 🔴 Add `flutter_secure_storage: ^9.2.2` to `pubspec.yaml`
-- [ ] 🔴 Migrate ALL credentials from `SharedPreferences` to `flutter_secure_storage` (access token, refresh token, FCM token)
-- [ ] 🔴 Add Dio interceptor to attach `Authorization: Bearer <token>` to every request
-- [ ] 🔴 Add Dio interceptor to auto-refresh token on 401 response (with retry)
-- [ ] 🔴 On refresh token expiry: clear all stored data and redirect to login screen
-- [ ] 🔴 Clear all secure storage on logout
+### A2 · Secure Token Storage (Flutter) ✅ COMPLETE
+- [x] 🔴 Add `flutter_secure_storage: ^9.2.2` to `pubspec.yaml`
+- [x] 🔴 Migrate ALL credentials from `SharedPreferences` to `flutter_secure_storage` (access token, refresh token, FCM token)
+- [x] 🔴 Add Dio interceptor to attach `Authorization: Bearer <token>` to every request
+- [x] 🔴 Add Dio interceptor to auto-refresh token on 401 response (with retry)
+- [x] 🔴 On refresh token expiry: clear all stored data and redirect to login screen
+- [x] 🔴 Clear all secure storage on logout
 
 ### A3 · Role-Based Authorization (Backend)
 - [ ] 🔴 Create `get_current_user` dependency that validates JWT and returns user

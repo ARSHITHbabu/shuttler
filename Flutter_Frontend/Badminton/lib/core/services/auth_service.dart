@@ -96,7 +96,14 @@ class AuthService {
           final userData = data['user'] as Map<String, dynamic>;
 
           // Save common data
-          await _storageService.saveAuthToken('dummy_token'); // Backend doesn't return JWT yet
+          final accessToken = data['access_token'] ?? 'dummy_token';
+          final refreshToken = data['refresh_token'];
+          
+          await _storageService.saveAuthToken(accessToken);
+          if (refreshToken != null) {
+            await _storageService.saveRefreshToken(refreshToken);
+          }
+          
           await _storageService.saveUserId(userData['id']);
           await _storageService.saveUserType(userType);
           await _storageService.saveUserEmail(userData['email']);
