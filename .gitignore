@@ -14,10 +14,13 @@
 *.crt
 id_rsa
 id_rsa.pub
+*.p12
 
 # Firebase credentials
 firebase-adminsdk*.json
 service-account*.json
+google-services.json
+GoogleService-Info.plist
 
 # ========================================
 # PYTHON/BACKEND - Generated files
