@@ -1,8 +1,10 @@
-from fastapi import FastAPI, HTTPException, File, UploadFile, Query, Form, Request
+from fastapi import FastAPI, HTTPException, File, UploadFile, Query, Form, Request, Depends, Security
 from fastapi.staticfiles import StaticFiles
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from jose import JWTError, jwt
 import mimetypes
 from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, Text, Date, DateTime, ForeignKey, JSON, func, and_, or_, select
 from sqlalchemy.orm import declarative_base
@@ -72,8 +74,94 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     except Exception as e:
         raise
 
+# ==================== JWT Utilities ====================
+
+security = HTTPBearer()
+
+def create_access_token(data: dict) -> str:
+    """Create a short-lived JWT access token (default 30 min)."""
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    jti = str(uuid.uuid4())
+    to_encode.update({"exp": expire, "type": "access", "jti": jti})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def create_refresh_token(data: dict) -> str:
+    """Create a long-lived JWT refresh token (default 30 days)."""
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    jti = str(uuid.uuid4())
+    to_encode.update({"exp": expire, "type": "refresh", "jti": jti})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def decode_token(token: str) -> dict:
+    """Decode and validate a JWT token. Raises HTTP 401 on failure."""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+
+def _check_token_revoked(payload: dict) -> None:
+    """Check token revocation list and per-user invalidation timestamp.
+    Raises HTTP 401 if the token has been revoked."""
+    jti = payload.get("jti")
+    user_id = payload.get("sub")
+    user_type = payload.get("user_type")
+    iat = payload.get("iat")
+
+    db = SessionLocal()
+    try:
+        # 1. Check per-token blacklist (for explicit logout)
+        if jti and db.query(RevokedTokenDB).filter(RevokedTokenDB.jti == jti).first():
+            raise HTTPException(status_code=401, detail="Token has been revoked. Please log in again.")
+
+        # 2. Check per-user invalidation timestamp (for password change)
+        if user_id and user_type and iat:
+            user = None
+            if user_type == "owner":
+                user = db.query(OwnerDB).filter(OwnerDB.id == int(user_id)).first()
+            elif user_type == "coach":
+                user = db.query(CoachDB).filter(CoachDB.id == int(user_id)).first()
+            elif user_type == "student":
+                user = db.query(StudentDB).filter(StudentDB.id == int(user_id)).first()
+
+            if user and user.jwt_invalidated_at is not None:
+                from datetime import timezone as _tz
+                invalidated_ts = user.jwt_invalidated_at.replace(tzinfo=_tz.utc).timestamp()
+                if iat < invalidated_ts:
+                    raise HTTPException(
+                        status_code=401,
+                        detail="Session expired due to password change. Please log in again."
+                    )
+    finally:
+        db.close()
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Security(security),
+) -> dict:
+    """FastAPI dependency that validates a JWT access token.
+    Usage: current_user: dict = Depends(get_current_user)
+    Returns the decoded JWT payload with keys: sub, user_type, email, role, jti.
+    """
+    payload = decode_token(credentials.credentials)
+    if payload.get("type") != "access":
+        raise HTTPException(status_code=401, detail="Invalid token type: expected access token")
+    _check_token_revoked(payload)
+    return payload
+
 # Load environment variables from .env file
 load_dotenv()
+
+# ==================== JWT Configuration ====================
+SECRET_KEY = os.getenv("SECRET_KEY", "temporary-dev-key-replace-with-secure-one-for-production")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
 
 # Database setup - PostgreSQL with fallback to SQLite
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
@@ -166,6 +254,9 @@ class CoachDB(Base):
     profile_photo = Column(String(500), nullable=True)  # Profile photo URL/path
     fcm_token = Column(String(500), nullable=True)  # Firebase Cloud Messaging token for push notifications
 
+    # JWT: all tokens issued before this timestamp are invalid (used for password-change revocation)
+    jwt_invalidated_at = Column(DateTime(timezone=True), nullable=True)
+
     # RELATIONSHIPS (will be defined after the related models are created):
     # Note: Announcements and calendar events now support both coaches and owners via polymorphic relationships
 
@@ -180,20 +271,23 @@ class OwnerDB(Base):
     specialization = Column(String, nullable=True)
     experience_years = Column(Integer, nullable=True)
     status = Column(String, default="active")  # active, inactive
-    
+
     # Profile enhancements:
     profile_photo = Column(String(500), nullable=True)  # Profile photo URL/path
     fcm_token = Column(String(500), nullable=True)  # Firebase Cloud Messaging token for push notifications
-    
+
     # Academy Details:
     academy_name = Column(String(255), nullable=True)
     academy_address = Column(Text, nullable=True)
     academy_contact = Column(String(50), nullable=True)
     academy_email = Column(String(100), nullable=True)
-    
+
     # Ownership and Permissions:
     role = Column(String(20), default="owner")  # "owner" (primary), "co_owner"
     must_change_password = Column(Boolean, default=False)
+
+    # JWT: all tokens issued before this timestamp are invalid (used for password-change revocation)
+    jwt_invalidated_at = Column(DateTime(timezone=True), nullable=True)
     
     # RELATIONSHIPS (will be defined after the related models are created):
     # Note: Announcements and calendar events now support both coaches and owners via polymorphic relationships
@@ -247,6 +341,9 @@ class StudentDB(Base):
     # NEW COLUMNS for Phase 0 enhancements:
     profile_photo = Column(String(500), nullable=True)  # Profile photo URL/path, required for profile completion
     fcm_token = Column(String(500), nullable=True)  # Firebase Cloud Messaging token for push notifications
+
+    # JWT: all tokens issued before this timestamp are invalid (used for password-change revocation)
+    jwt_invalidated_at = Column(DateTime(timezone=True), nullable=True)
 
 class BatchStudentDB(Base):
     __tablename__ = "batch_students"
@@ -543,7 +640,7 @@ class CoachRegistrationRequestDB(Base):
 class ReportHistoryDB(Base):
     """History of generated reports"""
     __tablename__ = "report_history"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, nullable=False)
     user_role = Column(String(50), nullable=False) # "owner", "coach"
@@ -552,6 +649,21 @@ class ReportHistoryDB(Base):
     generated_on = Column(DateTime(timezone=True), server_default=func.now())
     report_data = Column(JSON, nullable=False) # The full JSON data needed to recreate the report
     key_metrics = Column(JSON, nullable=True) # Optional summary metrics for quick display
+
+
+class RevokedTokenDB(Base):
+    """JWT token revocation list (blacklist) for explicit logout.
+    Tokens are identified by their unique JTI (JWT ID) claim.
+    Cleanup of expired entries can be handled by a background job.
+    """
+    __tablename__ = "revoked_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    jti = Column(String(255), unique=True, nullable=False, index=True)  # JWT unique ID
+    user_id = Column(Integer, nullable=False, index=True)
+    user_type = Column(String(20), nullable=False)  # owner | coach | student
+    revoked_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)  # mirrors token expiry for cleanup
 
 
 # ==================== Database Migration Functions ====================
@@ -1105,11 +1217,17 @@ def migrate_database_schema(engine):
             check_and_add_column(engine, 'coach_attendance', 'remarks', 'TEXT', nullable=True)
             print(" coach_attendance table schema verified")
         
+        # ── JWT Phase A1: per-user token invalidation timestamp ──────────────
+        check_and_add_column(engine, 'coaches', 'jwt_invalidated_at', 'TIMESTAMP WITH TIME ZONE', nullable=True)
+        check_and_add_column(engine, 'owners', 'jwt_invalidated_at', 'TIMESTAMP WITH TIME ZONE', nullable=True)
+        check_and_add_column(engine, 'students', 'jwt_invalidated_at', 'TIMESTAMP WITH TIME ZONE', nullable=True)
+        print("JWT invalidation columns verified.")
+
         print("Database schema migration completed!")
     except Exception as e:
         print(f"Migration error: {e}")
 
-# Create tables
+# Create tables (also creates revoked_tokens if it doesn't exist)
 Base.metadata.create_all(bind=engine)
 
 # Run migration to add missing columns
@@ -1170,6 +1288,17 @@ class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
     user_type: str  # "coach", "owner", or "student"
+
+
+class TokenRefreshRequest(BaseModel):
+    """Body for POST /auth/refresh"""
+    refresh_token: str
+
+
+class LogoutRequest(BaseModel):
+    """Body for POST /auth/logout (refresh_token is optional but recommended)"""
+    refresh_token: Optional[str] = None
+
 
 class CoachUpdate(BaseModel):
     name: Optional[str] = None
@@ -2030,6 +2159,128 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ==================== JWT Auth Middleware ====================
+# These paths never require a JWT token
+_JWT_PUBLIC_PATHS: set = {
+    "/",
+    "/auth/login",
+    "/auth/forgot-password",
+    "/auth/reset-password",
+    "/auth/refresh",
+    # Legacy login endpoints (to be removed after Flutter migrates to JWT in A2)
+    "/owners/login",
+    "/coaches/login",
+    "/students/login",
+    # Owner self-registration (first-time setup)
+    "/owners/",
+}
+
+# Path *prefixes* that are public (checked with str.startswith)
+_JWT_PUBLIC_PREFIXES: tuple = (
+    "/uploads/",          # static file serving
+    "/docs",              # Swagger UI
+    "/redoc",             # ReDoc
+    "/openapi.json",      # OpenAPI schema
+    # Registration / invitation flows (pre-login)
+    "/students/registration-request",
+    "/coaches/registration-request",
+    "/students/check-registration-status/",
+    "/coaches/check-registration-status/",
+    "/coach-invitations/token/",
+    "/invitations/student/",
+    "/invitations/token/",
+    "/student-registration-requests/",
+    "/coach-registration-requests/",
+)
+
+
+@app.middleware("http")
+async def jwt_auth_middleware(request: Request, call_next):
+    """Validate JWT Bearer token for all protected routes.
+    Public paths are whitelisted above. All others require a valid access token.
+    On success the decoded payload is stored in request.state.current_user.
+    """
+    path = request.url.path
+    method = request.method
+
+    # 1. Always allow CORS pre-flight
+    if method == "OPTIONS":
+        return await call_next(request)
+
+    # 2. Allow exact public paths
+    if path in _JWT_PUBLIC_PATHS:
+        # Special-case: POST /owners/ is public (registration); other methods require auth
+        if path == "/owners/" and method != "POST":
+            pass  # fall through to token validation below
+        else:
+            return await call_next(request)
+
+    # 3. Allow public path prefixes
+    if any(path.startswith(prefix) for prefix in _JWT_PUBLIC_PREFIXES):
+        return await call_next(request)
+
+    # 4. Validate Bearer token
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Authentication required. Please log in."},
+        )
+
+    token = auth_header[len("Bearer "):]
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Invalid or expired token. Please log in again."},
+        )
+
+    if payload.get("type") != "access":
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Invalid token type: expected access token."},
+        )
+
+    # 5. Check per-token revocation (explicit logout)
+    jti = payload.get("jti")
+    user_id = payload.get("sub")
+    user_type = payload.get("user_type")
+    iat = payload.get("iat")
+
+    db = SessionLocal()
+    try:
+        if jti and db.query(RevokedTokenDB).filter(RevokedTokenDB.jti == jti).first():
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Token has been revoked. Please log in again."},
+            )
+
+        # 6. Check per-user invalidation timestamp (password change)
+        if user_id and user_type and iat:
+            _user = None
+            if user_type == "owner":
+                _user = db.query(OwnerDB).filter(OwnerDB.id == int(user_id)).first()
+            elif user_type == "coach":
+                _user = db.query(CoachDB).filter(CoachDB.id == int(user_id)).first()
+            elif user_type == "student":
+                _user = db.query(StudentDB).filter(StudentDB.id == int(user_id)).first()
+
+            if _user and _user.jwt_invalidated_at is not None:
+                from datetime import timezone as _tz
+                inv_ts = _user.jwt_invalidated_at.replace(tzinfo=_tz.utc).timestamp()
+                if iat < inv_ts:
+                    return JSONResponse(
+                        status_code=401,
+                        content={"detail": "Session expired due to password change. Please log in again."},
+                    )
+    finally:
+        db.close()
+
+    # 7. Attach user info to request state for downstream use
+    request.state.current_user = payload
+    return await call_next(request)
+
 # Create uploads directory for image storage
 UPLOAD_DIR = Path("./uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
@@ -2266,12 +2517,18 @@ def delete_coach(coach_id: int):
 
 @app.post("/auth/login")
 def unified_login(login_data: UnifiedLoginRequest):
-    """
-    Unified login endpoint that detects user type (owner, coach, or student)
-    and validates credentials.
+    """Unified login. Returns JWT access + refresh tokens plus user data.
+
+    Response shape:
+        {success, userType, access_token, refresh_token, token_type, user}
     """
     db = SessionLocal()
     try:
+        # ── helper to build token pair ────────────────────────────────────
+        def _make_tokens(user_id: int, user_type: str, email: str, role: str):
+            payload = {"sub": str(user_id), "user_type": user_type, "email": email, "role": role}
+            return create_access_token(payload), create_refresh_token(payload)
+
         # 1. Try OwnerDB
         owner = db.query(OwnerDB).filter(OwnerDB.email == login_data.email).first()
         if owner:
@@ -2283,14 +2540,18 @@ def unified_login(login_data: UnifiedLoginRequest):
                 if password_valid:
                     owner.password = hash_password(login_data.password)
                     db.commit()
-            
+
             if password_valid:
                 if owner.status == "inactive":
                     return {"success": False, "message": "Your account has been deactivated."}
-                
+
+                access_token, refresh_token = _make_tokens(owner.id, "owner", owner.email, owner.role or "owner")
                 return {
                     "success": True,
                     "userType": "owner",
+                    "access_token": access_token,
+                    "refresh_token": refresh_token,
+                    "token_type": "bearer",
                     "user": {
                         "id": owner.id,
                         "name": owner.name,
@@ -2302,8 +2563,8 @@ def unified_login(login_data: UnifiedLoginRequest):
                         "academy_name": owner.academy_name,
                         "academy_address": owner.academy_address,
                         "academy_contact": owner.academy_contact,
-                        "academy_email": owner.academy_email
-                    }
+                        "academy_email": owner.academy_email,
+                    },
                 }
 
         # 2. Try CoachDB
@@ -2317,14 +2578,18 @@ def unified_login(login_data: UnifiedLoginRequest):
                 if password_valid:
                     coach.password = hash_password(login_data.password)
                     db.commit()
-            
+
             if password_valid:
                 if coach.status == "inactive":
                     return {"success": False, "message": "Your account has been deactivated."}
-                
+
+                access_token, refresh_token = _make_tokens(coach.id, "coach", coach.email, "coach")
                 return {
                     "success": True,
                     "userType": "coach",
+                    "access_token": access_token,
+                    "refresh_token": refresh_token,
+                    "token_type": "bearer",
                     "user": {
                         "id": coach.id,
                         "name": coach.name,
@@ -2333,8 +2598,8 @@ def unified_login(login_data: UnifiedLoginRequest):
                         "specialization": coach.specialization,
                         "experience_years": coach.experience_years,
                         "status": coach.status,
-                        "profile_photo": coach.profile_photo
-                    }
+                        "profile_photo": coach.profile_photo,
+                    },
                 }
 
         # 3. Try StudentDB
@@ -2348,9 +2613,8 @@ def unified_login(login_data: UnifiedLoginRequest):
                 if password_valid:
                     student.password = hash_password(login_data.password)
                     db.commit()
-            
+
             if password_valid:
-                # Check profile completeness
                 required_profile_fields = {
                     'guardian_name': student.guardian_name,
                     'guardian_phone': student.guardian_phone,
@@ -2359,28 +2623,32 @@ def unified_login(login_data: UnifiedLoginRequest):
                     't_shirt_size': student.t_shirt_size,
                 }
                 profile_complete = all(v is not None and str(v).strip() != '' for v in required_profile_fields.values())
-                
+
                 if student.status == "inactive":
                     return {
                         "success": False,
                         "message": "Your account is currently inactive.",
                         "account_inactive": True,
                         "rejoin_request_pending": student.rejoin_request_pending,
-                        "student_id": student.id
+                        "student_id": student.id,
                     }
-                
+
+                access_token, refresh_token = _make_tokens(student.id, "student", student.email, "student")
                 return {
                     "success": True,
                     "userType": "student",
                     "profile_complete": profile_complete,
+                    "access_token": access_token,
+                    "refresh_token": refresh_token,
+                    "token_type": "bearer",
                     "user": {
                         "id": student.id,
                         "name": student.name,
                         "email": student.email,
                         "phone": student.phone,
                         "status": student.status,
-                        "profile_photo": student.profile_photo
-                    }
+                        "profile_photo": student.profile_photo,
+                    },
                 }
 
         return {"success": False, "message": "Invalid email or password"}
@@ -2560,9 +2828,218 @@ def reset_password(request: ResetPasswordRequest):
     finally:
         db.close()
 
+@app.post("/auth/refresh")
+def refresh_access_token(body: TokenRefreshRequest):
+    """Exchange a valid refresh token for a new access + refresh token pair.
+
+    The old refresh token is revoked after a successful rotation.
+    """
+    payload = decode_token(body.refresh_token)
+
+    if payload.get("type") != "refresh":
+        raise HTTPException(status_code=401, detail="Invalid token type: expected refresh token")
+
+    # Check if refresh token has been explicitly revoked
+    jti = payload.get("jti")
+    user_id = payload.get("sub")
+    user_type = payload.get("user_type")
+    iat = payload.get("iat")
+    exp = payload.get("exp")
+
+    db = SessionLocal()
+    try:
+        if jti and db.query(RevokedTokenDB).filter(RevokedTokenDB.jti == jti).first():
+            raise HTTPException(status_code=401, detail="Refresh token has been revoked. Please log in again.")
+
+        # Check per-user invalidation (password change)
+        if user_id and user_type and iat:
+            _user = None
+            if user_type == "owner":
+                _user = db.query(OwnerDB).filter(OwnerDB.id == int(user_id)).first()
+            elif user_type == "coach":
+                _user = db.query(CoachDB).filter(CoachDB.id == int(user_id)).first()
+            elif user_type == "student":
+                _user = db.query(StudentDB).filter(StudentDB.id == int(user_id)).first()
+
+            if _user and _user.jwt_invalidated_at is not None:
+                from datetime import timezone as _tz
+                inv_ts = _user.jwt_invalidated_at.replace(tzinfo=_tz.utc).timestamp()
+                if iat < inv_ts:
+                    raise HTTPException(
+                        status_code=401,
+                        detail="Session expired due to password change. Please log in again."
+                    )
+
+        # Revoke the consumed refresh token (token rotation)
+        if jti and exp:
+            from datetime import timezone as _tz
+            expires_dt = datetime.fromtimestamp(exp, tz=_tz.utc)
+            db.add(RevokedTokenDB(
+                jti=jti,
+                user_id=int(user_id),
+                user_type=user_type,
+                expires_at=expires_dt,
+            ))
+            db.commit()
+
+    finally:
+        db.close()
+
+    # Issue new token pair
+    token_data = {
+        "sub": user_id,
+        "user_type": user_type,
+        "email": payload.get("email", ""),
+        "role": payload.get("role", user_type),
+    }
+    new_access = create_access_token(token_data)
+    new_refresh = create_refresh_token(token_data)
+
+    return {
+        "access_token": new_access,
+        "refresh_token": new_refresh,
+        "token_type": "bearer",
+    }
+
+
+@app.post("/auth/logout")
+def logout(body: LogoutRequest, credentials: HTTPAuthorizationCredentials = Security(security)):
+    """Revoke the current access token and (optionally) the refresh token.
+
+    The client should delete both tokens from secure storage after calling this.
+    """
+    access_payload = decode_token(credentials.credentials)
+    if access_payload.get("type") != "access":
+        raise HTTPException(status_code=401, detail="Invalid token type")
+
+    db = SessionLocal()
+    try:
+        from datetime import timezone as _tz
+
+        # Revoke access token
+        a_jti = access_payload.get("jti")
+        a_exp = access_payload.get("exp")
+        a_uid = access_payload.get("sub")
+        a_utype = access_payload.get("user_type", "unknown")
+        if a_jti and a_exp and not db.query(RevokedTokenDB).filter(RevokedTokenDB.jti == a_jti).first():
+            db.add(RevokedTokenDB(
+                jti=a_jti,
+                user_id=int(a_uid) if a_uid else 0,
+                user_type=a_utype,
+                expires_at=datetime.fromtimestamp(a_exp, tz=_tz.utc),
+            ))
+
+        # Optionally revoke refresh token
+        if body.refresh_token:
+            try:
+                r_payload = jwt.decode(body.refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+                r_jti = r_payload.get("jti")
+                r_exp = r_payload.get("exp")
+                r_uid = r_payload.get("sub")
+                r_utype = r_payload.get("user_type", a_utype)
+                if r_jti and r_exp and not db.query(RevokedTokenDB).filter(RevokedTokenDB.jti == r_jti).first():
+                    db.add(RevokedTokenDB(
+                        jti=r_jti,
+                        user_id=int(r_uid) if r_uid else 0,
+                        user_type=r_utype,
+                        expires_at=datetime.fromtimestamp(r_exp, tz=_tz.utc),
+                    ))
+            except JWTError:
+                pass  # Invalid refresh token — still succeed, just skip revoking it
+
+        db.commit()
+    finally:
+        db.close()
+
+    return {"success": True, "message": "Logged out successfully"}
+
+
+@app.get("/auth/me")
+def get_current_user_profile(credentials: HTTPAuthorizationCredentials = Security(security)):
+    """Return the profile of the currently authenticated user."""
+    payload = decode_token(credentials.credentials)
+    if payload.get("type") != "access":
+        raise HTTPException(status_code=401, detail="Invalid token type")
+    _check_token_revoked(payload)
+
+    user_id = payload.get("sub")
+    user_type = payload.get("user_type")
+
+    db = SessionLocal()
+    try:
+        if user_type == "owner":
+            user = db.query(OwnerDB).filter(OwnerDB.id == int(user_id)).first()
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            return {
+                "id": user.id,
+                "user_type": "owner",
+                "name": user.name,
+                "email": user.email,
+                "phone": user.phone,
+                "role": user.role,
+                "status": user.status,
+                "profile_photo": user.profile_photo,
+                "must_change_password": user.must_change_password,
+                "academy_name": user.academy_name,
+                "academy_address": user.academy_address,
+                "academy_contact": user.academy_contact,
+                "academy_email": user.academy_email,
+            }
+        elif user_type == "coach":
+            user = db.query(CoachDB).filter(CoachDB.id == int(user_id)).first()
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            return {
+                "id": user.id,
+                "user_type": "coach",
+                "name": user.name,
+                "email": user.email,
+                "phone": user.phone,
+                "specialization": user.specialization,
+                "experience_years": user.experience_years,
+                "status": user.status,
+                "profile_photo": user.profile_photo,
+            }
+        elif user_type == "student":
+            user = db.query(StudentDB).filter(StudentDB.id == int(user_id)).first()
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            required = {
+                'guardian_name': user.guardian_name,
+                'guardian_phone': user.guardian_phone,
+                'date_of_birth': user.date_of_birth,
+                'address': user.address,
+                't_shirt_size': user.t_shirt_size,
+            }
+            profile_complete = all(v is not None and str(v).strip() != '' for v in required.values())
+            return {
+                "id": user.id,
+                "user_type": "student",
+                "name": user.name,
+                "email": user.email,
+                "phone": user.phone,
+                "status": user.status,
+                "profile_photo": user.profile_photo,
+                "profile_complete": profile_complete,
+                "guardian_name": user.guardian_name,
+                "guardian_phone": user.guardian_phone,
+                "date_of_birth": user.date_of_birth,
+                "address": user.address,
+                "t_shirt_size": user.t_shirt_size,
+                "blood_group": user.blood_group,
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Unknown user type in token")
+    finally:
+        db.close()
+
+
 @app.post("/auth/change-password")
 def change_password(request: ChangePasswordRequest):
-    """Change password for authenticated users - requires current password verification"""
+    """Change password for authenticated users - requires current password verification.
+    Invalidates ALL existing tokens for the user (forces re-login on all devices).
+    """
     db = SessionLocal()
     try:
         # Find user by email and type
@@ -2572,57 +3049,36 @@ def change_password(request: ChangePasswordRequest):
             user = db.query(OwnerDB).filter(OwnerDB.email == request.email).first()
         else:
             user = db.query(StudentDB).filter(StudentDB.email == request.email).first()
-        
+
         if not user:
-            return {
-                "success": False,
-                "message": "User not found"
-            }
-        
+            return {"success": False, "message": "User not found"}
+
         # Verify current password
         password_valid = False
         if user.password.startswith('$2b$') or user.password.startswith('$2a$'):
-            # Password is hashed, verify it
             password_valid = verify_password(request.current_password, user.password)
         else:
-            # Plain text password (legacy), check directly
             password_valid = (user.password == request.current_password)
-        
+
         if not password_valid:
-            return {
-                "success": False,
-                "message": "Current password is incorrect"
-            }
-        
-        # Check if new password is different from current password
+            return {"success": False, "message": "Current password is incorrect"}
+
         if request.current_password == request.new_password:
-            return {
-                "success": False,
-                "message": "New password must be different from current password"
-            }
-        
+            return {"success": False, "message": "New password must be different from current password"}
+
         # Validate new password length (bcrypt limit is 72 bytes)
-        new_password_bytes = request.new_password.encode('utf-8')
-        if len(new_password_bytes) > 72:
-            return {
-                "success": False,
-                "message": "Password cannot be longer than 72 characters"
-            }
-        
-        # Update password
+        if len(request.new_password.encode('utf-8')) > 72:
+            return {"success": False, "message": "Password cannot be longer than 72 characters"}
+
+        # Update password and invalidate ALL existing JWT tokens for this user
         user.password = hash_password(request.new_password)
+        user.jwt_invalidated_at = datetime.utcnow()
         db.commit()
-        
-        return {
-            "success": True,
-            "message": "Password changed successfully"
-        }
+
+        return {"success": True, "message": "Password changed successfully. Please log in again on all devices."}
     except Exception as e:
         db.rollback()
-        return {
-            "success": False,
-            "message": f"Failed to change password: {str(e)}"
-        }
+        return {"success": False, "message": f"Failed to change password: {str(e)}"}
     finally:
         db.close()
 

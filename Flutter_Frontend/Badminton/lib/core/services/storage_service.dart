@@ -1,8 +1,10 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// Local storage service for persisting user data
 class StorageService {
   static const String _keyAuthToken = 'auth_token';
+  static const String _keyRefreshToken = 'refresh_token';
   static const String _keyUserId = 'user_id';
   static const String _keyUserType = 'user_type';
   static const String _keyUserEmail = 'user_email';
@@ -19,6 +21,12 @@ class StorageService {
   static const String _keyAcademyEmail = 'academy_email';
 
   SharedPreferences? _prefs;
+  final _secureStorage = const FlutterSecureStorage();
+  
+  String? _cachedAuthToken;
+  String? _cachedRefreshToken;
+  String? _cachedFcmToken;
+
   bool _isInitialized = false;
   Future<void>? _initFuture;
   
@@ -36,6 +44,24 @@ class StorageService {
 
   Future<void> _doInit() async {
     _prefs = await SharedPreferences.getInstance();
+    
+    // Migrate credentials from SharedPreferences if they exist
+    final oldAuth = _prefs!.getString(_keyAuthToken);
+    final oldFcm = _prefs!.getString(_keyFcmToken);
+    
+    if (oldAuth != null) {
+      await _secureStorage.write(key: _keyAuthToken, value: oldAuth);
+      await _prefs!.remove(_keyAuthToken);
+    }
+    if (oldFcm != null) {
+      await _secureStorage.write(key: _keyFcmToken, value: oldFcm);
+      await _prefs!.remove(_keyFcmToken);
+    }
+    
+    _cachedAuthToken = await _secureStorage.read(key: _keyAuthToken);
+    _cachedRefreshToken = await _secureStorage.read(key: _keyRefreshToken);
+    _cachedFcmToken = await _secureStorage.read(key: _keyFcmToken);
+
     _isInitialized = true;
   }
 
@@ -67,7 +93,9 @@ class StorageService {
   // Auth Token
   Future<bool> saveAuthToken(String token) async {
     await _ensureInitialized();
-    return await _prefs!.setString(_keyAuthToken, token);
+    await _secureStorage.write(key: _keyAuthToken, value: token);
+    _cachedAuthToken = token;
+    return true;
   }
 
   String? getAuthToken() {
@@ -75,12 +103,36 @@ class StorageService {
       // Return null if not initialized (safe for read operations)
       return null;
     }
-    return _prefs!.getString(_keyAuthToken);
+    return _cachedAuthToken;
   }
 
   Future<bool> removeAuthToken() async {
     await _ensureInitialized();
-    return await _prefs!.remove(_keyAuthToken);
+    await _secureStorage.delete(key: _keyAuthToken);
+    _cachedAuthToken = null;
+    return true;
+  }
+
+  // Refresh Token
+  Future<bool> saveRefreshToken(String token) async {
+    await _ensureInitialized();
+    await _secureStorage.write(key: _keyRefreshToken, value: token);
+    _cachedRefreshToken = token;
+    return true;
+  }
+
+  String? getRefreshToken() {
+    if (!_isInitialized) {
+      return null;
+    }
+    return _cachedRefreshToken;
+  }
+
+  Future<bool> removeRefreshToken() async {
+    await _ensureInitialized();
+    await _secureStorage.delete(key: _keyRefreshToken);
+    _cachedRefreshToken = null;
+    return true;
   }
 
   // User ID
@@ -200,17 +252,21 @@ class StorageService {
   // FCM Token (for push notifications)
   Future<bool> saveFcmToken(String token) async {
     await _ensureInitialized();
-    return await _prefs!.setString(_keyFcmToken, token);
+    await _secureStorage.write(key: _keyFcmToken, value: token);
+    _cachedFcmToken = token;
+    return true;
   }
 
   String? getFcmToken() {
     if (!_isInitialized) return null;
-    return _prefs!.getString(_keyFcmToken);
+    return _cachedFcmToken;
   }
 
   Future<bool> removeFcmToken() async {
     await _ensureInitialized();
-    return await _prefs!.remove(_keyFcmToken);
+    await _secureStorage.delete(key: _keyFcmToken);
+    _cachedFcmToken = null;
+    return true;
   }
 
   // Clear all user data (logout)
@@ -222,6 +278,7 @@ class StorageService {
   // Clear only auth data (keep app preferences)
   Future<void> clearAuthData() async {
     await removeAuthToken();
+    await removeRefreshToken();
     await removeUserId();
     await removeUserType();
     await removeUserEmail();

@@ -21,24 +21,24 @@
 ## PHASE A — Security & Authentication
 *Complete this before any real user data is stored. Estimated: 2 weeks.*
 
-### A1 · JWT Authentication (Backend)
-- [ ] 🔴 Install and configure `python-jose` for JWT token generation (library already installed, not used)
-- [ ] 🔴 Implement `POST /auth/login` → returns `{access_token, refresh_token, user_data}`
-- [ ] 🔴 Access token: short-lived (15–60 min); refresh token: 7–30 days
-- [ ] 🔴 Implement `POST /auth/refresh` endpoint
-- [ ] 🔴 Implement `POST /auth/logout` endpoint (add token to blacklist / revocation list)
-- [ ] 🔴 Implement `GET /auth/me` endpoint (current user profile)
-- [ ] 🔴 Protect ALL backend endpoints with Bearer token validation via FastAPI `Depends(get_current_user)`
-- [ ] 🔴 Token revocation list (blacklist in Redis or DB) for logout
-- [ ] 🔴 Invalidate ALL tokens on password change
+### A1 · JWT Authentication (Backend) ✅ COMPLETE
+- [x] 🔴 Install and configure `python-jose` for JWT token generation (library already installed, now wired up)
+- [x] 🔴 Implement `POST /auth/login` → returns `{access_token, refresh_token, token_type, user_data}`
+- [x] 🔴 Access token: 30 min (configurable via `ACCESS_TOKEN_EXPIRE_MINUTES`); refresh token: 30 days (`REFRESH_TOKEN_EXPIRE_DAYS`)
+- [x] 🔴 Implement `POST /auth/refresh` endpoint (with token rotation — old refresh token is revoked)
+- [x] 🔴 Implement `POST /auth/logout` endpoint (revokes access + refresh tokens in DB blacklist)
+- [x] 🔴 Implement `GET /auth/me` endpoint (current user profile from JWT)
+- [x] 🔴 Protect ALL backend endpoints with JWT auth middleware (`jwt_auth_middleware`); `get_current_user` dependency also available for individual endpoints
+- [x] 🔴 Token revocation list (`revoked_tokens` DB table) for logout; per-token JTI blacklist
+- [x] 🔴 Invalidate ALL tokens on password change (`jwt_invalidated_at` timestamp on user tables)
 
-### A2 · Secure Token Storage (Flutter)
-- [ ] 🔴 Add `flutter_secure_storage: ^9.2.2` to `pubspec.yaml`
-- [ ] 🔴 Migrate ALL credentials from `SharedPreferences` to `flutter_secure_storage` (access token, refresh token, FCM token)
-- [ ] 🔴 Add Dio interceptor to attach `Authorization: Bearer <token>` to every request
-- [ ] 🔴 Add Dio interceptor to auto-refresh token on 401 response (with retry)
-- [ ] 🔴 On refresh token expiry: clear all stored data and redirect to login screen
-- [ ] 🔴 Clear all secure storage on logout
+### A2 · Secure Token Storage (Flutter) ✅ COMPLETE
+- [x] 🔴 Add `flutter_secure_storage: ^9.2.2` to `pubspec.yaml`
+- [x] 🔴 Migrate ALL credentials from `SharedPreferences` to `flutter_secure_storage` (access token, refresh token, FCM token)
+- [x] 🔴 Add Dio interceptor to attach `Authorization: Bearer <token>` to every request
+- [x] 🔴 Add Dio interceptor to auto-refresh token on 401 response (with retry)
+- [x] 🔴 On refresh token expiry: clear all stored data and redirect to login screen
+- [x] 🔴 Clear all secure storage on logout
 
 ### A3 · Role-Based Authorization (Backend)
 - [ ] 🔴 Create `get_current_user` dependency that validates JWT and returns user

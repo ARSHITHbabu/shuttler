@@ -12,6 +12,8 @@ class ApiEndpoints {
     // Run get_local_ip.ps1 to find your current IP address
     // Current IP: 192.168.1.11 (updated automatically)
     return 'http://192.168.1.11:8001';
+    // Current IP: 192.168.1.7 (updated automatically)
+    return 'http://192.168.1.7:8001';
   }
 
   // Authentication
