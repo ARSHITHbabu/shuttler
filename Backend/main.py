@@ -23,6 +23,10 @@ from pathlib import Path
 from dotenv import load_dotenv
 from passlib.context import CryptContext
 import bcrypt
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 # Password hashing context - use bcrypt directly to avoid passlib initialization issues
 # Fallback to passlib if direct bcrypt fails
@@ -2272,7 +2276,20 @@ class CalendarEventUpdate(BaseModel):
 
 # ==================== FastAPI App ====================
 
+def get_user_id_or_ip(request: Request) -> str:
+    """Returns the user ID if authenticated, else falls back to IP."""
+    try:
+        user = dict(request.state.current_user)
+        return str(user.get("sub", get_remote_address(request)))
+    except Exception:
+        return get_remote_address(request)
+
+limiter = Limiter(key_func=get_user_id_or_ip, default_limits=["100/minute"])
+
 app = FastAPI(title="Badminton Academy Management System")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 # CORS Configuration
 ALLOWED_ORIGINS_STR = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8001,https://shuttler.app,https://api.shuttler.app")
@@ -2761,7 +2778,8 @@ def delete_coach(coach_id: int):
         db.close()
 
 @app.post("/auth/login")
-def unified_login(login_data: UnifiedLoginRequest):
+@limiter.limit("5/15minutes")
+def unified_login(request: Request, login_data: UnifiedLoginRequest):
     """Unified login. Returns JWT access + refresh tokens plus user data.
 
     Response shape:
@@ -2901,7 +2919,8 @@ def unified_login(login_data: UnifiedLoginRequest):
         db.close()
 
 @app.post("/coaches/login")
-def login_coach(login_data: CoachLogin):
+@limiter.limit("5/15minutes")
+def login_coach(request: Request, login_data: CoachLogin):
     """Login endpoint for coaches only - owners should use /owners/login"""
     db = SessionLocal()
     try:
@@ -2960,7 +2979,10 @@ def login_coach(login_data: CoachLogin):
 password_reset_tokens = {}
 
 @app.post("/auth/forgot-password")
-def forgot_password(request: ForgotPasswordRequest):
+@limiter.limit("3/hour")
+def forgot_password(request: Request, rq: ForgotPasswordRequest):
+    # To avoid changing the rest of the function for rq variable:
+    request_data = rq
     """Request password reset - generates a reset token"""
     db = SessionLocal()
     try:
@@ -2970,36 +2992,32 @@ def forgot_password(request: ForgotPasswordRequest):
 
         # Try provided type first
         if user_type == "coach":
-            user = db.query(CoachDB).filter(CoachDB.email == request.email).first()
+            user = db.query(CoachDB).filter(CoachDB.email == request_data.email).first()
         elif user_type == "owner":
-            user = db.query(OwnerDB).filter(OwnerDB.email == request.email).first()
+            user = db.query(OwnerDB).filter(OwnerDB.email == request_data.email).first()
         elif user_type == "student":
-            user = db.query(StudentDB).filter(StudentDB.email == request.email).first()
+            user = db.query(StudentDB).filter(StudentDB.email == request_data.email).first()
         
         # If not found, search all
         if not user:
-            user = db.query(OwnerDB).filter(OwnerDB.email == request.email).first()
+            user = db.query(OwnerDB).filter(OwnerDB.email == request_data.email).first()
             if user: user_type = "owner"
             else:
-                user = db.query(CoachDB).filter(CoachDB.email == request.email).first()
+                user = db.query(CoachDB).filter(CoachDB.email == request_data.email).first()
                 if user: user_type = "coach"
                 else:
-                    user = db.query(StudentDB).filter(StudentDB.email == request.email).first()
+                    user = db.query(StudentDB).filter(StudentDB.email == request_data.email).first()
                     if user: user_type = "student"
         
         if not user:
-            # Don't reveal if email exists for security
-            return {
-                "success": True,
-                "message": "If an account exists with this email, a password reset link has been sent."
-            }
+            return {"success": False, "message": "Email not found"}
         
         # Generate secure reset token
         reset_token = secrets.token_urlsafe(32)
         
         # Store token with expiration (1 hour)
         password_reset_tokens[reset_token] = {
-            "email": request.email,
+            "email": request_data.email,
             "user_type": user_type, # Use the detected type
             "expires_at": datetime.now() + timedelta(hours=1)
         }
@@ -8833,7 +8851,8 @@ def check_coach_registration_status(email: str):
 # ==================== Image Upload Endpoints ====================
 
 @app.post("/api/upload/image", dependencies=[Depends(require_owner)])
-async def upload_image(file: UploadFile = File(...)):
+@limiter.limit("10/hour")
+async def upload_image(request: Request, file: UploadFile = File(...)):
     """Upload an image file (for profile photos, etc.)"""
     try:
         # Validate file type

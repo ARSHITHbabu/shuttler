@@ -69,13 +69,13 @@
 - [x] 🔴 Replace wildcard `allow_origins=["*"]` with specific production domain(s) only
 - [x] 🔴 Specify `allow_methods` and `allow_headers` explicitly
 
-### A8 · Rate Limiting
-- [ ] 🔴 Add `slowapi==0.1.9` to backend
-- [ ] 🔴 Login endpoint: max 5 attempts per IP per 15 minutes
-- [ ] 🔴 Forgot password: max 3 requests per email per hour
-- [ ] 🔴 General API: max 100 requests per user per minute
-- [ ] 🔴 File upload: max 10 uploads per user per hour
-- [ ] 🔴 Return HTTP 429 with `Retry-After` header
+### A8 · Rate Limiting ✅ COMPLETE
+- [x] 🔴 Add `slowapi==0.1.9` to backend
+- [x] 🔴 Login endpoint: max 5 attempts per IP per 15 minutes
+- [x] 🔴 Forgot password: max 3 requests per email per hour
+- [x] 🔴 General API: max 100 requests per user per minute
+- [x] 🔴 File upload: max 10 uploads per user per hour
+- [x] 🔴 Return HTTP 429 with `Retry-After` header
 
 ### A9 · Security Headers
 - [ ] 🔴 Add via Nginx or FastAPI middleware: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `X-XSS-Protection: 1; mode=block`, `Content-Security-Policy`, `Referrer-Policy: no-referrer`
