@@ -138,37 +138,46 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
   @override
   Widget build(BuildContext context) {
     final batchesAsync = ref.watch(batchListProvider);
+    final canPop = Navigator.canPop(context);
 
-    return RefreshIndicator(
-      onRefresh: () => ref.read(batchListProvider.notifier).refresh(),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header
-                Padding(
-                  padding: const EdgeInsets.all(AppDimensions.paddingL),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Batches',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.add, color: AppColors.textPrimary),
-                        onPressed: _openAddForm,
-                      ),
-                    ],
-                  ),
-                ),
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: canPop
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+                onPressed: () => Navigator.of(context).pop(),
+              )
+            : null,
+        title: const Text(
+          'Batches',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        titleSpacing: canPop ? 0 : AppDimensions.paddingL,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add, color: AppColors.accent),
+            onPressed: _openAddForm,
+          ),
+          const SizedBox(width: AppDimensions.spacingS),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: () => ref.read(batchListProvider.notifier).refresh(),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: AppDimensions.paddingL),
 
                 // Search Bar
                 Padding(
@@ -286,8 +295,9 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
           );
         },
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 class _BatchCard extends StatelessWidget {
