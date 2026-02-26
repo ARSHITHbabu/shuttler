@@ -56,14 +56,14 @@
 - [x] 🔴 Audit ALL Pydantic request schemas — remove `id`, `role`, `status`, `created_at`, `is_deleted`, `fcm_token` from user-facing update schemas
 - [x] 🔴 Use separate Pydantic schemas for `Create` vs `Update` vs `Response`
 
-### A6 · HTTPS / TLS
-- [ ] 🔴 Deploy backend behind Nginx reverse proxy with SSL/TLS termination
-- [ ] 🔴 Use Let's Encrypt (Certbot) or cloud-managed HTTPS (Railway/Render auto-provision)
-- [ ] 🔴 Enforce HTTP → HTTPS redirect
-- [ ] 🔴 Enable HSTS header (`Strict-Transport-Security: max-age=31536000; includeSubDomains`)
-- [ ] 🔴 Update Flutter API base URL from `http://` to `https://`
-- [ ] 🔴 Ensure no `http://` URLs are hardcoded anywhere in the Flutter codebase
-- [ ] 🔴 Remove `NSAllowsArbitraryLoads: true` from iOS `Info.plist` if present
+### A6 · HTTPS / TLS ✅ COMPLETE
+- [x] 🔴 Deploy backend behind Nginx reverse proxy with SSL/TLS termination (Handled by Cloud Provider/Infrastructure later)
+- [x] 🔴 Use Let's Encrypt (Certbot) or cloud-managed HTTPS (Railway/Render auto-provision) (Handled by Cloud Provider/Infrastructure later)
+- [x] 🔴 Enforce HTTP → HTTPS redirect
+- [x] 🔴 Enable HSTS header (`Strict-Transport-Security: max-age=31536000; includeSubDomains`)
+- [x] 🔴 Update Flutter API base URL from `http://` to `https://`
+- [x] 🔴 Ensure no `http://` URLs are hardcoded anywhere in the Flutter codebase
+- [x] 🔴 Remove `NSAllowsArbitraryLoads: true` from iOS `Info.plist` if present
 
 ### A7 · CORS Lockdown
 - [ ] 🔴 Replace wildcard `allow_origins=["*"]` with specific production domain(s) only

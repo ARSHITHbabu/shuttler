@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, File, UploadFile, Query, Form, Reque
 from fastapi.staticfiles import StaticFiles
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
+from fastapi.responses import FileResponse, StreamingResponse, JSONResponse, RedirectResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 import mimetypes
@@ -2282,6 +2282,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ==================== HTTPS / HSTS Middleware ====================
+@app.middleware("http")
+async def https_redirect_middleware(request: Request, call_next):
+    # Enforce HTTP -> HTTPS redirect if behind a proxy that forwards HTTP
+    if request.headers.get("x-forwarded-proto") == "http":
+        url = request.url.replace(scheme="https")
+        return RedirectResponse(url, status_code=301)
+        
+    response = await call_next(request)
+    
+    # Enable HSTS header
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    return response
 
 # ==================== JWT Auth Middleware ====================
 # These paths never require a JWT token
