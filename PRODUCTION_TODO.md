@@ -52,9 +52,9 @@
 - [x] 🔴 Create reusable `verify_coach_batch_access(coach_id, batch_id, db)` utility
 - [x] 🔴 Audit ALL GET/PUT/DELETE endpoints for ownership enforcement (students, coaches, fees, payments, performance, BMI, notifications, profile photos, leave requests)
 
-### A5 · Mass Assignment Protection
-- [ ] 🔴 Audit ALL Pydantic request schemas — remove `id`, `role`, `status`, `created_at`, `is_deleted`, `fcm_token` from user-facing update schemas
-- [ ] 🔴 Use separate Pydantic schemas for `Create` vs `Update` vs `Response`
+### A5 · Mass Assignment Protection ✅ COMPLETE
+- [x] 🔴 Audit ALL Pydantic request schemas — remove `id`, `role`, `status`, `created_at`, `is_deleted`, `fcm_token` from user-facing update schemas
+- [x] 🔴 Use separate Pydantic schemas for `Create` vs `Update` vs `Response`
 
 ### A6 · HTTPS / TLS
 - [ ] 🔴 Deploy backend behind Nginx reverse proxy with SSL/TLS termination

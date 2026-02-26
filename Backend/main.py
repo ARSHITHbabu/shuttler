@@ -1440,7 +1440,6 @@ class CoachUpdate(BaseModel):
     password: Optional[str] = None
     specialization: Optional[str] = None
     experience_years: Optional[int] = None
-    status: Optional[str] = None
     monthly_salary: Optional[float] = None
     joining_date: Optional[date] = None
     profile_photo: Optional[str] = None
@@ -1489,7 +1488,6 @@ class OwnerUpdate(BaseModel):
     experience_years: Optional[int] = None
     must_change_password: Optional[bool] = None
     profile_photo: Optional[str] = None
-    fcm_token: Optional[str] = None
     academy_name: Optional[str] = None
     academy_address: Optional[str] = None
     academy_contact: Optional[str] = None
@@ -1510,7 +1508,6 @@ class SessionUpdate(BaseModel):
     name: Optional[str] = None
     start_date: Optional[str] = None
     end_date: Optional[str] = None
-    status: Optional[str] = None
 
 class Session(BaseModel):
     id: int
@@ -1580,8 +1577,6 @@ class BatchUpdate(BaseModel):
     assigned_coach_name: Optional[str] = None  # Deprecated: kept for backward compatibility
     assigned_coach_ids: Optional[List[int]] = None  # New: supports multiple coaches
     session_id: Optional[int] = None
-    status: Optional[str] = None
-    inactive_at: Optional[datetime] = None
 
 # Student Models
 class StudentCreate(BaseModel):
@@ -1634,9 +1629,7 @@ class StudentUpdate(BaseModel):
     address: Optional[str] = None
     t_shirt_size: Optional[str] = None
     blood_group: Optional[str] = None
-    status: Optional[str] = None
     profile_photo: Optional[str] = None
-    inactive_at: Optional[datetime] = None
     rejoin_request_pending: Optional[bool] = None
 
 # Attendance Models
@@ -1763,7 +1756,6 @@ class FeeUpdate(BaseModel):
     amount: Optional[float] = None
     due_date: Optional[str] = None
     payee_student_id: Optional[int] = None
-    status: Optional[str] = None  # Will be recalculated
 
 # Performance Models
 class PerformanceCreate(BaseModel):
@@ -1920,7 +1912,6 @@ def create_notification(db, user_id: int, user_type: str, title: str, body: str,
 
 
 class EnquiryUpdate(BaseModel):
-    status: Optional[str] = None
     followed_up_by: Optional[str] = None
     notes: Optional[str] = None
     assigned_to: Optional[str] = None
