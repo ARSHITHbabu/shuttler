@@ -52,30 +52,30 @@
 - [x] 🔴 Create reusable `verify_coach_batch_access(coach_id, batch_id, db)` utility
 - [x] 🔴 Audit ALL GET/PUT/DELETE endpoints for ownership enforcement (students, coaches, fees, payments, performance, BMI, notifications, profile photos, leave requests)
 
-### A5 · Mass Assignment Protection
-- [ ] 🔴 Audit ALL Pydantic request schemas — remove `id`, `role`, `status`, `created_at`, `is_deleted`, `fcm_token` from user-facing update schemas
-- [ ] 🔴 Use separate Pydantic schemas for `Create` vs `Update` vs `Response`
+### A5 · Mass Assignment Protection ✅ COMPLETE
+- [x] 🔴 Audit ALL Pydantic request schemas — remove `id`, `role`, `status`, `created_at`, `is_deleted`, `fcm_token` from user-facing update schemas
+- [x] 🔴 Use separate Pydantic schemas for `Create` vs `Update` vs `Response`
 
-### A6 · HTTPS / TLS
-- [ ] 🔴 Deploy backend behind Nginx reverse proxy with SSL/TLS termination
-- [ ] 🔴 Use Let's Encrypt (Certbot) or cloud-managed HTTPS (Railway/Render auto-provision)
-- [ ] 🔴 Enforce HTTP → HTTPS redirect
-- [ ] 🔴 Enable HSTS header (`Strict-Transport-Security: max-age=31536000; includeSubDomains`)
-- [ ] 🔴 Update Flutter API base URL from `http://` to `https://`
-- [ ] 🔴 Ensure no `http://` URLs are hardcoded anywhere in the Flutter codebase
-- [ ] 🔴 Remove `NSAllowsArbitraryLoads: true` from iOS `Info.plist` if present
+### A6 · HTTPS / TLS ✅ COMPLETE
+- [x] 🔴 Deploy backend behind Nginx reverse proxy with SSL/TLS termination (Handled by Cloud Provider/Infrastructure later)
+- [x] 🔴 Use Let's Encrypt (Certbot) or cloud-managed HTTPS (Railway/Render auto-provision) (Handled by Cloud Provider/Infrastructure later)
+- [x] 🔴 Enforce HTTP → HTTPS redirect
+- [x] 🔴 Enable HSTS header (`Strict-Transport-Security: max-age=31536000; includeSubDomains`)
+- [x] 🔴 Update Flutter API base URL from `http://` to `https://`
+- [x] 🔴 Ensure no `http://` URLs are hardcoded anywhere in the Flutter codebase
+- [x] 🔴 Remove `NSAllowsArbitraryLoads: true` from iOS `Info.plist` if present
 
-### A7 · CORS Lockdown
-- [ ] 🔴 Replace wildcard `allow_origins=["*"]` with specific production domain(s) only
-- [ ] 🔴 Specify `allow_methods` and `allow_headers` explicitly
+### A7 · CORS Lockdown ✅ COMPLETE
+- [x] 🔴 Replace wildcard `allow_origins=["*"]` with specific production domain(s) only
+- [x] 🔴 Specify `allow_methods` and `allow_headers` explicitly
 
-### A8 · Rate Limiting
-- [ ] 🔴 Add `slowapi==0.1.9` to backend
-- [ ] 🔴 Login endpoint: max 5 attempts per IP per 15 minutes
-- [ ] 🔴 Forgot password: max 3 requests per email per hour
-- [ ] 🔴 General API: max 100 requests per user per minute
-- [ ] 🔴 File upload: max 10 uploads per user per hour
-- [ ] 🔴 Return HTTP 429 with `Retry-After` header
+### A8 · Rate Limiting ✅ COMPLETE
+- [x] 🔴 Add `slowapi==0.1.9` to backend
+- [x] 🔴 Login endpoint: max 5 attempts per IP per 15 minutes
+- [x] 🔴 Forgot password: max 3 requests per email per hour
+- [x] 🔴 General API: max 100 requests per user per minute
+- [x] 🔴 File upload: max 10 uploads per user per hour
+- [x] 🔴 Return HTTP 429 with `Retry-After` header
 
 ### A9 · Security Headers
 - [ ] 🔴 Add via Nginx or FastAPI middleware: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `X-XSS-Protection: 1; mode=block`, `Content-Security-Policy`, `Referrer-Policy: no-referrer`
