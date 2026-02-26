@@ -1,8 +1,9 @@
-from fastapi import FastAPI, HTTPException, File, UploadFile, Query, Form
+from fastapi import FastAPI, HTTPException, File, UploadFile, Query, Form, Request
 from fastapi.staticfiles import StaticFiles
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse, JSONResponse
+import mimetypes
 from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, Text, Date, DateTime, ForeignKey, JSON, func, and_, or_, select
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
@@ -1098,6 +1099,12 @@ def migrate_database_schema(engine):
             check_and_add_column(engine, 'calendar_events', 'related_schedule_id', 'INTEGER', nullable=True)
             print(" calendar_events table schema updated for multi-table support")
         
+        # Migrate coach_attendance table
+        if 'coach_attendance' in tables:
+            check_and_add_column(engine, 'coach_attendance', 'marked_by', 'VARCHAR(255)', nullable=True)
+            check_and_add_column(engine, 'coach_attendance', 'remarks', 'TEXT', nullable=True)
+            print(" coach_attendance table schema verified")
+        
         print("Database schema migration completed!")
     except Exception as e:
         print(f"Migration error: {e}")
@@ -2041,6 +2048,103 @@ def get_db():
 @app.get("/")
 def read_root():
     return {"message": "Badminton Academy Management System API", "version": "2.0"}
+
+# Helper for range-based video streaming
+def get_video_range_chunk(file_path: Path, start: int, end: int, chunk_size: int = 256*1024):
+    """Generator that yields specific byte range of a file"""
+    try:
+        with open(file_path, "rb") as f:
+            f.seek(start)
+            remaining = (end - start) + 1
+            while remaining > 0:
+                to_read = min(chunk_size, remaining)
+                data = f.read(to_read)
+                if not data:
+                    break
+                yield data
+                remaining -= len(data)
+    except Exception as e:
+        print(f"Streaming error for {file_path}: {e}")
+
+@app.options("/video-stream/{filename}")
+async def video_stream_options():
+    return JSONResponse(
+        content="OK",
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "Range, Content-Type",
+            "Access-Control-Max-Age": "3600",
+        }
+    )
+
+@app.get("/video-stream/{filename}")
+async def stream_video(filename: str, request: Request):
+    file_path = UPLOAD_DIR / filename
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    file_size = file_path.stat().st_size
+    range_header = request.headers.get("range")
+    user_agent = request.headers.get("user-agent", "Unknown")
+    
+    # Extract file extension and determine content type
+    content_type, _ = mimetypes.guess_type(str(file_path))
+    content_type = content_type or "video/mp4"
+
+    # Common CORS and Range headers
+    common_headers = {
+        "Accept-Ranges": "bytes",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Expose-Headers": "Content-Range, Content-Length, Accept-Ranges",
+    }
+    
+    # Default to 200 OK if no range requested
+    if not range_header or not range_header.startswith("bytes="):
+        print(f"Full Video Request: {filename} | UA: {user_agent}")
+        return FileResponse(
+            file_path,
+            headers={**common_headers, "Content-Length": str(file_size)},
+            media_type=content_type
+        )
+
+    # Handle Range Request
+    try:
+        range_value = range_header.replace("bytes=", "")
+        start_str, end_str = range_value.split("-") if "-" in range_value else (range_value, "")
+        
+        start = int(start_str) if start_str else 0
+        end = int(end_str) if end_str else file_size - 1
+        
+        # Clamp values
+        start = max(0, start)
+        end = min(end, file_size - 1)
+        
+        if start > end:
+            raise HTTPException(status_code=416, detail="Requested range not satisfiable")
+            
+        content_length = (end - start) + 1
+        
+        print(f"Range Request: {filename} | {start}-{end}/{file_size} | UA: {user_agent}")
+        
+        return StreamingResponse(
+            get_video_range_chunk(file_path, start, end),
+            status_code=206,
+            headers={
+                **common_headers,
+                "Content-Range": f"bytes {start}-{end}/{file_size}",
+                "Content-Length": str(content_length),
+                "Content-Type": content_type,
+            },
+            media_type=content_type
+        )
+    except Exception as e:
+        print(f"Range handling error: {e}")
+        return FileResponse(
+            file_path,
+            headers={**common_headers, "Content-Length": str(file_size)},
+            media_type=content_type
+        )
 
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
@@ -4053,6 +4157,23 @@ def mark_coach_attendance(attendance: CoachAttendanceCreate):
             db.commit()
             db.refresh(db_attendance)
             return coach_attendance_db_to_response(db_attendance)
+    finally:
+        db.close()
+
+@app.get("/coach-attendance/")
+def get_coach_attendance(date: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None):
+    db = SessionLocal()
+    try:
+        query = db.query(CoachAttendanceDB)
+        if date:
+            query = query.filter(CoachAttendanceDB.date == date)
+        if start_date:
+            query = query.filter(CoachAttendanceDB.date >= start_date)
+        if end_date:
+            query = query.filter(CoachAttendanceDB.date <= end_date)
+            
+        attendance = query.all()
+        return [coach_attendance_db_to_response(a) for a in attendance]
     finally:
         db.close()
 
@@ -8578,9 +8699,9 @@ if __name__ == "__main__":
     
     print("Starting Badminton Academy Management System API...")
     print("API Documentation (Local): http://127.0.0.1:8001/docs")
-    print("API Documentation (Network): http://192.168.1.4:8001/docs")
+    print("API Documentation (Network): http://192.168.1.11:8001/docs")
     print("Alternative Docs: http://127.0.0.1:8001/redoc")
-    print("Mobile devices can connect to: http://192.168.1.4:8001")
+    print("Mobile devices can connect to: http://192.168.1.11:8001")
     # host="0.0.0.0" allows connections from any device on the network
     
     # Start background cleanup scheduler

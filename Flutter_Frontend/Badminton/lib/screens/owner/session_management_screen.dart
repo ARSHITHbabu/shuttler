@@ -13,11 +13,12 @@ import '../../providers/auth_provider.dart';
 import '../../providers/batch_provider.dart';
 import '../../providers/coach_provider.dart';
 import '../../providers/calendar_provider.dart';
+import '../../providers/announcement_provider.dart';
 import '../../models/schedule.dart';
 import '../../models/batch.dart';
 import 'package:intl/intl.dart';
 
-/// Session Management Screen - Manage practice/tournament/camp sessions
+/// Practice Session Management Screen - Manage practice/tournament/camp sessions
 /// Matches React reference: SessionManagement.tsx (adapted for Schedule model)
 class SessionManagementScreen extends ConsumerStatefulWidget {
   const SessionManagementScreen({super.key});
@@ -146,6 +147,7 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
     try {
       final scheduleService = ref.read(scheduleServiceProvider);
       final authState = await ref.read(authProvider.future);
+      final batches = await ref.read(batchListProvider.future);
       
       // Get created_by from auth (convert to string as backend expects string)
       String? createdBy;
@@ -182,9 +184,33 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
       }
 
       if (mounted) {
-        SuccessSnackbar.show(context, _editingSession != null
-            ? 'Session updated successfully'
-            : 'Session created successfully');
+        final isEdit = _editingSession != null;
+        SuccessSnackbar.show(context, isEdit
+            ? 'Practice Session updated successfully'
+            : 'Practice Session created successfully');
+
+        // Create an announcement automatically if it's a new session
+        if (!isEdit) {
+          try {
+            final announcementManager = ref.read(announcementManagerProvider(
+              targetAudience: 'student',
+            ).notifier);
+            
+            final batchName = batches.firstWhere((b) => b.id == _selectedBatchId).name;
+            final dateStr = DateFormat('dd MMM').format(_selectedDate);
+            
+            await announcementManager.createAnnouncement({
+              'title': 'New Practice Session scheduled!',
+              'content': 'A new session "${_titleController.text.trim()}" has been scheduled for batch $batchName on $dateStr.',
+              'target_audience': 'all', // Or filter by batch if supported
+              'priority': 'normal',
+              'is_sent': true,
+            });
+          } catch (e) {
+            // Silently fail announcement creation so it doesn't block the session save
+            debugPrint('Failed to create automatic announcement: $e');
+          }
+        }
         setState(() {
           _showAddForm = false;
           _titleController.clear();
@@ -229,7 +255,7 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: const Text(
-          'Sessions',
+          'Practice Sessions',
           style: TextStyle(
             color: AppColors.textPrimary,
             fontSize: 20,
@@ -323,8 +349,8 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
                                   const SizedBox(height: AppDimensions.spacingM),
                                   Text(
                                     _selectedTab == 'upcoming'
-                                        ? 'No upcoming sessions'
-                                        : 'No past sessions',
+                                        ? 'No upcoming practice sessions'
+                                        : 'No past practice sessions',
                                     style: const TextStyle(
                                       color: AppColors.textSecondary,
                                       fontSize: 16,
@@ -464,7 +490,7 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
           onPressed: () => setState(() => _showAddForm = false),
         ),
         title: Text(
-          _editingSession != null ? 'Edit Session' : 'Create Session',
+          _editingSession != null ? 'Edit Practice Session' : 'Create Practice Session',
           style: const TextStyle(
             color: AppColors.textPrimary,
             fontSize: 20,
@@ -774,7 +800,7 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : Text(
-                          _editingSession != null ? 'Update Session' : 'Create Session',
+                          _editingSession != null ? 'Update Practice Session' : 'Create Practice Session',
                           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                         ),
                 ),
@@ -823,7 +849,7 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
                 onTap: () async {
                   final confirmed = await ConfirmationDialog.showDelete(
                     context,
-                    'Session',
+                    'Practice Session',
                   );
                   if (confirmed == true && mounted) {
                     try {
@@ -833,12 +859,12 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
                       ref.invalidate(yearlyEventsProvider(session.date.year));
                       
                       if (mounted) {
-                        SuccessSnackbar.show(context, 'Session deleted successfully');
+                        SuccessSnackbar.show(context, 'Practice Session deleted successfully');
                         setState(() => _selectedSession = null);
                       }
                     } catch (e) {
                       if (mounted) {
-                        SuccessSnackbar.showError(context, 'Failed to delete session: ${e.toString()}');
+                        SuccessSnackbar.showError(context, 'Failed to delete practice session: ${e.toString()}');
                       }
                     }
                   }
