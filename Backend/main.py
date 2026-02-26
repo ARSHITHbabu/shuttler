@@ -113,6 +113,110 @@ def _check_token_revoked(payload: dict) -> None:
     user_type = payload.get("user_type")
     iat = payload.get("iat")
 
+    # ==================== IDOR ENFORCEMENT ====================
+    # Globally protect resources based on user_type and IDs in path
+    import json
+    import re
+    
+    # DO NOT EXHAUST REQUEST BODY STREAM: we avoid reading body here to not break FastAPI request parsing
+    
+    def check_student_access(s_id):
+        # Student can only access their own data
+        if user_type == 'student' and str(user_id) != str(s_id):
+            return False
+            
+        # Coach can only access students in their batches
+        if user_type == 'coach':
+            db = SessionLocal()
+            try:
+                # Find batches the student is in
+                batches = db.query(BatchStudentDB).filter(BatchStudentDB.student_id == int(s_id)).all()
+                if not batches:
+                    return False
+                batch_ids = [b.batch_id for b in batches]
+                
+                # Check if coach is assigned to any of these batches
+                coach_batch = db.query(BatchCoachDB).filter(
+                    BatchCoachDB.coach_id == int(user_id), 
+                    BatchCoachDB.batch_id.in_(batch_ids)
+                ).first()
+                
+                legacy = db.query(BatchDB).filter(
+                    BatchDB.id.in_(batch_ids), 
+                    BatchDB.assigned_coach_id == int(user_id)
+                ).first()
+                
+                if not coach_batch and not legacy:
+                    return False
+            except Exception:
+                return False
+            finally:
+                db.close()
+        return True
+
+    def check_batch_access(b_id):
+        if user_type == 'student':
+            db = SessionLocal()
+            try:
+                enrolled = db.query(BatchStudentDB).filter(
+                    BatchStudentDB.batch_id == int(b_id), 
+                    BatchStudentDB.student_id == int(user_id)
+                ).first()
+                if not enrolled:
+                    return False
+            except Exception:
+                return False
+            finally:
+                db.close()
+        elif user_type == 'coach':
+            db = SessionLocal()
+            try:
+                coach_batch = db.query(BatchCoachDB).filter(
+                    BatchCoachDB.coach_id == int(user_id), 
+                    BatchCoachDB.batch_id == int(b_id)
+                ).first()
+                
+                legacy = db.query(BatchDB).filter(
+                    BatchDB.id == int(b_id), 
+                    BatchDB.assigned_coach_id == int(user_id)
+                ).first()
+                
+                if not coach_batch and not legacy:
+                    return False
+            except Exception:
+                return False
+            finally:
+                db.close()
+        return True
+
+    if user_type != 'owner':
+        # Check student ID matching in path (e.g. /students/5, /attendance/student/5)
+        # Be careful not to match /students/ and then an action without ID
+        student_match = re.search(r'/(?:student|students)/(\d+)(?:/|$)', path)
+        if student_match:
+            s_id = student_match.group(1)
+            if not check_student_access(s_id):
+                return JSONResponse(status_code=403, content={"detail": "Access denied to this student resource"})
+                
+        # Check batch ID matching in path (e.g. /batches/5, /attendance/batch/5)
+        batch_match = re.search(r'/(?:batch|batches)/(\d+)(?:/|$)', path)
+        if batch_match:
+            b_id = batch_match.group(1)
+            if not check_batch_access(b_id):
+                return JSONResponse(status_code=403, content={"detail": "Access denied to this batch resource"})
+                
+        # Check coach ID matching in path
+        coach_match = re.search(r'/(?:coach|coaches)/(\d+)(?:/|$)', path)
+        # Prevent coach from accessing other coach's data, unless allowed by some specific rule.
+        # But students can access coach data to view profile.
+        if coach_match and user_type == 'coach':
+            c_id = coach_match.group(1)
+            if str(user_id) != str(c_id):
+                return JSONResponse(status_code=403, content={"detail": "Access denied to other coach data"})
+
+    # ==========================================================
+
+
     db = SessionLocal()
     try:
         # 1. Check per-token blacklist (for explicit logout)
@@ -140,6 +244,20 @@ def _check_token_revoked(payload: dict) -> None:
     finally:
         db.close()
 
+
+
+def verify_coach_batch_access(coach_id: int, batch_id: int, db) -> bool:
+    coach_batch = db.query(BatchCoachDB).filter(
+        BatchCoachDB.coach_id == coach_id, 
+        BatchCoachDB.batch_id == batch_id
+    ).first()
+    
+    legacy = db.query(BatchDB).filter(
+        BatchDB.id == batch_id, 
+        BatchDB.assigned_coach_id == coach_id
+    ).first()
+    
+    return bool(coach_batch or legacy)
 
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Security(security),
@@ -2263,6 +2381,110 @@ async def jwt_auth_middleware(request: Request, call_next):
     user_type = payload.get("user_type")
     iat = payload.get("iat")
 
+    # ==================== IDOR ENFORCEMENT ====================
+    # Globally protect resources based on user_type and IDs in path
+    import json
+    import re
+    
+    # DO NOT EXHAUST REQUEST BODY STREAM: we avoid reading body here to not break FastAPI request parsing
+    
+    def check_student_access(s_id):
+        # Student can only access their own data
+        if user_type == 'student' and str(user_id) != str(s_id):
+            return False
+            
+        # Coach can only access students in their batches
+        if user_type == 'coach':
+            db = SessionLocal()
+            try:
+                # Find batches the student is in
+                batches = db.query(BatchStudentDB).filter(BatchStudentDB.student_id == int(s_id)).all()
+                if not batches:
+                    return False
+                batch_ids = [b.batch_id for b in batches]
+                
+                # Check if coach is assigned to any of these batches
+                coach_batch = db.query(BatchCoachDB).filter(
+                    BatchCoachDB.coach_id == int(user_id), 
+                    BatchCoachDB.batch_id.in_(batch_ids)
+                ).first()
+                
+                legacy = db.query(BatchDB).filter(
+                    BatchDB.id.in_(batch_ids), 
+                    BatchDB.assigned_coach_id == int(user_id)
+                ).first()
+                
+                if not coach_batch and not legacy:
+                    return False
+            except Exception:
+                return False
+            finally:
+                db.close()
+        return True
+
+    def check_batch_access(b_id):
+        if user_type == 'student':
+            db = SessionLocal()
+            try:
+                enrolled = db.query(BatchStudentDB).filter(
+                    BatchStudentDB.batch_id == int(b_id), 
+                    BatchStudentDB.student_id == int(user_id)
+                ).first()
+                if not enrolled:
+                    return False
+            except Exception:
+                return False
+            finally:
+                db.close()
+        elif user_type == 'coach':
+            db = SessionLocal()
+            try:
+                coach_batch = db.query(BatchCoachDB).filter(
+                    BatchCoachDB.coach_id == int(user_id), 
+                    BatchCoachDB.batch_id == int(b_id)
+                ).first()
+                
+                legacy = db.query(BatchDB).filter(
+                    BatchDB.id == int(b_id), 
+                    BatchDB.assigned_coach_id == int(user_id)
+                ).first()
+                
+                if not coach_batch and not legacy:
+                    return False
+            except Exception:
+                return False
+            finally:
+                db.close()
+        return True
+
+    if user_type != 'owner':
+        # Check student ID matching in path (e.g. /students/5, /attendance/student/5)
+        # Be careful not to match /students/ and then an action without ID
+        student_match = re.search(r'/(?:student|students)/(\d+)(?:/|$)', path)
+        if student_match:
+            s_id = student_match.group(1)
+            if not check_student_access(s_id):
+                return JSONResponse(status_code=403, content={"detail": "Access denied to this student resource"})
+                
+        # Check batch ID matching in path (e.g. /batches/5, /attendance/batch/5)
+        batch_match = re.search(r'/(?:batch|batches)/(\d+)(?:/|$)', path)
+        if batch_match:
+            b_id = batch_match.group(1)
+            if not check_batch_access(b_id):
+                return JSONResponse(status_code=403, content={"detail": "Access denied to this batch resource"})
+                
+        # Check coach ID matching in path
+        coach_match = re.search(r'/(?:coach|coaches)/(\d+)(?:/|$)', path)
+        # Prevent coach from accessing other coach's data, unless allowed by some specific rule.
+        # But students can access coach data to view profile.
+        if coach_match and user_type == 'coach':
+            c_id = coach_match.group(1)
+            if str(user_id) != str(c_id):
+                return JSONResponse(status_code=403, content={"detail": "Access denied to other coach data"})
+
+    # ==========================================================
+
+
     db = SessionLocal()
     try:
         if jti and db.query(RevokedTokenDB).filter(RevokedTokenDB.jti == jti).first():
@@ -2859,6 +3081,110 @@ def refresh_access_token(body: TokenRefreshRequest):
     user_id = payload.get("sub")
     user_type = payload.get("user_type")
     iat = payload.get("iat")
+
+    # ==================== IDOR ENFORCEMENT ====================
+    # Globally protect resources based on user_type and IDs in path
+    import json
+    import re
+    
+    # DO NOT EXHAUST REQUEST BODY STREAM: we avoid reading body here to not break FastAPI request parsing
+    
+    def check_student_access(s_id):
+        # Student can only access their own data
+        if user_type == 'student' and str(user_id) != str(s_id):
+            return False
+            
+        # Coach can only access students in their batches
+        if user_type == 'coach':
+            db = SessionLocal()
+            try:
+                # Find batches the student is in
+                batches = db.query(BatchStudentDB).filter(BatchStudentDB.student_id == int(s_id)).all()
+                if not batches:
+                    return False
+                batch_ids = [b.batch_id for b in batches]
+                
+                # Check if coach is assigned to any of these batches
+                coach_batch = db.query(BatchCoachDB).filter(
+                    BatchCoachDB.coach_id == int(user_id), 
+                    BatchCoachDB.batch_id.in_(batch_ids)
+                ).first()
+                
+                legacy = db.query(BatchDB).filter(
+                    BatchDB.id.in_(batch_ids), 
+                    BatchDB.assigned_coach_id == int(user_id)
+                ).first()
+                
+                if not coach_batch and not legacy:
+                    return False
+            except Exception:
+                return False
+            finally:
+                db.close()
+        return True
+
+    def check_batch_access(b_id):
+        if user_type == 'student':
+            db = SessionLocal()
+            try:
+                enrolled = db.query(BatchStudentDB).filter(
+                    BatchStudentDB.batch_id == int(b_id), 
+                    BatchStudentDB.student_id == int(user_id)
+                ).first()
+                if not enrolled:
+                    return False
+            except Exception:
+                return False
+            finally:
+                db.close()
+        elif user_type == 'coach':
+            db = SessionLocal()
+            try:
+                coach_batch = db.query(BatchCoachDB).filter(
+                    BatchCoachDB.coach_id == int(user_id), 
+                    BatchCoachDB.batch_id == int(b_id)
+                ).first()
+                
+                legacy = db.query(BatchDB).filter(
+                    BatchDB.id == int(b_id), 
+                    BatchDB.assigned_coach_id == int(user_id)
+                ).first()
+                
+                if not coach_batch and not legacy:
+                    return False
+            except Exception:
+                return False
+            finally:
+                db.close()
+        return True
+
+    if user_type != 'owner':
+        # Check student ID matching in path (e.g. /students/5, /attendance/student/5)
+        # Be careful not to match /students/ and then an action without ID
+        student_match = re.search(r'/(?:student|students)/(\d+)(?:/|$)', path)
+        if student_match:
+            s_id = student_match.group(1)
+            if not check_student_access(s_id):
+                return JSONResponse(status_code=403, content={"detail": "Access denied to this student resource"})
+                
+        # Check batch ID matching in path (e.g. /batches/5, /attendance/batch/5)
+        batch_match = re.search(r'/(?:batch|batches)/(\d+)(?:/|$)', path)
+        if batch_match:
+            b_id = batch_match.group(1)
+            if not check_batch_access(b_id):
+                return JSONResponse(status_code=403, content={"detail": "Access denied to this batch resource"})
+                
+        # Check coach ID matching in path
+        coach_match = re.search(r'/(?:coach|coaches)/(\d+)(?:/|$)', path)
+        # Prevent coach from accessing other coach's data, unless allowed by some specific rule.
+        # But students can access coach data to view profile.
+        if coach_match and user_type == 'coach':
+            c_id = coach_match.group(1)
+            if str(user_id) != str(c_id):
+                return JSONResponse(status_code=403, content={"detail": "Access denied to other coach data"})
+
+    # ==========================================================
+
     exp = payload.get("exp")
 
     db = SessionLocal()

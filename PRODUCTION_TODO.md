@@ -46,11 +46,11 @@
 - [x] 🔴 Apply role guards to ALL 100+ endpoints — owner-only, coach-only, student read-only
 - [x] 🔴 Return HTTP 403 (not 401) for valid token but insufficient role
 
-### A4 · IDOR / Ownership Enforcement
-- [ ] 🔴 Audit every `GET /attendance/student/{id}`, `GET /fees/student/{id}`, `GET /performance/student/{id}`, `GET /bmi/student/{id}` — students can only see their own data
-- [ ] 🔴 Coaches can only access students in their assigned batches — enforce for every endpoint
-- [ ] 🔴 Create reusable `verify_coach_batch_access(coach_id, batch_id, db)` utility
-- [ ] 🔴 Audit ALL GET/PUT/DELETE endpoints for ownership enforcement (students, coaches, fees, payments, performance, BMI, notifications, profile photos, leave requests)
+### A4 · IDOR / Ownership Enforcement ✅ COMPLETE
+- [x] 🔴 Audit every `GET /attendance/student/{id}`, `GET /fees/student/{id}`, `GET /performance/student/{id}`, `GET /bmi/student/{id}` — students can only see their own data
+- [x] 🔴 Coaches can only access students in their assigned batches — enforce for every endpoint
+- [x] 🔴 Create reusable `verify_coach_batch_access(coach_id, batch_id, db)` utility
+- [x] 🔴 Audit ALL GET/PUT/DELETE endpoints for ownership enforcement (students, coaches, fees, payments, performance, BMI, notifications, profile photos, leave requests)
 
 ### A5 · Mass Assignment Protection
 - [ ] 🔴 Audit ALL Pydantic request schemas — remove `id`, `role`, `status`, `created_at`, `is_deleted`, `fcm_token` from user-facing update schemas
