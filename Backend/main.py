@@ -11,7 +11,8 @@ from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel, field_validator
-from typing import List, Optional, Dict, Any, Union, Annotated
+import re
+from typing import List, Optional, Dict, Any, Union, Annotated, Literal
 from datetime import datetime, date, timedelta
 import json
 import os
@@ -23,7 +24,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from passlib.context import CryptContext
 import bcrypt
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -1456,7 +1457,7 @@ class OwnerCreate(BaseModel):
     password: str
     specialization: Optional[str] = None
     experience_years: Optional[int] = None
-    role: Optional[str] = "owner"
+    role: Literal["owner", "co_owner"] = "owner"
     must_change_password: Optional[bool] = False
 
 class Owner(BaseModel):
@@ -1634,7 +1635,6 @@ class StudentUpdate(BaseModel):
     t_shirt_size: Optional[str] = None
     blood_group: Optional[str] = None
     profile_photo: Optional[str] = None
-    rejoin_request_pending: Optional[bool] = None
 
 # Attendance Models
 class AttendanceCreate(BaseModel):
@@ -2288,8 +2288,24 @@ limiter = Limiter(key_func=get_user_id_or_ip, default_limits=["100/minute"])
 
 app = FastAPI(title="Badminton Academy Management System")
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
+
+async def _rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
+    """Return HTTP 429 with a Retry-After header parsed from the limit window."""
+    retry_after = 60  # fallback default
+    match = re.search(r'per\s+(\d+)\s*(second|minute|hour)', str(exc), re.IGNORECASE)
+    if match:
+        amount, unit = int(match.group(1)), match.group(2).lower()
+        retry_after = amount * {"second": 1, "minute": 60, "hour": 3600}[unit]
+    from fastapi.responses import JSONResponse
+    response = JSONResponse(
+        {"error": "Rate limit exceeded. Please try again later."},
+        status_code=429,
+    )
+    response.headers["Retry-After"] = str(retry_after)
+    return response
+
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS Configuration
 ALLOWED_ORIGINS_STR = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8001,https://shuttler.app,https://api.shuttler.app")
