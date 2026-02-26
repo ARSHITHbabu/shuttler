@@ -65,9 +65,9 @@
 - [x] 🔴 Ensure no `http://` URLs are hardcoded anywhere in the Flutter codebase
 - [x] 🔴 Remove `NSAllowsArbitraryLoads: true` from iOS `Info.plist` if present
 
-### A7 · CORS Lockdown
-- [ ] 🔴 Replace wildcard `allow_origins=["*"]` with specific production domain(s) only
-- [ ] 🔴 Specify `allow_methods` and `allow_headers` explicitly
+### A7 · CORS Lockdown ✅ COMPLETE
+- [x] 🔴 Replace wildcard `allow_origins=["*"]` with specific production domain(s) only
+- [x] 🔴 Specify `allow_methods` and `allow_headers` explicitly
 
 ### A8 · Rate Limiting
 - [ ] 🔴 Add `slowapi==0.1.9` to backend
