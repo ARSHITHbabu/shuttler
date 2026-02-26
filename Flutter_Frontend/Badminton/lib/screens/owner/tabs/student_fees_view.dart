@@ -65,9 +65,9 @@ class _StudentFeesViewState extends ConsumerState<StudentFeesView> {
                   child: ConstrainedBox(
                     constraints: BoxConstraints(minHeight: constraints.maxHeight),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppDimensions.paddingL,
-                        vertical: AppDimensions.paddingM,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppDimensions.getScreenPadding(context),
+                        vertical: AppDimensions.spacingL,
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -118,7 +118,7 @@ class _StudentFeesViewState extends ConsumerState<StudentFeesView> {
   Widget _buildBatchFeeCard(BatchFeeGroup group) {
     return NeumorphicContainer(
       margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
-      padding: const EdgeInsets.all(AppDimensions.paddingL),
+      padding: const EdgeInsets.all(AppDimensions.paddingM),
       onTap: () => setState(() => _selectedBatchId = group.batchId),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -386,7 +386,7 @@ class _StudentFeesViewState extends ConsumerState<StudentFeesView> {
   Widget _buildDeepView() {
     final fee = _selectedFee!;
     return Padding(
-      padding: const EdgeInsets.all(AppDimensions.paddingL),
+      padding: EdgeInsets.all(AppDimensions.getScreenPadding(context)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -414,7 +414,7 @@ class _StudentFeesViewState extends ConsumerState<StudentFeesView> {
 
   Widget _buildFeeDetailCard(Fee fee) {
     return NeumorphicContainer(
-      padding: const EdgeInsets.all(AppDimensions.paddingL),
+      padding: const EdgeInsets.all(AppDimensions.paddingM),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

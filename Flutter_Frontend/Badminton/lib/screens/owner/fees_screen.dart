@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
+import '../../core/utils/theme_colors.dart';
+import '../../widgets/common/standard_page_header.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import 'tabs/coach_salary_tab.dart';
 import 'tabs/student_fees_view.dart';
@@ -44,87 +46,73 @@ class _FeesScreenState extends ConsumerState<FeesScreen> with SingleTickerProvid
   @override
   Widget build(BuildContext context) {
     final canPop = Navigator.canPop(context);
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Standardized Header
+        StandardPageHeader(
+          title: 'Fees Management',
+          showBackButton: canPop,
+        ),
+        const SizedBox(height: AppDimensions.spacingS),
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.only(
-              left: AppDimensions.paddingL,
-              right: AppDimensions.paddingL,
-              top: AppDimensions.paddingL,
-              bottom: AppDimensions.paddingM,
-            ),
+        // Custom Neumorphic Tab Bar
+        Padding(
+          padding: EdgeInsets.symmetric(horizontal: AppDimensions.getScreenPadding(context)),
+          child: NeumorphicContainer(
+            padding: const EdgeInsets.all(4),
             child: Row(
               children: [
-                if (canPop) ...[
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-                    onPressed: () => Navigator.of(context).pop(),
+                Expanded(
+                  child: _TabButton(
+                    label: 'Student Fees',
+                    icon: Icons.people_outline,
+                    isActive: _tabController.index == 0,
+                    onTap: () => setState(() => _tabController.animateTo(0)),
                   ),
-                  const SizedBox(width: AppDimensions.spacingS),
-                ],
-                const Text(
-                  'Fees Management',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: _TabButton(
+                    label: 'Coach Salaries',
+                    icon: Icons.payments_outlined,
+                    isActive: _tabController.index == 1,
+                    onTap: () => setState(() => _tabController.animateTo(1)),
                   ),
                 ),
               ],
             ),
           ),
+        ),
 
-          // Custom Neumorphic Tab Bar
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
-            child: NeumorphicContainer(
-              padding: const EdgeInsets.all(4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _TabButton(
-                      label: 'Student Fees',
-                      icon: Icons.people_outline,
-                      isActive: _tabController.index == 0,
-                      onTap: () => setState(() => _tabController.animateTo(0)),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: _TabButton(
-                      label: 'Coach Salaries',
-                      icon: Icons.payments_outlined,
-                      isActive: _tabController.index == 1,
-                      onTap: () => setState(() => _tabController.animateTo(1)),
-                    ),
-                  ),
-                ],
+        // Tab Content
+        Expanded(
+          child: TabBarView(
+            controller: _tabController,
+            physics: const NeverScrollableScrollPhysics(), // Disable swipe to keep custom buttons in sync
+            children: [
+              StudentFeesView(
+                selectedStudentId: widget.selectedStudentId,
+                selectedStudentName: widget.selectedStudentName,
               ),
-            ),
+              const CoachSalaryTab(),
+            ],
           ),
+        ),
+      ],
+    );
 
-          const SizedBox(height: AppDimensions.spacingL),
+    if (!canPop) {
+      return content;
+    }
 
-          // Tab Content
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              physics: const NeverScrollableScrollPhysics(), // Disable swipe to keep custom buttons in sync
-              children: [
-                StudentFeesView(
-                  selectedStudentId: widget.selectedStudentId,
-                  selectedStudentName: widget.selectedStudentName,
-                ),
-                const CoachSalaryTab(),
-              ],
-            ),
-          ),
-        ],
+    return Scaffold(
+      backgroundColor: context.backgroundColor,
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: context.backgroundGradient,
+        ),
+        child: SafeArea(child: content),
       ),
     );
   }

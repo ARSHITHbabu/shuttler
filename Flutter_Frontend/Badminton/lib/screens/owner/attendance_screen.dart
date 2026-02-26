@@ -157,6 +157,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const StandardPageHeader(title: 'Attendance'),
+                const SizedBox(height: AppDimensions.spacingS),
                 
                 // Type Selector
                 Padding(

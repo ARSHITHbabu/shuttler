@@ -96,7 +96,7 @@ class _CoachSalaryTabState extends ConsumerState<CoachSalaryTab> {
       children: [
         // Month Selector Header
         Padding(
-          padding: const EdgeInsets.all(AppDimensions.paddingL),
+          padding: EdgeInsets.all(AppDimensions.getScreenPadding(context)),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
             decoration: BoxDecoration(
@@ -139,7 +139,7 @@ class _CoachSalaryTabState extends ConsumerState<CoachSalaryTab> {
 
             return Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
+                padding: EdgeInsets.symmetric(horizontal: AppDimensions.getScreenPadding(context)),
                 child: Column(
                   children: [
                     // Dashboard Stats
@@ -187,7 +187,7 @@ class _CoachSalaryTabState extends ConsumerState<CoachSalaryTab> {
 
   Widget _buildStatCard(String title, String value, IconData icon, Color color) {
     return NeumorphicContainer(
-      padding: const EdgeInsets.all(AppDimensions.paddingL),
+      padding: const EdgeInsets.all(AppDimensions.paddingM),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -224,7 +224,7 @@ class _CoachSalaryTabState extends ConsumerState<CoachSalaryTab> {
 
     return NeumorphicContainer(
       margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
-      padding: const EdgeInsets.all(AppDimensions.paddingL),
+      padding: const EdgeInsets.all(AppDimensions.paddingM),
       child: Row(
         children: [
           CircleAvatar(

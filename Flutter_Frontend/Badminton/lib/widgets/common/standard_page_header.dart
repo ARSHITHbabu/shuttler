@@ -66,7 +66,7 @@ class StandardPageHeader extends StatelessWidget {
                         title,
                         style: TextStyle(
                           fontSize: titleSize,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                           color: context.textPrimaryColor,
                         ),
                         maxLines: 1,
@@ -80,7 +80,9 @@ class StandardPageHeader extends StatelessWidget {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: actions!,
-                ),
+                )
+              else 
+                const SizedBox(height: 40), // Minimum height when no actions are present
             ],
           ),
           if (subtitle != null) ...[
