@@ -47,37 +47,29 @@ class _FeesScreenState extends ConsumerState<FeesScreen> with SingleTickerProvid
 
     return Scaffold(
       backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: canPop
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+                onPressed: () => Navigator.of(context).pop(),
+              )
+            : null,
+        title: const Text(
+          'Fees Management',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        titleSpacing: canPop ? 0 : AppDimensions.paddingL,
+      ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.only(
-              left: AppDimensions.paddingL,
-              right: AppDimensions.paddingL,
-              top: AppDimensions.paddingL,
-              bottom: AppDimensions.paddingM,
-            ),
-            child: Row(
-              children: [
-                if (canPop) ...[
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                  const SizedBox(width: AppDimensions.spacingS),
-                ],
-                const Text(
-                  'Fees Management',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          const SizedBox(height: AppDimensions.paddingL),
 
           // Custom Neumorphic Tab Bar
           Padding(
