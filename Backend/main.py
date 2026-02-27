@@ -547,6 +547,29 @@ def send_overdue_fee_notifications():
                 type="fee_due",
                 data={"fee_id": fee.id, "batch_id": fee.batch_id, "pending_amount": pending_amount},
             )
+
+            # B11: Send overdue fee email
+            student = db.query(StudentDB).filter(StudentDB.id == fee.student_id).first()
+            if student and student.email:
+                try:
+                    reminder_html = f"""
+<html><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;">
+<div style="max-width:480px;margin:auto;background:#fff;border-radius:8px;padding:32px;">
+  <h2 style="color:#1a1a2e;">Fee Payment Overdue</h2>
+  <p>Dear {student.name},</p>
+  <p>This is an automated reminder that your fee payment for <strong>{batch_name}</strong> of <strong>₹{pending_amount:.2f}</strong> is now overdue.</p>
+  <p>Original Due Date: <strong>{fee.due_date}</strong></p>
+  <p>Please log in to your Shuttler app or contact your academy admin to complete this payment as soon as possible.</p>
+  <p style="color:#888;font-size:13px;">If you have already paid, please ignore this email.</p>
+</div></body></html>"""
+                    send_email(
+                        to_email=student.email,
+                        subject=f"Shuttler — Fee Overdue: ₹{pending_amount:.2f}",
+                        html_content=reminder_html,
+                        plain_content=f"Fee overdue: ₹{pending_amount:.2f} for {batch_name}. Please pay immediately.",
+                    )
+                except Exception as _ee:
+                    print(f"[Email] Automated fee reminder email error: {_ee}")
     except Exception as e:
         print(f"[Cron/FeeOverdue] Error: {e}")
     finally:
@@ -2312,7 +2335,7 @@ class FeeCreate(BaseModel):
     payee_student_id: Optional[int] = None
     status: Optional[str] = None  # Will be calculated, optional on create
 
-_ALLOWED_PAYMENT_METHODS = {'cash', 'card'}
+_ALLOWED_PAYMENT_METHODS = {'cash', 'card', 'online', 'razorpay'}
 
 class FeePaymentCreate(BaseModel):
     fee_id: Optional[int] = None  # Optional - provided via path parameter
@@ -6375,6 +6398,139 @@ def update_fee(fee_id: int, fee_update: FeeUpdate):
 
 # ==================== Fee Payment Routes ====================
 
+# B12: Payment Gateway Integration
+class RazorpayVerifyRequest(BaseModel):
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
+    payee_student_id: Optional[int] = None
+    payee_name: Optional[str] = None
+
+try:
+    import razorpay
+    _rzp_key_id = os.getenv("RAZORPAY_KEY_ID", "")
+    _rzp_key_secret = os.getenv("RAZORPAY_KEY_SECRET", "")
+    if _rzp_key_id and _rzp_key_secret:
+        rzp_client = razorpay.Client(auth=(_rzp_key_id, _rzp_key_secret))
+    else:
+        rzp_client = None
+except ImportError:
+    rzp_client = None
+
+@app.post("/fees/{fee_id}/checkout", dependencies=[Depends(require_student)])
+def create_razorpay_order(fee_id: int):
+    """Initialise a Razorpay Checkout order for the remaining fee amount"""
+    if not rzp_client:
+        raise HTTPException(status_code=501, detail="Payment gateway is not configured on the server")
+        
+    db = SessionLocal()
+    try:
+        fee = db.query(FeeDB).filter(FeeDB.id == fee_id).first()
+        if not fee:
+            raise HTTPException(status_code=404, detail="Fee not found")
+            
+        total_paid = calculate_total_paid(fee_id, db)
+        pending_amount = fee.amount - total_paid
+        
+        if pending_amount <= 0:
+            raise HTTPException(status_code=400, detail="Fee is already fully paid")
+            
+        order_amount = int(pending_amount * 100) # Razorpay accepts amounts in paise
+        order_currency = "INR"
+        order_receipt = f"fee_receipt_{fee.id}_{int(datetime.now().timestamp())}"
+        
+        try:
+            order = rzp_client.order.create({
+                "amount": order_amount,
+                "currency": order_currency,
+                "receipt": order_receipt,
+            })
+            return order
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to create payment order: {str(e)}")
+            
+    finally:
+        db.close()
+
+@app.post("/fees/{fee_id}/verify-payment", dependencies=[Depends(require_student)])
+def verify_razorpay_payment(fee_id: int, req: RazorpayVerifyRequest):
+    """Verify a successful Razorpay Web/App checkout and record the payment"""
+    if not rzp_client:
+        raise HTTPException(status_code=501, detail="Payment gateway is not configured")
+        
+    try:
+        # Verify signature
+        rzp_client.utility.verify_payment_signature({
+            'razorpay_order_id': req.razorpay_order_id,
+            'razorpay_payment_id': req.razorpay_payment_id,
+            'razorpay_signature': req.razorpay_signature
+        })
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Payment signature verification failed")
+        
+    db = SessionLocal()
+    try:
+        fee = db.query(FeeDB).filter(FeeDB.id == fee_id).first()
+        if not fee:
+            raise HTTPException(status_code=404, detail="Fee not found")
+            
+        # Optional payee checks
+        if req.payee_student_id and req.payee_name:
+            raise HTTPException(status_code=400, detail="Cannot specify both payee_student_id and payee_name.")
+            
+        # We need to lookup the actual payment details to know exactly how much was paid
+        try:
+            payment_info = rzp_client.payment.fetch(req.razorpay_payment_id)
+            amount_paid = payment_info['amount'] / 100.0  # Convert back from paise
+        except Exception:
+            raise HTTPException(status_code=500, detail="Could not fetch payment details from gateway")
+            
+        payment_dict = {
+            "fee_id": fee_id,
+            "amount": amount_paid,
+            "paid_date": datetime.now().strftime("%Y-%m-%d"),
+            "payee_student_id": req.payee_student_id or fee.student_id,  # default to fee student if none provided
+            "payee_name": req.payee_name,
+            "payment_method": "online",
+            "collected_by": "Razorpay Automated"
+        }
+        
+        db_payment = FeePaymentDB(**payment_dict)
+        db.add(db_payment)
+        db.commit()
+        db.refresh(db_payment)
+        
+        # Auto-update the fee status
+        new_total_paid = calculate_total_paid(fee_id, db)
+        new_status = calculate_fee_status(fee.amount, new_total_paid, fee.due_date)
+        fee.status = new_status
+        db.commit()
+        
+        # Record notification & receipt
+        try:
+            student_for_email = db.query(StudentDB).filter(StudentDB.id == fee.student_id).first()
+            if student_for_email and student_for_email.email:
+                receipt_html = f"""
+<html><body style='font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;'>
+<div style='max-width:480px;margin:auto;background:#fff;border-radius:8px;padding:32px;'>
+  <h2 style='color:#1a1a2e;'>Payment Successful</h2>
+  <p>Dear {student_for_email.name},</p>
+  <p>Your online fee payment of ₹{amount_paid:.2f} was successful via Razorpay.</p>
+  <p>Transaction ID: {req.razorpay_payment_id}</p>
+</div></body></html>"""
+                send_email(
+                    to_email=student_for_email.email,
+                    subject=f"Shuttler — Online Payment Receipt ₹{amount_paid:.2f}",
+                    html_content=receipt_html,
+                    plain_content=f"Payment of ₹{amount_paid:.2f} successful. Txn ID: {req.razorpay_payment_id}"
+                )
+        except Exception:
+            pass
+
+        return {"success": True, "message": "Payment verified and recorded", "payment_id": db_payment.id}
+    finally:
+        db.close()
+
 @app.post("/fees/{fee_id}/payments/", response_model=FeePayment, dependencies=[Depends(require_owner)])
 def create_fee_payment(fee_id: int, payment: FeePaymentCreate):
     """Add a payment to a fee"""
@@ -6852,6 +7008,28 @@ def notify_student_about_fee(fee_id: int):
         db.commit()
         db.refresh(notification)
         
+        # B11: Send fee overdue reminder email
+        try:
+            if student.email:
+                reminder_html = f"""
+<html><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;">
+<div style="max-width:480px;margin:auto;background:#fff;border-radius:8px;padding:32px;">
+  <h2 style="color:#1a1a2e;">Fee Payment Reminder</h2>
+  <p>Dear {student.name},</p>
+  <p>This is a polite reminder that your fee payment of <strong>₹{pending_amount:.2f}</strong> is currently overdue.</p>
+  <p>Due Date: <strong>{fee.due_date}</strong></p>
+  <p>Please log in to your Shuttler app or contact your academy admin to complete this payment.</p>
+  <p style="color:#888;font-size:13px;">If you have already paid, please ignore this email.</p>
+</div></body></html>"""
+                send_email(
+                    to_email=student.email,
+                    subject=f"Shuttler — Fee Overdue Reminder (₹{pending_amount:.2f})",
+                    html_content=reminder_html,
+                    plain_content=f"Fee overdue: ₹{pending_amount:.2f}. Please pay at your earliest convenience.",
+                )
+        except Exception as _ee:
+            print(f"[Email] Fee reminder email error: {_ee}")
+
         return {"message": "Notification sent successfully", "notification_id": notification.id}
     finally:
         db.close()
@@ -7131,6 +7309,50 @@ def get_performance_records(
             if transformed:
                 result.append(transformed)
         
+        return result
+    finally:
+        db.close()
+
+@app.get("/performance/completion-status", dependencies=[Depends(require_coach)])
+def get_performance_completion_status(batch_id: int, date: Optional[str] = None):
+    """B8: Get performance completion status for all students in a batch on a given date"""
+    from datetime import datetime
+    db = SessionLocal()
+    try:
+        if not date:
+            date = datetime.now().strftime("%Y-%m-%d")
+            
+        # Get all approved students in the batch
+        batch_students = db.query(BatchStudentDB).filter(
+            BatchStudentDB.batch_id == batch_id,
+            BatchStudentDB.status == "approved"
+        ).all()
+        student_ids = [bs.student_id for bs in batch_students]
+        
+        if not student_ids:
+            return []
+            
+        students = db.query(StudentDB).filter(StudentDB.id.in_(student_ids)).all()
+        student_map = {s.id: s.name for s in students}
+        
+        # Get performance records for these students on this date and batch
+        records = db.query(PerformanceDB).filter(
+            PerformanceDB.batch_id == batch_id,
+            PerformanceDB.date == date,
+            PerformanceDB.student_id.in_(student_ids)
+        ).all()
+        
+        assessed_student_ids = set([r.student_id for r in records])
+        
+        result = []
+        for sid in student_ids:
+            if sid in student_map:
+                result.append({
+                    "student_id": sid,
+                    "student_name": student_map[sid],
+                    "has_entry": sid in assessed_student_ids
+                })
+                
         return result
     finally:
         db.close()
@@ -8155,6 +8377,30 @@ def create_coach_invitation(invitation: CoachInvitationCreate):
         base_url = os.getenv("INVITE_BASE_URL", "https://academy.app")
         invite_link = f"{base_url}/invite/coach/{invite_token}"
         
+        # B11: Send coach invitation email
+        if email:
+            try:
+                invite_html = f"""
+<html><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;">
+<div style="max-width:480px;margin:auto;background:#fff;border-radius:8px;padding:32px;">
+  <h2 style="color:#1a1a2e;">Join Shuttler Academy</h2>
+  <p>Dear {invitation.coach_name or 'Coach'},</p>
+  <p>You have been invited by <strong>{invitation.owner_name}</strong> to join their academy as a Coach on Shuttler.</p>
+  <div style="text-align:center;margin:32px 0;">
+    <a href="{invite_link}" style="background:#4CAF50;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold;">Accept Invitation</a>
+  </div>
+  <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+  <p style="word-break:break-all;color:#0066cc;background:#f0f0f0;padding:8px;border-radius:4px;">{invite_link}</p>
+</div></body></html>"""
+                send_email(
+                    to_email=email,
+                    subject="You've been invited to join Shuttler as a Coach",
+                    html_content=invite_html,
+                    plain_content=f"You've been invited by {invitation.owner_name} to join as a Coach. Use this link to accept: {invite_link}",
+                )
+            except Exception as _ee:
+                print(f"[Email] Coach invitation email error: {_ee}")
+        
         # Convert to response model with invite link
         invitation_response = CoachInvitation(
             id=db_invitation.id,
@@ -8366,6 +8612,30 @@ def create_invitation(invitation: InvitationCreate):
         # In production, this should come from environment variables
         base_url = os.getenv("INVITE_BASE_URL", "https://academy.app")
         invite_link = f"{base_url}/invite/{invite_token}"
+        
+        # B11: Send student invitation email
+        if email:
+            try:
+                invite_html = f"""
+<html><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;">
+<div style="max-width:480px;margin:auto;background:#fff;border-radius:8px;padding:32px;">
+  <h2 style="color:#1a1a2e;">Join Shuttler Academy</h2>
+  <p>Hello,</p>
+  <p>You have been invited by Coach <strong>{invitation.coach_name or 'a coach'}</strong> to join their academy as a Student on Shuttler.</p>
+  <div style="text-align:center;margin:32px 0;">
+    <a href="{invite_link}" style="background:#4CAF50;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold;">Accept Invitation</a>
+  </div>
+  <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+  <p style="word-break:break-all;color:#0066cc;background:#f0f0f0;padding:8px;border-radius:4px;">{invite_link}</p>
+</div></body></html>"""
+                send_email(
+                    to_email=email,
+                    subject="You've been invited to join Shuttler as a Student",
+                    html_content=invite_html,
+                    plain_content=f"You've been invited to join as a Student. Use this link to accept: {invite_link}",
+                )
+            except Exception as _ee:
+                print(f"[Email] Student invitation email error: {_ee}")
         
         # Convert to response model with invite link
         invitation_response = Invitation(

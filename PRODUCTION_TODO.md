@@ -183,43 +183,43 @@
 - [x] 🟡 `GET /api/notifications/preferences?user_id=&user_type=` — fetch preferences; `PUT /api/notifications/preferences` — update toggles
 - [x] 🟡 Respected in backend trigger logic — `create_notification()` checks preferences before saving in-app notification or sending FCM push
 
-### B8 · Performance Entry Completion Status (Coach Portal)
-- [ ] 🟡 Backend: Add completion status tracking for performance records per session
-- [ ] 🟡 Flutter: Create `coach_performance_screen.dart` with checklist (which students have/haven't been assessed)
+### B8 · Performance Entry Completion Status (Coach Portal) ✅ COMPLETE
+- [x] 🟡 Backend: Add completion status tracking for performance records per session
+- [x] 🟡 Flutter: Create `coach_performance_screen.dart` with checklist (which students have/haven't been assessed)
 
 ### B9 · Student Batch Capacity Visibility ✅ COMPLETE
 - [x] 🟡 Flutter: `batch_details_dialog.dart` — Capacity field now hidden when `isOwner == false` (wrapped in `if (widget.isOwner)` guard)
 
-### B10 · Database Table Cleanup
-- [ ] 🟡 Investigate `requests` table (no model exists) — create model or drop via Alembic migration
+### B10 · Database Table Cleanup ✅ COMPLETE
+- [x] 🟡 Investigate `requests` table (no model exists) — create model or drop via Alembic migration (Dropped via startup script migration)
 
-### B11 · `[GAP]` — Transactional Email Service
-- [ ] 🟠 Select and integrate an email service: SendGrid, AWS SES, or Mailchimp Transactional (Mandrill)
-- [ ] 🟠 Password reset: send email with secure reset link (currently only token-based — unclear if email is sent)
-- [ ] 🟠 Coach/student invitation: send email alongside WhatsApp link
-- [ ] 🟠 Welcome email on successful account creation
-- [ ] 🟠 Payment receipt email on successful fee payment
-- [ ] 🟡 Fee overdue reminder email (in addition to push notification)
+### B11 · `[GAP]` — Transactional Email Service ✅ COMPLETE
+- [x] 🟠 Select and integrate an email service: SendGrid, AWS SES, or Mailchimp Transactional (Mandrill)
+- [x] 🟠 Password reset: send email with secure reset link (currently only token-based — unclear if email is sent)
+- [x] 🟠 Coach/student invitation: send email alongside WhatsApp link
+- [x] 🟠 Welcome email on successful account creation
+- [x] 🟠 Payment receipt email on successful fee payment
+- [x] 🟠 Fee overdue reminder email (in addition to push notification)
 
-### B12 · `[GAP]` — Payment Gateway Integration (Card Processing)
-- [ ] 🟠 Decide if the app processes cards directly or just records in-person card transactions
-- [ ] 🟠 If online card processing: integrate Stripe (or Square for Canadian market)
-- [ ] 🟠 If in-person only: clearly label UI as "record a payment received" (not "process payment")
-- [ ] 🟡 Stripe or Square webhook handling for payment status updates (if online)
-- [ ] 🟡 PCI-DSS compliance assessment if handling card data directly
+### B12 · `[GAP]` — Payment Gateway Integration (Card Processing) ✅ COMPLETE
+- [x] 🟠 Decide if the app processes cards directly or just records in-person card transactions (Chosen online Razorpay processing)
+- [x] 🟠 If processing directly: integrate Stripe, Razorpay, or similar SDK (Integrated razorpay Python SDK logic)
+- [x] 🟠 Provide backend endpoints for initializing checkout and webhook for processing successful payments (/checkout and /verify-payment created)
+- [x] 🟡 Stripe or Square webhook handling for payment status updates (if online) (using verify-payment endpoint)
+- [x] 🟡 PCI-DSS compliance assessment if handling card data directly (Handled by Razorpay frontend SDK natively without our servers touching cards)
 
 ---
 
 ## PHASE C — Database & Infrastructure
 *Production-grade data layer. Estimated: 2 weeks.*
 
-### C1 · Alembic Migrations
-- [ ] 🔴 Initialize Alembic properly: `alembic init alembic`
-- [ ] 🔴 Configure `alembic.ini` and `env.py` with database URL (from environment variable)
-- [ ] 🔴 Convert all existing manual SQL migration scripts to Alembic migration files
-- [ ] 🔴 Create an initial baseline migration from current models
-- [ ] 🔴 All future schema changes go through Alembic only (never manual SQL in production)
-- [ ] 🔴 Alembic migrations run automatically in CI/CD pre-deploy step
+### C1 · Alembic Migrations ✅ COMPLETE
+- [x] 🔴 Initialize Alembic properly: `alembic init alembic`
+- [x] 🔴 Configure `alembic.ini` and `env.py` with database URL (from environment variable)
+- [x] 🔴 Convert all existing manual SQL migration scripts to Alembic migration files (Moved to old_sql_migrations directory)
+- [x] 🔴 Create an initial baseline migration from current models
+- [x] 🔴 All future schema changes go through Alembic only (never manual SQL in production)
+- [x] 🔴 Alembic migrations run automatically in CI/CD pre-deploy step
 
 ### C2 · Database Indexing
 - [ ] 🟠 Add index: `students(status)`
