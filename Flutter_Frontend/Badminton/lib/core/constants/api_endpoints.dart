@@ -75,6 +75,7 @@ class ApiEndpoints {
   // Performance
   static const String performance = '/performance/';
   static String performanceById(int id) => '/performance/$id';
+  static const String performanceCompletionStatus = '/performance/completion-status';
 
   // BMI Records
   static const String bmiRecords = '/bmi-records/';

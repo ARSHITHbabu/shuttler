@@ -90,4 +90,28 @@ class PerformanceService {
       throw Exception('Failed to delete performance record: ${_apiService.getErrorMessage(e)}');
     }
   }
+
+  /// Get performance completion status for all students in a batch on a given date.
+  /// Returns a list of maps: {student_id, student_name, has_entry, performance_id?}
+  Future<List<Map<String, dynamic>>> getCompletionStatus({
+    required int batchId,
+    String? date,
+  }) async {
+    try {
+      final queryParams = <String, dynamic>{'batch_id': batchId};
+      if (date != null) queryParams['date'] = date;
+      final response = await _apiService.get(
+        ApiEndpoints.performanceCompletionStatus,
+        queryParameters: queryParams,
+      );
+      if (response.data is List) {
+        return (response.data as List)
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+      }
+      return [];
+    } catch (e) {
+      throw Exception('Failed to fetch completion status: ${_apiService.getErrorMessage(e)}');
+    }
+  }
 }

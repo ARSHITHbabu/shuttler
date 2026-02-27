@@ -40,6 +40,15 @@ except ImportError:
     _FIREBASE_AVAILABLE = False
     print("Warning: firebase-admin not installed. Push notifications disabled.")
 
+# ── B11: SendGrid for transactional email ──────────────────────────────────
+try:
+    from sendgrid import SendGridAPIClient
+    from sendgrid.helpers.mail import Mail, Content
+    _SENDGRID_AVAILABLE = True
+except ImportError:
+    _SENDGRID_AVAILABLE = False
+    print("Warning: sendgrid not installed. Transactional emails disabled.")
+
 # Password hashing context - use bcrypt directly to avoid passlib initialization issues
 # Fallback to passlib if direct bcrypt fails
 try:
@@ -384,6 +393,34 @@ def send_push_notification(fcm_token: str, title: str, body: str, data: Optional
         return True
     except Exception as e:
         print(f"[FCM] Push failed (token={fcm_token[:10]}...): {e}")
+        return False
+
+
+# ── B11: Transactional email via SendGrid ──────────────────────────────────
+def send_email(to_email: str, subject: str, html_content: str, plain_content: Optional[str] = None) -> bool:
+    """
+    Send a transactional email via SendGrid.
+    Requires SENDGRID_API_KEY and FROM_EMAIL env vars.
+    Returns True on success, False on any error (non-blocking — never raises).
+    Graceful no-op when SendGrid is not configured.
+    """
+    api_key = os.getenv("SENDGRID_API_KEY")
+    from_email = os.getenv("FROM_EMAIL", "noreply@shuttler.app")
+    if not api_key or not _SENDGRID_AVAILABLE:
+        return False
+    try:
+        message = Mail(
+            from_email=from_email,
+            to_emails=to_email,
+            subject=subject,
+            html_content=html_content,
+            plain_text_content=plain_content or "",
+        )
+        sg = SendGridAPIClient(api_key)
+        sg.send(message)
+        return True
+    except Exception as e:
+        print(f"[Email] Send failed (to={to_email}): {e}")
         return False
 
 
@@ -1616,6 +1653,24 @@ def migrate_database_schema(engine):
                 print(f" Error creating notification_preferences table: {e}")
         else:
             print(" notification_preferences table exists")
+
+        # ── B10: Drop orphaned `requests` table (no model exists for it) ─────
+        if 'requests' in tables:
+            try:
+                with engine.connect() as conn:
+                    row_count = conn.execute(
+                        __import__('sqlalchemy').text("SELECT COUNT(*) FROM requests")
+                    ).scalar()
+                    if row_count == 0:
+                        conn.execute(__import__('sqlalchemy').text("DROP TABLE requests"))
+                        conn.commit()
+                        print(" Dropped empty orphaned `requests` table.")
+                    else:
+                        print(f" WARNING: Orphaned `requests` table has {row_count} rows — manual review required before dropping.")
+            except Exception as e:
+                print(f" Could not clean up `requests` table: {e}")
+        else:
+            print(" No orphaned `requests` table found.")
 
         print("Database schema migration completed!")
     except Exception as e:
@@ -3514,12 +3569,35 @@ def create_coach(coach: CoachCreate):
         
         # Convert to Pydantic model before closing session
         coach_response = Coach.model_validate(db_coach)
-        
+
         # Verify it was saved to coaches table by querying it back
         verify_coach = db.query(CoachDB).filter(CoachDB.id == db_coach.id).first()
         if not verify_coach:
             raise HTTPException(status_code=500, detail="Error: Coach was not saved to coaches table")
-        
+
+        # B11: Send welcome email to new coach (non-blocking)
+        try:
+            welcome_html = f"""
+<html><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;">
+<div style="max-width:480px;margin:auto;background:#fff;border-radius:8px;padding:32px;">
+  <h2 style="color:#1a1a2e;">Welcome to Shuttler, {db_coach.name}!</h2>
+  <p>Your coach account has been created. Here are your login details:</p>
+  <ul style="line-height:1.8;">
+    <li><strong>Email:</strong> {db_coach.email}</li>
+    <li><strong>Role:</strong> Coach</li>
+  </ul>
+  <p>Download the Shuttler app and login with your email and the password provided by your academy admin.</p>
+  <p style="color:#888;font-size:13px;">If you have any questions, contact your academy admin.</p>
+</div></body></html>"""
+            send_email(
+                to_email=db_coach.email,
+                subject="Welcome to Shuttler — Coach Account Created",
+                html_content=welcome_html,
+                plain_content=f"Welcome to Shuttler, {db_coach.name}! Your coach account has been created. Login with: {db_coach.email}",
+            )
+        except Exception as _ee:
+            print(f"[Email] Coach welcome email error: {_ee}")
+
         return coach_response
     except IntegrityError as e:
         db.rollback()
@@ -3857,9 +3935,31 @@ def forgot_password(request: Request, rq: ForgotPasswordRequest):
         db.add(new_token)
         db.commit()
         
+        # B11: Send password reset email (graceful no-op if SendGrid not configured)
+        try:
+            app_name = "Shuttler"
+            reset_html = f"""
+<html><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;">
+<div style="max-width:480px;margin:auto;background:#fff;border-radius:8px;padding:32px;">
+  <h2 style="color:#1a1a2e;">Password Reset Request</h2>
+  <p>You requested a password reset for your <strong>{app_name}</strong> account.</p>
+  <p>Use the token below to reset your password. It expires in <strong>15 minutes</strong>.</p>
+  <div style="background:#f0f0f0;border-radius:6px;padding:16px;text-align:center;margin:24px 0;">
+    <span style="font-size:20px;font-weight:bold;letter-spacing:2px;color:#1a1a2e;">{reset_token}</span>
+  </div>
+  <p style="color:#888;font-size:13px;">Enter this token in the app's "Reset Password" screen along with your new password.</p>
+  <p style="color:#888;font-size:13px;">If you did not request this, ignore this email — your account is safe.</p>
+</div></body></html>"""
+            send_email(
+                to_email=request_data.email,
+                subject=f"{app_name} — Password Reset Token",
+                html_content=reset_html,
+                plain_content=f"Your {app_name} password reset token: {reset_token}\nExpires in 15 minutes.",
+            )
+        except Exception as _ee:
+            print(f"[Email] Password reset email error: {_ee}")
+
         # Prevent account enumeration: return uniform message whether email was found or not
-        # NOTE: In production the reset_token must be delivered via email (B11).
-        # Never expose it in the API response.
         return {
             "success": True,
             "message": "If your email is registered, you will receive a password reset token.",
@@ -5320,7 +5420,32 @@ def create_student(student: StudentCreate):
         db.add(db_student)
         db.commit()
         db.refresh(db_student)
-        return Student.model_validate(db_student)
+        student_response = Student.model_validate(db_student)
+
+        # B11: Send welcome email to new student (non-blocking)
+        try:
+            welcome_html = f"""
+<html><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;">
+<div style="max-width:480px;margin:auto;background:#fff;border-radius:8px;padding:32px;">
+  <h2 style="color:#1a1a2e;">Welcome to Shuttler, {db_student.name}!</h2>
+  <p>Your student account has been created by your academy.</p>
+  <ul style="line-height:1.8;">
+    <li><strong>Email:</strong> {db_student.email}</li>
+    <li><strong>Role:</strong> Student</li>
+  </ul>
+  <p>Download the Shuttler app and login with your email and the password provided by your academy admin.</p>
+  <p style="color:#888;font-size:13px;">If you have any questions, contact your academy admin.</p>
+</div></body></html>"""
+            send_email(
+                to_email=db_student.email,
+                subject="Welcome to Shuttler — Student Account Created",
+                html_content=welcome_html,
+                plain_content=f"Welcome to Shuttler, {db_student.name}! Your student account has been created. Login with: {db_student.email}",
+            )
+        except Exception as _ee:
+            print(f"[Email] Student welcome email error: {_ee}")
+
+        return student_response
     finally:
         db.close()
 
@@ -6307,6 +6432,33 @@ def create_fee_payment(fee_id: int, payment: FeePaymentCreate):
         except Exception as _ne:
             print(f"[Notif] Fee payment notification error: {_ne}")
 
+        # B11: Send payment receipt email to student (non-blocking)
+        try:
+            student_for_email = db.query(StudentDB).filter(StudentDB.id == fee.student_id).first()
+            if student_for_email and student_for_email.email:
+                receipt_html = f"""
+<html><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;">
+<div style="max-width:480px;margin:auto;background:#fff;border-radius:8px;padding:32px;">
+  <h2 style="color:#1a1a2e;">Payment Receipt — Shuttler</h2>
+  <p>Dear {student_for_email.name},</p>
+  <p>A fee payment has been recorded for your account.</p>
+  <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+    <tr><td style="padding:8px;color:#555;">Amount Paid</td><td style="padding:8px;font-weight:bold;">₹{db_payment.amount:.2f}</td></tr>
+    <tr style="background:#f9f9f9;"><td style="padding:8px;color:#555;">Date</td><td style="padding:8px;">{db_payment.paid_date}</td></tr>
+    <tr><td style="padding:8px;color:#555;">Payment Method</td><td style="padding:8px;text-transform:capitalize;">{db_payment.payment_method}</td></tr>
+    <tr style="background:#f9f9f9;"><td style="padding:8px;color:#555;">Fee Status</td><td style="padding:8px;text-transform:capitalize;">{fee.status}</td></tr>
+  </table>
+  <p style="color:#888;font-size:13px;">This is an automated receipt. Please keep it for your records.</p>
+</div></body></html>"""
+                send_email(
+                    to_email=student_for_email.email,
+                    subject=f"Shuttler — Payment Receipt ₹{db_payment.amount:.2f}",
+                    html_content=receipt_html,
+                    plain_content=f"Payment of ₹{db_payment.amount:.2f} recorded on {db_payment.paid_date} via {db_payment.payment_method}. Fee status: {fee.status}.",
+                )
+        except Exception as _ee:
+            print(f"[Email] Fee payment receipt email error: {_ee}")
+
         return {
             "id": db_payment.id,
             "fee_id": db_payment.fee_id,
@@ -7241,6 +7393,77 @@ def delete_performance_record(record_id: int):
         raise HTTPException(status_code=400, detail=str(e))
     finally:
         db.close()
+
+# ── B8: Performance Entry Completion Status ──────────────────────────────
+@app.get("/performance/completion-status", dependencies=[Depends(require_coach)])
+def get_performance_completion_status(
+    batch_id: int,
+    date: Optional[str] = None,
+    current_user: dict = Depends(require_coach),
+):
+    """
+    Return completion status of performance entries for all approved students in a
+    batch for a given date. Used by the coach portal to see who has/hasn't been assessed.
+    """
+    db = SessionLocal()
+    try:
+        target_date = date or datetime.now().strftime("%Y-%m-%d")
+
+        # A15: coaches may only view batches they are assigned to
+        if current_user.get("user_type") == "coach":
+            coach_id = int(current_user["sub"])
+            if not verify_coach_batch_access(coach_id, batch_id, db):
+                raise HTTPException(
+                    status_code=403,
+                    detail="You are not assigned to this batch.",
+                )
+
+        # Get all approved students in the batch
+        batch_students = (
+            db.query(BatchStudentDB)
+            .filter(
+                BatchStudentDB.batch_id == batch_id,
+                BatchStudentDB.status == "approved",
+            )
+            .all()
+        )
+        student_ids = [bs.student_id for bs in batch_students]
+        if not student_ids:
+            return []
+
+        # Performance records already created for this batch+date
+        perf_records = (
+            db.query(PerformanceDB)
+            .filter(
+                PerformanceDB.batch_id == batch_id,
+                PerformanceDB.date == target_date,
+                PerformanceDB.student_id.in_(student_ids),
+            )
+            .all()
+        )
+        # Map student_id → first record id (representative id for update/view)
+        assessed: Dict[int, int] = {}
+        for r in perf_records:
+            if r.student_id not in assessed:
+                assessed[r.student_id] = r.id
+
+        students = db.query(StudentDB).filter(StudentDB.id.in_(student_ids)).all()
+
+        result = [
+            {
+                "student_id": s.id,
+                "student_name": s.name,
+                "has_entry": s.id in assessed,
+                "performance_id": assessed.get(s.id),
+            }
+            for s in students
+        ]
+        # Sort: pending students first, then alphabetical
+        result.sort(key=lambda x: (x["has_entry"], x["student_name"]))
+        return result
+    finally:
+        db.close()
+
 
 # ==================== BMI Routes ====================
 

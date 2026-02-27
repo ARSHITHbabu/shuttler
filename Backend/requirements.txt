@@ -32,6 +32,9 @@ python-dotenv==1.0.0
 # Firebase for push notifications (B5)
 firebase-admin==6.3.0
 
+# Transactional email (B11)
+sendgrid==6.11.0
+
 # Testing (optional)
 # pytest==7.4.3
 # httpx==0.25.2
