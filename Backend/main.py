@@ -83,21 +83,21 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 security = HTTPBearer()
 
-def create_access_token(data: dict) -> str:
+def create_access_token(data: dict, jti: str = None) -> str:
     """Create a short-lived JWT access token (default 30 min)."""
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    jti = str(uuid.uuid4())
-    to_encode.update({"exp": expire, "type": "access", "jti": jti})
+    token_jti = jti if jti else str(uuid.uuid4())
+    to_encode.update({"exp": expire, "type": "access", "jti": token_jti})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def create_refresh_token(data: dict) -> str:
+def create_refresh_token(data: dict, jti: str = None) -> str:
     """Create a long-lived JWT refresh token (default 30 days)."""
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-    jti = str(uuid.uuid4())
-    to_encode.update({"exp": expire, "type": "refresh", "jti": jti})
+    token_jti = jti if jti else str(uuid.uuid4())
+    to_encode.update({"exp": expire, "type": "refresh", "jti": token_jti})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -789,6 +789,27 @@ class ReportHistoryDB(Base):
     key_metrics = Column(JSON, nullable=True) # Optional summary metrics for quick display
 
 
+class ActiveSessionDB(Base):
+    __tablename__ = "active_sessions"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    user_type = Column(String(20), nullable=False)
+    jti = Column(String(255), unique=True, nullable=False, index=True) # Access token JTI
+    refresh_jti = Column(String(255), unique=True, nullable=False, index=True) # Refresh token JTI
+    ip_address = Column(String(100), nullable=True)
+    user_agent = Column(String(500), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    is_revoked = Column(Boolean, default=False)
+
+class PasswordResetTokenDB(Base):
+    __tablename__ = "password_reset_tokens"
+    id = Column(Integer, primary_key=True, index=True)
+    token_hash = Column(String(255), unique=True, nullable=False, index=True)
+    email = Column(String, nullable=False)
+    user_type = Column(String(20), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+
 class RevokedTokenDB(Base):
     """JWT token revocation list (blacklist) for explicit logout.
     Tokens are identified by their unique JTI (JWT ID) claim.
@@ -1307,6 +1328,22 @@ def migrate_database_schema(engine):
         else:
             print(" video_resources table will be created by SQLAlchemy")
 
+        if 'active_sessions' not in tables:
+            print("  active_sessions table not found. Creating...")
+            try:
+                ActiveSessionDB.__table__.create(bind=engine)
+                print(" active_sessions table created!")
+            except Exception as e:
+                pass
+                
+        if 'password_reset_tokens' not in tables:
+            print("  password_reset_tokens table not found. Creating...")
+            try:
+                PasswordResetTokenDB.__table__.create(bind=engine)
+                print(" password_reset_tokens table created!")
+            except Exception as e:
+                pass
+                
         # Check if leave_requests table exists
         if 'leave_requests' not in tables:
             print("  leave_requests table not found. Creating...")
@@ -1376,6 +1413,20 @@ print("Database tables created/verified!")
 # ==================== Pydantic Models ====================
 
 # Coach Models
+
+def validate_password_complexity(v: str) -> str:
+    if len(v) < 8:
+        raise ValueError("Password must be at least 8 characters long")
+    if len(v.encode('utf-8')) > 72:
+        raise ValueError("Password cannot be longer than 72 bytes")
+    if not re.search(r"[A-Z]", v):
+        raise ValueError("Password must contain at least one uppercase letter")
+    if not re.search(r"[a-z]", v):
+        raise ValueError("Password must contain at least one lowercase letter")
+    if not re.search(r"[0-9]", v):
+        raise ValueError("Password must contain at least one number")
+    return v
+
 class CoachCreate(BaseModel):
     name: str
     email: str
@@ -1385,6 +1436,12 @@ class CoachCreate(BaseModel):
     experience_years: Optional[int] = None
     monthly_salary: Optional[float] = None
     joining_date: Optional[date] = None
+
+    @field_validator('password')
+    @classmethod
+    def check_pwd_CoachCreate(cls, v):
+        return validate_password_complexity(v)
+
 
 class Coach(BaseModel):
     id: int
@@ -1421,11 +1478,22 @@ class ResetPasswordRequest(BaseModel):
     new_password: str
     user_type: str  # "coach", "owner", or "student"
 
+    @field_validator('new_password')
+    @classmethod
+    def check_pwd_ResetPasswordRequest(cls, v):
+        return validate_password_complexity(v)
+
+
 class ChangePasswordRequest(BaseModel):
     email: str
     current_password: str
     new_password: str
     user_type: str  # "coach", "owner", or "student"
+
+    @field_validator('new_password')
+    @classmethod
+    def check_pwd_ChangePasswordRequest(cls, v):
+        return validate_password_complexity(v)
 
 
 class TokenRefreshRequest(BaseModel):
@@ -1459,6 +1527,12 @@ class OwnerCreate(BaseModel):
     experience_years: Optional[int] = None
     role: Literal["owner", "co_owner"] = "owner"
     must_change_password: Optional[bool] = False
+
+    @field_validator('password')
+    @classmethod
+    def check_pwd_OwnerCreate(cls, v):
+        return validate_password_complexity(v)
+
 
 class Owner(BaseModel):
     id: int
@@ -1596,6 +1670,12 @@ class StudentCreate(BaseModel):
     address: Optional[str] = None  # Required for profile completion
     t_shirt_size: Optional[str] = None  # Required for profile completion
     blood_group: Optional[str] = None
+
+    @field_validator('password')
+    @classmethod
+    def check_pwd_StudentCreate(cls, v):
+        return validate_password_complexity(v)
+
 
 class Student(BaseModel):
     id: int
@@ -2814,7 +2894,29 @@ def unified_login(request: Request, login_data: UnifiedLoginRequest):
         # ── helper to build token pair ────────────────────────────────────
         def _make_tokens(user_id: int, user_type: str, email: str, role: str):
             payload = {"sub": str(user_id), "user_type": user_type, "email": email, "role": role}
-            return create_access_token(payload), create_refresh_token(payload)
+            access_jti = str(uuid.uuid4())
+            refresh_jti = str(uuid.uuid4())
+            access_token = create_access_token(payload, jti=access_jti)
+            refresh_token = create_refresh_token(payload, jti=refresh_jti)
+            
+            # Record active session
+            expires_at = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+            client_ip = request.client.host if request and request.client else None
+            user_agent = request.headers.get("user-agent", None) if request else None
+            
+            new_session = ActiveSessionDB(
+                user_id=user_id,
+                user_type=user_type,
+                jti=access_jti,
+                refresh_jti=refresh_jti,
+                ip_address=client_ip,
+                user_agent=user_agent,
+                expires_at=expires_at
+            )
+            db.add(new_session)
+            db.commit()
+            
+            return access_token, refresh_token
 
         # 1. Try OwnerDB
         owner = db.query(OwnerDB).filter(OwnerDB.email == login_data.email).first()
@@ -3034,25 +3136,29 @@ def forgot_password(request: Request, rq: ForgotPasswordRequest):
                     if user: user_type = "student"
         
         if not user:
-            return {"success": False, "message": "Email not found"}
+            return {"success": True, "message": "If your email is registered, you will receive a password reset token."}
         
+        import hashlib
         # Generate secure reset token
         reset_token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(reset_token.encode()).hexdigest()
         
-        # Store token with expiration (1 hour)
-        password_reset_tokens[reset_token] = {
-            "email": request_data.email,
-            "user_type": user_type, # Use the detected type
-            "expires_at": datetime.now() + timedelta(hours=1)
-        }
+        # Store token with expiration (15 mins)
+        new_token = PasswordResetTokenDB(
+            token_hash=token_hash,
+            email=request_data.email,
+            user_type=user_type,
+            expires_at=datetime.now() + timedelta(minutes=15)
+        )
+        db.add(new_token)
+        db.commit()
         
-        # In production, send email with reset link
-        # For now, return token (in production, don't return token, send via email)
+        # Prevent account enumeration: return uniform message whether email was found or not
         return {
             "success": True,
-            "message": "Password reset token generated. Use this token to reset your password.",
-            "reset_token": reset_token,  # Remove this in production, send via email instead
-            "expires_in": 3600  # seconds
+            "message": "If your email is registered, you will receive a password reset token.",
+            "reset_token": reset_token,  # Remove this in production, but needed for development right now
+            "expires_in": 900
         }
     finally:
         db.close()
@@ -3062,29 +3168,24 @@ def reset_password(request: ResetPasswordRequest):
     """Reset password using reset token"""
     db = SessionLocal()
     try:
-        # Validate token
-        if request.reset_token not in password_reset_tokens:
-            return {
-                "success": False,
-                "message": "Invalid or expired reset token"
-            }
+        import hashlib
+        token_hash = hashlib.sha256(request.reset_token.encode()).hexdigest()
         
-        token_data = password_reset_tokens[request.reset_token]
+        # Validate token
+        token_entry = db.query(PasswordResetTokenDB).filter(PasswordResetTokenDB.token_hash == token_hash).first()
+        if not token_entry:
+            return {"success": False, "message": "Invalid or expired reset token"}
         
         # Check expiration
-        if datetime.now() > token_data["expires_at"]:
-            del password_reset_tokens[request.reset_token]
-            return {
-                "success": False,
-                "message": "Reset token has expired. Please request a new one."
-            }
+        if datetime.now() > token_entry.expires_at.replace(tzinfo=None):
+            db.delete(token_entry)
+            db.commit()
+            return {"success": False, "message": "Reset token has expired. Please request a new one."}
         
         # Verify email matches
-        if token_data["email"] != request.email or token_data["user_type"] != request.user_type:
-            return {
-                "success": False,
-                "message": "Invalid reset token"
-            }
+        if token_entry.email != request.email or token_entry.user_type != request.user_type:
+            return {"success": False, "message": "Invalid reset token"}
+
         
         # Find user using the user_type from token
         target_user_type = token_data["user_type"]
@@ -3106,7 +3207,8 @@ def reset_password(request: ResetPasswordRequest):
         db.commit()
         
         # Remove used token
-        del password_reset_tokens[request.reset_token]
+        db.delete(token_entry)
+        db.commit()
         
         return {
             "success": True,
@@ -3116,7 +3218,7 @@ def reset_password(request: ResetPasswordRequest):
         db.close()
 
 @app.post("/auth/refresh")
-def refresh_access_token(body: TokenRefreshRequest):
+def refresh_access_token(request: Request, body: TokenRefreshRequest):
     """Exchange a valid refresh token for a new access + refresh token pair.
 
     The old refresh token is revoked after a successful rotation.
@@ -3283,8 +3385,37 @@ def refresh_access_token(body: TokenRefreshRequest):
         "email": payload.get("email", ""),
         "role": payload.get("role", user_type),
     }
-    new_access = create_access_token(token_data)
-    new_refresh = create_refresh_token(token_data)
+    new_access_jti = str(uuid.uuid4())
+    new_refresh_jti = str(uuid.uuid4())
+    new_access = create_access_token(token_data, jti=new_access_jti)
+    new_refresh = create_refresh_token(token_data, jti=new_refresh_jti)
+    
+    db_sess = SessionLocal()
+    try:
+        expires_at = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        client_ip = request.client.host if request and hasattr(request, 'client') and request.client else None
+        user_agent = request.headers.get("user-agent", None) if request else None
+        
+        new_session = ActiveSessionDB(
+            user_id=int(user_id),
+            user_type=user_type,
+            jti=new_access_jti,
+            refresh_jti=new_refresh_jti,
+            ip_address=client_ip,
+            user_agent=user_agent,
+            expires_at=expires_at
+        )
+        db_sess.add(new_session)
+        
+        old_session = db_sess.query(ActiveSessionDB).filter(ActiveSessionDB.refresh_jti == jti).first()
+        if old_session:
+            old_session.is_revoked = True
+            
+        db_sess.commit()
+    except Exception as e:
+        print(f"Error recording rotated session: {e}")
+    finally:
+        db_sess.close()
 
     return {
         "access_token": new_access,
@@ -3292,6 +3423,109 @@ def refresh_access_token(body: TokenRefreshRequest):
         "token_type": "bearer",
     }
 
+
+
+@app.get("/auth/sessions")
+def get_active_sessions(request: Request, current_user: dict = Depends(get_current_user)):
+    """Get all active sessions for the current user."""
+    db = SessionLocal()
+    try:
+        user_id = current_user.get("sub")
+        user_type = current_user.get("user_type")
+        current_jti = current_user.get("jti")
+        
+        # Cleanup expired sessions
+        db.query(ActiveSessionDB).filter(
+            ActiveSessionDB.expires_at < datetime.utcnow()
+        ).delete()
+        db.commit()
+        
+        sessions = db.query(ActiveSessionDB).filter(
+            ActiveSessionDB.user_id == int(user_id),
+            ActiveSessionDB.user_type == user_type,
+            ActiveSessionDB.is_revoked == False
+        ).order_by(ActiveSessionDB.created_at.desc()).all()
+        
+        result = []
+        for s in sessions:
+            result.append({
+                "id": s.id,
+                "ip_address": s.ip_address,
+                "user_agent": s.user_agent,
+                "created_at": s.created_at.isoformat() if s.created_at else None,
+                "is_current": s.jti == current_jti
+            })
+        return {"success": True, "sessions": result}
+    finally:
+        db.close()
+
+@app.delete("/auth/sessions/{session_id}")
+def revoke_session(session_id: int, current_user: dict = Depends(get_current_user)):
+    """Revoke a specific active session."""
+    db = SessionLocal()
+    try:
+        user_id = current_user.get("sub")
+        user_type = current_user.get("user_type")
+        
+        session = db.query(ActiveSessionDB).filter(
+            ActiveSessionDB.id == session_id,
+            ActiveSessionDB.user_id == int(user_id),
+            ActiveSessionDB.user_type == user_type
+        ).first()
+        
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        if session.is_revoked:
+            return {"success": True, "message": "Session already revoked"}
+            
+        # Revoke the tokens explicitly
+        db.add(RevokedTokenDB(
+            jti=session.jti,
+            user_id=int(user_id),
+            user_type=user_type,
+            expires_at=session.expires_at
+        ))
+        db.add(RevokedTokenDB(
+            jti=session.refresh_jti,
+            user_id=int(user_id),
+            user_type=user_type,
+            expires_at=session.expires_at
+        ))
+        
+        session.is_revoked = True
+        db.commit()
+        
+        return {"success": True, "message": "Session revoked successfully"}
+    finally:
+        db.close()
+
+@app.post("/auth/logout_all")
+def logout_all_devices(current_user: dict = Depends(get_current_user)):
+    """Logs out the user from all devices by invalidating all previously issued tokens."""
+    db = SessionLocal()
+    try:
+        user_id = current_user.get("sub")
+        user_type = current_user.get("user_type")
+        
+        user = None
+        if user_type == "owner":
+            user = db.query(OwnerDB).filter(OwnerDB.id == int(user_id)).first()
+        elif user_type == "coach":
+            user = db.query(CoachDB).filter(CoachDB.id == int(user_id)).first()
+        elif user_type == "student":
+            user = db.query(StudentDB).filter(StudentDB.id == int(user_id)).first()
+            
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+            
+        from sqlalchemy.sql import func
+        user.jwt_invalidated_at = func.now()
+        db.commit()
+        
+        return {"success": True, "message": "Successfully logged out from all devices"}
+    finally:
+        db.close()
 
 @app.post("/auth/logout")
 def logout(body: LogoutRequest, credentials: HTTPAuthorizationCredentials = Security(security)):

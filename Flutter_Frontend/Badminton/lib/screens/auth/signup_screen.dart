@@ -11,6 +11,7 @@ import '../../widgets/common/success_snackbar.dart';
 import '../../providers/service_providers.dart';
 import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/app_logo.dart';
+import '../../widgets/common/password_strength_indicator.dart';
 
 /// Signup screen for user registration
 class SignupScreen extends ConsumerStatefulWidget {
@@ -247,7 +248,14 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   enabled: !_isLoading,
                   textInputAction: TextInputAction.next,
                 ),
-                const SizedBox(height: AppDimensions.spacingL),
+                const SizedBox(height: AppDimensions.spacingS),
+                ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: _passwordController,
+                  builder: (context, value, child) {
+                    return PasswordStrengthIndicator(password: value.text);
+                  },
+                ),
+                const SizedBox(height: AppDimensions.spacingM),
 
                 // Confirm Password Field
                 CustomTextField(

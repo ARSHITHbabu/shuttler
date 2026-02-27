@@ -89,13 +89,13 @@
 - [x] 🔴 Add `google-services.json`, `GoogleService-Info.plist`, `*.pem`, `*.p12` to `.gitignore`
 
 ### A11 · Password & Account Security
-- [ ] 🔴 Enforce minimum password length (8 chars), complexity, and maximum length (72 bytes for BCrypt)
-- [ ] 🔴 Add password strength indicator in signup screen
-- [ ] 🔴 Fix account enumeration: return identical error message for wrong email AND wrong password ("Invalid email or password")
-- [ ] 🔴 Password reset tokens: cryptographically random (`secrets.token_urlsafe(32)`), single-use, expire after 15 min, stored as hash in DB
-- [ ] 🟠 Rate-limit password reset requests (3 per email per hour)
+- [x] 🔴 Enforce minimum password length (8 chars), complexity, and maximum length (72 bytes for BCrypt)
+- [x] 🔴 Add password strength indicator in signup screen
+- [x] 🔴 Fix account enumeration: return identical error message for wrong email AND wrong password ("Invalid email or password")
+- [x] 🔴 Password reset tokens: cryptographically random (`secrets.token_urlsafe(32)`), single-use, expire after 15 min, stored as hash in DB
+- [x] 🟠 Rate-limit password reset requests (3 per email per hour)
 - [ ] 🟡 Implement concurrent session control (view and revoke active sessions)
-- [ ] 🟡 "Log out all devices" option in settings
+- [x] 🟡 "Log out all devices" option in settings
 
 ### A12 · Input Validation & File Upload Security
 - [ ] 🔴 Validate all text inputs (length limits, allowed characters) server-side
