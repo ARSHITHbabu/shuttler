@@ -10,7 +10,7 @@ import 'coach_schedule_screen.dart';
 import 'coach_settings_screen.dart';
 import 'coach_video_management_screen.dart';
 import '../owner/bmi_tracking_screen.dart';
-import '../owner/performance_tracking_screen.dart';
+import 'coach_performance_screen.dart';
 import 'coach_fees_screen.dart';
 import 'leave_request_screen.dart';
 import 'coach_reports_screen.dart';
@@ -133,7 +133,7 @@ class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (context) => const PerformanceTrackingScreen(),
+                    builder: (context) => const CoachPerformanceScreen(),
                   ),
                 );
               },

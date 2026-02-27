@@ -6,11 +6,13 @@ from fastapi.responses import FileResponse, StreamingResponse, JSONResponse, Red
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 import mimetypes
-from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, Text, Date, DateTime, ForeignKey, JSON, func, and_, or_, select
+from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, Text, Date, DateTime, ForeignKey, JSON, func, and_, or_, select, TypeDecorator
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.exc import IntegrityError
-from pydantic import BaseModel, field_validator
+from cryptography.fernet import Fernet, InvalidToken
+from pydantic import BaseModel, field_validator, model_validator
+import html as html_lib
 import re
 from typing import List, Optional, Dict, Any, Union, Annotated, Literal
 from datetime import datetime, date, timedelta
@@ -28,6 +30,24 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+
+# ── B5: Firebase Admin SDK for FCM push notifications ──────────────────────
+try:
+    import firebase_admin
+    from firebase_admin import credentials as fb_credentials, messaging as fb_messaging
+    _FIREBASE_AVAILABLE = True
+except ImportError:
+    _FIREBASE_AVAILABLE = False
+    print("Warning: firebase-admin not installed. Push notifications disabled.")
+
+# ── B11: SendGrid for transactional email ──────────────────────────────────
+try:
+    from sendgrid import SendGridAPIClient
+    from sendgrid.helpers.mail import Mail, Content
+    _SENDGRID_AVAILABLE = True
+except ImportError:
+    _SENDGRID_AVAILABLE = False
+    print("Warning: sendgrid not installed. Transactional emails disabled.")
 
 # Password hashing context - use bcrypt directly to avoid passlib initialization issues
 # Fallback to passlib if direct bcrypt fails
@@ -254,16 +274,39 @@ def _check_token_revoked(payload: dict, request: Request) -> None:
 
 def verify_coach_batch_access(coach_id: int, batch_id: int, db) -> bool:
     coach_batch = db.query(BatchCoachDB).filter(
-        BatchCoachDB.coach_id == coach_id, 
+        BatchCoachDB.coach_id == coach_id,
         BatchCoachDB.batch_id == batch_id
     ).first()
-    
+
     legacy = db.query(BatchDB).filter(
-        BatchDB.id == batch_id, 
+        BatchDB.id == batch_id,
         BatchDB.assigned_coach_id == coach_id
     ).first()
-    
+
     return bool(coach_batch or legacy)
+
+def verify_coach_student_access(coach_id: int, student_id: int, db) -> bool:
+    """
+    A15: Verify that a student is enrolled in at least one batch assigned to this coach.
+    Used to guard student-record updates performed by coaches.
+    """
+    coach_batch_ids = [
+        row.batch_id for row in
+        db.query(BatchCoachDB.batch_id).filter(BatchCoachDB.coach_id == coach_id).all()
+    ]
+    legacy_batch_ids = [
+        row.id for row in
+        db.query(BatchDB.id).filter(BatchDB.assigned_coach_id == coach_id).all()
+    ]
+    all_batch_ids = list(set(coach_batch_ids + legacy_batch_ids))
+    if not all_batch_ids:
+        return False
+    return bool(
+        db.query(BatchStudentDB).filter(
+            BatchStudentDB.student_id == student_id,
+            BatchStudentDB.batch_id.in_(all_batch_ids)
+        ).first()
+    )
 
 def get_current_user(
     request: Request,
@@ -303,8 +346,92 @@ ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
 
+# ── B5: Firebase initialization ──────────────────────────────────────────────
+# Set FIREBASE_SERVICE_ACCOUNT_PATH in .env to path of your serviceAccountKey.json
+# If not configured, push notifications are silently skipped (app still works).
+_firebase_app = None
+if _FIREBASE_AVAILABLE:
+    _fb_cred_path = os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH", "")
+    if _fb_cred_path and os.path.exists(_fb_cred_path):
+        try:
+            if not firebase_admin._apps:
+                cred = fb_credentials.Certificate(_fb_cred_path)
+                _firebase_app = firebase_admin.initialize_app(cred)
+            else:
+                _firebase_app = firebase_admin.get_app()
+            print(f"Firebase Admin SDK initialized (FCM push notifications ENABLED)")
+        except Exception as _fb_err:
+            print(f"Warning: Firebase init failed: {_fb_err}. Push notifications disabled.")
+    else:
+        print("Firebase: FIREBASE_SERVICE_ACCOUNT_PATH not set. Push notifications disabled.")
+
+
+def send_push_notification(fcm_token: str, title: str, body: str, data: Optional[Dict[str, Any]] = None) -> bool:
+    """
+    Send a Firebase Cloud Messaging push notification.
+    Returns True on success, False on any error (non-blocking — never raises).
+    """
+    if not _FIREBASE_AVAILABLE or _firebase_app is None:
+        return False
+    if not fcm_token:
+        return False
+    try:
+        # FCM data payload values must all be strings
+        str_data = {k: str(v) for k, v in (data or {}).items()}
+        message = fb_messaging.Message(
+            notification=fb_messaging.Notification(title=title, body=body),
+            data=str_data,
+            token=fcm_token,
+            android=fb_messaging.AndroidConfig(priority="high"),
+            apns=fb_messaging.APNSConfig(
+                payload=fb_messaging.APNSPayload(
+                    aps=fb_messaging.Aps(sound="default")
+                )
+            ),
+        )
+        fb_messaging.send(message)
+        return True
+    except Exception as e:
+        print(f"[FCM] Push failed (token={fcm_token[:10]}...): {e}")
+        return False
+
+
+# ── B11: Transactional email via SendGrid ──────────────────────────────────
+def send_email(to_email: str, subject: str, html_content: str, plain_content: Optional[str] = None) -> bool:
+    """
+    Send a transactional email via SendGrid.
+    Requires SENDGRID_API_KEY and FROM_EMAIL env vars.
+    Returns True on success, False on any error (non-blocking — never raises).
+    Graceful no-op when SendGrid is not configured.
+    """
+    api_key = os.getenv("SENDGRID_API_KEY")
+    from_email = os.getenv("FROM_EMAIL", "noreply@shuttler.app")
+    if not api_key or not _SENDGRID_AVAILABLE:
+        return False
+    try:
+        message = Mail(
+            from_email=from_email,
+            to_emails=to_email,
+            subject=subject,
+            html_content=html_content,
+            plain_text_content=plain_content or "",
+        )
+        sg = SendGridAPIClient(api_key)
+        sg.send(message)
+        return True
+    except Exception as e:
+        print(f"[Email] Send failed (to={to_email}): {e}")
+        return False
+
+
 # Database setup - PostgreSQL with fallback to SQLite
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
+
+# A13: SSL mode for PostgreSQL connections.
+# Set DB_SSLMODE=require in production to enforce encrypted transport.
+# Use "prefer" (default) for dev — SSL if available, plaintext fallback.
+# Use "disable" only when connecting to local containerised PG with no SSL configured.
+_DB_SSLMODE = os.getenv("DB_SSLMODE", "prefer")
 
 if not SQLALCHEMY_DATABASE_URL:
     print("WARNING: DATABASE_URL not found in .env file!")
@@ -313,20 +440,118 @@ if not SQLALCHEMY_DATABASE_URL:
     SQLALCHEMY_DATABASE_URL = "sqlite:///./academy_portal.db"
     engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 else:
-    print(f"Connecting to PostgreSQL database...")
+    print(f"Connecting to PostgreSQL database (sslmode={_DB_SSLMODE})...")
     # PostgreSQL connection with connection pooling for high concurrency
     engine = create_engine(
         SQLALCHEMY_DATABASE_URL,
-        pool_size=20,  # Number of permanent connections in the pool
-        max_overflow=40,  # Additional connections when pool is full (total 60 max)
-        pool_pre_ping=True,  # Verify connections before using (handles dropped connections)
-        pool_recycle=3600,  # Recycle connections after 1 hour
-        echo=False  # Set to True to see SQL queries (for debugging)
+        pool_size=20,          # Number of permanent connections in the pool
+        max_overflow=40,       # Additional connections when pool is full (total 60 max)
+        pool_pre_ping=True,    # Verify connections before using (handles dropped connections)
+        pool_recycle=3600,     # Recycle connections after 1 hour
+        echo=False,            # Set to True to see SQL queries (for debugging)
+        connect_args={"sslmode": _DB_SSLMODE},  # A13: enforce SSL transport to DB
     )
-    print("PostgreSQL connection established!")
+    print(f"PostgreSQL connection established (sslmode={_DB_SSLMODE})!")
+
+# ── A13: Field-level Encryption ───────────────────────────────────────────────
+# Sensitive columns (guardian_phone, address) are encrypted at rest using Fernet
+# symmetric encryption. Set FIELD_ENCRYPTION_KEY to a valid Fernet key to enable.
+# Generate a key with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# Leave unset (or empty) in dev — fields will be stored as plaintext.
+_FIELD_KEY_RAW = os.getenv("FIELD_ENCRYPTION_KEY", "").strip()
+_fernet: Optional[Fernet] = None
+if _FIELD_KEY_RAW:
+    try:
+        _fernet = Fernet(_FIELD_KEY_RAW.encode())
+        print("Field-level encryption: ENABLED (guardian_phone, address)")
+    except Exception as _fe:
+        print(f"WARNING: FIELD_ENCRYPTION_KEY is invalid ({_fe}). Field encryption DISABLED.")
+else:
+    print("Field-level encryption: DISABLED (set FIELD_ENCRYPTION_KEY env var to enable in production)")
+
+def encrypt_field(value: Optional[str]) -> Optional[str]:
+    """Encrypt a sensitive field before storing. No-op when key is not configured."""
+    if value is None or _fernet is None:
+        return value
+    return _fernet.encrypt(value.encode()).decode()
+
+def decrypt_field(value: Optional[str]) -> Optional[str]:
+    """
+    Decrypt a sensitive field after loading.
+    Falls back to returning the raw value for legacy plaintext rows (migration-safe).
+    """
+    if value is None or _fernet is None:
+        return value
+    try:
+        return _fernet.decrypt(value.encode()).decode()
+    except (InvalidToken, Exception):
+        return value  # Legacy plaintext — not yet encrypted
+
+class EncryptedString(TypeDecorator):
+    """
+    SQLAlchemy column type that transparently encrypts on write and decrypts on read.
+    Uses Fernet symmetric encryption. Falls back to plaintext when no key is configured.
+    """
+    impl = Text
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        return encrypt_field(value)
+
+    def process_result_value(self, value, dialect):
+        return decrypt_field(value)
+# ─────────────────────────────────────────────────────────────────────────────
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+def send_overdue_fee_notifications():
+    """
+    B5: Daily cron — find fees that are overdue and send a push + in-app notification
+    to students who have not yet been notified today.
+    """
+    db = SessionLocal()
+    try:
+        today = date.today()
+        today_str = today.isoformat()
+
+        overdue_fees = db.query(FeeDB).filter(
+            FeeDB.status.in_(["pending", "partial"]),
+            FeeDB.due_date < today_str,
+        ).all()
+
+        for fee in overdue_fees:
+            # Skip if we already sent a fee_due notification for this fee in the last 24 h
+            recent_notif = db.query(NotificationDB).filter(
+                NotificationDB.user_id == fee.student_id,
+                NotificationDB.user_type == "student",
+                NotificationDB.type == "fee_due",
+                NotificationDB.data["fee_id"].as_integer() == fee.id,
+                NotificationDB.created_at >= datetime.now() - timedelta(hours=23),
+            ).first()
+            if recent_notif:
+                continue
+
+            batch = db.query(BatchDB).filter(BatchDB.id == fee.batch_id).first()
+            batch_name = batch.batch_name if batch else "your batch"
+
+            total_paid = calculate_total_paid(fee.id, db)
+            pending_amount = fee.amount - total_paid
+
+            create_notification(
+                db=db,
+                user_id=fee.student_id,
+                user_type="student",
+                title="Fee Payment Overdue",
+                body=f"₹{pending_amount:.2f} for {batch_name} was due on {fee.due_date}. Please pay immediately.",
+                type="fee_due",
+                data={"fee_id": fee.id, "batch_id": fee.batch_id, "pending_amount": pending_amount},
+            )
+    except Exception as e:
+        print(f"[Cron/FeeOverdue] Error: {e}")
+    finally:
+        db.close()
+
 
 def cleanup_inactive_records():
     """Background task to delete records inactive for > 2 years"""
@@ -467,11 +692,11 @@ class StudentDB(Base):
     phone = Column(String, nullable=False)
     email = Column(String, nullable=False, unique=True)
     guardian_name = Column(String, nullable=True)  # Optional for signup, required for profile completion
-    guardian_phone = Column(String, nullable=True)  # Optional for signup, required for profile completion
+    guardian_phone = Column(EncryptedString, nullable=True)  # A13: encrypted at rest
     password = Column(String, nullable=False)
     added_by = Column(String, nullable=True)  # Optional for signup
     date_of_birth = Column(String, nullable=True)  # Required for profile completion
-    address = Column(Text, nullable=True)  # Required for profile completion
+    address = Column(EncryptedString, nullable=True)  # A13: encrypted at rest
     status = Column(String, default="active") # active, inactive
     inactive_at = Column(DateTime(timezone=True), nullable=True)
     rejoin_request_pending = Column(Boolean, default=False)
@@ -684,6 +909,24 @@ class NotificationDB(Base):
     is_read = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     data = Column(JSON, nullable=True)  # Extra metadata as JSON
+
+
+class NotificationPreferencesDB(Base):
+    """Per-user notification preferences (B7)"""
+    __tablename__ = "notification_preferences"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    user_type = Column(String(20), nullable=False)  # "student", "coach", "owner"
+    # Notification type toggles — all default True (opted-in)
+    pref_attendance = Column(Boolean, default=True, nullable=False)
+    pref_performance = Column(Boolean, default=True, nullable=False)
+    pref_bmi = Column(Boolean, default=True, nullable=False)
+    pref_announcements = Column(Boolean, default=True, nullable=False)
+    pref_leave_updates = Column(Boolean, default=True, nullable=False)
+    pref_fee_payments = Column(Boolean, default=True, nullable=False)
+    pref_fee_due = Column(Boolean, default=True, nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 class CalendarEventDB(Base):
@@ -1400,6 +1643,35 @@ def migrate_database_schema(engine):
         check_and_add_column(engine, 'students', 'jwt_invalidated_at', 'TIMESTAMP WITH TIME ZONE', nullable=True)
         print("JWT invalidation columns verified.")
 
+        # ── B7: Notification preferences table ───────────────────────────────
+        if 'notification_preferences' not in tables:
+            print("  notification_preferences table not found. Creating...")
+            try:
+                NotificationPreferencesDB.__table__.create(bind=engine)
+                print(" notification_preferences table created!")
+            except Exception as e:
+                print(f" Error creating notification_preferences table: {e}")
+        else:
+            print(" notification_preferences table exists")
+
+        # ── B10: Drop orphaned `requests` table (no model exists for it) ─────
+        if 'requests' in tables:
+            try:
+                with engine.connect() as conn:
+                    row_count = conn.execute(
+                        __import__('sqlalchemy').text("SELECT COUNT(*) FROM requests")
+                    ).scalar()
+                    if row_count == 0:
+                        conn.execute(__import__('sqlalchemy').text("DROP TABLE requests"))
+                        conn.commit()
+                        print(" Dropped empty orphaned `requests` table.")
+                    else:
+                        print(f" WARNING: Orphaned `requests` table has {row_count} rows — manual review required before dropping.")
+            except Exception as e:
+                print(f" Could not clean up `requests` table: {e}")
+        else:
+            print(" No orphaned `requests` table found.")
+
         print("Database schema migration completed!")
     except Exception as e:
         print(f"Migration error: {e}")
@@ -1429,6 +1701,48 @@ def validate_password_complexity(v: str) -> str:
         raise ValueError("Password must contain at least one number")
     return v
 
+# ── A12: Input Validation Helpers ────────────────────────────────────────────
+# RFC 5321-compatible email regex (max 254 chars per RFC 5321)
+_EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
+
+def validate_email_format(v: str) -> str:
+    """Validate email format and length."""
+    v = v.strip()
+    if len(v) > 254:
+        raise ValueError("Email address exceeds maximum length of 254 characters")
+    if not _EMAIL_RE.match(v):
+        raise ValueError("Invalid email address format")
+    return v
+
+def validate_phone_format(v: str) -> str:
+    """Validate phone number format: digits, spaces, +, -, (, ), . allowed; 7-15 digits required."""
+    v = v.strip()
+    if not v:
+        raise ValueError("Phone number cannot be empty")
+    # Strip formatting chars and count digits
+    digits_only = re.sub(r'[\s\-\(\)\+\.]', '', v)
+    if not digits_only.isdigit():
+        raise ValueError("Phone number may only contain digits, spaces, +, -, (, ), and .")
+    if not (7 <= len(digits_only) <= 15):
+        raise ValueError("Phone number must contain between 7 and 15 digits")
+    if len(v) > 25:
+        raise ValueError("Phone number too long (max 25 characters)")
+    return v
+
+def validate_name_field(v: str, max_len: int = 100, field_label: str = "Name") -> str:
+    """Validate a human name field: strip whitespace and enforce max length."""
+    v = v.strip()
+    if not v:
+        raise ValueError(f"{field_label} cannot be empty")
+    if len(v) > max_len:
+        raise ValueError(f"{field_label} too long (max {max_len} characters)")
+    return v
+
+def sanitize_html(v: str) -> str:
+    """HTML-escape text to prevent stored XSS when rendered in web contexts."""
+    return html_lib.escape(v, quote=True)
+# ─────────────────────────────────────────────────────────────────────────────
+
 class CoachCreate(BaseModel):
     name: str
     email: str
@@ -1438,6 +1752,28 @@ class CoachCreate(BaseModel):
     experience_years: Optional[int] = None
     monthly_salary: Optional[float] = None
     joining_date: Optional[date] = None
+
+    @field_validator('name')
+    @classmethod
+    def check_name_CoachCreate(cls, v):
+        return validate_name_field(v, max_len=100, field_label="Name")
+
+    @field_validator('email')
+    @classmethod
+    def check_email_CoachCreate(cls, v):
+        return validate_email_format(v)
+
+    @field_validator('phone')
+    @classmethod
+    def check_phone_CoachCreate(cls, v):
+        return validate_phone_format(v)
+
+    @field_validator('specialization')
+    @classmethod
+    def check_specialization_CoachCreate(cls, v):
+        if v is not None and len(v) > 200:
+            raise ValueError("Specialization too long (max 200 characters)")
+        return v
 
     @field_validator('password')
     @classmethod
@@ -1519,6 +1855,27 @@ class CoachUpdate(BaseModel):
     joining_date: Optional[date] = None
     profile_photo: Optional[str] = None
 
+    @field_validator('name')
+    @classmethod
+    def check_name_CoachUpdate(cls, v):
+        if v is not None:
+            return validate_name_field(v, max_len=100, field_label="Name")
+        return v
+
+    @field_validator('email')
+    @classmethod
+    def check_email_CoachUpdate(cls, v):
+        if v is not None:
+            return validate_email_format(v)
+        return v
+
+    @field_validator('phone')
+    @classmethod
+    def check_phone_CoachUpdate(cls, v):
+        if v is not None:
+            return validate_phone_format(v)
+        return v
+
 # Owner Models
 class OwnerCreate(BaseModel):
     name: str
@@ -1529,6 +1886,21 @@ class OwnerCreate(BaseModel):
     experience_years: Optional[int] = None
     role: Literal["owner", "co_owner"] = "owner"
     must_change_password: Optional[bool] = False
+
+    @field_validator('name')
+    @classmethod
+    def check_name_OwnerCreate(cls, v):
+        return validate_name_field(v, max_len=100, field_label="Name")
+
+    @field_validator('email')
+    @classmethod
+    def check_email_OwnerCreate(cls, v):
+        return validate_email_format(v)
+
+    @field_validator('phone')
+    @classmethod
+    def check_phone_OwnerCreate(cls, v):
+        return validate_phone_format(v)
 
     @field_validator('password')
     @classmethod
@@ -1574,6 +1946,48 @@ class OwnerUpdate(BaseModel):
     academy_contact: Optional[str] = None
     academy_email: Optional[str] = None
 
+    @field_validator('name')
+    @classmethod
+    def check_name_OwnerUpdate(cls, v):
+        if v is not None:
+            return validate_name_field(v, max_len=100, field_label="Name")
+        return v
+
+    @field_validator('email')
+    @classmethod
+    def check_email_OwnerUpdate(cls, v):
+        if v is not None:
+            return validate_email_format(v)
+        return v
+
+    @field_validator('phone')
+    @classmethod
+    def check_phone_OwnerUpdate(cls, v):
+        if v is not None:
+            return validate_phone_format(v)
+        return v
+
+    @field_validator('academy_email')
+    @classmethod
+    def check_academy_email_OwnerUpdate(cls, v):
+        if v is not None:
+            return validate_email_format(v)
+        return v
+
+    @field_validator('academy_name')
+    @classmethod
+    def check_academy_name_OwnerUpdate(cls, v):
+        if v is not None and len(v) > 200:
+            raise ValueError("Academy name too long (max 200 characters)")
+        return v
+
+    @field_validator('academy_address')
+    @classmethod
+    def check_academy_address_OwnerUpdate(cls, v):
+        if v is not None and len(v) > 500:
+            raise ValueError("Academy address too long (max 500 characters)")
+        return v
+
 class TransferOwnershipRequest(BaseModel):
     new_owner_id: int
 
@@ -1584,6 +1998,30 @@ class SessionCreate(BaseModel):
     start_date: str
     end_date: str
     status: Optional[str] = "active"
+
+    @field_validator('name')
+    @classmethod
+    def check_session_name(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("Session name cannot be empty")
+        if len(v) > 100:
+            raise ValueError("Session name too long (max 100 characters)")
+        return v
+
+    @model_validator(mode='after')
+    def validate_session_date_range(self):
+        try:
+            if self.start_date and self.end_date:
+                start = date.fromisoformat(self.start_date)
+                end = date.fromisoformat(self.end_date)
+                if end <= start:
+                    raise ValueError("end_date must be after start_date")
+        except ValueError as exc:
+            if "end_date must be" in str(exc):
+                raise
+            raise ValueError("Invalid date format. Use YYYY-MM-DD") from exc
+        return self
 
 class SessionUpdate(BaseModel):
     name: Optional[str] = None
@@ -1673,6 +2111,42 @@ class StudentCreate(BaseModel):
     t_shirt_size: Optional[str] = None  # Required for profile completion
     blood_group: Optional[str] = None
 
+    @field_validator('name')
+    @classmethod
+    def check_name_StudentCreate(cls, v):
+        return validate_name_field(v, max_len=100, field_label="Name")
+
+    @field_validator('email')
+    @classmethod
+    def check_email_StudentCreate(cls, v):
+        return validate_email_format(v)
+
+    @field_validator('phone')
+    @classmethod
+    def check_phone_StudentCreate(cls, v):
+        return validate_phone_format(v)
+
+    @field_validator('guardian_name')
+    @classmethod
+    def check_guardian_name_StudentCreate(cls, v):
+        if v is not None:
+            return validate_name_field(v, max_len=100, field_label="Guardian name")
+        return v
+
+    @field_validator('guardian_phone')
+    @classmethod
+    def check_guardian_phone_StudentCreate(cls, v):
+        if v is not None:
+            return validate_phone_format(v)
+        return v
+
+    @field_validator('address')
+    @classmethod
+    def check_address_StudentCreate(cls, v):
+        if v is not None and len(v) > 500:
+            raise ValueError("Address too long (max 500 characters)")
+        return v
+
     @field_validator('password')
     @classmethod
     def check_pwd_StudentCreate(cls, v):
@@ -1717,6 +2191,48 @@ class StudentUpdate(BaseModel):
     t_shirt_size: Optional[str] = None
     blood_group: Optional[str] = None
     profile_photo: Optional[str] = None
+
+    @field_validator('name')
+    @classmethod
+    def check_name_StudentUpdate(cls, v):
+        if v is not None:
+            return validate_name_field(v, max_len=100, field_label="Name")
+        return v
+
+    @field_validator('email')
+    @classmethod
+    def check_email_StudentUpdate(cls, v):
+        if v is not None:
+            return validate_email_format(v)
+        return v
+
+    @field_validator('phone')
+    @classmethod
+    def check_phone_StudentUpdate(cls, v):
+        if v is not None:
+            return validate_phone_format(v)
+        return v
+
+    @field_validator('guardian_name')
+    @classmethod
+    def check_guardian_name_StudentUpdate(cls, v):
+        if v is not None:
+            return validate_name_field(v, max_len=100, field_label="Guardian name")
+        return v
+
+    @field_validator('guardian_phone')
+    @classmethod
+    def check_guardian_phone_StudentUpdate(cls, v):
+        if v is not None:
+            return validate_phone_format(v)
+        return v
+
+    @field_validator('address')
+    @classmethod
+    def check_address_StudentUpdate(cls, v):
+        if v is not None and len(v) > 500:
+            raise ValueError("Address too long (max 500 characters)")
+        return v
 
 # Attendance Models
 class AttendanceCreate(BaseModel):
@@ -1796,6 +2312,8 @@ class FeeCreate(BaseModel):
     payee_student_id: Optional[int] = None
     status: Optional[str] = None  # Will be calculated, optional on create
 
+_ALLOWED_PAYMENT_METHODS = {'cash', 'card'}
+
 class FeePaymentCreate(BaseModel):
     fee_id: Optional[int] = None  # Optional - provided via path parameter
     amount: float
@@ -1804,6 +2322,13 @@ class FeePaymentCreate(BaseModel):
     payee_name: Optional[str] = None  # For non-student payees
     payment_method: Optional[str] = None
     collected_by: Optional[str] = None
+
+    @field_validator('payment_method')
+    @classmethod
+    def validate_payment_method(cls, v):
+        if v is not None and v.lower() not in _ALLOWED_PAYMENT_METHODS:
+            raise ValueError(f"Invalid payment method '{v}'. Allowed values: {', '.join(sorted(_ALLOWED_PAYMENT_METHODS))}")
+        return v.lower() if v is not None else v
 
 class FeePayment(BaseModel):
     id: int
@@ -1972,12 +2497,50 @@ class Notification(BaseModel):
 
 # ==================== Helper Functions ====================
 
+def _get_notification_prefs(db, user_id: int, user_type: str):
+    """Return NotificationPreferencesDB row, auto-creating default if absent."""
+    prefs = db.query(NotificationPreferencesDB).filter(
+        NotificationPreferencesDB.user_id == user_id,
+        NotificationPreferencesDB.user_type == user_type,
+    ).first()
+    if prefs is None:
+        prefs = NotificationPreferencesDB(user_id=user_id, user_type=user_type)
+        db.add(prefs)
+        db.commit()
+        db.refresh(prefs)
+    return prefs
+
+
+# Maps notification type string → preference column name
+_NOTIF_TYPE_PREF_MAP = {
+    "attendance":   "pref_attendance",
+    "performance":  "pref_performance",
+    "bmi":          "pref_bmi",
+    "announcement": "pref_announcements",
+    "leave_update": "pref_leave_updates",
+    "fee_payment":  "pref_fee_payments",
+    "fee_due":      "pref_fee_due",
+}
+
+
 def create_notification(db, user_id: int, user_type: str, title: str, body: str, type: str = "general", data: Optional[Dict[str, Any]] = None):
-    """Helper to create a notification for a user"""
+    """
+    Helper to create an in-app notification and send a FCM push.
+    B7: Respects per-user notification preferences — silently skips if disabled.
+    B5: Sends FCM push notification when FCM token available.
+    """
     try:
-        # Debug check
-        print(f"Creating notification for {user_type} {user_id}: {title}")
-        
+        # ── B7: check user preferences ─────────────────────────────────────
+        pref_attr = _NOTIF_TYPE_PREF_MAP.get(type)
+        if pref_attr is not None:
+            try:
+                prefs = _get_notification_prefs(db, user_id, user_type)
+                if not getattr(prefs, pref_attr, True):
+                    return None  # User has opted out of this notification type
+            except Exception as pref_err:
+                print(f"[Prefs] Could not check preferences: {pref_err}")
+
+        # ── Create in-app notification ──────────────────────────────────────
         notification = NotificationDB(
             user_id=user_id,
             user_type=user_type,
@@ -1985,11 +2548,33 @@ def create_notification(db, user_id: int, user_type: str, title: str, body: str,
             body=body,
             type=type,
             data=data,
-            is_read=False
+            is_read=False,
         )
         db.add(notification)
         db.commit()
         db.refresh(notification)
+
+        # ── B5: Send FCM push notification ─────────────────────────────────
+        try:
+            fcm_token = None
+            if user_type == "student":
+                user = db.query(StudentDB).filter(StudentDB.id == user_id).first()
+            elif user_type == "coach":
+                user = db.query(CoachDB).filter(CoachDB.id == user_id).first()
+            elif user_type == "owner":
+                user = db.query(OwnerDB).filter(OwnerDB.id == user_id).first()
+            else:
+                user = None
+            if user:
+                fcm_token = getattr(user, "fcm_token", None)
+            if fcm_token:
+                push_data = dict(data or {})
+                push_data["notification_id"] = str(notification.id)
+                push_data["type"] = type
+                send_push_notification(fcm_token, title, body, push_data)
+        except Exception as push_err:
+            print(f"[FCM] Push send error: {push_err}")
+
         return notification
     except Exception as e:
         print(f" Error creating notification: {e}")
@@ -2261,6 +2846,40 @@ class AnnouncementCreate(BaseModel):
     creator_type: str = "coach"  # "coach" or "owner"
     scheduled_at: Optional[str] = None
 
+    @field_validator('title')
+    @classmethod
+    def sanitize_announcement_title(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("Title cannot be empty")
+        if len(v) > 255:
+            raise ValueError("Title too long (max 255 characters)")
+        return sanitize_html(v)
+
+    @field_validator('message')
+    @classmethod
+    def sanitize_announcement_message(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("Message cannot be empty")
+        if len(v) > 5000:
+            raise ValueError("Message too long (max 5000 characters)")
+        return sanitize_html(v)
+
+    @field_validator('target_audience')
+    @classmethod
+    def validate_target_audience(cls, v):
+        if v not in ["all", "students", "coaches"]:
+            raise ValueError('target_audience must be "all", "students", or "coaches"')
+        return v
+
+    @field_validator('creator_type')
+    @classmethod
+    def validate_creator_type(cls, v):
+        if v not in ["coach", "owner"]:
+            raise ValueError('creator_type must be "coach" or "owner"')
+        return v
+
     @field_validator('priority')
     @classmethod
     def validate_priority(cls, v):
@@ -2291,6 +2910,26 @@ class AnnouncementUpdate(BaseModel):
     scheduled_at: Optional[str] = None
     is_sent: Optional[bool] = None
 
+    @field_validator('title')
+    @classmethod
+    def sanitize_ann_update_title(cls, v):
+        if v is not None:
+            v = v.strip()
+            if len(v) > 255:
+                raise ValueError("Title too long (max 255 characters)")
+            return sanitize_html(v)
+        return v
+
+    @field_validator('message')
+    @classmethod
+    def sanitize_ann_update_message(cls, v):
+        if v is not None:
+            v = v.strip()
+            if len(v) > 5000:
+                raise ValueError("Message too long (max 5000 characters)")
+            return sanitize_html(v)
+        return v
+
 # Notification Models
 class NotificationCreate(BaseModel):
     user_id: int
@@ -2299,6 +2938,29 @@ class NotificationCreate(BaseModel):
     body: str
     type: str = "general"
     data: Optional[dict] = None
+
+    @field_validator('title')
+    @classmethod
+    def sanitize_notification_title(cls, v):
+        v = v.strip()
+        if len(v) > 255:
+            raise ValueError("Notification title too long (max 255 characters)")
+        return sanitize_html(v)
+
+    @field_validator('body')
+    @classmethod
+    def sanitize_notification_body(cls, v):
+        v = v.strip()
+        if len(v) > 1000:
+            raise ValueError("Notification body too long (max 1000 characters)")
+        return sanitize_html(v)
+
+    @field_validator('user_type')
+    @classmethod
+    def validate_notification_user_type(cls, v):
+        if v not in ["student", "coach", "owner"]:
+            raise ValueError('user_type must be "student", "coach", or "owner"')
+        return v
 
 class Notification(BaseModel):
     id: int
@@ -2316,6 +2978,30 @@ class Notification(BaseModel):
 
 class NotificationUpdate(BaseModel):
     is_read: Optional[bool] = None
+
+# B7: Notification Preferences Models
+class NotificationPreferences(BaseModel):
+    user_id: int
+    user_type: str
+    pref_attendance: bool = True
+    pref_performance: bool = True
+    pref_bmi: bool = True
+    pref_announcements: bool = True
+    pref_leave_updates: bool = True
+    pref_fee_payments: bool = True
+    pref_fee_due: bool = True
+
+    class Config:
+        from_attributes = True
+
+class NotificationPreferencesUpdate(BaseModel):
+    pref_attendance: Optional[bool] = None
+    pref_performance: Optional[bool] = None
+    pref_bmi: Optional[bool] = None
+    pref_announcements: Optional[bool] = None
+    pref_leave_updates: Optional[bool] = None
+    pref_fee_payments: Optional[bool] = None
+    pref_fee_due: Optional[bool] = None
 
 # CalendarEvent Models
 class CalendarEventCreate(BaseModel):
@@ -2653,7 +3339,56 @@ async def jwt_auth_middleware(request: Request, call_next):
 UPLOAD_DIR = Path("./uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 print(f" Upload directory ready at: {UPLOAD_DIR.absolute()}")
+
+# A14: Restrict UPLOAD_DIR permissions — owner rw+x, group r+x, others nothing.
+# Prevents other OS users from writing or listing the directory.
+try:
+    UPLOAD_DIR.chmod(0o750)
+except (AttributeError, NotImplementedError, OSError):
+    pass  # Windows does not support POSIX chmod — safe to skip
+
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+# ── A14: Safe upload path resolution ─────────────────────────────────────────
+def resolve_safe_upload_path(filename: str) -> Path:
+    """
+    Safely resolve a filename within UPLOAD_DIR.
+    Prevents path traversal attacks (e.g. '../../etc/passwd', '../secrets').
+    - Rejects filenames containing '..', '/', or '\\'
+    - Resolves the absolute path and confirms it is inside UPLOAD_DIR
+    Raises HTTP 400 if the path would escape the upload directory.
+    """
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    resolved = (UPLOAD_DIR / filename).resolve()
+    try:
+        resolved.relative_to(UPLOAD_DIR.resolve())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    return resolved
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── A12: File Upload Security ─────────────────────────────────────────────────
+IMAGE_MAX_SIZE_BYTES = 5 * 1024 * 1024    # 5 MB — enforced on all image uploads
+VIDEO_MAX_SIZE_BYTES = 500 * 1024 * 1024  # 500 MB — enforced on video uploads
+
+def validate_image_magic_bytes(header: bytes) -> str:
+    """
+    Inspect magic bytes to confirm image type. Returns a safe extension string
+    ('jpg', 'png', 'webp'). Raises HTTP 400 for any other file type.
+    Do NOT rely on file.content_type or filename extension — both are attacker-controlled.
+    """
+    if header[:3] == b'\xff\xd8\xff':
+        return 'jpg'
+    if header[:8] == b'\x89PNG\r\n\x1a\n':
+        return 'png'
+    if header[:4] == b'RIFF' and len(header) >= 12 and header[8:12] == b'WEBP':
+        return 'webp'
+    raise HTTPException(
+        status_code=400,
+        detail="Invalid file type. Only JPEG, PNG, and WebP images are allowed."
+    )
+# ─────────────────────────────────────────────────────────────────────────────
 
 def get_db():
     db = SessionLocal()
@@ -2699,7 +3434,7 @@ async def video_stream_options():
 
 @app.get("/video-stream/{filename}", dependencies=[Depends(require_owner)])
 async def stream_video(filename: str, request: Request):
-    file_path = UPLOAD_DIR / filename
+    file_path = resolve_safe_upload_path(filename)  # A14: path traversal protection
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Video not found")
 
@@ -2768,14 +3503,36 @@ async def stream_video(filename: str, request: Request):
 @app.post("/upload", dependencies=[Depends(require_owner)])
 async def upload_file(file: UploadFile = File(...)):
     try:
-        file_ext = os.path.splitext(file.filename)[1]
-        filename = f"{uuid.uuid4()}{file_ext}"
+        # A12: Enforce 5 MB size limit — check before reading content
+        file.file.seek(0, 2)
+        file_size = file.file.tell()
+        file.file.seek(0)
+        if file_size > IMAGE_MAX_SIZE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Maximum allowed size is {IMAGE_MAX_SIZE_BYTES // (1024 * 1024)} MB."
+            )
+
+        # A12: Validate MIME type via magic bytes — do NOT trust file.content_type or filename extension
+        header = await file.read(12)
+        await file.seek(0)
+        safe_ext = validate_image_magic_bytes(header)  # raises HTTP 400 for non-image types
+
+        # A12: Server-generated UUID filename; original filename is discarded entirely
+        filename = f"{uuid.uuid4()}.{safe_ext}"
         file_path = UPLOAD_DIR / filename
-        
+
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
-            
+        # A14: strip execute bits — uploaded files must never be executable
+        try:
+            os.chmod(file_path, 0o644)
+        except (AttributeError, NotImplementedError, OSError):
+            pass
+
         return {"url": f"/uploads/{filename}"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2812,12 +3569,35 @@ def create_coach(coach: CoachCreate):
         
         # Convert to Pydantic model before closing session
         coach_response = Coach.model_validate(db_coach)
-        
+
         # Verify it was saved to coaches table by querying it back
         verify_coach = db.query(CoachDB).filter(CoachDB.id == db_coach.id).first()
         if not verify_coach:
             raise HTTPException(status_code=500, detail="Error: Coach was not saved to coaches table")
-        
+
+        # B11: Send welcome email to new coach (non-blocking)
+        try:
+            welcome_html = f"""
+<html><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;">
+<div style="max-width:480px;margin:auto;background:#fff;border-radius:8px;padding:32px;">
+  <h2 style="color:#1a1a2e;">Welcome to Shuttler, {db_coach.name}!</h2>
+  <p>Your coach account has been created. Here are your login details:</p>
+  <ul style="line-height:1.8;">
+    <li><strong>Email:</strong> {db_coach.email}</li>
+    <li><strong>Role:</strong> Coach</li>
+  </ul>
+  <p>Download the Shuttler app and login with your email and the password provided by your academy admin.</p>
+  <p style="color:#888;font-size:13px;">If you have any questions, contact your academy admin.</p>
+</div></body></html>"""
+            send_email(
+                to_email=db_coach.email,
+                subject="Welcome to Shuttler — Coach Account Created",
+                html_content=welcome_html,
+                plain_content=f"Welcome to Shuttler, {db_coach.name}! Your coach account has been created. Login with: {db_coach.email}",
+            )
+        except Exception as _ee:
+            print(f"[Email] Coach welcome email error: {_ee}")
+
         return coach_response
     except IntegrityError as e:
         db.rollback()
@@ -3155,11 +3935,34 @@ def forgot_password(request: Request, rq: ForgotPasswordRequest):
         db.add(new_token)
         db.commit()
         
+        # B11: Send password reset email (graceful no-op if SendGrid not configured)
+        try:
+            app_name = "Shuttler"
+            reset_html = f"""
+<html><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;">
+<div style="max-width:480px;margin:auto;background:#fff;border-radius:8px;padding:32px;">
+  <h2 style="color:#1a1a2e;">Password Reset Request</h2>
+  <p>You requested a password reset for your <strong>{app_name}</strong> account.</p>
+  <p>Use the token below to reset your password. It expires in <strong>15 minutes</strong>.</p>
+  <div style="background:#f0f0f0;border-radius:6px;padding:16px;text-align:center;margin:24px 0;">
+    <span style="font-size:20px;font-weight:bold;letter-spacing:2px;color:#1a1a2e;">{reset_token}</span>
+  </div>
+  <p style="color:#888;font-size:13px;">Enter this token in the app's "Reset Password" screen along with your new password.</p>
+  <p style="color:#888;font-size:13px;">If you did not request this, ignore this email — your account is safe.</p>
+</div></body></html>"""
+            send_email(
+                to_email=request_data.email,
+                subject=f"{app_name} — Password Reset Token",
+                html_content=reset_html,
+                plain_content=f"Your {app_name} password reset token: {reset_token}\nExpires in 15 minutes.",
+            )
+        except Exception as _ee:
+            print(f"[Email] Password reset email error: {_ee}")
+
         # Prevent account enumeration: return uniform message whether email was found or not
         return {
             "success": True,
             "message": "If your email is registered, you will receive a password reset token.",
-            "reset_token": reset_token,  # Remove this in production, but needed for development right now
             "expires_in": 900
         }
     finally:
@@ -3190,7 +3993,7 @@ def reset_password(request: ResetPasswordRequest):
 
         
         # Find user using the user_type from token
-        target_user_type = token_data["user_type"]
+        target_user_type = token_entry.user_type
         if target_user_type == "coach":
             user = db.query(CoachDB).filter(CoachDB.email == request.email).first()
         elif target_user_type == "owner":
@@ -4617,7 +5420,32 @@ def create_student(student: StudentCreate):
         db.add(db_student)
         db.commit()
         db.refresh(db_student)
-        return Student.model_validate(db_student)
+        student_response = Student.model_validate(db_student)
+
+        # B11: Send welcome email to new student (non-blocking)
+        try:
+            welcome_html = f"""
+<html><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;">
+<div style="max-width:480px;margin:auto;background:#fff;border-radius:8px;padding:32px;">
+  <h2 style="color:#1a1a2e;">Welcome to Shuttler, {db_student.name}!</h2>
+  <p>Your student account has been created by your academy.</p>
+  <ul style="line-height:1.8;">
+    <li><strong>Email:</strong> {db_student.email}</li>
+    <li><strong>Role:</strong> Student</li>
+  </ul>
+  <p>Download the Shuttler app and login with your email and the password provided by your academy admin.</p>
+  <p style="color:#888;font-size:13px;">If you have any questions, contact your academy admin.</p>
+</div></body></html>"""
+            send_email(
+                to_email=db_student.email,
+                subject="Welcome to Shuttler — Student Account Created",
+                html_content=welcome_html,
+                plain_content=f"Welcome to Shuttler, {db_student.name}! Your student account has been created. Login with: {db_student.email}",
+            )
+        except Exception as _ee:
+            print(f"[Email] Student welcome email error: {_ee}")
+
+        return student_response
     finally:
         db.close()
 
@@ -4644,14 +5472,23 @@ def get_student(student_id: int):
     finally:
         db.close()
 
-@app.put("/students/{student_id}", response_model=Student, dependencies=[Depends(require_coach)])
-def update_student(student_id: int, student_update: StudentUpdate):
+@app.put("/students/{student_id}", response_model=Student)
+def update_student(student_id: int, student_update: StudentUpdate, current_user: dict = Depends(require_coach)):
     db = SessionLocal()
     try:
         student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
         if not student:
             raise HTTPException(status_code=404, detail="Student not found")
-        
+
+        # A15: Coaches may only update students enrolled in their assigned batches
+        if current_user.get("user_type") == "coach":
+            coach_id = int(current_user["sub"])
+            if not verify_coach_student_access(coach_id, student_id, db):
+                raise HTTPException(
+                    status_code=403,
+                    detail="You do not have access to update this student's record."
+                )
+
         update_data = student_update.dict(exclude_unset=True)
         for key, value in update_data.items():
             setattr(student, key, value)
@@ -5100,10 +5937,19 @@ def get_attendance(
     finally:
         db.close()
 
-@app.post("/attendance/", response_model=Attendance, dependencies=[Depends(require_coach)])
-def mark_attendance(attendance: AttendanceCreate):
+@app.post("/attendance/", response_model=Attendance)
+def mark_attendance(attendance: AttendanceCreate, current_user: dict = Depends(require_coach)):
     db = SessionLocal()
     try:
+        # A15: Coaches may only mark attendance for batches they are assigned to
+        if current_user.get("user_type") == "coach":
+            coach_id = int(current_user["sub"])
+            if not verify_coach_batch_access(coach_id, attendance.batch_id, db):
+                raise HTTPException(
+                    status_code=403,
+                    detail="You are not assigned to this batch and cannot mark attendance for it."
+                )
+
         existing = db.query(AttendanceDB).filter(
             AttendanceDB.batch_id == attendance.batch_id,
             AttendanceDB.student_id == attendance.student_id,
@@ -5155,11 +6001,22 @@ def mark_attendance(attendance: AttendanceCreate):
     finally:
         db.close()
 
-@app.post("/attendance/bulk/", response_model=List[Attendance], dependencies=[Depends(require_coach)])
-def mark_attendance_bulk(bulk: AttendanceBulkCreate):
+@app.post("/attendance/bulk/", response_model=List[Attendance])
+def mark_attendance_bulk(bulk: AttendanceBulkCreate, current_user: dict = Depends(require_coach)):
     db = SessionLocal()
     results = []
     try:
+        # A15: Coaches may only mark attendance for their assigned batches
+        if current_user.get("user_type") == "coach":
+            coach_id = int(current_user["sub"])
+            unique_batch_ids = {a.batch_id for a in bulk.attendances}
+            for bid in unique_batch_ids:
+                if not verify_coach_batch_access(coach_id, bid, db):
+                    raise HTTPException(
+                        status_code=403,
+                        detail=f"You are not assigned to batch {bid} and cannot mark attendance for it."
+                    )
+
         for attendance in bulk.attendances:
             existing = db.query(AttendanceDB).filter(
                 AttendanceDB.batch_id == attendance.batch_id,
@@ -5313,8 +6170,8 @@ def calculate_fee_status(amount: float, total_paid: float, due_date: str) -> str
     # Fully paid
     if total_paid >= amount:
         return 'paid'
-    
-    # Check if overdue (7 days after due_date)
+
+    # Check if overdue (7 days after due_date) — overdue takes priority over partial
     try:
         due_date_obj = datetime.fromisoformat(due_date)
         days_overdue = (datetime.now() - due_date_obj).days
@@ -5322,8 +6179,12 @@ def calculate_fee_status(amount: float, total_paid: float, due_date: str) -> str
             return 'overdue'
     except:
         pass
-    
-    # Default to pending
+
+    # Partially paid (some payment made but not fully paid)
+    if total_paid > 0:
+        return 'partial'
+
+    # Default to pending (no payment made yet)
     return 'pending'
 
 def enrich_fee_with_payments(fee: FeeDB, db) -> dict:
@@ -5556,7 +6417,48 @@ def create_fee_payment(fee_id: int, payment: FeePaymentCreate):
         if db_payment.payee_student_id:
             payee = db.query(StudentDB).filter(StudentDB.id == db_payment.payee_student_id).first()
             payee_student_name = payee.name if payee else None
-        
+
+        # B5: Notify student that a fee payment was recorded
+        try:
+            create_notification(
+                db=db,
+                user_id=fee.student_id,
+                user_type="student",
+                title="Fee Payment Received",
+                body=f"A payment of ₹{db_payment.amount:.2f} has been recorded for your fee.",
+                type="fee_payment",
+                data={"fee_id": fee_id, "payment_id": db_payment.id, "amount": db_payment.amount},
+            )
+        except Exception as _ne:
+            print(f"[Notif] Fee payment notification error: {_ne}")
+
+        # B11: Send payment receipt email to student (non-blocking)
+        try:
+            student_for_email = db.query(StudentDB).filter(StudentDB.id == fee.student_id).first()
+            if student_for_email and student_for_email.email:
+                receipt_html = f"""
+<html><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;">
+<div style="max-width:480px;margin:auto;background:#fff;border-radius:8px;padding:32px;">
+  <h2 style="color:#1a1a2e;">Payment Receipt — Shuttler</h2>
+  <p>Dear {student_for_email.name},</p>
+  <p>A fee payment has been recorded for your account.</p>
+  <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+    <tr><td style="padding:8px;color:#555;">Amount Paid</td><td style="padding:8px;font-weight:bold;">₹{db_payment.amount:.2f}</td></tr>
+    <tr style="background:#f9f9f9;"><td style="padding:8px;color:#555;">Date</td><td style="padding:8px;">{db_payment.paid_date}</td></tr>
+    <tr><td style="padding:8px;color:#555;">Payment Method</td><td style="padding:8px;text-transform:capitalize;">{db_payment.payment_method}</td></tr>
+    <tr style="background:#f9f9f9;"><td style="padding:8px;color:#555;">Fee Status</td><td style="padding:8px;text-transform:capitalize;">{fee.status}</td></tr>
+  </table>
+  <p style="color:#888;font-size:13px;">This is an automated receipt. Please keep it for your records.</p>
+</div></body></html>"""
+                send_email(
+                    to_email=student_for_email.email,
+                    subject=f"Shuttler — Payment Receipt ₹{db_payment.amount:.2f}",
+                    html_content=receipt_html,
+                    plain_content=f"Payment of ₹{db_payment.amount:.2f} recorded on {db_payment.paid_date} via {db_payment.payment_method}. Fee status: {fee.status}.",
+                )
+        except Exception as _ee:
+            print(f"[Email] Fee payment receipt email error: {_ee}")
+
         return {
             "id": db_payment.id,
             "fee_id": db_payment.fee_id,
@@ -6260,13 +7162,21 @@ def get_performance_record(record_id: int):
     finally:
         db.close()
 
-@app.post("/performance/", response_model=PerformanceFrontend, dependencies=[Depends(require_coach)])
-def create_performance_record_v2(performance_data: PerformanceFrontendCreate):
+@app.post("/performance/", response_model=PerformanceFrontend)
+def create_performance_record_v2(performance_data: PerformanceFrontendCreate, current_user: dict = Depends(require_coach)):
     """Create performance records (frontend-compatible endpoint)"""
     db = SessionLocal()
     try:
-        # Get current user for recorded_by (you may need to adjust this based on your auth)
-        recorded_by = "owner"  # Default, should come from auth context
+        # A15: Coaches may only record performance for students in their assigned batches
+        if current_user.get("user_type") == "coach":
+            coach_id = int(current_user["sub"])
+            if not verify_coach_batch_access(coach_id, performance_data.batch_id, db):
+                raise HTTPException(
+                    status_code=403,
+                    detail="You are not assigned to this batch and cannot record performance for it."
+                )
+
+        recorded_by = current_user.get("email", "coach")  # Use authenticated user's email
         
         
         # Create individual records for each skill with rating > 0
@@ -6314,7 +7224,21 @@ def create_performance_record_v2(performance_data: PerformanceFrontendCreate):
         transformed = transform_performance_to_frontend(all_records, db)
         if not transformed:
             raise HTTPException(status_code=500, detail="Failed to create performance record")
-        
+
+        # B5: Notify student that performance was recorded
+        try:
+            create_notification(
+                db=db,
+                user_id=performance_data.student_id,
+                user_type="student",
+                title="Performance Recorded",
+                body=f"Your performance for {performance_data.date} has been recorded.",
+                type="performance",
+                data={"batch_id": performance_data.batch_id, "date": str(performance_data.date)},
+            )
+        except Exception as _ne:
+            print(f"[Notif] Performance POST notification error: {_ne}")
+
         return transformed
     except HTTPException:
         raise
@@ -6324,8 +7248,8 @@ def create_performance_record_v2(performance_data: PerformanceFrontendCreate):
     finally:
         db.close()
 
-@app.put("/performance/{record_id}", response_model=PerformanceFrontend, dependencies=[Depends(require_coach)])
-def update_performance_record(record_id: int, performance_update: PerformanceFrontendUpdate):
+@app.put("/performance/{record_id}", response_model=PerformanceFrontend)
+def update_performance_record(record_id: int, performance_update: PerformanceFrontendUpdate, current_user: dict = Depends(require_coach)):
     """Update performance records (frontend-compatible endpoint)"""
     db = SessionLocal()
     try:
@@ -6333,6 +7257,15 @@ def update_performance_record(record_id: int, performance_update: PerformanceFro
         first_record = db.query(PerformanceDB).filter(PerformanceDB.id == record_id).first()
         if not first_record:
             raise HTTPException(status_code=404, detail="Performance record not found")
+
+        # A15: Coaches may only update performance for students in their assigned batches
+        if current_user.get("user_type") == "coach":
+            coach_id = int(current_user["sub"])
+            if not verify_coach_batch_access(coach_id, first_record.batch_id, db):
+                raise HTTPException(
+                    status_code=403,
+                    detail="You are not assigned to this batch and cannot update this performance record."
+                )
         
         # Get all records for the same date, student, and batch
         all_records = db.query(PerformanceDB).filter(
@@ -6405,7 +7338,21 @@ def update_performance_record(record_id: int, performance_update: PerformanceFro
         transformed = transform_performance_to_frontend(updated_records, db)
         if not transformed:
             raise HTTPException(status_code=404, detail="Performance record not found")
-        
+
+        # B5: Notify student that performance was updated
+        try:
+            create_notification(
+                db=db,
+                user_id=first_record.student_id,
+                user_type="student",
+                title="Performance Updated",
+                body=f"Your performance record for {first_record.date} has been updated.",
+                type="performance",
+                data={"batch_id": first_record.batch_id, "date": str(first_record.date)},
+            )
+        except Exception as _ne:
+            print(f"[Notif] Performance PUT notification error: {_ne}")
+
         return transformed
     except HTTPException:
         raise
@@ -6446,6 +7393,77 @@ def delete_performance_record(record_id: int):
         raise HTTPException(status_code=400, detail=str(e))
     finally:
         db.close()
+
+# ── B8: Performance Entry Completion Status ──────────────────────────────
+@app.get("/performance/completion-status", dependencies=[Depends(require_coach)])
+def get_performance_completion_status(
+    batch_id: int,
+    date: Optional[str] = None,
+    current_user: dict = Depends(require_coach),
+):
+    """
+    Return completion status of performance entries for all approved students in a
+    batch for a given date. Used by the coach portal to see who has/hasn't been assessed.
+    """
+    db = SessionLocal()
+    try:
+        target_date = date or datetime.now().strftime("%Y-%m-%d")
+
+        # A15: coaches may only view batches they are assigned to
+        if current_user.get("user_type") == "coach":
+            coach_id = int(current_user["sub"])
+            if not verify_coach_batch_access(coach_id, batch_id, db):
+                raise HTTPException(
+                    status_code=403,
+                    detail="You are not assigned to this batch.",
+                )
+
+        # Get all approved students in the batch
+        batch_students = (
+            db.query(BatchStudentDB)
+            .filter(
+                BatchStudentDB.batch_id == batch_id,
+                BatchStudentDB.status == "approved",
+            )
+            .all()
+        )
+        student_ids = [bs.student_id for bs in batch_students]
+        if not student_ids:
+            return []
+
+        # Performance records already created for this batch+date
+        perf_records = (
+            db.query(PerformanceDB)
+            .filter(
+                PerformanceDB.batch_id == batch_id,
+                PerformanceDB.date == target_date,
+                PerformanceDB.student_id.in_(student_ids),
+            )
+            .all()
+        )
+        # Map student_id → first record id (representative id for update/view)
+        assessed: Dict[int, int] = {}
+        for r in perf_records:
+            if r.student_id not in assessed:
+                assessed[r.student_id] = r.id
+
+        students = db.query(StudentDB).filter(StudentDB.id.in_(student_ids)).all()
+
+        result = [
+            {
+                "student_id": s.id,
+                "student_name": s.name,
+                "has_entry": s.id in assessed,
+                "performance_id": assessed.get(s.id),
+            }
+            for s in students
+        ]
+        # Sort: pending students first, then alphabetical
+        result.sort(key=lambda x: (x["has_entry"], x["student_name"]))
+        return result
+    finally:
+        db.close()
+
 
 # ==================== BMI Routes ====================
 
@@ -6548,7 +7566,7 @@ def create_bmi_record_v2(bmi_data: BMICreate):
         # Calculate BMI
         height_m = bmi_data.height / 100
         bmi_value = bmi_data.weight / (height_m ** 2)
-        
+
         db_bmi = BMIDB(
             **bmi_data.dict(),
             bmi=round(bmi_value, 2)
@@ -6556,6 +7574,21 @@ def create_bmi_record_v2(bmi_data: BMICreate):
         db.add(db_bmi)
         db.commit()
         db.refresh(db_bmi)
+
+        # B5: Notify student that BMI was recorded
+        try:
+            create_notification(
+                db=db,
+                user_id=db_bmi.student_id,
+                user_type="student",
+                title="BMI Recorded",
+                body=f"Your BMI has been recorded: {db_bmi.bmi:.1f} (H:{db_bmi.height}cm W:{db_bmi.weight}kg).",
+                type="bmi",
+                data={"bmi_id": db_bmi.id, "bmi": db_bmi.bmi},
+            )
+        except Exception as _ne:
+            print(f"[Notif] BMI POST notification error: {_ne}")
+
         return bmi_db_to_response(db_bmi)
     except Exception as e:
         db.rollback()
@@ -6586,9 +7619,24 @@ def update_bmi_record(record_id: int, bmi_update: BMIUpdate):
         
         for key, value in update_data.items():
             setattr(db_bmi, key, value)
-        
+
         db.commit()
         db.refresh(db_bmi)
+
+        # B5: Notify student that BMI was updated
+        try:
+            create_notification(
+                db=db,
+                user_id=db_bmi.student_id,
+                user_type="student",
+                title="BMI Updated",
+                body=f"Your BMI record has been updated: {db_bmi.bmi:.1f} (H:{db_bmi.height}cm W:{db_bmi.weight}kg).",
+                type="bmi",
+                data={"bmi_id": db_bmi.id, "bmi": db_bmi.bmi},
+            )
+        except Exception as _ne:
+            print(f"[Notif] BMI PUT notification error: {_ne}")
+
         return bmi_db_to_response(db_bmi)
     except HTTPException:
         raise
@@ -6852,9 +7900,24 @@ async def upload_video(
         if audience_type != "all" and not targets:
             raise HTTPException(status_code=400, detail="target_ids required for 'batch' or 'student' audience")
 
-        # Validate file type
+        # A12: Enforce video size limit (500 MB)
+        video.file.seek(0, 2)
+        video_size = video.file.tell()
+        video.file.seek(0)
+        if video_size > VIDEO_MAX_SIZE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Maximum allowed size for videos is {VIDEO_MAX_SIZE_BYTES // (1024 * 1024)} MB."
+            )
+
+        # A12: Validate extension against allowlist (extension-only check is acceptable for video
+        #      since magic-byte validation for all video containers is complex and not required here)
         allowed_extensions = ["mp4", "webm", "mov", "avi", "mkv", "m4v"]
-        file_extension = video.filename.split(".")[-1].lower() if video.filename else ""
+        # Sanitize: take only the last extension component; reject paths with directory separators
+        raw_filename = video.filename or ""
+        if "/" in raw_filename or "\\" in raw_filename or ".." in raw_filename:
+            raise HTTPException(status_code=400, detail="Invalid filename")
+        file_extension = raw_filename.rsplit(".", 1)[-1].lower() if "." in raw_filename else ""
 
         if file_extension not in allowed_extensions:
             raise HTTPException(
@@ -6862,13 +7925,18 @@ async def upload_video(
                 detail=f"File type not allowed. Allowed types: {', '.join(allowed_extensions)}"
             )
 
-        # Generate unique filename
+        # A12: Server-generated UUID filename; original filename is discarded
         unique_filename = f"video_{uuid.uuid4()}.{file_extension}"
         file_path = UPLOAD_DIR / unique_filename
 
         # Save file
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(video.file, buffer)
+        # A14: strip execute bits
+        try:
+            os.chmod(file_path, 0o644)
+        except (AttributeError, NotImplementedError, OSError):
+            pass
 
         # Create database record
         db_video = VideoResourceDB(
@@ -9135,33 +10203,47 @@ def check_coach_registration_status(email: str):
 @app.post("/api/upload/image", dependencies=[Depends(require_owner)])
 @limiter.limit("10/hour")
 async def upload_image(request: Request, file: UploadFile = File(...)):
-    """Upload an image file (for profile photos, etc.)"""
+    """Upload an image file (for profile photos, etc.). Accepts JPEG, PNG, WebP only; max 5 MB."""
     try:
-        # Validate file type
-        allowed_extensions = ["jpg", "jpeg", "png", "gif", "webp"]
-        file_extension = file.filename.split(".")[-1].lower()
+        # A12: Enforce 5 MB size limit
+        file.file.seek(0, 2)
+        file_size = file.file.tell()
+        file.file.seek(0)
+        if file_size > IMAGE_MAX_SIZE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Maximum allowed size is {IMAGE_MAX_SIZE_BYTES // (1024 * 1024)} MB."
+            )
 
-        if file_extension not in allowed_extensions:
-            raise HTTPException(status_code=400, detail=f"File type not allowed. Allowed types: {', '.join(allowed_extensions)}")
+        # A12: Validate MIME type via magic bytes — do NOT trust file.content_type or filename extension
+        header = await file.read(12)
+        await file.seek(0)
+        safe_ext = validate_image_magic_bytes(header)  # raises HTTP 400 for non-image types
 
-        # Generate unique filename
-        unique_filename = f"{uuid.uuid4()}.{file_extension}"
+        # A12: Server-generated UUID filename; original filename is discarded entirely
+        unique_filename = f"{uuid.uuid4()}.{safe_ext}"
         file_path = UPLOAD_DIR / unique_filename
 
         # Save file
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
+        # A14: strip execute bits
+        try:
+            os.chmod(file_path, 0o644)
+        except (AttributeError, NotImplementedError, OSError):
+            pass
 
-        # Return relative URL
         return {"url": f"/uploads/{unique_filename}", "filename": unique_filename}
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/uploads/{filename}", dependencies=[Depends(require_owner)])
 async def get_uploaded_image(filename: str):
     """Serve uploaded images"""
-    file_path = UPLOAD_DIR / filename
+    file_path = resolve_safe_upload_path(filename)  # A14: path traversal protection
 
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Image not found")
@@ -9307,10 +10389,66 @@ def delete_notification(notification_id: int):
         notif = db.query(NotificationDB).filter(NotificationDB.id == notification_id).first()
         if not notif:
             raise HTTPException(status_code=404, detail="Notification not found")
-            
+
         db.delete(notif)
         db.commit()
         return {"success": True}
+    finally:
+        db.close()
+
+
+# ==================== B7: Notification Preferences Endpoints ====================
+
+@app.get("/api/notifications/preferences", response_model=NotificationPreferences, dependencies=[Depends(require_student)])
+def get_notification_preferences(
+    user_id: int = Query(...),
+    user_type: str = Query(..., pattern="^(student|coach|owner)$"),
+):
+    """Get notification preferences for a user. Creates defaults if none exist."""
+    db = SessionLocal()
+    try:
+        prefs = _get_notification_prefs(db, user_id, user_type)
+        return NotificationPreferences(
+            user_id=prefs.user_id,
+            user_type=prefs.user_type,
+            pref_attendance=prefs.pref_attendance,
+            pref_performance=prefs.pref_performance,
+            pref_bmi=prefs.pref_bmi,
+            pref_announcements=prefs.pref_announcements,
+            pref_leave_updates=prefs.pref_leave_updates,
+            pref_fee_payments=prefs.pref_fee_payments,
+            pref_fee_due=prefs.pref_fee_due,
+        )
+    finally:
+        db.close()
+
+
+@app.put("/api/notifications/preferences", response_model=NotificationPreferences, dependencies=[Depends(require_student)])
+def update_notification_preferences(
+    user_id: int = Query(...),
+    user_type: str = Query(..., pattern="^(student|coach|owner)$"),
+    updates: NotificationPreferencesUpdate = ...,
+):
+    """Update notification preferences for a user."""
+    db = SessionLocal()
+    try:
+        prefs = _get_notification_prefs(db, user_id, user_type)
+        update_data = updates.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(prefs, field, value)
+        db.commit()
+        db.refresh(prefs)
+        return NotificationPreferences(
+            user_id=prefs.user_id,
+            user_type=prefs.user_type,
+            pref_attendance=prefs.pref_attendance,
+            pref_performance=prefs.pref_performance,
+            pref_bmi=prefs.pref_bmi,
+            pref_announcements=prefs.pref_announcements,
+            pref_leave_updates=prefs.pref_leave_updates,
+            pref_fee_payments=prefs.pref_fee_payments,
+            pref_fee_due=prefs.pref_fee_due,
+        )
     finally:
         db.close()
 
@@ -9810,11 +10948,13 @@ if __name__ == "__main__":
     print("Mobile devices can connect to: http://192.168.1.11:8001")
     # host="0.0.0.0" allows connections from any device on the network
     
-    # Start background cleanup scheduler
+    # Start background scheduler
     scheduler = BackgroundScheduler()
     scheduler.add_job(cleanup_inactive_records, 'interval', days=1)
+    # B5: Daily overdue-fee push notifications
+    scheduler.add_job(send_overdue_fee_notifications, 'cron', hour=9, minute=0)
     scheduler.start()
-    print("Background cleanup scheduler started (Daily).")
+    print("Background scheduler started (cleanup: daily, overdue-fee alerts: 09:00).")
     
     uvicorn.run(app, host="0.0.0.0", port=8001)
 

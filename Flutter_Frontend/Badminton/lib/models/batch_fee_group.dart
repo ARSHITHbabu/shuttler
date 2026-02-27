@@ -50,16 +50,20 @@ class BatchFeeGroup {
 
   // Counts
   int get paidCount => students.where((s) => s.existingFee?.status == 'paid').length;
-  
+
+  int get partialCount => students.where((s) =>
+    s.existingFee != null && s.existingFee!.status == 'partial'
+  ).length;
+
   int get pendingCount {
     // Both explicitly pending and virtually pending (null fee)
-    return students.where((s) => 
-      s.existingFee == null || 
+    return students.where((s) =>
+      s.existingFee == null ||
       (s.existingFee!.status == 'pending' && !s.existingFee!.isOverdue)
     ).length;
   }
 
-  int get overdueCount => students.where((s) => 
+  int get overdueCount => students.where((s) =>
     s.existingFee != null && (s.existingFee!.status == 'overdue' || s.existingFee!.isOverdue)
   ).length;
 

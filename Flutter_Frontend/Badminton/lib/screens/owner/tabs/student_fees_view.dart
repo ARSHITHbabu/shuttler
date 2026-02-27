@@ -152,6 +152,8 @@ class _StudentFeesViewState extends ConsumerState<StudentFeesView> {
             children: [
               _buildStatChip('Total: ${group.totalStudents}', AppColors.info),
               _buildStatChip('Paid: ${group.paidCount}', AppColors.success),
+              if (group.partialCount > 0)
+                _buildStatChip('Partial: ${group.partialCount}', Colors.teal),
               _buildStatChip('Pending: ${group.pendingCount}', AppColors.warning),
               if (group.overdueCount > 0)
                 _buildStatChip('Overdue: ${group.overdueCount}', AppColors.error),
@@ -233,6 +235,7 @@ class _StudentFeesViewState extends ConsumerState<StudentFeesView> {
             final isOverdue = s.existingFee?.isOverdue ?? false;
             if (_selectedFilter == 'overdue') return isOverdue;
             if (_selectedFilter == 'pending') return s.existingFee == null || (s.existingFee!.status == 'pending' && !isOverdue);
+            if (_selectedFilter == 'partial') return s.existingFee?.status == 'partial';
             return s.existingFee?.status == _selectedFilter;
           }).toList();
         }
@@ -274,6 +277,8 @@ class _StudentFeesViewState extends ConsumerState<StudentFeesView> {
                   _buildFilterTab('All', 'all'),
                   const SizedBox(width: 12),
                   _buildFilterTab('Paid', 'paid'),
+                  const SizedBox(width: 12),
+                  _buildFilterTab('Partial', 'partial'),
                   const SizedBox(width: 12),
                   _buildFilterTab('Pending', 'pending'),
                   const SizedBox(width: 12),
@@ -321,7 +326,8 @@ class _StudentFeesViewState extends ConsumerState<StudentFeesView> {
 
   Widget _buildStudentFeeRow(StudentWithBatchFee studentFee) {
     final fee = studentFee.existingFee;
-    final status = fee?.isOverdue ?? false ? 'overdue' : (fee?.status ?? 'pending');
+    final backendStatus = fee?.status ?? 'pending';
+    final status = (fee?.isOverdue ?? false) && backendStatus != 'partial' ? 'overdue' : backendStatus;
     
     return NeumorphicContainer(
       margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
@@ -384,6 +390,7 @@ class _StudentFeesViewState extends ConsumerState<StudentFeesView> {
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'paid': return AppColors.success;
+      case 'partial': return Colors.teal;
       case 'pending': return AppColors.warning;
       case 'overdue': return AppColors.error;
       default: return AppColors.textSecondary;

@@ -235,18 +235,6 @@ class _AddPaymentDialogState extends ConsumerState<AddPaymentDialog> {
                       selected: _selectedPaymentMethod,
                       onTap: () => setState(() => _selectedPaymentMethod = 'card'),
                     ),
-                    _PaymentMethodChip(
-                      label: 'UPI',
-                      value: 'upi',
-                      selected: _selectedPaymentMethod,
-                      onTap: () => setState(() => _selectedPaymentMethod = 'upi'),
-                    ),
-                    _PaymentMethodChip(
-                      label: 'Bank Transfer',
-                      value: 'bank_transfer',
-                      selected: _selectedPaymentMethod,
-                      onTap: () => setState(() => _selectedPaymentMethod = 'bank_transfer'),
-                    ),
                   ],
                 ),
                 const SizedBox(height: AppDimensions.spacingM),
