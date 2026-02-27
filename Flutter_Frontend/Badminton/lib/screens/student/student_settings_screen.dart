@@ -16,6 +16,7 @@ import '../../widgets/forms/change_password_dialog.dart';
 import '../../providers/owner_provider.dart';
 import 'student_profile_screen.dart';
 import 'student_batches_screen.dart';
+import '../common/active_sessions_screen.dart';
 
 /// Student Settings Screen - App preferences and account settings
 /// Students can toggle theme, manage notifications, and logout
@@ -155,6 +156,20 @@ class _StudentSettingsScreenState extends ConsumerState<StudentSettingsScreen> {
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (context) => const StudentProfileScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      const Divider(height: 1),
+                      _buildActionTile(
+                        title: 'Active Sessions',
+                        icon: Icons.devices_outlined,
+                        isDark: isDark,
+                        isSmallScreen: isSmallScreen,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const ActiveSessionsScreen(),
                             ),
                           );
                         },

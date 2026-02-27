@@ -23,6 +23,9 @@ class ApiEndpoints {
   static const String changePassword = '/auth/change-password';
   static const String forgotPassword = '/auth/forgot-password';
   static const String resetPassword = '/auth/reset-password';
+  static const String sessions = '/auth/sessions';
+  static String sessionRevoke(int id) => '/auth/sessions/$id';
+  static const String logoutAll = '/auth/logout_all';
 
   // Owners
   static const String owners = '/owners/';
