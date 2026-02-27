@@ -45,7 +45,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   String _selectedBatchId = 'all';
 
   // State for History
-  int _tabIndex = 0; // 0: Generate, 1: History
   List<Map<String, dynamic>> _historyData = [];
   bool _isHistoryLoading = false;
 
@@ -93,6 +92,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         setState(() => _isInitializing = false);
       }
     }
+    
+    // Always load history
+    _loadHistory();
   }
 
   void _filterBatches() {
@@ -141,11 +143,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       final authState = ref.read(authProvider);
       String userName = "Admin";
       String userRole = "Owner";
+      int? currentUserId;
       
       authState.whenData((state) {
         if (state is Authenticated) {
           userName = state.userName;
-          userRole = state.userType;
+          userRole = state.userRole ?? state.userType;
+          currentUserId = state.userId;
         }
       });
 
@@ -169,6 +173,17 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
       setState(() {
         _reportData = data;
       });
+
+      if (currentUserId != null) {
+        await reportService.saveReportHistory(
+          reportType: _reportType.name,
+          filterSummary: data['filter_summary'] as String,
+          reportData: data,
+          userId: currentUserId!,
+          userRole: userRole,
+        );
+        _loadHistory();
+      }
     } catch (e) {
       if (mounted) SuccessSnackbar.showError(context, 'Failed to generate report: $e');
     } finally {
@@ -200,62 +215,129 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         elevation: 0,
         leading: const BackButton(color: AppColors.textPrimary),
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildTabSelector(isSmallScreen),
-              const SizedBox(height: AppDimensions.spacingL),
-              if (_tabIndex == 0) ...[
-                _buildReportTypeSelector(),
-                const SizedBox(height: AppDimensions.spacingL),
-                _buildFilters(isSmallScreen),
-                const SizedBox(height: AppDimensions.spacingL),
-                _buildGenerateButton(isSmallScreen),
-                const SizedBox(height: AppDimensions.spacingL),
-                if (_reportData != null) _buildReportPreview(isSmallScreen),
-              ] else ...[
-                _buildHistoryList(isSmallScreen),
-              ]
-            ],
-          ),
+      body: Padding(
+        padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              flex: 5,
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildReportTypeSelector(),
+                    const SizedBox(height: AppDimensions.spacingL),
+                    _buildFilters(isSmallScreen),
+                    const SizedBox(height: AppDimensions.spacingL),
+                    _buildGenerateButton(isSmallScreen),
+                  ],
+                ),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: AppDimensions.spacingM),
+              child: Divider(color: AppColors.border, thickness: 1),
+            ),
+            Text("Generated Reports", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+            const SizedBox(height: AppDimensions.spacingS),
+            Expanded(
+              flex: 3,
+              child: _buildHistoryList(isSmallScreen),
+            ),
+          ],
         ),
       ),
     );
   }
 
   Widget _buildReportTypeSelector() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
+    final types = ReportType.values;
+    final int currentIndex = types.indexOf(_reportType);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
       child: Row(
-        children: ReportType.values.map((type) {
-           bool isSelected = _reportType == type;
-           return Padding(
-             padding: const EdgeInsets.only(right: 8.0),
-             child: ChoiceChip(
-               label: Text(type.name.toUpperCase()),
-               selected: isSelected,
-                onSelected: (val) {
-                  if (val) {
-                    setState(() {
-                      _reportType = type;
-                      _reportData = null; // Clear previous report data
-                    });
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          IconButton(
+            icon: Icon(Icons.chevron_left, color: currentIndex > 0 ? AppColors.accent : AppColors.textSecondary.withValues(alpha: 0.5)),
+            onPressed: currentIndex > 0 ? () {
+              setState(() {
+                _reportType = types[currentIndex - 1];
+                _reportData = null;
+              });
+            } : null,
+          ),
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onHorizontalDragEnd: (details) {
+                int velocity = details.primaryVelocity?.toInt() ?? 0;
+                if (velocity > 0 && currentIndex > 0) {
+                  // Swipe Right (Previous)
+                  setState(() {
+                    _reportType = types[currentIndex - 1];
+                    _reportData = null;
+                  });
+                } else if (velocity < 0 && currentIndex < types.length - 1) {
+                  // Swipe Left (Next)
+                  setState(() {
+                    _reportType = types[currentIndex + 1];
+                    _reportData = null;
+                  });
+                }
+              },
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                transitionBuilder: (Widget child, Animation<double> animation) {
+                  bool isNext = true; // Default direction
+                  if (child.key is ValueKey<ReportType>) {
+                     // Check if an element is swiping backward or forward. Simple fade/slide.
                   }
+                  return SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0.5, 0.0), // Reduced start offset for smoother swipe transition
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: FadeTransition(
+                      opacity: animation,
+                      child: child,
+                    ),
+                  );
                 },
-                selectedColor: AppColors.accent,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                labelStyle: TextStyle(
-                  color: isSelected ? Colors.white : AppColors.textPrimary,
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                  fontSize: 12,
+                child: Padding(
+                  key: ValueKey<ReportType>(_reportType),
+                  padding: const EdgeInsets.symmetric(vertical: 16.0),
+                  child: Text(
+                    _reportType.name.toUpperCase() + " REPORT",
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
                 ),
               ),
-            );
-        }).toList(),
+            ),
+          ),
+          IconButton(
+            icon: Icon(Icons.chevron_right, color: currentIndex < types.length - 1 ? AppColors.accent : AppColors.textSecondary.withValues(alpha: 0.5)),
+            onPressed: currentIndex < types.length - 1 ? () {
+              setState(() {
+                _reportType = types[currentIndex + 1];
+                _reportData = null;
+              });
+            } : null,
+          ),
+        ],
       ),
     );
   }
@@ -514,51 +596,6 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     );
   }
 
-  Widget _buildTabSelector(bool isSmallScreen) {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        children: [
-          Expanded(child: _tabButton("Generate Report", 0, isSmallScreen)),
-          Expanded(child: _tabButton("History", 1, isSmallScreen)),
-        ],
-      ),
-    );
-  }
-
-  Widget _tabButton(String title, int index, bool isSmallScreen) {
-      bool isSelected = _tabIndex == index;
-      return InkWell(
-        onTap: () {
-          setState(() {
-             _tabIndex = index;
-             if (index == 1) _loadHistory();
-          });
-        },
-        child: Container(
-          padding: EdgeInsets.symmetric(vertical: isSmallScreen ? 8 : 10),
-          decoration: BoxDecoration(
-            color: isSelected ? AppColors.accent : Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            title,
-            style: TextStyle(
-              color: isSelected ? Colors.white : AppColors.textPrimary,
-              fontWeight: FontWeight.w600,
-              fontSize: isSmallScreen ? 12 : 14,
-            ),
-          ),
-        ),
-      );
-  }
-
   Future<void> _loadHistory() async {
      setState(() => _isHistoryLoading = true);
      try {
@@ -591,11 +628,13 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     if (_isHistoryLoading) return const Center(child: CircularProgressIndicator());
     if (_historyData.isEmpty) return const Center(child: Text("No report history found."));
 
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: _historyData.length,
-      itemBuilder: (context, index) {
+    return RefreshIndicator(
+      onRefresh: _loadHistory,
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+        padding: const EdgeInsets.only(bottom: AppDimensions.paddingL),
+        itemCount: _historyData.length,
+        itemBuilder: (context, index) {
         final item = _historyData[index];
         final date = DateTime.tryParse(item['generated_on'] ?? '') ?? DateTime.now();
         
@@ -637,87 +676,18 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                         _reportType = ReportType.values.firstWhere((e) => e.name == item['report_type']);
                      } catch (_) {}
                    });
-                   _exportPDF(isHistory: true);
+                   _exportPDF();
                 },
               ),
             ],
           ),
         );
       },
-    );
-  }
+    ),
+  );
+}
 
-  Widget _buildReportPreview(bool isSmallScreen) {
-    final filterSummary = _reportData!['filter_summary'];
-    // final generatedBy = _reportData!['generated_by'] ?? "Unknown"; // Removed as per request
-    final generatedOn = _reportData!['generated_on'] ?? DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now());
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text("Generated Report", style: TextStyle(fontSize: isSmallScreen ? 16 : 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 12),
-        NeumorphicContainer(
-          padding: EdgeInsets.all(isSmallScreen ? 15 : 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: EdgeInsets.all(isSmallScreen ? 10 : 12),
-                    decoration: BoxDecoration(
-                      color: AppColors.accent.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      _reportType == ReportType.attendance 
-                        ? Icons.fact_check 
-                        : _reportType == ReportType.fee 
-                          ? Icons.payments 
-                          : Icons.insights,
-                      color: AppColors.accent,
-                      size: isSmallScreen ? 20 : 24,
-                    ),
-                  ),
-                  SizedBox(width: isSmallScreen ? 12 : 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "${_reportType.name.toUpperCase()} REPORT",
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: isSmallScreen ? 14 : 16),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          "$filterSummary",
-                          style: TextStyle(color: AppColors.textSecondary, fontSize: isSmallScreen ? 11 : 13),
-                        ),
-                         Text(
-                          "Generated On: $generatedOn",
-                          style: TextStyle(color: AppColors.textSecondary, fontSize: isSmallScreen ? 11 : 13, fontWeight: FontWeight.w500),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () => _exportPDF(isHistory: false),
-                    icon: Icon(Icons.download, color: AppColors.accent, size: isSmallScreen ? 20 : 24),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    tooltip: "Download PDF",
-                  ),
-                ],
-              ),
-              // Removed Divider and Overview Table
-            ],
-          ),
-        ),
-      ],
-    );
-  }
 
   Widget _infoRow(IconData icon, String label, String value) {
     return Row(
@@ -1426,7 +1396,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   }
 
   // Update _exportPDF to pass ownerName
-  Future<void> _exportPDF({bool isHistory = false}) async {
+  Future<void> _exportPDF() async {
     if (_reportData == null) return;
     
     try {
@@ -1484,34 +1454,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         }
       }
       
-      // Save history logic
-      if (!isHistory) {
-         try {
-           final authState = ref.read(authProvider);
-           int? userId;
-           String? userRole;
-           
-           authState.whenData((state) {
-             if (state is Authenticated) {
-               userId = state.userId;
-               userRole = state.userRole ?? 'owner';
-             }
-           });
 
-           if (userId != null && userRole != null) {
-             final reportService = ref.read(reportServiceProvider);
-             await reportService.saveReportHistory(
-               reportType: _reportType.name,
-               filterSummary: _reportData!['filter_summary'] ?? 'Report',
-               reportData: _reportData!,
-               userId: userId!,
-               userRole: userRole!,
-             );
-           }
-         } catch (e) {
-           debugPrint("History save error: $e");
-         }
-      }
 
     } catch (e) {
       if (mounted) {
