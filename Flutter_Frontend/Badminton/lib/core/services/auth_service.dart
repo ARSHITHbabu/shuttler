@@ -385,7 +385,7 @@ class AuthService {
   /// Get active sessions
   Future<List<dynamic>> getActiveSessions() async {
     try {
-      final response = await _apiService.get(ApiEndpoints.sessions);
+      final response = await _apiService.get(ApiEndpoints.authSessions);
       if (response.statusCode == 200 && response.data['success'] == true) {
         return response.data['sessions'];
       }

@@ -9199,7 +9199,7 @@ def check_and_create_fee_notifications(db, user_id: int, user_type: str):
 @app.get("/api/notifications/{user_id}", response_model=List[Notification], dependencies=[Depends(require_student)])
 def get_user_notifications(
     user_id: int, 
-    user_type: str = Query(..., regex="^(student|coach|owner)$"),
+    user_type: str = Query(..., pattern="^(student|coach|owner)$"),
     type: Optional[str] = None,
     is_read: Optional[bool] = None
 ):
