@@ -183,9 +183,9 @@
 - [x] 🟡 `GET /api/notifications/preferences?user_id=&user_type=` — fetch preferences; `PUT /api/notifications/preferences` — update toggles
 - [x] 🟡 Respected in backend trigger logic — `create_notification()` checks preferences before saving in-app notification or sending FCM push
 
-### B8 · Performance Entry Completion Status (Coach Portal)
-- [ ] 🟡 Backend: Add completion status tracking for performance records per session
-- [ ] 🟡 Flutter: Create `coach_performance_screen.dart` with checklist (which students have/haven't been assessed)
+### B8 · Performance Entry Completion Status (Coach Portal) ✅ COMPLETE
+- [x] 🟡 Backend: Add completion status tracking for performance records per session
+- [x] 🟡 Flutter: Create `coach_performance_screen.dart` with checklist (which students have/haven't been assessed)
 
 ### B9 · Student Batch Capacity Visibility ✅ COMPLETE
 - [x] 🟡 Flutter: `batch_details_dialog.dart` — Capacity field now hidden when `isOwner == false` (wrapped in `if (widget.isOwner)` guard)

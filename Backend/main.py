@@ -7135,6 +7135,50 @@ def get_performance_records(
     finally:
         db.close()
 
+@app.get("/performance/completion-status", dependencies=[Depends(require_coach)])
+def get_performance_completion_status(batch_id: int, date: Optional[str] = None):
+    """B8: Get performance completion status for all students in a batch on a given date"""
+    from datetime import datetime
+    db = SessionLocal()
+    try:
+        if not date:
+            date = datetime.now().strftime("%Y-%m-%d")
+            
+        # Get all approved students in the batch
+        batch_students = db.query(BatchStudentDB).filter(
+            BatchStudentDB.batch_id == batch_id,
+            BatchStudentDB.status == "approved"
+        ).all()
+        student_ids = [bs.student_id for bs in batch_students]
+        
+        if not student_ids:
+            return []
+            
+        students = db.query(StudentDB).filter(StudentDB.id.in_(student_ids)).all()
+        student_map = {s.id: s.name for s in students}
+        
+        # Get performance records for these students on this date and batch
+        records = db.query(PerformanceDB).filter(
+            PerformanceDB.batch_id == batch_id,
+            PerformanceDB.date == date,
+            PerformanceDB.student_id.in_(student_ids)
+        ).all()
+        
+        assessed_student_ids = set([r.student_id for r in records])
+        
+        result = []
+        for sid in student_ids:
+            if sid in student_map:
+                result.append({
+                    "student_id": sid,
+                    "student_name": student_map[sid],
+                    "has_entry": sid in assessed_student_ids
+                })
+                
+        return result
+    finally:
+        db.close()
+
 @app.get("/performance/{record_id}", response_model=PerformanceFrontend, dependencies=[Depends(require_student)])
 def get_performance_record(record_id: int):
     """Get a single performance record by ID in frontend format"""
