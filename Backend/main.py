@@ -31,6 +31,15 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
+# ── B5: Firebase Admin SDK for FCM push notifications ──────────────────────
+try:
+    import firebase_admin
+    from firebase_admin import credentials as fb_credentials, messaging as fb_messaging
+    _FIREBASE_AVAILABLE = True
+except ImportError:
+    _FIREBASE_AVAILABLE = False
+    print("Warning: firebase-admin not installed. Push notifications disabled.")
+
 # Password hashing context - use bcrypt directly to avoid passlib initialization issues
 # Fallback to passlib if direct bcrypt fails
 try:
@@ -328,6 +337,56 @@ ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
 
+# ── B5: Firebase initialization ──────────────────────────────────────────────
+# Set FIREBASE_SERVICE_ACCOUNT_PATH in .env to path of your serviceAccountKey.json
+# If not configured, push notifications are silently skipped (app still works).
+_firebase_app = None
+if _FIREBASE_AVAILABLE:
+    _fb_cred_path = os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH", "")
+    if _fb_cred_path and os.path.exists(_fb_cred_path):
+        try:
+            if not firebase_admin._apps:
+                cred = fb_credentials.Certificate(_fb_cred_path)
+                _firebase_app = firebase_admin.initialize_app(cred)
+            else:
+                _firebase_app = firebase_admin.get_app()
+            print(f"Firebase Admin SDK initialized (FCM push notifications ENABLED)")
+        except Exception as _fb_err:
+            print(f"Warning: Firebase init failed: {_fb_err}. Push notifications disabled.")
+    else:
+        print("Firebase: FIREBASE_SERVICE_ACCOUNT_PATH not set. Push notifications disabled.")
+
+
+def send_push_notification(fcm_token: str, title: str, body: str, data: Optional[Dict[str, Any]] = None) -> bool:
+    """
+    Send a Firebase Cloud Messaging push notification.
+    Returns True on success, False on any error (non-blocking — never raises).
+    """
+    if not _FIREBASE_AVAILABLE or _firebase_app is None:
+        return False
+    if not fcm_token:
+        return False
+    try:
+        # FCM data payload values must all be strings
+        str_data = {k: str(v) for k, v in (data or {}).items()}
+        message = fb_messaging.Message(
+            notification=fb_messaging.Notification(title=title, body=body),
+            data=str_data,
+            token=fcm_token,
+            android=fb_messaging.AndroidConfig(priority="high"),
+            apns=fb_messaging.APNSConfig(
+                payload=fb_messaging.APNSPayload(
+                    aps=fb_messaging.Aps(sound="default")
+                )
+            ),
+        )
+        fb_messaging.send(message)
+        return True
+    except Exception as e:
+        print(f"[FCM] Push failed (token={fcm_token[:10]}...): {e}")
+        return False
+
+
 # Database setup - PostgreSQL with fallback to SQLite
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
 
@@ -408,6 +467,54 @@ class EncryptedString(TypeDecorator):
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+def send_overdue_fee_notifications():
+    """
+    B5: Daily cron — find fees that are overdue and send a push + in-app notification
+    to students who have not yet been notified today.
+    """
+    db = SessionLocal()
+    try:
+        today = date.today()
+        today_str = today.isoformat()
+
+        overdue_fees = db.query(FeeDB).filter(
+            FeeDB.status.in_(["pending", "partial"]),
+            FeeDB.due_date < today_str,
+        ).all()
+
+        for fee in overdue_fees:
+            # Skip if we already sent a fee_due notification for this fee in the last 24 h
+            recent_notif = db.query(NotificationDB).filter(
+                NotificationDB.user_id == fee.student_id,
+                NotificationDB.user_type == "student",
+                NotificationDB.type == "fee_due",
+                NotificationDB.data["fee_id"].as_integer() == fee.id,
+                NotificationDB.created_at >= datetime.now() - timedelta(hours=23),
+            ).first()
+            if recent_notif:
+                continue
+
+            batch = db.query(BatchDB).filter(BatchDB.id == fee.batch_id).first()
+            batch_name = batch.batch_name if batch else "your batch"
+
+            total_paid = calculate_total_paid(fee.id, db)
+            pending_amount = fee.amount - total_paid
+
+            create_notification(
+                db=db,
+                user_id=fee.student_id,
+                user_type="student",
+                title="Fee Payment Overdue",
+                body=f"₹{pending_amount:.2f} for {batch_name} was due on {fee.due_date}. Please pay immediately.",
+                type="fee_due",
+                data={"fee_id": fee.id, "batch_id": fee.batch_id, "pending_amount": pending_amount},
+            )
+    except Exception as e:
+        print(f"[Cron/FeeOverdue] Error: {e}")
+    finally:
+        db.close()
+
 
 def cleanup_inactive_records():
     """Background task to delete records inactive for > 2 years"""
@@ -765,6 +872,24 @@ class NotificationDB(Base):
     is_read = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     data = Column(JSON, nullable=True)  # Extra metadata as JSON
+
+
+class NotificationPreferencesDB(Base):
+    """Per-user notification preferences (B7)"""
+    __tablename__ = "notification_preferences"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    user_type = Column(String(20), nullable=False)  # "student", "coach", "owner"
+    # Notification type toggles — all default True (opted-in)
+    pref_attendance = Column(Boolean, default=True, nullable=False)
+    pref_performance = Column(Boolean, default=True, nullable=False)
+    pref_bmi = Column(Boolean, default=True, nullable=False)
+    pref_announcements = Column(Boolean, default=True, nullable=False)
+    pref_leave_updates = Column(Boolean, default=True, nullable=False)
+    pref_fee_payments = Column(Boolean, default=True, nullable=False)
+    pref_fee_due = Column(Boolean, default=True, nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
 
 class CalendarEventDB(Base):
@@ -1480,6 +1605,17 @@ def migrate_database_schema(engine):
         check_and_add_column(engine, 'owners', 'jwt_invalidated_at', 'TIMESTAMP WITH TIME ZONE', nullable=True)
         check_and_add_column(engine, 'students', 'jwt_invalidated_at', 'TIMESTAMP WITH TIME ZONE', nullable=True)
         print("JWT invalidation columns verified.")
+
+        # ── B7: Notification preferences table ───────────────────────────────
+        if 'notification_preferences' not in tables:
+            print("  notification_preferences table not found. Creating...")
+            try:
+                NotificationPreferencesDB.__table__.create(bind=engine)
+                print(" notification_preferences table created!")
+            except Exception as e:
+                print(f" Error creating notification_preferences table: {e}")
+        else:
+            print(" notification_preferences table exists")
 
         print("Database schema migration completed!")
     except Exception as e:
@@ -2306,12 +2442,50 @@ class Notification(BaseModel):
 
 # ==================== Helper Functions ====================
 
+def _get_notification_prefs(db, user_id: int, user_type: str):
+    """Return NotificationPreferencesDB row, auto-creating default if absent."""
+    prefs = db.query(NotificationPreferencesDB).filter(
+        NotificationPreferencesDB.user_id == user_id,
+        NotificationPreferencesDB.user_type == user_type,
+    ).first()
+    if prefs is None:
+        prefs = NotificationPreferencesDB(user_id=user_id, user_type=user_type)
+        db.add(prefs)
+        db.commit()
+        db.refresh(prefs)
+    return prefs
+
+
+# Maps notification type string → preference column name
+_NOTIF_TYPE_PREF_MAP = {
+    "attendance":   "pref_attendance",
+    "performance":  "pref_performance",
+    "bmi":          "pref_bmi",
+    "announcement": "pref_announcements",
+    "leave_update": "pref_leave_updates",
+    "fee_payment":  "pref_fee_payments",
+    "fee_due":      "pref_fee_due",
+}
+
+
 def create_notification(db, user_id: int, user_type: str, title: str, body: str, type: str = "general", data: Optional[Dict[str, Any]] = None):
-    """Helper to create a notification for a user"""
+    """
+    Helper to create an in-app notification and send a FCM push.
+    B7: Respects per-user notification preferences — silently skips if disabled.
+    B5: Sends FCM push notification when FCM token available.
+    """
     try:
-        # Debug check
-        print(f"Creating notification for {user_type} {user_id}: {title}")
-        
+        # ── B7: check user preferences ─────────────────────────────────────
+        pref_attr = _NOTIF_TYPE_PREF_MAP.get(type)
+        if pref_attr is not None:
+            try:
+                prefs = _get_notification_prefs(db, user_id, user_type)
+                if not getattr(prefs, pref_attr, True):
+                    return None  # User has opted out of this notification type
+            except Exception as pref_err:
+                print(f"[Prefs] Could not check preferences: {pref_err}")
+
+        # ── Create in-app notification ──────────────────────────────────────
         notification = NotificationDB(
             user_id=user_id,
             user_type=user_type,
@@ -2319,11 +2493,33 @@ def create_notification(db, user_id: int, user_type: str, title: str, body: str,
             body=body,
             type=type,
             data=data,
-            is_read=False
+            is_read=False,
         )
         db.add(notification)
         db.commit()
         db.refresh(notification)
+
+        # ── B5: Send FCM push notification ─────────────────────────────────
+        try:
+            fcm_token = None
+            if user_type == "student":
+                user = db.query(StudentDB).filter(StudentDB.id == user_id).first()
+            elif user_type == "coach":
+                user = db.query(CoachDB).filter(CoachDB.id == user_id).first()
+            elif user_type == "owner":
+                user = db.query(OwnerDB).filter(OwnerDB.id == user_id).first()
+            else:
+                user = None
+            if user:
+                fcm_token = getattr(user, "fcm_token", None)
+            if fcm_token:
+                push_data = dict(data or {})
+                push_data["notification_id"] = str(notification.id)
+                push_data["type"] = type
+                send_push_notification(fcm_token, title, body, push_data)
+        except Exception as push_err:
+            print(f"[FCM] Push send error: {push_err}")
+
         return notification
     except Exception as e:
         print(f" Error creating notification: {e}")
@@ -2727,6 +2923,30 @@ class Notification(BaseModel):
 
 class NotificationUpdate(BaseModel):
     is_read: Optional[bool] = None
+
+# B7: Notification Preferences Models
+class NotificationPreferences(BaseModel):
+    user_id: int
+    user_type: str
+    pref_attendance: bool = True
+    pref_performance: bool = True
+    pref_bmi: bool = True
+    pref_announcements: bool = True
+    pref_leave_updates: bool = True
+    pref_fee_payments: bool = True
+    pref_fee_due: bool = True
+
+    class Config:
+        from_attributes = True
+
+class NotificationPreferencesUpdate(BaseModel):
+    pref_attendance: Optional[bool] = None
+    pref_performance: Optional[bool] = None
+    pref_bmi: Optional[bool] = None
+    pref_announcements: Optional[bool] = None
+    pref_leave_updates: Optional[bool] = None
+    pref_fee_payments: Optional[bool] = None
+    pref_fee_due: Optional[bool] = None
 
 # CalendarEvent Models
 class CalendarEventCreate(BaseModel):
@@ -6072,7 +6292,21 @@ def create_fee_payment(fee_id: int, payment: FeePaymentCreate):
         if db_payment.payee_student_id:
             payee = db.query(StudentDB).filter(StudentDB.id == db_payment.payee_student_id).first()
             payee_student_name = payee.name if payee else None
-        
+
+        # B5: Notify student that a fee payment was recorded
+        try:
+            create_notification(
+                db=db,
+                user_id=fee.student_id,
+                user_type="student",
+                title="Fee Payment Received",
+                body=f"A payment of ₹{db_payment.amount:.2f} has been recorded for your fee.",
+                type="fee_payment",
+                data={"fee_id": fee_id, "payment_id": db_payment.id, "amount": db_payment.amount},
+            )
+        except Exception as _ne:
+            print(f"[Notif] Fee payment notification error: {_ne}")
+
         return {
             "id": db_payment.id,
             "fee_id": db_payment.fee_id,
@@ -6838,7 +7072,21 @@ def create_performance_record_v2(performance_data: PerformanceFrontendCreate, cu
         transformed = transform_performance_to_frontend(all_records, db)
         if not transformed:
             raise HTTPException(status_code=500, detail="Failed to create performance record")
-        
+
+        # B5: Notify student that performance was recorded
+        try:
+            create_notification(
+                db=db,
+                user_id=performance_data.student_id,
+                user_type="student",
+                title="Performance Recorded",
+                body=f"Your performance for {performance_data.date} has been recorded.",
+                type="performance",
+                data={"batch_id": performance_data.batch_id, "date": str(performance_data.date)},
+            )
+        except Exception as _ne:
+            print(f"[Notif] Performance POST notification error: {_ne}")
+
         return transformed
     except HTTPException:
         raise
@@ -6938,7 +7186,21 @@ def update_performance_record(record_id: int, performance_update: PerformanceFro
         transformed = transform_performance_to_frontend(updated_records, db)
         if not transformed:
             raise HTTPException(status_code=404, detail="Performance record not found")
-        
+
+        # B5: Notify student that performance was updated
+        try:
+            create_notification(
+                db=db,
+                user_id=first_record.student_id,
+                user_type="student",
+                title="Performance Updated",
+                body=f"Your performance record for {first_record.date} has been updated.",
+                type="performance",
+                data={"batch_id": first_record.batch_id, "date": str(first_record.date)},
+            )
+        except Exception as _ne:
+            print(f"[Notif] Performance PUT notification error: {_ne}")
+
         return transformed
     except HTTPException:
         raise
@@ -7081,7 +7343,7 @@ def create_bmi_record_v2(bmi_data: BMICreate):
         # Calculate BMI
         height_m = bmi_data.height / 100
         bmi_value = bmi_data.weight / (height_m ** 2)
-        
+
         db_bmi = BMIDB(
             **bmi_data.dict(),
             bmi=round(bmi_value, 2)
@@ -7089,6 +7351,21 @@ def create_bmi_record_v2(bmi_data: BMICreate):
         db.add(db_bmi)
         db.commit()
         db.refresh(db_bmi)
+
+        # B5: Notify student that BMI was recorded
+        try:
+            create_notification(
+                db=db,
+                user_id=db_bmi.student_id,
+                user_type="student",
+                title="BMI Recorded",
+                body=f"Your BMI has been recorded: {db_bmi.bmi:.1f} (H:{db_bmi.height}cm W:{db_bmi.weight}kg).",
+                type="bmi",
+                data={"bmi_id": db_bmi.id, "bmi": db_bmi.bmi},
+            )
+        except Exception as _ne:
+            print(f"[Notif] BMI POST notification error: {_ne}")
+
         return bmi_db_to_response(db_bmi)
     except Exception as e:
         db.rollback()
@@ -7119,9 +7396,24 @@ def update_bmi_record(record_id: int, bmi_update: BMIUpdate):
         
         for key, value in update_data.items():
             setattr(db_bmi, key, value)
-        
+
         db.commit()
         db.refresh(db_bmi)
+
+        # B5: Notify student that BMI was updated
+        try:
+            create_notification(
+                db=db,
+                user_id=db_bmi.student_id,
+                user_type="student",
+                title="BMI Updated",
+                body=f"Your BMI record has been updated: {db_bmi.bmi:.1f} (H:{db_bmi.height}cm W:{db_bmi.weight}kg).",
+                type="bmi",
+                data={"bmi_id": db_bmi.id, "bmi": db_bmi.bmi},
+            )
+        except Exception as _ne:
+            print(f"[Notif] BMI PUT notification error: {_ne}")
+
         return bmi_db_to_response(db_bmi)
     except HTTPException:
         raise
@@ -9874,10 +10166,66 @@ def delete_notification(notification_id: int):
         notif = db.query(NotificationDB).filter(NotificationDB.id == notification_id).first()
         if not notif:
             raise HTTPException(status_code=404, detail="Notification not found")
-            
+
         db.delete(notif)
         db.commit()
         return {"success": True}
+    finally:
+        db.close()
+
+
+# ==================== B7: Notification Preferences Endpoints ====================
+
+@app.get("/api/notifications/preferences", response_model=NotificationPreferences, dependencies=[Depends(require_student)])
+def get_notification_preferences(
+    user_id: int = Query(...),
+    user_type: str = Query(..., pattern="^(student|coach|owner)$"),
+):
+    """Get notification preferences for a user. Creates defaults if none exist."""
+    db = SessionLocal()
+    try:
+        prefs = _get_notification_prefs(db, user_id, user_type)
+        return NotificationPreferences(
+            user_id=prefs.user_id,
+            user_type=prefs.user_type,
+            pref_attendance=prefs.pref_attendance,
+            pref_performance=prefs.pref_performance,
+            pref_bmi=prefs.pref_bmi,
+            pref_announcements=prefs.pref_announcements,
+            pref_leave_updates=prefs.pref_leave_updates,
+            pref_fee_payments=prefs.pref_fee_payments,
+            pref_fee_due=prefs.pref_fee_due,
+        )
+    finally:
+        db.close()
+
+
+@app.put("/api/notifications/preferences", response_model=NotificationPreferences, dependencies=[Depends(require_student)])
+def update_notification_preferences(
+    user_id: int = Query(...),
+    user_type: str = Query(..., pattern="^(student|coach|owner)$"),
+    updates: NotificationPreferencesUpdate = ...,
+):
+    """Update notification preferences for a user."""
+    db = SessionLocal()
+    try:
+        prefs = _get_notification_prefs(db, user_id, user_type)
+        update_data = updates.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(prefs, field, value)
+        db.commit()
+        db.refresh(prefs)
+        return NotificationPreferences(
+            user_id=prefs.user_id,
+            user_type=prefs.user_type,
+            pref_attendance=prefs.pref_attendance,
+            pref_performance=prefs.pref_performance,
+            pref_bmi=prefs.pref_bmi,
+            pref_announcements=prefs.pref_announcements,
+            pref_leave_updates=prefs.pref_leave_updates,
+            pref_fee_payments=prefs.pref_fee_payments,
+            pref_fee_due=prefs.pref_fee_due,
+        )
     finally:
         db.close()
 
@@ -10377,11 +10725,13 @@ if __name__ == "__main__":
     print("Mobile devices can connect to: http://192.168.1.11:8001")
     # host="0.0.0.0" allows connections from any device on the network
     
-    # Start background cleanup scheduler
+    # Start background scheduler
     scheduler = BackgroundScheduler()
     scheduler.add_job(cleanup_inactive_records, 'interval', days=1)
+    # B5: Daily overdue-fee push notifications
+    scheduler.add_job(send_overdue_fee_notifications, 'cron', hour=9, minute=0)
     scheduler.start()
-    print("Background cleanup scheduler started (Daily).")
+    print("Background scheduler started (cleanup: daily, overdue-fee alerts: 09:00).")
     
     uvicorn.run(app, host="0.0.0.0", port=8001)
 
