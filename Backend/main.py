@@ -3629,10 +3629,11 @@ def forgot_password(request: Request, rq: ForgotPasswordRequest):
         db.commit()
         
         # Prevent account enumeration: return uniform message whether email was found or not
+        # NOTE: In production the reset_token must be delivered via email (B11).
+        # Never expose it in the API response.
         return {
             "success": True,
             "message": "If your email is registered, you will receive a password reset token.",
-            "reset_token": reset_token,  # Remove this in production, but needed for development right now
             "expires_in": 900
         }
     finally:
@@ -3663,7 +3664,7 @@ def reset_password(request: ResetPasswordRequest):
 
         
         # Find user using the user_type from token
-        target_user_type = token_data["user_type"]
+        target_user_type = token_entry.user_type
         if target_user_type == "coach":
             user = db.query(CoachDB).filter(CoachDB.email == request.email).first()
         elif target_user_type == "owner":
