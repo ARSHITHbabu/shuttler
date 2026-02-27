@@ -213,13 +213,13 @@
 ## PHASE C — Database & Infrastructure
 *Production-grade data layer. Estimated: 2 weeks.*
 
-### C1 · Alembic Migrations
-- [ ] 🔴 Initialize Alembic properly: `alembic init alembic`
-- [ ] 🔴 Configure `alembic.ini` and `env.py` with database URL (from environment variable)
-- [ ] 🔴 Convert all existing manual SQL migration scripts to Alembic migration files
-- [ ] 🔴 Create an initial baseline migration from current models
-- [ ] 🔴 All future schema changes go through Alembic only (never manual SQL in production)
-- [ ] 🔴 Alembic migrations run automatically in CI/CD pre-deploy step
+### C1 · Alembic Migrations ✅ COMPLETE
+- [x] 🔴 Initialize Alembic properly: `alembic init alembic`
+- [x] 🔴 Configure `alembic.ini` and `env.py` with database URL (from environment variable)
+- [x] 🔴 Convert all existing manual SQL migration scripts to Alembic migration files (Moved to old_sql_migrations directory)
+- [x] 🔴 Create an initial baseline migration from current models
+- [x] 🔴 All future schema changes go through Alembic only (never manual SQL in production)
+- [x] 🔴 Alembic migrations run automatically in CI/CD pre-deploy step
 
 ### C2 · Database Indexing
 - [ ] 🟠 Add index: `students(status)`
