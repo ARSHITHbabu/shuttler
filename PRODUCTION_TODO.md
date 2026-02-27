@@ -138,22 +138,22 @@
 ## PHASE B — Core App Features (Pending)
 *All HIGH-priority items needed before beta. Estimated: 2 weeks.*
 
-### B1 · Multiple Coach Assignment per Batch
-- [ ] 🟠 Backend: Enable many-to-many via existing `batch_coaches` junction table; remove `assigned_coach_id` single-field dependency
-- [ ] 🟠 Backend: Update batch create/update endpoints for multi-coach
-- [ ] 🟠 Flutter: Update `Batch` model to `List<int> assignedCoachIds`
-- [ ] 🟠 Flutter: Update batch create/edit form with multi-select coach picker
-- [ ] 🟠 Flutter: Update batch card to display multiple coaches
+### B1 · Multiple Coach Assignment per Batch ✅ COMPLETE
+- [x] 🟠 Backend: Enable many-to-many via existing `batch_coaches` junction table; remove `assigned_coach_id` single-field dependency
+- [x] 🟠 Backend: Update batch create/update endpoints for multi-coach
+- [x] 🟠 Flutter: Update `Batch` model to `List<int> assignedCoachIds`
+- [x] 🟠 Flutter: Update batch create/edit form with multi-select coach picker
+- [x] 🟠 Flutter: Update batch card to display multiple coaches
 
-### B2 · Partial Payment Status for Fees
-- [ ] 🟠 Backend: Update `calculate_fee_status()` to return `'partial'` when `0 < total_paid < amount`
-- [ ] 🟠 Flutter: Add `partial` to `Fee` model status enum
-- [ ] 🟠 Flutter: Add "Partially Paid" badge/color in fees UI and filter chips
+### B2 · Partial Payment Status for Fees ✅ COMPLETE
+- [x] 🟠 Backend: Update `calculate_fee_status()` to return `'partial'` when `0 < total_paid < amount` (overdue still takes priority at 7+ days past due date)
+- [x] 🟠 Flutter: Add `partial` to `Fee` model status comment; `isOverdue` getter returns false for 'partial'
+- [x] 🟠 Flutter: Add "Partially Paid" badge/color (teal) in fees UI and filter chips — owner, coach, and student screens; `partialCount` added to `BatchFeeGroup`
 
-### B3 · Payment Method Standardization
-- [ ] 🟠 Flutter: Update `add_payment_dialog.dart` — restrict to Cash and Card only (remove UPI, Bank Transfer)
-- [ ] 🟠 Flutter: Update `record_payment_dialog.dart` — same restriction
-- [ ] 🟠 Backend: Add server-side validation for allowed payment methods (`cash`, `card`)
+### B3 · Payment Method Standardization ✅ COMPLETE
+- [x] 🟠 Flutter: Update `add_payment_dialog.dart` — restricted to Cash and Card only (removed UPI, Bank Transfer)
+- [x] 🟠 Flutter: Update `record_payment_dialog.dart` — restricted to Cash and Card only (removed UPI, Bank Transfer, Other)
+- [x] 🟠 Backend: Added `field_validator` on `FeePaymentCreate.payment_method` — only `cash` and `card` accepted; returns HTTP 422 for invalid values
 
 ### B4 · Session-wise Reports
 - [ ] 🟠 Backend: Add `/reports/attendance/session/{session_id}` endpoint

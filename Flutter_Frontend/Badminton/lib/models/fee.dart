@@ -11,7 +11,7 @@ class Fee {
   final double totalPaid;
   final double pendingAmount;
   final DateTime dueDate;
-  final String status; // 'paid', 'pending', 'overdue'
+  final String status; // 'paid', 'partial', 'pending', 'overdue'
   final int? payeeStudentId;
   final String? payeeStudentName;
   final List<FeePayment>? payments;
@@ -111,7 +111,7 @@ class Fee {
 
   /// Check if fee is overdue (7 days after due date)
   bool get isOverdue {
-    if (status == 'paid') return false;
+    if (status == 'paid' || status == 'partial') return false;
     final daysOverdue = DateTime.now().difference(dueDate).inDays;
     return daysOverdue >= 7;
   }

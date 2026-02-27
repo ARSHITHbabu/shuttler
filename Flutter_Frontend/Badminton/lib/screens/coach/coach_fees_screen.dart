@@ -374,11 +374,13 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
         List<StudentWithBatchFee> filteredStudents = studentFees;
         if (_selectedFilter == 'paid') {
           filteredStudents = studentFees.where((s) => s.feeStatus == 'paid').toList();
+        } else if (_selectedFilter == 'partial') {
+          filteredStudents = studentFees.where((s) => s.feeStatus == 'partial').toList();
         } else if (_selectedFilter == 'pending') {
           filteredStudents = studentFees.where((s) => s.feeStatus == 'pending').toList();
         } else if (_selectedFilter == 'overdue') {
-          filteredStudents = studentFees.where((s) => 
-            s.feeStatus == 'overdue' || 
+          filteredStudents = studentFees.where((s) =>
+            s.feeStatus == 'overdue' ||
             (s.existingFee != null && s.existingFee!.isOverdue)
           ).toList();
         }
@@ -435,6 +437,13 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
                     isSelected: _selectedFilter == 'paid',
                     onTap: () => setState(() => _selectedFilter = 'paid'),
                     color: AppColors.success,
+                  ),
+                  const SizedBox(width: AppDimensions.spacingS),
+                  _FilterChip(
+                    label: 'Partial',
+                    isSelected: _selectedFilter == 'partial',
+                    onTap: () => setState(() => _selectedFilter = 'partial'),
+                    color: Colors.teal,
                   ),
                   const SizedBox(width: AppDimensions.spacingS),
                   _FilterChip(
@@ -1027,6 +1036,8 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
     switch (status.toLowerCase()) {
       case 'paid':
         return AppColors.success;
+      case 'partial':
+        return Colors.teal;
       case 'pending':
         return AppColors.warning;
       case 'overdue':

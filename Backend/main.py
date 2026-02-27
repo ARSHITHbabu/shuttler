@@ -2121,6 +2121,8 @@ class FeeCreate(BaseModel):
     payee_student_id: Optional[int] = None
     status: Optional[str] = None  # Will be calculated, optional on create
 
+_ALLOWED_PAYMENT_METHODS = {'cash', 'card'}
+
 class FeePaymentCreate(BaseModel):
     fee_id: Optional[int] = None  # Optional - provided via path parameter
     amount: float
@@ -2129,6 +2131,13 @@ class FeePaymentCreate(BaseModel):
     payee_name: Optional[str] = None  # For non-student payees
     payment_method: Optional[str] = None
     collected_by: Optional[str] = None
+
+    @field_validator('payment_method')
+    @classmethod
+    def validate_payment_method(cls, v):
+        if v is not None and v.lower() not in _ALLOWED_PAYMENT_METHODS:
+            raise ValueError(f"Invalid payment method '{v}'. Allowed values: {', '.join(sorted(_ALLOWED_PAYMENT_METHODS))}")
+        return v.lower() if v is not None else v
 
 class FeePayment(BaseModel):
     id: int
@@ -5816,8 +5825,8 @@ def calculate_fee_status(amount: float, total_paid: float, due_date: str) -> str
     # Fully paid
     if total_paid >= amount:
         return 'paid'
-    
-    # Check if overdue (7 days after due_date)
+
+    # Check if overdue (7 days after due_date) — overdue takes priority over partial
     try:
         due_date_obj = datetime.fromisoformat(due_date)
         days_overdue = (datetime.now() - due_date_obj).days
@@ -5825,8 +5834,12 @@ def calculate_fee_status(amount: float, total_paid: float, due_date: str) -> str
             return 'overdue'
     except:
         pass
-    
-    # Default to pending
+
+    # Partially paid (some payment made but not fully paid)
+    if total_paid > 0:
+        return 'partial'
+
+    # Default to pending (no payment made yet)
     return 'pending'
 
 def enrich_fee_with_payments(fee: FeeDB, db) -> dict:
