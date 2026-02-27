@@ -152,7 +152,7 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
               )
             : null,
         title: const Text(
-          'Batches',
+          'Batch Management',
           style: TextStyle(
             color: AppColors.textPrimary,
             fontSize: 20,

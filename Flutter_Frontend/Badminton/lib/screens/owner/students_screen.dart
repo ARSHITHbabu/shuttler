@@ -59,7 +59,7 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: const Text(
-          'Students',
+          'Student Management',
           style: TextStyle(
             color: AppColors.textPrimary,
             fontSize: 20,
@@ -148,6 +148,9 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
 
                 if (filteredStudents.isEmpty) {
                   if (_searchQuery.isEmpty) {
+                    if (_selectedFilter == 'inactive') {
+                      return EmptyState.noInactiveStudents();
+                    }
                     return EmptyState.noStudents(
                       onAdd: () => _showAddStudentDialog(context),
                     );
@@ -213,129 +216,15 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                                           ),
                                         ),
                                       ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: AppDimensions.spacingM,
-                                          vertical: AppDimensions.spacingS,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: student.status == 'active'
-                                              ? AppColors.success
-                                              : AppColors.error,
-                                          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Text(
-                                              student.status.toUpperCase(),
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                            if (student.rejoinRequestPending) ...[
-                                              const SizedBox(width: 4),
-                                              const Icon(Icons.info_outline, size: 10, color: Colors.white),
-                                            ],
-                                          ],
-                                        ),
-                                      ),
-                                      if (student.rejoinRequestPending)
-                                        Container(
-                                          margin: const EdgeInsets.only(left: 4),
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.accent,
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          child: const Text(
-                                            'REJOIN REQUEST',
-                                            style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                                      Expanded(
+                                        child: Text(
+                                          student.name,
+                                          style: const TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppColors.textPrimary,
                                           ),
                                         ),
-                                      PopupMenuButton(
-                                        icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
-                                        color: AppColors.cardBackground,
-                                        itemBuilder: (context) => [
-                                          PopupMenuItem(
-                                            child: const Row(
-                                              children: [
-                                                Icon(Icons.edit, size: 18, color: AppColors.textPrimary),
-                                                SizedBox(width: 8),
-                                                Text('Edit', style: TextStyle(color: AppColors.textPrimary)),
-                                              ],
-                                            ),
-                                            onTap: () {
-                                              Future.delayed(Duration.zero, () {
-                                                _showEditStudentDialog(context, student);
-                                              });
-                                            },
-                                          ),
-                                          PopupMenuItem(
-                                            child: Row(
-                                              children: [
-                                                Icon(
-                                                  student.status == 'active' 
-                                                      ? Icons.person_off 
-                                                      : Icons.person,
-                                                  size: 18,
-                                                  color: student.status == 'active' 
-                                                      ? AppColors.error 
-                                                      : AppColors.success,
-                                                ),
-                                                const SizedBox(width: 8),
-                                                Text(
-                                                  student.status == 'active' 
-                                                      ? 'Mark Inactive' 
-                                                      : 'Mark Active',
-                                                  style: TextStyle(
-                                                    color: student.status == 'active' 
-                                                        ? AppColors.error 
-                                                        : AppColors.success,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            onTap: () {
-                                              Future.delayed(Duration.zero, () {
-                                                if (student.status == 'inactive' && student.rejoinRequestPending) {
-                                                  _showApproveRejoinDialog(context, student);
-                                                } else {
-                                                  _toggleStudentStatus(context, student);
-                                                }
-                                              });
-                                            },
-                                          ),
-                                          PopupMenuItem(
-                                            child: const Row(
-                                              children: [
-                                                Icon(Icons.group_add, size: 18, color: AppColors.textPrimary),
-                                                SizedBox(width: 8),
-                                                Text('Manage Batches', style: TextStyle(color: AppColors.textPrimary)),
-                                              ],
-                                            ),
-                                            onTap: () {
-                                              Future.delayed(Duration.zero, () {
-                                                _showManageBatchesDialog(context, student);
-                                              });
-                                            },
-                                          ),
-                                          PopupMenuItem(
-                                            child: const Row(
-                                              children: [
-                                                Icon(Icons.delete, size: 18, color: AppColors.error),
-                                                SizedBox(width: 8),
-                                                Text('Delete', style: TextStyle(color: AppColors.error)),
-                                              ],
-                                            ),
-                                            onTap: () {
-                                              Future.delayed(Duration.zero, () {
-                                                _showDeleteConfirmation(context, student);
-                                              });
-                                            },
-                                          ),
-                                        ],
                                       ),
                                     ],
                                   ),
@@ -358,76 +247,7 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                                       value: student.phone,
                                     ),
                                   ],
-                                  if (student.guardianName != null && student.guardianName!.isNotEmpty) ...[
-                                    const SizedBox(height: AppDimensions.spacingS),
-                                    _InfoRow(
-                                      icon: Icons.person_outline,
-                                      label: 'Guardian',
-                                      value: student.guardianName!,
-                                    ),
-                                  ],
-                                  if (student.guardianPhone != null && student.guardianPhone!.isNotEmpty) ...[
-                                    const SizedBox(height: AppDimensions.spacingS),
-                                    _InfoRow(
-                                      icon: Icons.phone_outlined,
-                                      label: 'Guardian Phone',
-                                      value: student.guardianPhone!,
-                                    ),
-                                  ],
                                   const SizedBox(height: AppDimensions.spacingM),
-                                  // Action Buttons
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: _ActionButton(
-                                          icon: Icons.trending_up,
-                                          label: 'Performance',
-                                          onTap: () {
-                                            Navigator.of(context).push(
-                                              MaterialPageRoute(
-                                                builder: (context) => PerformanceTrackingScreen(
-                                                  initialStudent: student,
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                      const SizedBox(width: AppDimensions.spacingS),
-                                      Expanded(
-                                        child: _ActionButton(
-                                          icon: Icons.monitor_weight,
-                                          label: 'BMI',
-                                          onTap: () {
-                                            Navigator.of(context).push(
-                                              MaterialPageRoute(
-                                                builder: (context) => BMITrackingScreen(
-                                                  initialStudent: student,
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                      const SizedBox(width: AppDimensions.spacingS),
-                                      Expanded(
-                                        child: _ActionButton(
-                                          icon: Icons.attach_money,
-                                          label: 'Fees',
-                                          onTap: () {
-                                            Navigator.of(context).push(
-                                              MaterialPageRoute(
-                                                builder: (context) => FeesScreen(
-                                                  selectedStudentId: student.id,
-                                                  selectedStudentName: student.name,
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                    ],
-                                  ),
                                 ],
                               ),
                             ),

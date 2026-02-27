@@ -14,6 +14,7 @@ import '../../../providers/service_providers.dart';
 import '../../../providers/fee_provider.dart';
 import '../../../providers/student_provider.dart';
 import '../../../providers/dashboard_provider.dart';
+import '../../../providers/owner_navigation_provider.dart';
 import '../../../widgets/forms/add_payment_dialog.dart';
 import '../../../widgets/forms/edit_fee_dialog.dart';
 import '../../../models/fee_payment.dart';
@@ -36,12 +37,15 @@ class StudentFeesView extends ConsumerStatefulWidget {
 }
 
 class _StudentFeesViewState extends ConsumerState<StudentFeesView> {
-  String _selectedFilter = 'all'; 
+  // No longer using local _selectedFilter, using feeFilterProvider instead
   Fee? _selectedFee; 
   int? _selectedBatchId; 
 
+  late String _selectedFilter;
+
   @override
   Widget build(BuildContext context) {
+    _selectedFilter = ref.watch(feeFilterProvider);
     if (_selectedFee != null) {
       return _buildDeepView();
     }
@@ -238,7 +242,10 @@ class _StudentFeesViewState extends ConsumerState<StudentFeesView> {
           children: [
             // Breadcrumb
             InkWell(
-              onTap: () => setState(() { _selectedBatchId = null; _selectedFilter = 'all'; }),
+              onTap: () {
+                setState(() => _selectedBatchId = null);
+                ref.read(feeFilterProvider.notifier).state = 'all';
+              },
               child: Row(
                 children: [
                   const Icon(Icons.arrow_back, size: 16, color: AppColors.primary),
@@ -289,7 +296,7 @@ class _StudentFeesViewState extends ConsumerState<StudentFeesView> {
   Widget _buildFilterTab(String label, String value) {
     final isSelected = _selectedFilter == value;
     return GestureDetector(
-      onTap: () => setState(() => _selectedFilter = value),
+      onTap: () => ref.read(feeFilterProvider.notifier).state = value,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(

@@ -174,11 +174,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     label: 'Pending Fees',
                     isSmallScreen: isSmallScreen,
                     onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => const FeesScreen(),
-                        ),
-                      );
+                      ref.read(feeFilterProvider.notifier).state = 'pending';
+                      ref.read(ownerBottomNavIndexProvider.notifier).state = 3; // 3 is Fees screen index
                     },
                   ),
                 ],
