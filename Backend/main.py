@@ -547,6 +547,29 @@ def send_overdue_fee_notifications():
                 type="fee_due",
                 data={"fee_id": fee.id, "batch_id": fee.batch_id, "pending_amount": pending_amount},
             )
+
+            # B11: Send overdue fee email
+            student = db.query(StudentDB).filter(StudentDB.id == fee.student_id).first()
+            if student and student.email:
+                try:
+                    reminder_html = f"""
+<html><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;">
+<div style="max-width:480px;margin:auto;background:#fff;border-radius:8px;padding:32px;">
+  <h2 style="color:#1a1a2e;">Fee Payment Overdue</h2>
+  <p>Dear {student.name},</p>
+  <p>This is an automated reminder that your fee payment for <strong>{batch_name}</strong> of <strong>₹{pending_amount:.2f}</strong> is now overdue.</p>
+  <p>Original Due Date: <strong>{fee.due_date}</strong></p>
+  <p>Please log in to your Shuttler app or contact your academy admin to complete this payment as soon as possible.</p>
+  <p style="color:#888;font-size:13px;">If you have already paid, please ignore this email.</p>
+</div></body></html>"""
+                    send_email(
+                        to_email=student.email,
+                        subject=f"Shuttler — Fee Overdue: ₹{pending_amount:.2f}",
+                        html_content=reminder_html,
+                        plain_content=f"Fee overdue: ₹{pending_amount:.2f} for {batch_name}. Please pay immediately.",
+                    )
+                except Exception as _ee:
+                    print(f"[Email] Automated fee reminder email error: {_ee}")
     except Exception as e:
         print(f"[Cron/FeeOverdue] Error: {e}")
     finally:
@@ -6852,6 +6875,28 @@ def notify_student_about_fee(fee_id: int):
         db.commit()
         db.refresh(notification)
         
+        # B11: Send fee overdue reminder email
+        try:
+            if student.email:
+                reminder_html = f"""
+<html><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;">
+<div style="max-width:480px;margin:auto;background:#fff;border-radius:8px;padding:32px;">
+  <h2 style="color:#1a1a2e;">Fee Payment Reminder</h2>
+  <p>Dear {student.name},</p>
+  <p>This is a polite reminder that your fee payment of <strong>₹{pending_amount:.2f}</strong> is currently overdue.</p>
+  <p>Due Date: <strong>{fee.due_date}</strong></p>
+  <p>Please log in to your Shuttler app or contact your academy admin to complete this payment.</p>
+  <p style="color:#888;font-size:13px;">If you have already paid, please ignore this email.</p>
+</div></body></html>"""
+                send_email(
+                    to_email=student.email,
+                    subject=f"Shuttler — Fee Overdue Reminder (₹{pending_amount:.2f})",
+                    html_content=reminder_html,
+                    plain_content=f"Fee overdue: ₹{pending_amount:.2f}. Please pay at your earliest convenience.",
+                )
+        except Exception as _ee:
+            print(f"[Email] Fee reminder email error: {_ee}")
+
         return {"message": "Notification sent successfully", "notification_id": notification.id}
     finally:
         db.close()
@@ -8199,6 +8244,30 @@ def create_coach_invitation(invitation: CoachInvitationCreate):
         base_url = os.getenv("INVITE_BASE_URL", "https://academy.app")
         invite_link = f"{base_url}/invite/coach/{invite_token}"
         
+        # B11: Send coach invitation email
+        if email:
+            try:
+                invite_html = f"""
+<html><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;">
+<div style="max-width:480px;margin:auto;background:#fff;border-radius:8px;padding:32px;">
+  <h2 style="color:#1a1a2e;">Join Shuttler Academy</h2>
+  <p>Dear {invitation.coach_name or 'Coach'},</p>
+  <p>You have been invited by <strong>{invitation.owner_name}</strong> to join their academy as a Coach on Shuttler.</p>
+  <div style="text-align:center;margin:32px 0;">
+    <a href="{invite_link}" style="background:#4CAF50;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold;">Accept Invitation</a>
+  </div>
+  <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+  <p style="word-break:break-all;color:#0066cc;background:#f0f0f0;padding:8px;border-radius:4px;">{invite_link}</p>
+</div></body></html>"""
+                send_email(
+                    to_email=email,
+                    subject="You've been invited to join Shuttler as a Coach",
+                    html_content=invite_html,
+                    plain_content=f"You've been invited by {invitation.owner_name} to join as a Coach. Use this link to accept: {invite_link}",
+                )
+            except Exception as _ee:
+                print(f"[Email] Coach invitation email error: {_ee}")
+        
         # Convert to response model with invite link
         invitation_response = CoachInvitation(
             id=db_invitation.id,
@@ -8410,6 +8479,30 @@ def create_invitation(invitation: InvitationCreate):
         # In production, this should come from environment variables
         base_url = os.getenv("INVITE_BASE_URL", "https://academy.app")
         invite_link = f"{base_url}/invite/{invite_token}"
+        
+        # B11: Send student invitation email
+        if email:
+            try:
+                invite_html = f"""
+<html><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;">
+<div style="max-width:480px;margin:auto;background:#fff;border-radius:8px;padding:32px;">
+  <h2 style="color:#1a1a2e;">Join Shuttler Academy</h2>
+  <p>Hello,</p>
+  <p>You have been invited by Coach <strong>{invitation.coach_name or 'a coach'}</strong> to join their academy as a Student on Shuttler.</p>
+  <div style="text-align:center;margin:32px 0;">
+    <a href="{invite_link}" style="background:#4CAF50;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold;">Accept Invitation</a>
+  </div>
+  <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+  <p style="word-break:break-all;color:#0066cc;background:#f0f0f0;padding:8px;border-radius:4px;">{invite_link}</p>
+</div></body></html>"""
+                send_email(
+                    to_email=email,
+                    subject="You've been invited to join Shuttler as a Student",
+                    html_content=invite_html,
+                    plain_content=f"You've been invited to join as a Student. Use this link to accept: {invite_link}",
+                )
+            except Exception as _ee:
+                print(f"[Email] Student invitation email error: {_ee}")
         
         # Convert to response model with invite link
         invitation_response = Invitation(

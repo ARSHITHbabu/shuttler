@@ -190,16 +190,16 @@
 ### B9 · Student Batch Capacity Visibility ✅ COMPLETE
 - [x] 🟡 Flutter: `batch_details_dialog.dart` — Capacity field now hidden when `isOwner == false` (wrapped in `if (widget.isOwner)` guard)
 
-### B10 · Database Table Cleanup
-- [ ] 🟡 Investigate `requests` table (no model exists) — create model or drop via Alembic migration
+### B10 · Database Table Cleanup ✅ COMPLETE
+- [x] 🟡 Investigate `requests` table (no model exists) — create model or drop via Alembic migration (Dropped via startup script migration)
 
-### B11 · `[GAP]` — Transactional Email Service
-- [ ] 🟠 Select and integrate an email service: SendGrid, AWS SES, or Mailchimp Transactional (Mandrill)
-- [ ] 🟠 Password reset: send email with secure reset link (currently only token-based — unclear if email is sent)
-- [ ] 🟠 Coach/student invitation: send email alongside WhatsApp link
-- [ ] 🟠 Welcome email on successful account creation
-- [ ] 🟠 Payment receipt email on successful fee payment
-- [ ] 🟡 Fee overdue reminder email (in addition to push notification)
+### B11 · `[GAP]` — Transactional Email Service ✅ COMPLETE
+- [x] 🟠 Select and integrate an email service: SendGrid, AWS SES, or Mailchimp Transactional (Mandrill)
+- [x] 🟠 Password reset: send email with secure reset link (currently only token-based — unclear if email is sent)
+- [x] 🟠 Coach/student invitation: send email alongside WhatsApp link
+- [x] 🟠 Welcome email on successful account creation
+- [x] 🟠 Payment receipt email on successful fee payment
+- [x] � Fee overdue reminder email (in addition to push notification)
 
 ### B12 · `[GAP]` — Payment Gateway Integration (Card Processing)
 - [ ] 🟠 Decide if the app processes cards directly or just records in-person card transactions
