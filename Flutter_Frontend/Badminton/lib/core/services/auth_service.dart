@@ -381,4 +381,39 @@ class AuthService {
   Map<String, dynamic> getUserData() {
     return _storageService.getUserData();
   }
+
+  /// Get active sessions
+  Future<List<dynamic>> getActiveSessions() async {
+    try {
+      final response = await _apiService.get(ApiEndpoints.sessions);
+      if (response.statusCode == 200 && response.data['success'] == true) {
+        return response.data['sessions'];
+      }
+      return [];
+    } catch (e) {
+      throw Exception('Failed to get sessions');
+    }
+  }
+
+  /// Revoke an active session
+  Future<void> revokeSession(int sessionId) async {
+    try {
+      final response = await _apiService.delete(ApiEndpoints.sessionRevoke(sessionId));
+      if (response.statusCode != 200 || response.data['success'] != true) {
+        throw Exception('Failed to revoke session');
+      }
+    } catch (e) {
+      throw Exception('Failed to revoke session: $e');
+    }
+  }
+
+  /// Logout from all devices
+  Future<void> logoutAll() async {
+    try {
+      await _apiService.post(ApiEndpoints.logoutAll);
+      await _storageService.clearAuthData();
+    } catch (e) {
+      throw Exception('Failed to log out all devices: $e');
+    }
+  }
 }

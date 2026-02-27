@@ -18,6 +18,7 @@ import '../common/academy_info_screen.dart';
 import '../../widgets/common/app_logo.dart';
 import '../../providers/owner_provider.dart';
 import 'coach_profile_screen.dart';
+import '../common/active_sessions_screen.dart';
 
 /// Coach Settings Screen - App settings and preferences
 class CoachSettingsScreen extends ConsumerStatefulWidget {
@@ -141,6 +142,19 @@ class _CoachSettingsScreenState extends ConsumerState<CoachSettingsScreen> {
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (context) => const CoachProfileScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      const Divider(height: 1),
+                      _buildActionTile(
+                        title: 'Active Sessions',
+                        icon: Icons.devices_outlined,
+                        isDark: isDark,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const ActiveSessionsScreen(),
                             ),
                           );
                         },

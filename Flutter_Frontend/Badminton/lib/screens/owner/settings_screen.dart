@@ -20,6 +20,7 @@ import '../common/help_support_screen.dart';
 import 'profile_screen.dart';
 import 'academy_details_screen.dart';
 import 'owner_management_screen.dart';
+import '../common/active_sessions_screen.dart';
 
 /// Settings Screen - App settings, academy settings, account settings
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -143,6 +144,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (context) => const ProfileScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      const Divider(height: 1),
+                      _buildActionTile(
+                        title: 'Active Sessions',
+                        icon: Icons.devices_outlined,
+                        isDark: isDark,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const ActiveSessionsScreen(),
                             ),
                           );
                         },
