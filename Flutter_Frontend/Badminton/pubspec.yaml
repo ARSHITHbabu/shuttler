@@ -59,7 +59,7 @@ dependencies:
   table_calendar: ^3.0.9
 
   # Charts
-  fl_chart: ^0.65.0
+  fl_chart: ^1.1.1
 
   # Image Handling
   image_picker: ^1.0.4
