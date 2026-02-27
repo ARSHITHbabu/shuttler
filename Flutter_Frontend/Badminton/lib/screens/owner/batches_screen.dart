@@ -248,7 +248,7 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                       // Filter by status
                       final status = batch.status.toLowerCase();
                       if (_statusFilter == 'active' && status != 'active') return false;
-                      if (_statusFilter == 'inactive' && status == 'active') return false;
+                      if (_statusFilter == 'inactive' && status != 'inactive') return false;
                       
                       // Filter by search query
                       if (_searchQuery.isEmpty) return true;
@@ -340,8 +340,6 @@ class _BatchCard extends StatelessWidget {
                         color: AppColors.textPrimary,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    _StatusBadge(status: batch.status),
                   ],
                 ),
               ),
@@ -374,35 +372,7 @@ class _BatchCard extends StatelessWidget {
   }
 }
 
-class _StatusBadge extends StatelessWidget {
-  final String status;
 
-  const _StatusBadge({required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    final isActive = status == 'active';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: isActive ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(
-          color: isActive ? Colors.green : Colors.orange,
-          width: 0.5,
-        ),
-      ),
-      child: Text(
-        status.toUpperCase(),
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          color: isActive ? Colors.green : Colors.orange,
-        ),
-      ),
-    );
-  }
-}
 
 class _InfoChip extends StatelessWidget {
   final IconData icon;

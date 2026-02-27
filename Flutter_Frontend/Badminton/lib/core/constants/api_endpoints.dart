@@ -53,6 +53,7 @@ class ApiEndpoints {
   static String batchById(int id) => '/batches/$id';
   static String batchStudentsList(int id) => '/batches/$id/students';
   static String deactivateBatch(int id) => '/batches/$id/deactivate';
+  static String activateBatch(int id) => '/batches/$id/activate';
   static String removeBatch(int id) => '/batches/$id/remove';
 
   // Batch Students (enrollment)

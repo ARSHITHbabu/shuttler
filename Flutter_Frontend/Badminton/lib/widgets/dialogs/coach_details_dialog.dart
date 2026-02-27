@@ -80,53 +80,10 @@ class _CoachDetailsDialogState extends ConsumerState<CoachDetailsDialog> {
 
   Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.all(AppDimensions.paddingL),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: AppColors.textSecondary.withOpacity(0.2),
-            width: 1,
-          ),
-        ),
-      ),
+      padding: const EdgeInsets.fromLTRB(AppDimensions.paddingL, AppDimensions.paddingL / 1.5, AppDimensions.paddingL / 2, AppDimensions.paddingL / 2),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.coach.name,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: AppDimensions.spacingXs),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppDimensions.spacingS,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: widget.coach.status == 'active'
-                        ? AppColors.success
-                        : AppColors.error,
-                    borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                  ),
-                  child: Text(
-                    widget.coach.status.toUpperCase(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
           IconButton(
             icon: const Icon(Icons.close, color: AppColors.textSecondary),
             onPressed: () => Navigator.of(context).pop(),
@@ -202,36 +159,19 @@ class _TabButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(AppDimensions.radiusS),
       child: Container(
         padding: const EdgeInsets.symmetric(
-          vertical: AppDimensions.spacingS,
-          horizontal: AppDimensions.spacingXs,
+          vertical: AppDimensions.spacingM,
         ),
         decoration: BoxDecoration(
           color: isActive ? AppColors.accent.withOpacity(0.2) : Colors.transparent,
           borderRadius: BorderRadius.circular(AppDimensions.radiusS),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 16,
-              color: isActive ? AppColors.accent : AppColors.textSecondary,
-            ),
-            const SizedBox(width: 4),
-            Flexible(
-              child: Text(
-                label,
-                style: TextStyle(
-                  color: isActive ? AppColors.accent : AppColors.textSecondary,
-                  fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                  fontSize: 12,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
+        child: Icon(
+          icon,
+          size: 24,
+          color: isActive ? AppColors.accent : AppColors.textSecondary,
         ),
       ),
     );

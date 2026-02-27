@@ -74,6 +74,19 @@ class BatchList extends _$BatchList {
     }
   }
 
+  /// Activate a batch
+  Future<void> activateBatch(int id) async {
+    try {
+      final batchService = ref.read(batchServiceProvider);
+      await batchService.activateBatch(id);
+      
+      ref.invalidate(dashboardStatsProvider);
+      await refresh();
+    } catch (e) {
+      throw Exception('Failed to activate batch: $e');
+    }
+  }
+
   /// Remove a batch permanently (Hard delete)
   Future<void> removeStudentPermanently(int id) async {
     // Note: I named it removeStudentPermanently in frontend for students, 

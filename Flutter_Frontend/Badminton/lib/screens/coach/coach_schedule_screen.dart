@@ -179,16 +179,16 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
                       focusedDay: _focusedDay,
                       selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
                       calendarFormat: _calendarFormat,
-                      availableCalendarFormats: const {
-                        CalendarFormat.month: 'Month',
-                        CalendarFormat.twoWeeks: '2 Weeks',
-                        CalendarFormat.week: 'Week',
-                      },
+                      // availableCalendarFormats: const {
+                      //   CalendarFormat.month: 'Month',
+                      //   CalendarFormat.twoWeeks: '2 Weeks',
+                      //   CalendarFormat.week: 'Week',
+                      // },
                       eventLoader: (day) {
                         final date = DateTime(day.year, day.month, day.day);
                         return _getFilteredItems(groupedItems[date] ?? []);
                       },
-                      onFormatChanged: (format) => setState(() => _calendarFormat = format),
+                      // onFormatChanged: (format) => setState(() => _calendarFormat = format),
                       onDaySelected: (selectedDay, focusedDay) {
                         setState(() {
                           _selectedDay = selectedDay;
@@ -197,7 +197,8 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
                       },
                       onPageChanged: (focusedDay) => setState(() => _focusedDay = focusedDay),
                       headerStyle: HeaderStyle(
-                        formatButtonVisible: true,
+                        // formatButtonVisible: true,
+                        formatButtonVisible: false,
                         titleCentered: true,
                         formatButtonShowsNext: false,
                         formatButtonDecoration: BoxDecoration(

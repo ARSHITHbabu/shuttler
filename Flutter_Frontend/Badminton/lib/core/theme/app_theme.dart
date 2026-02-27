@@ -159,17 +159,36 @@ class AppTheme {
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.accent,
-          foregroundColor: AppColors.textPrimary,
-          elevation: AppDimensions.cardElevation,
+          foregroundColor: Colors.white,
+          elevation: 0,
           padding: const EdgeInsets.symmetric(
             horizontal: AppDimensions.paddingL,
             vertical: AppDimensions.paddingM,
           ),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+            borderRadius: BorderRadius.circular(AppDimensions.radiusL),
           ),
           textStyle: GoogleFonts.poppins(
-            fontSize: 16,
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+
+      // Outlined button theme
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.textPrimary,
+          side: BorderSide(color: AppColors.textPrimary.withOpacity(0.2), width: 1.5),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppDimensions.paddingL,
+            vertical: AppDimensions.paddingM,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+          ),
+          textStyle: GoogleFonts.poppins(
+            fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -418,17 +437,36 @@ class AppTheme {
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColorsLight.accent,
-          foregroundColor: AppColorsLight.textPrimary,
-          elevation: AppDimensions.cardElevation,
+          foregroundColor: Colors.white,
+          elevation: 0,
           padding: const EdgeInsets.symmetric(
             horizontal: AppDimensions.paddingL,
             vertical: AppDimensions.paddingM,
           ),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+            borderRadius: BorderRadius.circular(AppDimensions.radiusL),
           ),
           textStyle: GoogleFonts.poppins(
-            fontSize: 16,
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+
+      // Outlined button theme
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColorsLight.textPrimary,
+          side: BorderSide(color: AppColorsLight.textPrimary.withOpacity(0.2), width: 1.5),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppDimensions.paddingL,
+            vertical: AppDimensions.paddingM,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+          ),
+          textStyle: GoogleFonts.poppins(
+            fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
         ),

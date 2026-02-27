@@ -4515,7 +4515,9 @@ def create_batch(batch: BatchCreate):
             assigned_coach_name=coaches[0].name if coaches else None,  # Backward compatibility
             assigned_coach_ids=coach_ids_list,
             assigned_coaches=coaches,
-            session_id=db_batch.session_id
+            session_id=db_batch.session_id,
+            status=db_batch.status,
+            inactive_at=db_batch.inactive_at
         )
         
         return batch_response
@@ -4555,7 +4557,9 @@ def get_batches(status: Optional[str] = Query(None)):
                     assigned_coach_name=coaches[0].name if coaches else batch_db.assigned_coach_name,  # Backward compatibility
                     assigned_coach_ids=coach_ids_list,
                     assigned_coaches=coaches,
-                    session_id=batch_db.session_id
+                    session_id=batch_db.session_id,
+                    status=batch_db.status,
+                    inactive_at=batch_db.inactive_at
                 )
                 batches.append(batch)
             return batches
@@ -4566,8 +4570,6 @@ def get_batches(status: Optional[str] = Query(None)):
                 db.rollback()
                 from sqlalchemy import text
                 result = db.execute(text("""
-                    SELECT id, batch_name, capacity, fees, start_date, timing, period, 
-                           location, created_by, assigned_coach_id, assigned_coach_name
                     SELECT id, batch_name, capacity, fees, start_date, timing, period, 
                            location, created_by, assigned_coach_id, assigned_coach_name,
                            status, inactive_at
@@ -4676,7 +4678,9 @@ def get_coach_batches(coach_id: int):
                     assigned_coach_name=coaches[0].name if coaches else batch_db.assigned_coach_name,  # Backward compatibility
                     assigned_coach_ids=coach_ids_list,
                     assigned_coaches=coaches,
-                    session_id=batch_db.session_id
+                    session_id=batch_db.session_id,
+                    status=batch_db.status,
+                    inactive_at=batch_db.inactive_at
                 )
                 batches.append(batch)
             return batches
@@ -4706,7 +4710,9 @@ def get_coach_batches(coach_id: int):
                             assigned_coach_name=coaches[0].name if coaches else batch_db.assigned_coach_name,
                             assigned_coach_ids=coach_ids_list,
                             assigned_coaches=coaches,
-                            session_id=batch_db.session_id
+                            session_id=batch_db.session_id,
+                            status=batch_db.status,
+                            inactive_at=batch_db.inactive_at
                         )
                         batches.append(batch)
                     return batches
@@ -4714,8 +4720,6 @@ def get_coach_batches(coach_id: int):
                     # If that also fails, use raw SQL
                     from sqlalchemy import text
                     result = db.execute(text("""
-                        SELECT id, batch_name, capacity, fees, start_date, timing, period, 
-                               location, created_by, assigned_coach_id, assigned_coach_name
                         SELECT id, batch_name, capacity, fees, start_date, timing, period, 
                                location, created_by, assigned_coach_id, assigned_coach_name,
                                status, inactive_at
@@ -4769,8 +4773,6 @@ def update_batch(batch_id: int, batch_update: BatchUpdate):
                 db.rollback()
                 from sqlalchemy import text
                 result = db.execute(text("""
-                    SELECT id, batch_name, capacity, fees, start_date, timing, period, 
-                           location, created_by, assigned_coach_id, assigned_coach_name
                     SELECT id, batch_name, capacity, fees, start_date, timing, period, 
                            location, created_by, assigned_coach_id, assigned_coach_name,
                            status, inactive_at
@@ -4857,7 +4859,9 @@ def update_batch(batch_id: int, batch_update: BatchUpdate):
                 'period': batch.period,
                 'location': batch.location,
                 'created_by': batch.created_by,
-                'session_id': session_id_value
+                'session_id': session_id_value,
+                'status': batch.status,
+                'inactive_at': batch.inactive_at
             }
         else:
             # Re-query for response
@@ -4900,7 +4904,9 @@ def update_batch(batch_id: int, batch_update: BatchUpdate):
             assigned_coach_name=coaches[0].name if coaches else None,  # Backward compatibility
             assigned_coach_ids=coach_ids_list,
             assigned_coaches=coaches,
-            session_id=batch_data['session_id']
+            session_id=batch_data['session_id'],
+            status=batch_data.get('status', 'active'),
+            inactive_at=batch_data.get('inactive_at')
         )
         
         return batch_response
@@ -4933,6 +4939,22 @@ def deactivate_batch(batch_id: int):
         batch.inactive_at = datetime.now()
         db.commit()
         return {"message": "Batch deactivated successfully"}
+    finally:
+        db.close()
+
+@app.post("/batches/{batch_id}/activate", dependencies=[Depends(require_owner)])
+def activate_batch(batch_id: int):
+    """Reactivate a batch - moves back to active list"""
+    db = SessionLocal()
+    try:
+        batch = db.query(BatchDB).filter(BatchDB.id == batch_id).first()
+        if not batch:
+            raise HTTPException(status_code=404, detail="Batch not found")
+        
+        batch.status = "active"
+        batch.inactive_at = None
+        db.commit()
+        return {"message": "Batch activated successfully"}
     finally:
         db.close()
 

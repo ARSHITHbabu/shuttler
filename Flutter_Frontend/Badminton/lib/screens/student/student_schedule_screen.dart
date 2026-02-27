@@ -143,11 +143,11 @@ class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
                           focusedDay: _focusedDay,
                           selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
                           calendarFormat: _calendarFormat,
-                          availableCalendarFormats: const {
-                            CalendarFormat.month: 'Month',
-                            CalendarFormat.twoWeeks: '2 Weeks',
-                            CalendarFormat.week: 'Week',
-                          },
+                          // availableCalendarFormats: const {
+                          //   CalendarFormat.month: 'Month',
+                          //   CalendarFormat.twoWeeks: '2 Weeks',
+                          //   CalendarFormat.week: 'Week',
+                          // },
                           eventLoader: (day) {
                             final date = DateTime(day.year, day.month, day.day);
                             return _getFilteredItems(groupedItems[date] ?? []);
@@ -172,7 +172,8 @@ class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
                             ),
                           ),
                           headerStyle: HeaderStyle(
-                            formatButtonVisible: true,
+                            // formatButtonVisible: true,
+                            formatButtonVisible: false,
                             titleCentered: true,
                             formatButtonShowsNext: false,
                             formatButtonDecoration: BoxDecoration(
@@ -285,9 +286,9 @@ class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
                               _focusedDay = focusedDay;
                             });
                           },
-                          onFormatChanged: (format) {
-                            setState(() => _calendarFormat = format);
-                          },
+                          // onFormatChanged: (format) {
+                          //   setState(() => _calendarFormat = format);
+                          // },
                           onPageChanged: (focusedDay) {
                             setState(() => _focusedDay = focusedDay);
                           },

@@ -276,7 +276,6 @@ Future<StudentDashboardData> studentDashboard(
   // Get today's sessions and future sessions (next 7 days)
   // Only add ONE session per batch - either today (if upcoming) OR next future occurrence
   for (var batch in batches) {
-    bool batchAdded = false;
 
     // Check if batch runs today
     final runsToday =
@@ -297,42 +296,6 @@ Future<StudentDashboardData> studentDashboard(
         'location': batch.location ?? '',
         'date': DateTime(now.year, now.month, now.day).toIso8601String(),
       });
-      batchAdded = true; // Mark as added, skip future days for this batch
-    }
-
-    // Only check future days if batch wasn't added for today
-    if (!batchAdded) {
-      // Get future sessions (next 7 days)
-      for (int i = 1; i <= 7 && upcomingSessions.length < 5; i++) {
-        final checkDate = now.add(Duration(days: i));
-        final checkDayName = dayNames[checkDate.weekday - 1];
-
-        // Check if batch runs on this future day
-        final runsOnDay =
-            batch.period.toLowerCase() == 'daily' ||
-            batch.days.contains(checkDayName);
-
-        if (runsOnDay) {
-          final startTimeStr = parseBatchStartTime(batch.timing);
-          final endTimeStr = parseBatchEndTime(batch.timing);
-          final timeStr = startTimeStr != null && endTimeStr != null
-              ? '$startTimeStr - $endTimeStr'
-              : (startTimeStr ?? batch.timing);
-
-          final dateStr = DateTime(
-            checkDate.year,
-            checkDate.month,
-            checkDate.day,
-          ).toIso8601String();
-          upcomingSessions.add({
-            'batch_name': batch.name,
-            'time': timeStr,
-            'location': batch.location ?? '',
-            'date': dateStr,
-          });
-          break; // Only add one future session per batch
-        }
-      }
     }
   }
 

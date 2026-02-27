@@ -312,11 +312,11 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                   focusedDay: _focusedDay,
                   selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
                   calendarFormat: _calendarFormat,
-                  availableCalendarFormats: const {
-                    CalendarFormat.month: 'Month',
-                    CalendarFormat.twoWeeks: '2 Weeks',
-                    CalendarFormat.week: 'Week',
-                  },
+                  // availableCalendarFormats: const {
+                  //   CalendarFormat.month: 'Month',
+                  //   CalendarFormat.twoWeeks: '2 Weeks',
+                  //   CalendarFormat.week: 'Week',
+                  // },
                   eventLoader: (day) {
                     final date = DateTime(day.year, day.month, day.day);
                     return groupedEvents[date] ?? [];
@@ -336,7 +336,8 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                       ),
                     ),
                   headerStyle: HeaderStyle(
-                    formatButtonVisible: true,
+                    // formatButtonVisible: true,
+                    formatButtonVisible: false,
                     titleCentered: true,
                     formatButtonShowsNext: false,
                     formatButtonDecoration: BoxDecoration(
@@ -362,9 +363,9 @@ class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
                       _focusedDay = focusedDay;
                     });
                   },
-                  onFormatChanged: (format) {
-                    setState(() => _calendarFormat = format);
-                  },
+                  // onFormatChanged: (format) {
+                  //   setState(() => _calendarFormat = format);
+                  // },
                   onPageChanged: (focusedDay) {
                     setState(() => _focusedDay = focusedDay);
                   },

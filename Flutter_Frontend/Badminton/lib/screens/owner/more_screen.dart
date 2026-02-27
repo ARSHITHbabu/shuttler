@@ -131,7 +131,7 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
             _MenuItem(
               icon: Icons.video_library_outlined,
               title: 'Videos',
-              subtitle: 'Manage training videos',
+              subtitle: 'Upload & Manage training videos',
               isDark: isDark,
               onTap: () {
                 Navigator.of(context).push(

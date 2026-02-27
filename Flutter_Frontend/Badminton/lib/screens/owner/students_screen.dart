@@ -17,6 +17,7 @@ import '../../models/batch.dart';
 import '../../core/services/fee_service.dart';
 import '../../core/services/batch_enrollment_service.dart';
 import '../../providers/batch_provider.dart';
+import '../../providers/fee_provider.dart';
 import '../../core/utils/string_extensions.dart';
 import 'performance_tracking_screen.dart';
 import 'bmi_tracking_screen.dart';
@@ -206,16 +207,6 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                                 children: [
                                   Row(
                                     children: [
-                                      Expanded(
-                                        child: Text(
-                                          student.name,
-                                          style: const TextStyle(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.w600,
-                                            color: AppColors.textPrimary,
-                                          ),
-                                        ),
-                                      ),
                                       Expanded(
                                         child: Text(
                                           student.name,
@@ -752,7 +743,7 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
     try {
       await ref.read(studentListProvider.notifier).deactivateStudent(student.id);
       if (mounted) {
-        SuccessSnackbar.show(context, 'Student deactivated successfully');
+        SuccessSnackbar.show(context, 'Student Profile deactivated successfully');
       }
     } catch (e) {
       if (mounted) {
@@ -925,90 +916,111 @@ class _StudentBatchAndFeeStatus extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final studentBatchesAsync = ref.watch(studentBatchesProvider(studentId));
-    final feeService = ref.watch(feeServiceProvider);
+    final feesAsync = ref.watch(feeByStudentProvider(studentId));
 
-    return FutureBuilder<String?>(
-      future: _getFeeStatus(feeService, studentId),
-      builder: (context, feeSnapshot) {
-        return studentBatchesAsync.when(
+    return Column(
+      children: [
+        // Batches Row
+        studentBatchesAsync.when(
           data: (batches) {
-            final feeStatus = feeSnapshot.data;
+            if (batches.isEmpty) return const SizedBox.shrink();
             return Column(
               children: [
-                if (batches.isNotEmpty) ...[
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(Icons.group, size: 16, color: AppColors.textSecondary),
-                      const SizedBox(width: AppDimensions.spacingS),
-                      Expanded(
-                        child: Wrap(
-                          spacing: AppDimensions.spacingS,
-                          runSpacing: AppDimensions.spacingS,
-                          children: batches.map((batch) {
-                            return Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: AppDimensions.spacingS,
-                                vertical: 4,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.group, size: 16, color: AppColors.textSecondary),
+                    const SizedBox(width: AppDimensions.spacingS),
+                    Expanded(
+                      child: Wrap(
+                        spacing: AppDimensions.spacingS,
+                        runSpacing: AppDimensions.spacingS,
+                        children: batches.map((batch) {
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppDimensions.spacingS,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.accent.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                              border: Border.all(
+                                color: AppColors.accent.withOpacity(0.3),
+                                width: 1,
                               ),
-                              decoration: BoxDecoration(
-                                color: AppColors.accent.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                                border: Border.all(
-                                  color: AppColors.accent.withOpacity(0.3),
-                                  width: 1,
-                                ),
+                            ),
+                            child: Text(
+                              batch.batchName,
+                              style: const TextStyle(
+                                color: AppColors.accent,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
                               ),
-                              child: Text(
-                                batch.batchName,
-                                style: const TextStyle(
-                                  color: AppColors.accent,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            );
-                          }).toList(),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppDimensions.spacingS),
+              ],
+            );
+          },
+          loading: () => const SizedBox.shrink(),
+          error: (_, __) => const SizedBox.shrink(),
+        ),
+
+        // Fee Status Row
+        feesAsync.when(
+          data: (fees) {
+            String? feeStatus;
+            if (fees.isNotEmpty) {
+              final pendingFees = fees.where((f) => f.status != 'paid').toList();
+              if (pendingFees.isNotEmpty) {
+                final overdueFees = pendingFees.where((f) => f.isOverdue).toList();
+                feeStatus = overdueFees.isNotEmpty ? 'overdue' : 'pending';
+              } else {
+                feeStatus = 'paid';
+              }
+            }
+
+            if (feeStatus == null) return const SizedBox.shrink();
+
+            return Column(
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.attach_money, size: 16, color: AppColors.textSecondary),
+                    const SizedBox(width: AppDimensions.spacingS),
+                    const Text(
+                      'Fee Status: ',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 14,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppDimensions.spacingS,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _getFeeStatusColor(feeStatus),
+                        borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                      ),
+                      child: Text(
+                        feeStatus.toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: AppDimensions.spacingS),
-                ],
-                if (feeStatus != null) ...[
-                  Row(
-                    children: [
-                      const Icon(Icons.attach_money, size: 16, color: AppColors.textSecondary),
-                      const SizedBox(width: AppDimensions.spacingS),
-                      const Text(
-                        'Fee Status: ',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 14,
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppDimensions.spacingS,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _getFeeStatusColor(feeStatus),
-                          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                        ),
-                        child: Text(
-                          feeStatus.toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppDimensions.spacingS),
-                ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppDimensions.spacingS),
               ],
             );
           },
@@ -1018,7 +1030,6 @@ class _StudentBatchAndFeeStatus extends ConsumerWidget {
               child: Shimmer.fromColors(
                 baseColor: AppColors.cardBackground,
                 highlightColor: AppColors.surfaceLight,
-                period: const Duration(milliseconds: 1200),
                 child: Container(
                   width: 60,
                   height: 16,
@@ -1030,29 +1041,13 @@ class _StudentBatchAndFeeStatus extends ConsumerWidget {
               ),
             ),
           ),
-          error: (error, stack) => const SizedBox.shrink(),
-        );
-      },
+          error: (_, __) => const SizedBox.shrink(),
+        ),
+      ],
     );
   }
 
-  Future<String?> _getFeeStatus(FeeService feeService, int studentId) async {
-    try {
-      final fees = await feeService.getFees(studentId: studentId);
-      if (fees.isNotEmpty) {
-        final pendingFees = fees.where((f) => f.status != 'paid').toList();
-        if (pendingFees.isNotEmpty) {
-          final overdueFees = pendingFees.where((f) => f.isOverdue).toList();
-          return overdueFees.isNotEmpty ? 'overdue' : 'pending';
-        } else {
-          return 'paid';
-        }
-      }
-    } catch (e) {
-      // Skip if fees fetch fails
-    }
-    return null;
-  }
+
 
   Color _getFeeStatusColor(String status) {
     switch (status.toLowerCase()) {
