@@ -193,6 +193,15 @@ class BatchService {
     }
   }
 
+  /// Activate a batch
+  Future<void> activateBatch(int id) async {
+    try {
+      await _apiService.post(ApiEndpoints.activateBatch(id));
+    } catch (e) {
+      throw Exception('Failed to activate batch: ${_apiService.getErrorMessage(e)}');
+    }
+  }
+
   /// Remove a batch permanently (Hard delete)
   Future<void> removeBatchPermanently(int id) async {
     try {

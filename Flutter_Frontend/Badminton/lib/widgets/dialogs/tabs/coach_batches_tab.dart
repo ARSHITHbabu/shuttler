@@ -46,8 +46,8 @@ class _CoachBatchesTabState extends ConsumerState<CoachBatchesTab> {
               ),
               ElevatedButton.icon(
                 onPressed: () => _manageBatches(),
-                icon: const Icon(Icons.edit, size: 16),
-                label: const Text('Edit Batches'),
+                icon: const Icon(Icons.edit, size: 18),
+                label: const Text('Edit'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.accent,
                   foregroundColor: Colors.white,
@@ -55,7 +55,10 @@ class _CoachBatchesTabState extends ConsumerState<CoachBatchesTab> {
                     horizontal: AppDimensions.spacingM,
                     vertical: AppDimensions.spacingS,
                   ),
-                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+                  ),
                 ),
               ),
             ],

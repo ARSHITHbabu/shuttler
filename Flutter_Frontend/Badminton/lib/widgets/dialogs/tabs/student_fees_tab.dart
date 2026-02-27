@@ -205,7 +205,7 @@ class _StudentFeesTabState extends ConsumerState<StudentFeesTab> {
                       ),
                     const SizedBox(height: 4),
                     Text(
-                      '\$${fee.amount.toStringAsFixed(2)}',
+                      '₹${fee.amount.toStringAsFixed(2)}',
                       style: TextStyle(
                         fontSize: isSmallScreen ? 18 : 20,
                         fontWeight: FontWeight.w600,
@@ -244,13 +244,13 @@ class _StudentFeesTabState extends ConsumerState<StudentFeesTab> {
           _buildInfoRow(
             Icons.check_circle,
             'Paid',
-            '\$${fee.totalPaid.toStringAsFixed(2)}',
+            '₹${fee.totalPaid.toStringAsFixed(2)}',
           ),
           const SizedBox(height: AppDimensions.spacingS),
           _buildInfoRow(
             Icons.pending,
             'Pending',
-            '\$${fee.pendingAmount.toStringAsFixed(2)}',
+            '₹${fee.pendingAmount.toStringAsFixed(2)}',
             valueColor: fee.pendingAmount > 0 ? AppColors.error : AppColors.success,
           ),
           
@@ -285,7 +285,11 @@ class _StudentFeesTabState extends ConsumerState<StudentFeesTab> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.accent,
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+                        ),
                       ),
                     ),
                     const SizedBox(height: AppDimensions.spacingS),
@@ -295,7 +299,11 @@ class _StudentFeesTabState extends ConsumerState<StudentFeesTab> {
                       label: const Text('Edit'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.textPrimary,
-                        padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        side: BorderSide(color: AppColors.textPrimary.withOpacity(0.2), width: 1.5),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+                        ),
                       ),
                     ),
                   ],
@@ -310,7 +318,11 @@ class _StudentFeesTabState extends ConsumerState<StudentFeesTab> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.accent,
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+                          ),
                         ),
                       ),
                     ),
@@ -321,7 +333,11 @@ class _StudentFeesTabState extends ConsumerState<StudentFeesTab> {
                       label: const Text('Edit'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.textPrimary,
-                        padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingS),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        side: BorderSide(color: AppColors.textPrimary.withOpacity(0.2), width: 1.5),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+                        ),
                       ),
                     ),
                   ],
@@ -374,7 +390,7 @@ class _StudentFeesTabState extends ConsumerState<StudentFeesTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '\$${payment.amount.toStringAsFixed(2)}',
+                  '₹${payment.amount.toStringAsFixed(2)}',
                   style: TextStyle(
                     fontSize: isSmallScreen ? 13 : 14,
                     fontWeight: FontWeight.w600,
@@ -527,7 +543,7 @@ class _StudentFeesTabState extends ConsumerState<StudentFeesTab> {
     ConfirmationDialog.show(
       context,
       'Delete Payment',
-      'Are you sure you want to delete this payment of \$${payment.amount.toStringAsFixed(2)}?',
+      'Are you sure you want to delete this payment of ₹${payment.amount.toStringAsFixed(2)}?',
       confirmText: 'Delete',
       cancelText: 'Cancel',
       icon: Icons.delete_outline,

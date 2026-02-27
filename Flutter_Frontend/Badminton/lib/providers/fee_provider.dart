@@ -4,6 +4,8 @@ import '../models/student_with_batch_fee.dart';
 import '../models/batch_fee_group.dart';
 import 'service_providers.dart';
 import 'dashboard_provider.dart';
+import '../models/student.dart';
+import '../models/batch.dart';
 
 part 'fee_provider.g.dart';
 
@@ -157,61 +159,65 @@ Future<Map<int, BatchFeeGroup>> studentsWithBatchFees(
   final batchService = ref.watch(batchServiceProvider);
   final feeService = ref.watch(feeServiceProvider);
   
-  // Get all batches
-  final batches = await batchService.getBatches();
+  // Get all batches and all fees in parallel
+  final results = await Future.wait([
+    batchService.getBatches(),
+    feeService.getFees(),
+  ]);
   
-  // Get all existing fees
-  final allFees = await feeService.getFees();
+  final batches = results[0] as List<Batch>;
+  final allFees = results[1] as List<Fee>;
   
   // Map to store batchId -> BatchFeeGroup
   final Map<int, BatchFeeGroup> result = {};
   
-  // For each batch, get enrolled students and match with fees
+  // Fetch students for all batches in parallel
+  final batchStudentsResults = await Future.wait<MapEntry<int, List<Student>>>(
+    batches.map((batch) => batchService.getBatchStudents(batch.id).then(
+      (students) => MapEntry(batch.id, students),
+      onError: (_) => MapEntry(batch.id, <Student>[]), // Fallback for failed batch fetch
+    ))
+  );
+  
+  final batchStudentsMap = Map<int, List<Student>>.fromEntries(batchStudentsResults);
+  
+  // Process results
   for (final batch in batches) {
+    final students = batchStudentsMap[batch.id] ?? [];
+    
+    // Parse batch fee amount
+    double batchFeeAmount = 0.0;
     try {
-      // Get students enrolled in this batch
-      final students = await batchService.getBatchStudents(batch.id);
-      
-      // Parse batch fee amount (handle string format like "5000" or "$5000")
-      double batchFeeAmount = 0.0;
+      final feeString = batch.fees.replaceAll(RegExp(r'[\$,\s]'), '');
+      batchFeeAmount = double.parse(feeString);
+    } catch (e) {
+      batchFeeAmount = 0.0;
+    }
+    
+    // Create StudentWithBatchFee for each student
+    final studentFeeList = students.map((student) {
+      // Find existing fee for this student-batch combination
+      Fee? existingFee;
       try {
-        final feeString = batch.fees.replaceAll(RegExp(r'[\$,\s]'), '');
-        batchFeeAmount = double.parse(feeString);
+        existingFee = allFees.firstWhere(
+          (fee) => fee.studentId == student.id && fee.batchId == batch.id,
+        );
       } catch (e) {
-        // If parsing fails, default to 0
-        batchFeeAmount = 0.0;
+        existingFee = null;
       }
       
-      // Create StudentWithBatchFee for each student
-      final studentFeeList = students.map((student) {
-        // Find existing fee for this student-batch combination
-        Fee? existingFee;
-        try {
-          existingFee = allFees.firstWhere(
-            (fee) => fee.studentId == student.id && fee.batchId == batch.id,
-          );
-        } catch (e) {
-          // No fee found for this student-batch combination
-          existingFee = null;
-        }
-        
-        return StudentWithBatchFee(
-          student: student,
-          batch: batch,
-          batchFeeAmount: batchFeeAmount,
-          existingFee: existingFee,
-        );
-      }).toList();
-      
-      // Always add the batch to the result, even if studentFeeList is empty
-      result[batch.id] = BatchFeeGroup(
+      return StudentWithBatchFee(
+        student: student,
         batch: batch,
-        students: studentFeeList,
+        batchFeeAmount: batchFeeAmount,
+        existingFee: existingFee,
       );
-    } catch (e) {
-      // Skip batch if there's an error fetching students
-      continue;
-    }
+    }).toList();
+    
+    result[batch.id] = BatchFeeGroup(
+      batch: batch,
+      students: studentFeeList,
+    );
   }
   
   return result;
