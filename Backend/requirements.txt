@@ -44,3 +44,6 @@ watchdog==3.0.0  # File watcher for automatic schema registry updates (optional 
 
 # Background Tasks
 apscheduler==3.10.4
+
+# Payment Gateway (B12)
+razorpay==1.4.1

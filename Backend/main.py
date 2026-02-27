@@ -2335,7 +2335,7 @@ class FeeCreate(BaseModel):
     payee_student_id: Optional[int] = None
     status: Optional[str] = None  # Will be calculated, optional on create
 
-_ALLOWED_PAYMENT_METHODS = {'cash', 'card'}
+_ALLOWED_PAYMENT_METHODS = {'cash', 'card', 'online', 'razorpay'}
 
 class FeePaymentCreate(BaseModel):
     fee_id: Optional[int] = None  # Optional - provided via path parameter
@@ -6397,6 +6397,139 @@ def update_fee(fee_id: int, fee_update: FeeUpdate):
         db.close()
 
 # ==================== Fee Payment Routes ====================
+
+# B12: Payment Gateway Integration
+class RazorpayVerifyRequest(BaseModel):
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
+    payee_student_id: Optional[int] = None
+    payee_name: Optional[str] = None
+
+try:
+    import razorpay
+    _rzp_key_id = os.getenv("RAZORPAY_KEY_ID", "")
+    _rzp_key_secret = os.getenv("RAZORPAY_KEY_SECRET", "")
+    if _rzp_key_id and _rzp_key_secret:
+        rzp_client = razorpay.Client(auth=(_rzp_key_id, _rzp_key_secret))
+    else:
+        rzp_client = None
+except ImportError:
+    rzp_client = None
+
+@app.post("/fees/{fee_id}/checkout", dependencies=[Depends(require_student)])
+def create_razorpay_order(fee_id: int):
+    """Initialise a Razorpay Checkout order for the remaining fee amount"""
+    if not rzp_client:
+        raise HTTPException(status_code=501, detail="Payment gateway is not configured on the server")
+        
+    db = SessionLocal()
+    try:
+        fee = db.query(FeeDB).filter(FeeDB.id == fee_id).first()
+        if not fee:
+            raise HTTPException(status_code=404, detail="Fee not found")
+            
+        total_paid = calculate_total_paid(fee_id, db)
+        pending_amount = fee.amount - total_paid
+        
+        if pending_amount <= 0:
+            raise HTTPException(status_code=400, detail="Fee is already fully paid")
+            
+        order_amount = int(pending_amount * 100) # Razorpay accepts amounts in paise
+        order_currency = "INR"
+        order_receipt = f"fee_receipt_{fee.id}_{int(datetime.now().timestamp())}"
+        
+        try:
+            order = rzp_client.order.create({
+                "amount": order_amount,
+                "currency": order_currency,
+                "receipt": order_receipt,
+            })
+            return order
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to create payment order: {str(e)}")
+            
+    finally:
+        db.close()
+
+@app.post("/fees/{fee_id}/verify-payment", dependencies=[Depends(require_student)])
+def verify_razorpay_payment(fee_id: int, req: RazorpayVerifyRequest):
+    """Verify a successful Razorpay Web/App checkout and record the payment"""
+    if not rzp_client:
+        raise HTTPException(status_code=501, detail="Payment gateway is not configured")
+        
+    try:
+        # Verify signature
+        rzp_client.utility.verify_payment_signature({
+            'razorpay_order_id': req.razorpay_order_id,
+            'razorpay_payment_id': req.razorpay_payment_id,
+            'razorpay_signature': req.razorpay_signature
+        })
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Payment signature verification failed")
+        
+    db = SessionLocal()
+    try:
+        fee = db.query(FeeDB).filter(FeeDB.id == fee_id).first()
+        if not fee:
+            raise HTTPException(status_code=404, detail="Fee not found")
+            
+        # Optional payee checks
+        if req.payee_student_id and req.payee_name:
+            raise HTTPException(status_code=400, detail="Cannot specify both payee_student_id and payee_name.")
+            
+        # We need to lookup the actual payment details to know exactly how much was paid
+        try:
+            payment_info = rzp_client.payment.fetch(req.razorpay_payment_id)
+            amount_paid = payment_info['amount'] / 100.0  # Convert back from paise
+        except Exception:
+            raise HTTPException(status_code=500, detail="Could not fetch payment details from gateway")
+            
+        payment_dict = {
+            "fee_id": fee_id,
+            "amount": amount_paid,
+            "paid_date": datetime.now().strftime("%Y-%m-%d"),
+            "payee_student_id": req.payee_student_id or fee.student_id,  # default to fee student if none provided
+            "payee_name": req.payee_name,
+            "payment_method": "online",
+            "collected_by": "Razorpay Automated"
+        }
+        
+        db_payment = FeePaymentDB(**payment_dict)
+        db.add(db_payment)
+        db.commit()
+        db.refresh(db_payment)
+        
+        # Auto-update the fee status
+        new_total_paid = calculate_total_paid(fee_id, db)
+        new_status = calculate_fee_status(fee.amount, new_total_paid, fee.due_date)
+        fee.status = new_status
+        db.commit()
+        
+        # Record notification & receipt
+        try:
+            student_for_email = db.query(StudentDB).filter(StudentDB.id == fee.student_id).first()
+            if student_for_email and student_for_email.email:
+                receipt_html = f"""
+<html><body style='font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;'>
+<div style='max-width:480px;margin:auto;background:#fff;border-radius:8px;padding:32px;'>
+  <h2 style='color:#1a1a2e;'>Payment Successful</h2>
+  <p>Dear {student_for_email.name},</p>
+  <p>Your online fee payment of ₹{amount_paid:.2f} was successful via Razorpay.</p>
+  <p>Transaction ID: {req.razorpay_payment_id}</p>
+</div></body></html>"""
+                send_email(
+                    to_email=student_for_email.email,
+                    subject=f"Shuttler — Online Payment Receipt ₹{amount_paid:.2f}",
+                    html_content=receipt_html,
+                    plain_content=f"Payment of ₹{amount_paid:.2f} successful. Txn ID: {req.razorpay_payment_id}"
+                )
+        except Exception:
+            pass
+
+        return {"success": True, "message": "Payment verified and recorded", "payment_id": db_payment.id}
+    finally:
+        db.close()
 
 @app.post("/fees/{fee_id}/payments/", response_model=FeePayment, dependencies=[Depends(require_owner)])
 def create_fee_payment(fee_id: int, payment: FeePaymentCreate):

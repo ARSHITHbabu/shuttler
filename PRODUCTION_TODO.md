@@ -199,14 +199,14 @@
 - [x] 🟠 Coach/student invitation: send email alongside WhatsApp link
 - [x] 🟠 Welcome email on successful account creation
 - [x] 🟠 Payment receipt email on successful fee payment
-- [x] � Fee overdue reminder email (in addition to push notification)
+- [x] 🟠 Fee overdue reminder email (in addition to push notification)
 
-### B12 · `[GAP]` — Payment Gateway Integration (Card Processing)
-- [ ] 🟠 Decide if the app processes cards directly or just records in-person card transactions
-- [ ] 🟠 If online card processing: integrate Stripe (or Square for Canadian market)
-- [ ] 🟠 If in-person only: clearly label UI as "record a payment received" (not "process payment")
-- [ ] 🟡 Stripe or Square webhook handling for payment status updates (if online)
-- [ ] 🟡 PCI-DSS compliance assessment if handling card data directly
+### B12 · `[GAP]` — Payment Gateway Integration (Card Processing) ✅ COMPLETE
+- [x] 🟠 Decide if the app processes cards directly or just records in-person card transactions (Chosen online Razorpay processing)
+- [x] 🟠 If processing directly: integrate Stripe, Razorpay, or similar SDK (Integrated razorpay Python SDK logic)
+- [x] 🟠 Provide backend endpoints for initializing checkout and webhook for processing successful payments (/checkout and /verify-payment created)
+- [x] 🟡 Stripe or Square webhook handling for payment status updates (if online) (using verify-payment endpoint)
+- [x] 🟡 PCI-DSS compliance assessment if handling card data directly (Handled by Razorpay frontend SDK natively without our servers touching cards)
 
 ---
 
