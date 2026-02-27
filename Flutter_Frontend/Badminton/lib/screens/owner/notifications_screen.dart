@@ -222,88 +222,113 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final screenWidth = MediaQuery.of(context).size.width;
     final isSmallScreen = screenWidth < 600;
     
-    final textSecondary = isDark ? AppColors.textSecondary : AppColorsLight.textSecondary;
     final accent = isDark ? AppColors.accent : AppColorsLight.accent;
-    final cardBg = isDark ? AppColors.cardBackground : AppColorsLight.cardBackground;
     final bg = isDark ? AppColors.background : AppColorsLight.background;
     final textPrimary = isDark ? AppColors.textPrimary : AppColorsLight.textPrimary;
+    final textSecondary = isDark ? AppColors.textSecondary : AppColorsLight.textSecondary;
 
-    return NeumorphicContainer(
-      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingS : AppDimensions.paddingM),
-      margin: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL,
+        vertical: isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'Filter by Type',
             style: TextStyle(
-              fontSize: isSmallScreen ? 12 : 14,
+              fontSize: isSmallScreen ? 13 : 15,
               fontWeight: FontWeight.w600,
               color: textSecondary,
             ),
           ),
-          SizedBox(height: isSmallScreen ? 6 : AppDimensions.spacingS),
-          Wrap(
-            spacing: isSmallScreen ? 6 : AppDimensions.spacingS,
-            runSpacing: isSmallScreen ? 6 : AppDimensions.spacingS,
-            children: ['all', 'fee_due', 'attendance', 'announcement', 'general'].map((type) {
-              final isSelected = _selectedFilter == type;
-              return GestureDetector(
-                onTap: () => setState(() => _selectedFilter = type),
-                child: NeumorphicContainer(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isSmallScreen ? AppDimensions.spacingS : AppDimensions.paddingM,
-                    vertical: isSmallScreen ? 6 : AppDimensions.spacingS,
-                  ),
-                  color: isSelected ? accent : cardBg,
-                  borderRadius: AppDimensions.radiusS,
-                  child: Text(
-                    type == 'all' ? 'All' : type.replaceAll('_', ' ').toUpperCase(),
-                    style: TextStyle(
-                      fontSize: isSmallScreen ? 10 : 12,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                      color: isSelected ? bg : textPrimary,
+          SizedBox(height: AppDimensions.spacingM),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            child: Row(
+              children: ['all', 'fee_due', 'attendance', 'announcement', 'general'].map((type) {
+                final isSelected = _selectedFilter == type;
+                return Padding(
+                  padding: const EdgeInsets.only(right: AppDimensions.spacingM),
+                  child: GestureDetector(
+                    onTap: () => setState(() => _selectedFilter = type),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppDimensions.paddingL,
+                        vertical: AppDimensions.paddingS,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isSelected ? accent : (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.05)),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isSelected ? accent : (isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.1)),
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        type == 'all' ? 'All' : type.replaceAll('_', ' ').toUpperCase(),
+                        style: TextStyle(
+                          fontSize: isSmallScreen ? 12 : 14,
+                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                          color: isSelected ? bg : textPrimary,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              );
-            }).toList(),
+                );
+              }).toList(),
+            ),
           ),
-          SizedBox(height: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM),
+          SizedBox(height: AppDimensions.spacingL),
           Text(
             'Filter by Status',
             style: TextStyle(
-              fontSize: isSmallScreen ? 12 : 14,
+              fontSize: isSmallScreen ? 13 : 15,
               fontWeight: FontWeight.w600,
               color: textSecondary,
             ),
           ),
-          SizedBox(height: isSmallScreen ? 6 : AppDimensions.spacingS),
-          Wrap(
-            spacing: isSmallScreen ? 6 : AppDimensions.spacingS,
-            runSpacing: isSmallScreen ? 6 : AppDimensions.spacingS,
-            children: ['all', 'unread', 'read'].map((status) {
-              final isSelected = _readFilter == status;
-              return GestureDetector(
-                onTap: () => setState(() => _readFilter = status),
-                child: NeumorphicContainer(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isSmallScreen ? AppDimensions.spacingS : AppDimensions.paddingM,
-                    vertical: isSmallScreen ? 6 : AppDimensions.spacingS,
-                  ),
-                  color: isSelected ? accent : cardBg,
-                  borderRadius: AppDimensions.radiusS,
-                  child: Text(
-                    status == 'all' ? 'All' : status.toUpperCase(),
-                    style: TextStyle(
-                      fontSize: isSmallScreen ? 10 : 12,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                      color: isSelected ? bg : textPrimary,
+          SizedBox(height: AppDimensions.spacingM),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            child: Row(
+              children: ['all', 'unread', 'read'].map((status) {
+                final isSelected = _readFilter == status;
+                return Padding(
+                  padding: const EdgeInsets.only(right: AppDimensions.spacingM),
+                  child: GestureDetector(
+                    onTap: () => setState(() => _readFilter = status),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppDimensions.paddingL,
+                        vertical: AppDimensions.paddingS,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isSelected ? accent : (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.05)),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isSelected ? accent : (isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.1)),
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        status == 'all' ? 'All' : status.toUpperCase(),
+                        style: TextStyle(
+                          fontSize: isSmallScreen ? 12 : 14,
+                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                          color: isSelected ? bg : textPrimary,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              );
-            }).toList(),
+                );
+              }).toList(),
+            ),
           ),
         ],
       ),

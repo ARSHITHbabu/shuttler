@@ -133,7 +133,7 @@ class _StudentMoreScreenState extends ConsumerState<StudentMoreScreen> {
             const SizedBox(height: AppDimensions.spacingS),
             _MenuItem(
               icon: Icons.video_library_outlined,
-              title: 'Training Videos',
+              title: 'View Training Videos',
               subtitle: 'View videos uploaded by your coach',
               isDark: isDark,
               onTap: () => setState(() => _currentView = 'videos'),

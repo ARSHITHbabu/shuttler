@@ -866,7 +866,7 @@ class _CoachVideoManagementScreenState extends ConsumerState<CoachVideoManagemen
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Manage Videos (${_videos.length})',
+          'Uploaded Videos (${_videos.length})',
           style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
         ),
         const SizedBox(height: AppDimensions.spacingM),
