@@ -109,17 +109,18 @@ class _StudentPerformanceTabState extends ConsumerState<StudentPerformanceTab> {
                   }
                   setState(() => _showAddForm = true);
                 },
-                icon: Icon(Icons.add, size: isSmallScreen ? 16 : 18),
-                label: Text(
-                  isSmallScreen ? 'Add' : 'Add Record',
-                  style: TextStyle(fontSize: isSmallScreen ? 12 : 14),
-                ),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Add'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.accent,
                   foregroundColor: Colors.white,
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isSmallScreen ? 8 : 12,
-                    vertical: isSmallScreen ? 6 : 8,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppDimensions.spacingM,
+                    vertical: AppDimensions.spacingS,
+                  ),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppDimensions.radiusL),
                   ),
                 ),
               ),

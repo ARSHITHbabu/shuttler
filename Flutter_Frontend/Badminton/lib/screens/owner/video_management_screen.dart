@@ -857,7 +857,7 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Manage Videos (${_videos.length})',
+          'Uploaded Videos (${_videos.length})',
           style: TextStyle(
               fontSize: isSmallScreen ? 16 : 18,
               fontWeight: FontWeight.w600,

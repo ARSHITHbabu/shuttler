@@ -200,7 +200,6 @@ Future<List<Map<String, dynamic>>> coachUpcomingSessions(CoachUpcomingSessionsRe
 
   // Get today's sessions and future sessions (next 7 days)
   for (var batch in coachBatches) {
-    bool batchAdded = false;
 
     // Check if batch runs today
     final runsToday =
@@ -222,41 +221,6 @@ Future<List<Map<String, dynamic>>> coachUpcomingSessions(CoachUpcomingSessionsRe
         'location': batch.location ?? '',
         'date': DateTime(now.year, now.month, now.day).toIso8601String(),
       });
-      batchAdded = true;
-    }
-
-    // Only check future days if batch wasn't added for today
-    if (!batchAdded) {
-      for (int i = 1; i <= 7 && upcomingSessions.length < 10; i++) {
-        final checkDate = now.add(Duration(days: i));
-        final checkDayName = dayNames[checkDate.weekday - 1];
-
-        final runsOnDay =
-            batch.period.toLowerCase() == 'daily' ||
-            batch.days.contains(checkDayName);
-
-        if (runsOnDay) {
-          final startTimeStr = parseBatchStartTime(batch.timing);
-          final endTimeStr = parseBatchEndTime(batch.timing);
-          final timeStr = startTimeStr != null && endTimeStr != null
-              ? '$startTimeStr - $endTimeStr'
-              : (startTimeStr ?? batch.timing);
-
-          final dateStr = DateTime(
-            checkDate.year,
-            checkDate.month,
-            checkDate.day,
-          ).toIso8601String();
-          upcomingSessions.add({
-            'batch_id': batch.id,
-            'batch_name': batch.batchName,
-            'time': timeStr,
-            'location': batch.location ?? '',
-            'date': dateStr,
-          });
-          break;
-        }
-      }
     }
   }
 

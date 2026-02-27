@@ -232,6 +232,21 @@ class _BatchDetailsDialogState extends ConsumerState<BatchDetailsDialog> {
     }
   }
 
+  Future<void> _handleActivateBatch() async {
+    if (widget.batch == null) return;
+    
+    try {
+      await ref.read(batchListProvider.notifier).activateBatch(widget.batch!.id);
+      if (mounted) {
+        SuccessSnackbar.show(context, 'Batch activated successfully');
+      }
+    } catch (e) {
+      if (mounted) {
+        SuccessSnackbar.showError(context, 'Failed to activate batch: ${e.toString()}');
+      }
+    }
+  }
+
   Future<void> _handleDeleteBatch() async {
     if (widget.batch == null) return;
     
@@ -448,41 +463,37 @@ class _BatchDetailsDialogState extends ConsumerState<BatchDetailsDialog> {
           
           // Deactivate Button
           if (batch.status == 'active')
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  _handleDeactivateBatch();
-                },
-                icon: const Icon(Icons.archive_outlined, size: 20),
-                label: const Text('Deactivate Batch'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.warning,
-                  side: const BorderSide(color: AppColors.warning),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-              ),
+            _buildActionButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _handleDeactivateBatch();
+              },
+              icon: Icons.archive_outlined,
+              label: 'Deactivate Batch',
+              color: AppColors.warning,
+            )
+          else
+            _buildActionButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _handleActivateBatch();
+              },
+              icon: Icons.check_circle_outline,
+              label: 'Activate Batch',
+              color: AppColors.success,
             ),
           
           const SizedBox(height: AppDimensions.spacingM),
           
           // Delete Button
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: () {
-                Navigator.of(context).pop();
-                _handleDeleteBatch();
-              },
-              icon: const Icon(Icons.delete_outline, size: 20),
-              label: const Text('Delete Batch'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.error,
-                side: const BorderSide(color: AppColors.error),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-              ),
-            ),
+          _buildActionButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _handleDeleteBatch();
+            },
+            icon: Icons.delete_outline,
+            label: 'Delete Batch',
+            color: AppColors.error,
           ),
         ],
       ],
@@ -737,7 +748,7 @@ class _BatchDetailsDialogState extends ConsumerState<BatchDetailsDialog> {
       child: Row(
         children: [
           Expanded(
-            child: ElevatedButton(
+            child: _buildActionButton(
               onPressed: () {
                 if (widget.batch == null) {
                   Navigator.of(context).pop();
@@ -745,25 +756,54 @@ class _BatchDetailsDialogState extends ConsumerState<BatchDetailsDialog> {
                   setState(() => _isEditing = false);
                 }
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.background,
-                foregroundColor: AppColors.textPrimary,
-              ),
-              child: const Text('Cancel'),
+              label: 'Cancel',
+              color: AppColors.textSecondary,
+              icon: Icons.close,
             ),
           ),
           const SizedBox(width: AppDimensions.spacingM),
           Expanded(
-            child: ElevatedButton(
-              onPressed: _isSaving ? null : _saveBatch,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.accent,
-                foregroundColor: Colors.white,
-              ),
-              child: _isSaving ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Save'),
+            child: _buildActionButton(
+              onPressed: _isSaving ? () {} : _saveBatch,
+              label: 'Save',
+              color: AppColors.accent,
+              icon: Icons.save_outlined,
+              isLoading: _isSaving,
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+    required VoidCallback onPressed,
+    required String label,
+    required Color color,
+    required IconData icon,
+    bool isLoading = false,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: isLoading ? null : onPressed,
+        icon: isLoading 
+            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent))
+            : Icon(icon, size: 20),
+        label: Text(label),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color.withOpacity(0.1),
+          foregroundColor: color,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+            side: BorderSide(
+              color: color.withOpacity(0.25),
+              width: 1.5,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -789,31 +829,16 @@ class _TabButton extends StatelessWidget {
       borderRadius: BorderRadius.circular(AppDimensions.radiusS),
       child: Container(
         padding: const EdgeInsets.symmetric(
-          vertical: AppDimensions.spacingS,
-          horizontal: AppDimensions.spacingXs,
+          vertical: AppDimensions.spacingM,
         ),
         decoration: BoxDecoration(
           color: isActive ? AppColors.accent.withOpacity(0.15) : Colors.transparent,
           borderRadius: BorderRadius.circular(AppDimensions.radiusS),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 16,
-              color: isActive ? AppColors.accent : AppColors.textSecondary,
-            ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: isActive ? AppColors.accent : AppColors.textSecondary,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                fontSize: 13,
-              ),
-            ),
-          ],
+        child: Icon(
+          icon,
+          size: 24,
+          color: isActive ? AppColors.accent : AppColors.textSecondary,
         ),
       ),
     );

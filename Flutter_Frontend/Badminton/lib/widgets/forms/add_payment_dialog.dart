@@ -165,7 +165,7 @@ class _AddPaymentDialogState extends ConsumerState<AddPaymentDialog> {
                       ),
                       const SizedBox(height: AppDimensions.spacingS),
                       Text(
-                        'Total: \$${widget.fee.amount.toStringAsFixed(2)} | Paid: \$${widget.fee.totalPaid.toStringAsFixed(2)} | Pending: \$${widget.fee.pendingAmount.toStringAsFixed(2)}',
+                        'Total: ₹${widget.fee.amount.toStringAsFixed(2)} | Paid: ₹${widget.fee.totalPaid.toStringAsFixed(2)} | Pending: ₹${widget.fee.pendingAmount.toStringAsFixed(2)}',
                         style: const TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 12,
@@ -178,7 +178,7 @@ class _AddPaymentDialogState extends ConsumerState<AddPaymentDialog> {
                 // Payment Amount
                 CustomTextField(
                   controller: _amountController,
-                  label: 'Payment Amount (\$)',
+                  label: 'Payment Amount (₹)',
                   hint: 'Enter payment amount',
                   keyboardType: TextInputType.numberWithOptions(decimal: true),
                   validator: (value) {
@@ -190,7 +190,7 @@ class _AddPaymentDialogState extends ConsumerState<AddPaymentDialog> {
                       return 'Please enter a valid amount';
                     }
                     if (amount > widget.fee.pendingAmount) {
-                      return 'Amount exceeds pending amount (\$${widget.fee.pendingAmount.toStringAsFixed(2)})';
+                      return 'Amount exceeds pending amount (₹${widget.fee.pendingAmount.toStringAsFixed(2)})';
                     }
                     return null;
                   },

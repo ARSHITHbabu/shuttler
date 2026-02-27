@@ -109,7 +109,6 @@ Future<List<Map<String, dynamic>>> ownerUpcomingSessions(OwnerUpcomingSessionsRe
   final upcomingSessions = <Map<String, dynamic>>[];
 
   for (var batch in activeBatches) {
-    bool batchAdded = false;
 
     // Check if batch runs today
     final runsToday =
@@ -124,25 +123,6 @@ Future<List<Map<String, dynamic>>> ownerUpcomingSessions(OwnerUpcomingSessionsRe
         'location': batch.location ?? '',
         'date': DateTime(now.year, now.month, now.day).toIso8601String(),
       });
-      batchAdded = true;
-    }
-
-    if (!batchAdded) {
-      for (int i = 1; i <= 7 && upcomingSessions.length < 20; i++) {
-        final checkDate = now.add(Duration(days: i));
-        final checkDayName = dayNames[checkDate.weekday - 1];
-
-        if (batch.period.toLowerCase() == 'daily' || batch.days.contains(checkDayName)) {
-          upcomingSessions.add({
-            'batch_id': batch.id,
-            'batch_name': batch.name,
-            'time': batch.timing,
-            'location': batch.location ?? '',
-            'date': DateTime(checkDate.year, checkDate.month, checkDate.day).toIso8601String(),
-          });
-          break;
-        }
-      }
     }
   }
 

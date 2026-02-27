@@ -4,6 +4,7 @@ import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../models/student.dart';
+import '../../providers/student_provider.dart';
 import 'tabs/student_profile_tab.dart';
 import 'tabs/student_performance_tab.dart';
 import 'tabs/student_bmi_tab.dart';
@@ -38,6 +39,9 @@ class _StudentDetailsDialogState extends ConsumerState<StudentDetailsDialog> {
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
     final screenWidth = MediaQuery.of(context).size.width;
+
+    // Watch student for reactivity
+    final studentAsync = ref.watch(studentByIdProvider(widget.student.id));
     
     return Dialog(
       backgroundColor: Colors.transparent,
@@ -61,74 +65,60 @@ class _StudentDetailsDialogState extends ConsumerState<StudentDetailsDialog> {
             ),
           ],
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Header
-            _buildHeader(),
-            
-            // Tab Selector
-            _buildTabSelector(),
-            
-            // Tab Content
-            Expanded(
-              child: _buildTabContent(),
+        child: studentAsync.when(
+          data: (student) => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              _buildHeader(student),
+              
+              // Tab Selector
+              _buildTabSelector(),
+              
+              // Tab Content
+              Expanded(
+                child: _buildTabContent(student),
+              ),
+            ],
+          ),
+          loading: () => const Center(
+            child: Padding(
+              padding: EdgeInsets.all(AppDimensions.paddingL),
+              child: CircularProgressIndicator(),
             ),
-          ],
+          ),
+          error: (error, _) => Center(
+            child: Padding(
+              padding: const EdgeInsets.all(AppDimensions.paddingL),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error_outline, color: AppColors.error, size: 48),
+                  const SizedBox(height: AppDimensions.spacingM),
+                  Text(
+                    'Error: ${error.toString()}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: AppColors.textPrimary),
+                  ),
+                  TextButton(
+                    onPressed: () => ref.invalidate(studentByIdProvider(widget.student.id)),
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(Student student) {
     return Container(
-      padding: const EdgeInsets.all(AppDimensions.paddingL),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: AppColors.textSecondary.withOpacity(0.2),
-            width: 1,
-          ),
-        ),
-      ),
+      padding: const EdgeInsets.fromLTRB(AppDimensions.paddingL, AppDimensions.paddingL / 1.5, AppDimensions.paddingL / 2, AppDimensions.paddingL / 2),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.student.name,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: AppDimensions.spacingXs),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppDimensions.spacingS,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: widget.student.status == 'active'
-                        ? AppColors.success
-                        : AppColors.error,
-                    borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                  ),
-                  child: Text(
-                    widget.student.status.toUpperCase(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
           IconButton(
             icon: const Icon(Icons.close, color: AppColors.textSecondary),
             onPressed: () => Navigator.of(context).pop(),
@@ -187,26 +177,24 @@ class _StudentDetailsDialogState extends ConsumerState<StudentDetailsDialog> {
     );
   }
 
-  Widget _buildTabContent() {
+  Widget _buildTabContent(Student student) {
     switch (_selectedTab) {
       case 'profile':
         return StudentProfileTab(
-          student: widget.student,
+          student: student,
           onStudentUpdated: () {
-            // Refresh student data if needed
-            setState(() {});
+            // No need to call setState, provider watch handles it
           },
         );
       case 'performance':
-        return StudentPerformanceTab(student: widget.student);
+        return StudentPerformanceTab(student: student);
       case 'bmi':
-        return StudentBMITab(student: widget.student);
+        return StudentBMITab(student: student);
       case 'fees':
-        return StudentFeesTab(student: widget.student);
+        return StudentFeesTab(student: student);
       default:
         return StudentProfileTab(
-          student: widget.student,
-          onStudentUpdated: () => setState(() {}),
+          student: student,
         );
     }
   }
@@ -227,43 +215,21 @@ class _TabButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isVerySmall = screenWidth < 400;
-    
     return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(AppDimensions.radiusS),
       child: Container(
-        padding: EdgeInsets.symmetric(
-          vertical: AppDimensions.spacingS,
-          horizontal: isVerySmall ? 4 : AppDimensions.spacingXs,
+        padding: const EdgeInsets.symmetric(
+          vertical: AppDimensions.spacingM,
         ),
         decoration: BoxDecoration(
           color: isActive ? AppColors.accent.withOpacity(0.2) : Colors.transparent,
           borderRadius: BorderRadius.circular(AppDimensions.radiusS),
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: isVerySmall ? 18 : 16,
-              color: isActive ? AppColors.accent : AppColors.textSecondary,
-            ),
-            if (!isVerySmall) ...[
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    color: isActive ? AppColors.accent : AppColors.textSecondary,
-                    fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                    fontSize: 12,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ],
+        child: Icon(
+          icon,
+          size: 24,
+          color: isActive ? AppColors.accent : AppColors.textSecondary,
         ),
       ),
     );

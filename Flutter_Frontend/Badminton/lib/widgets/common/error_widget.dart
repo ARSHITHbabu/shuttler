@@ -111,7 +111,7 @@ class EmptyState extends StatelessWidget {
     return const EmptyState(
       title: 'No Inactive Batches',
       message: 'All your batches are currently active.',
-      icon: Icons.check_circle_outline,
+      icon: Icons.archive_outlined,
     );
   }
 

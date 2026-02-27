@@ -107,13 +107,17 @@ class _StudentBMITabState extends ConsumerState<StudentBMITab> {
               ElevatedButton.icon(
                 onPressed: () => setState(() => _showAddForm = true),
                 icon: const Icon(Icons.add, size: 18),
-                label: Text(isSmallScreen ? 'Add' : 'Add Record'),
+                label: const Text('Add'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.accent,
                   foregroundColor: Colors.white,
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppDimensions.spacingM,
                     vertical: AppDimensions.spacingS,
+                  ),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppDimensions.radiusL),
                   ),
                 ),
               ),
