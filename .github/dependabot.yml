@@ -1,0 +1,34 @@
+version: 2
+updates:
+  # Python backend — pip ecosystem
+  - package-ecosystem: "pip"
+    directory: "/Backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "backend"
+    groups:
+      # Group minor/patch updates into a single PR to reduce noise
+      python-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Flutter frontend — pub ecosystem
+  - package-ecosystem: "pub"
+    directory: "/Flutter_Frontend/Badminton"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "flutter"
+    groups:
+      flutter-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"

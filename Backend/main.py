@@ -6,11 +6,13 @@ from fastapi.responses import FileResponse, StreamingResponse, JSONResponse, Red
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 import mimetypes
-from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, Text, Date, DateTime, ForeignKey, JSON, func, and_, or_, select
+from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, Text, Date, DateTime, ForeignKey, JSON, func, and_, or_, select, TypeDecorator
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.exc import IntegrityError
-from pydantic import BaseModel, field_validator
+from cryptography.fernet import Fernet, InvalidToken
+from pydantic import BaseModel, field_validator, model_validator
+import html as html_lib
 import re
 from typing import List, Optional, Dict, Any, Union, Annotated, Literal
 from datetime import datetime, date, timedelta
@@ -253,16 +255,39 @@ def _check_token_revoked(payload: dict) -> None:
 
 def verify_coach_batch_access(coach_id: int, batch_id: int, db) -> bool:
     coach_batch = db.query(BatchCoachDB).filter(
-        BatchCoachDB.coach_id == coach_id, 
+        BatchCoachDB.coach_id == coach_id,
         BatchCoachDB.batch_id == batch_id
     ).first()
-    
+
     legacy = db.query(BatchDB).filter(
-        BatchDB.id == batch_id, 
+        BatchDB.id == batch_id,
         BatchDB.assigned_coach_id == coach_id
     ).first()
-    
+
     return bool(coach_batch or legacy)
+
+def verify_coach_student_access(coach_id: int, student_id: int, db) -> bool:
+    """
+    A15: Verify that a student is enrolled in at least one batch assigned to this coach.
+    Used to guard student-record updates performed by coaches.
+    """
+    coach_batch_ids = [
+        row.batch_id for row in
+        db.query(BatchCoachDB.batch_id).filter(BatchCoachDB.coach_id == coach_id).all()
+    ]
+    legacy_batch_ids = [
+        row.id for row in
+        db.query(BatchDB.id).filter(BatchDB.assigned_coach_id == coach_id).all()
+    ]
+    all_batch_ids = list(set(coach_batch_ids + legacy_batch_ids))
+    if not all_batch_ids:
+        return False
+    return bool(
+        db.query(BatchStudentDB).filter(
+            BatchStudentDB.student_id == student_id,
+            BatchStudentDB.batch_id.in_(all_batch_ids)
+        ).first()
+    )
 
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Security(security),
@@ -304,6 +329,12 @@ REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
 # Database setup - PostgreSQL with fallback to SQLite
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
 
+# A13: SSL mode for PostgreSQL connections.
+# Set DB_SSLMODE=require in production to enforce encrypted transport.
+# Use "prefer" (default) for dev — SSL if available, plaintext fallback.
+# Use "disable" only when connecting to local containerised PG with no SSL configured.
+_DB_SSLMODE = os.getenv("DB_SSLMODE", "prefer")
+
 if not SQLALCHEMY_DATABASE_URL:
     print("WARNING: DATABASE_URL not found in .env file!")
     print("Falling back to SQLite (NOT recommended for production)")
@@ -311,17 +342,67 @@ if not SQLALCHEMY_DATABASE_URL:
     SQLALCHEMY_DATABASE_URL = "sqlite:///./academy_portal.db"
     engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 else:
-    print(f"Connecting to PostgreSQL database...")
+    print(f"Connecting to PostgreSQL database (sslmode={_DB_SSLMODE})...")
     # PostgreSQL connection with connection pooling for high concurrency
     engine = create_engine(
         SQLALCHEMY_DATABASE_URL,
-        pool_size=20,  # Number of permanent connections in the pool
-        max_overflow=40,  # Additional connections when pool is full (total 60 max)
-        pool_pre_ping=True,  # Verify connections before using (handles dropped connections)
-        pool_recycle=3600,  # Recycle connections after 1 hour
-        echo=False  # Set to True to see SQL queries (for debugging)
+        pool_size=20,          # Number of permanent connections in the pool
+        max_overflow=40,       # Additional connections when pool is full (total 60 max)
+        pool_pre_ping=True,    # Verify connections before using (handles dropped connections)
+        pool_recycle=3600,     # Recycle connections after 1 hour
+        echo=False,            # Set to True to see SQL queries (for debugging)
+        connect_args={"sslmode": _DB_SSLMODE},  # A13: enforce SSL transport to DB
     )
-    print("PostgreSQL connection established!")
+    print(f"PostgreSQL connection established (sslmode={_DB_SSLMODE})!")
+
+# ── A13: Field-level Encryption ───────────────────────────────────────────────
+# Sensitive columns (guardian_phone, address) are encrypted at rest using Fernet
+# symmetric encryption. Set FIELD_ENCRYPTION_KEY to a valid Fernet key to enable.
+# Generate a key with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# Leave unset (or empty) in dev — fields will be stored as plaintext.
+_FIELD_KEY_RAW = os.getenv("FIELD_ENCRYPTION_KEY", "").strip()
+_fernet: Optional[Fernet] = None
+if _FIELD_KEY_RAW:
+    try:
+        _fernet = Fernet(_FIELD_KEY_RAW.encode())
+        print("Field-level encryption: ENABLED (guardian_phone, address)")
+    except Exception as _fe:
+        print(f"WARNING: FIELD_ENCRYPTION_KEY is invalid ({_fe}). Field encryption DISABLED.")
+else:
+    print("Field-level encryption: DISABLED (set FIELD_ENCRYPTION_KEY env var to enable in production)")
+
+def encrypt_field(value: Optional[str]) -> Optional[str]:
+    """Encrypt a sensitive field before storing. No-op when key is not configured."""
+    if value is None or _fernet is None:
+        return value
+    return _fernet.encrypt(value.encode()).decode()
+
+def decrypt_field(value: Optional[str]) -> Optional[str]:
+    """
+    Decrypt a sensitive field after loading.
+    Falls back to returning the raw value for legacy plaintext rows (migration-safe).
+    """
+    if value is None or _fernet is None:
+        return value
+    try:
+        return _fernet.decrypt(value.encode()).decode()
+    except (InvalidToken, Exception):
+        return value  # Legacy plaintext — not yet encrypted
+
+class EncryptedString(TypeDecorator):
+    """
+    SQLAlchemy column type that transparently encrypts on write and decrypts on read.
+    Uses Fernet symmetric encryption. Falls back to plaintext when no key is configured.
+    """
+    impl = Text
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        return encrypt_field(value)
+
+    def process_result_value(self, value, dialect):
+        return decrypt_field(value)
+# ─────────────────────────────────────────────────────────────────────────────
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -465,11 +546,11 @@ class StudentDB(Base):
     phone = Column(String, nullable=False)
     email = Column(String, nullable=False, unique=True)
     guardian_name = Column(String, nullable=True)  # Optional for signup, required for profile completion
-    guardian_phone = Column(String, nullable=True)  # Optional for signup, required for profile completion
+    guardian_phone = Column(EncryptedString, nullable=True)  # A13: encrypted at rest
     password = Column(String, nullable=False)
     added_by = Column(String, nullable=True)  # Optional for signup
     date_of_birth = Column(String, nullable=True)  # Required for profile completion
-    address = Column(Text, nullable=True)  # Required for profile completion
+    address = Column(EncryptedString, nullable=True)  # A13: encrypted at rest
     status = Column(String, default="active") # active, inactive
     inactive_at = Column(DateTime(timezone=True), nullable=True)
     rejoin_request_pending = Column(Boolean, default=False)
@@ -1427,6 +1508,48 @@ def validate_password_complexity(v: str) -> str:
         raise ValueError("Password must contain at least one number")
     return v
 
+# ── A12: Input Validation Helpers ────────────────────────────────────────────
+# RFC 5321-compatible email regex (max 254 chars per RFC 5321)
+_EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
+
+def validate_email_format(v: str) -> str:
+    """Validate email format and length."""
+    v = v.strip()
+    if len(v) > 254:
+        raise ValueError("Email address exceeds maximum length of 254 characters")
+    if not _EMAIL_RE.match(v):
+        raise ValueError("Invalid email address format")
+    return v
+
+def validate_phone_format(v: str) -> str:
+    """Validate phone number format: digits, spaces, +, -, (, ), . allowed; 7-15 digits required."""
+    v = v.strip()
+    if not v:
+        raise ValueError("Phone number cannot be empty")
+    # Strip formatting chars and count digits
+    digits_only = re.sub(r'[\s\-\(\)\+\.]', '', v)
+    if not digits_only.isdigit():
+        raise ValueError("Phone number may only contain digits, spaces, +, -, (, ), and .")
+    if not (7 <= len(digits_only) <= 15):
+        raise ValueError("Phone number must contain between 7 and 15 digits")
+    if len(v) > 25:
+        raise ValueError("Phone number too long (max 25 characters)")
+    return v
+
+def validate_name_field(v: str, max_len: int = 100, field_label: str = "Name") -> str:
+    """Validate a human name field: strip whitespace and enforce max length."""
+    v = v.strip()
+    if not v:
+        raise ValueError(f"{field_label} cannot be empty")
+    if len(v) > max_len:
+        raise ValueError(f"{field_label} too long (max {max_len} characters)")
+    return v
+
+def sanitize_html(v: str) -> str:
+    """HTML-escape text to prevent stored XSS when rendered in web contexts."""
+    return html_lib.escape(v, quote=True)
+# ─────────────────────────────────────────────────────────────────────────────
+
 class CoachCreate(BaseModel):
     name: str
     email: str
@@ -1436,6 +1559,28 @@ class CoachCreate(BaseModel):
     experience_years: Optional[int] = None
     monthly_salary: Optional[float] = None
     joining_date: Optional[date] = None
+
+    @field_validator('name')
+    @classmethod
+    def check_name_CoachCreate(cls, v):
+        return validate_name_field(v, max_len=100, field_label="Name")
+
+    @field_validator('email')
+    @classmethod
+    def check_email_CoachCreate(cls, v):
+        return validate_email_format(v)
+
+    @field_validator('phone')
+    @classmethod
+    def check_phone_CoachCreate(cls, v):
+        return validate_phone_format(v)
+
+    @field_validator('specialization')
+    @classmethod
+    def check_specialization_CoachCreate(cls, v):
+        if v is not None and len(v) > 200:
+            raise ValueError("Specialization too long (max 200 characters)")
+        return v
 
     @field_validator('password')
     @classmethod
@@ -1517,6 +1662,27 @@ class CoachUpdate(BaseModel):
     joining_date: Optional[date] = None
     profile_photo: Optional[str] = None
 
+    @field_validator('name')
+    @classmethod
+    def check_name_CoachUpdate(cls, v):
+        if v is not None:
+            return validate_name_field(v, max_len=100, field_label="Name")
+        return v
+
+    @field_validator('email')
+    @classmethod
+    def check_email_CoachUpdate(cls, v):
+        if v is not None:
+            return validate_email_format(v)
+        return v
+
+    @field_validator('phone')
+    @classmethod
+    def check_phone_CoachUpdate(cls, v):
+        if v is not None:
+            return validate_phone_format(v)
+        return v
+
 # Owner Models
 class OwnerCreate(BaseModel):
     name: str
@@ -1527,6 +1693,21 @@ class OwnerCreate(BaseModel):
     experience_years: Optional[int] = None
     role: Literal["owner", "co_owner"] = "owner"
     must_change_password: Optional[bool] = False
+
+    @field_validator('name')
+    @classmethod
+    def check_name_OwnerCreate(cls, v):
+        return validate_name_field(v, max_len=100, field_label="Name")
+
+    @field_validator('email')
+    @classmethod
+    def check_email_OwnerCreate(cls, v):
+        return validate_email_format(v)
+
+    @field_validator('phone')
+    @classmethod
+    def check_phone_OwnerCreate(cls, v):
+        return validate_phone_format(v)
 
     @field_validator('password')
     @classmethod
@@ -1572,6 +1753,48 @@ class OwnerUpdate(BaseModel):
     academy_contact: Optional[str] = None
     academy_email: Optional[str] = None
 
+    @field_validator('name')
+    @classmethod
+    def check_name_OwnerUpdate(cls, v):
+        if v is not None:
+            return validate_name_field(v, max_len=100, field_label="Name")
+        return v
+
+    @field_validator('email')
+    @classmethod
+    def check_email_OwnerUpdate(cls, v):
+        if v is not None:
+            return validate_email_format(v)
+        return v
+
+    @field_validator('phone')
+    @classmethod
+    def check_phone_OwnerUpdate(cls, v):
+        if v is not None:
+            return validate_phone_format(v)
+        return v
+
+    @field_validator('academy_email')
+    @classmethod
+    def check_academy_email_OwnerUpdate(cls, v):
+        if v is not None:
+            return validate_email_format(v)
+        return v
+
+    @field_validator('academy_name')
+    @classmethod
+    def check_academy_name_OwnerUpdate(cls, v):
+        if v is not None and len(v) > 200:
+            raise ValueError("Academy name too long (max 200 characters)")
+        return v
+
+    @field_validator('academy_address')
+    @classmethod
+    def check_academy_address_OwnerUpdate(cls, v):
+        if v is not None and len(v) > 500:
+            raise ValueError("Academy address too long (max 500 characters)")
+        return v
+
 class TransferOwnershipRequest(BaseModel):
     new_owner_id: int
 
@@ -1582,6 +1805,30 @@ class SessionCreate(BaseModel):
     start_date: str
     end_date: str
     status: Optional[str] = "active"
+
+    @field_validator('name')
+    @classmethod
+    def check_session_name(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("Session name cannot be empty")
+        if len(v) > 100:
+            raise ValueError("Session name too long (max 100 characters)")
+        return v
+
+    @model_validator(mode='after')
+    def validate_session_date_range(self):
+        try:
+            if self.start_date and self.end_date:
+                start = date.fromisoformat(self.start_date)
+                end = date.fromisoformat(self.end_date)
+                if end <= start:
+                    raise ValueError("end_date must be after start_date")
+        except ValueError as exc:
+            if "end_date must be" in str(exc):
+                raise
+            raise ValueError("Invalid date format. Use YYYY-MM-DD") from exc
+        return self
 
 class SessionUpdate(BaseModel):
     name: Optional[str] = None
@@ -1671,6 +1918,42 @@ class StudentCreate(BaseModel):
     t_shirt_size: Optional[str] = None  # Required for profile completion
     blood_group: Optional[str] = None
 
+    @field_validator('name')
+    @classmethod
+    def check_name_StudentCreate(cls, v):
+        return validate_name_field(v, max_len=100, field_label="Name")
+
+    @field_validator('email')
+    @classmethod
+    def check_email_StudentCreate(cls, v):
+        return validate_email_format(v)
+
+    @field_validator('phone')
+    @classmethod
+    def check_phone_StudentCreate(cls, v):
+        return validate_phone_format(v)
+
+    @field_validator('guardian_name')
+    @classmethod
+    def check_guardian_name_StudentCreate(cls, v):
+        if v is not None:
+            return validate_name_field(v, max_len=100, field_label="Guardian name")
+        return v
+
+    @field_validator('guardian_phone')
+    @classmethod
+    def check_guardian_phone_StudentCreate(cls, v):
+        if v is not None:
+            return validate_phone_format(v)
+        return v
+
+    @field_validator('address')
+    @classmethod
+    def check_address_StudentCreate(cls, v):
+        if v is not None and len(v) > 500:
+            raise ValueError("Address too long (max 500 characters)")
+        return v
+
     @field_validator('password')
     @classmethod
     def check_pwd_StudentCreate(cls, v):
@@ -1715,6 +1998,48 @@ class StudentUpdate(BaseModel):
     t_shirt_size: Optional[str] = None
     blood_group: Optional[str] = None
     profile_photo: Optional[str] = None
+
+    @field_validator('name')
+    @classmethod
+    def check_name_StudentUpdate(cls, v):
+        if v is not None:
+            return validate_name_field(v, max_len=100, field_label="Name")
+        return v
+
+    @field_validator('email')
+    @classmethod
+    def check_email_StudentUpdate(cls, v):
+        if v is not None:
+            return validate_email_format(v)
+        return v
+
+    @field_validator('phone')
+    @classmethod
+    def check_phone_StudentUpdate(cls, v):
+        if v is not None:
+            return validate_phone_format(v)
+        return v
+
+    @field_validator('guardian_name')
+    @classmethod
+    def check_guardian_name_StudentUpdate(cls, v):
+        if v is not None:
+            return validate_name_field(v, max_len=100, field_label="Guardian name")
+        return v
+
+    @field_validator('guardian_phone')
+    @classmethod
+    def check_guardian_phone_StudentUpdate(cls, v):
+        if v is not None:
+            return validate_phone_format(v)
+        return v
+
+    @field_validator('address')
+    @classmethod
+    def check_address_StudentUpdate(cls, v):
+        if v is not None and len(v) > 500:
+            raise ValueError("Address too long (max 500 characters)")
+        return v
 
 # Attendance Models
 class AttendanceCreate(BaseModel):
@@ -2259,6 +2584,40 @@ class AnnouncementCreate(BaseModel):
     creator_type: str = "coach"  # "coach" or "owner"
     scheduled_at: Optional[str] = None
 
+    @field_validator('title')
+    @classmethod
+    def sanitize_announcement_title(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("Title cannot be empty")
+        if len(v) > 255:
+            raise ValueError("Title too long (max 255 characters)")
+        return sanitize_html(v)
+
+    @field_validator('message')
+    @classmethod
+    def sanitize_announcement_message(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("Message cannot be empty")
+        if len(v) > 5000:
+            raise ValueError("Message too long (max 5000 characters)")
+        return sanitize_html(v)
+
+    @field_validator('target_audience')
+    @classmethod
+    def validate_target_audience(cls, v):
+        if v not in ["all", "students", "coaches"]:
+            raise ValueError('target_audience must be "all", "students", or "coaches"')
+        return v
+
+    @field_validator('creator_type')
+    @classmethod
+    def validate_creator_type(cls, v):
+        if v not in ["coach", "owner"]:
+            raise ValueError('creator_type must be "coach" or "owner"')
+        return v
+
     @field_validator('priority')
     @classmethod
     def validate_priority(cls, v):
@@ -2289,6 +2648,26 @@ class AnnouncementUpdate(BaseModel):
     scheduled_at: Optional[str] = None
     is_sent: Optional[bool] = None
 
+    @field_validator('title')
+    @classmethod
+    def sanitize_ann_update_title(cls, v):
+        if v is not None:
+            v = v.strip()
+            if len(v) > 255:
+                raise ValueError("Title too long (max 255 characters)")
+            return sanitize_html(v)
+        return v
+
+    @field_validator('message')
+    @classmethod
+    def sanitize_ann_update_message(cls, v):
+        if v is not None:
+            v = v.strip()
+            if len(v) > 5000:
+                raise ValueError("Message too long (max 5000 characters)")
+            return sanitize_html(v)
+        return v
+
 # Notification Models
 class NotificationCreate(BaseModel):
     user_id: int
@@ -2297,6 +2676,29 @@ class NotificationCreate(BaseModel):
     body: str
     type: str = "general"
     data: Optional[dict] = None
+
+    @field_validator('title')
+    @classmethod
+    def sanitize_notification_title(cls, v):
+        v = v.strip()
+        if len(v) > 255:
+            raise ValueError("Notification title too long (max 255 characters)")
+        return sanitize_html(v)
+
+    @field_validator('body')
+    @classmethod
+    def sanitize_notification_body(cls, v):
+        v = v.strip()
+        if len(v) > 1000:
+            raise ValueError("Notification body too long (max 1000 characters)")
+        return sanitize_html(v)
+
+    @field_validator('user_type')
+    @classmethod
+    def validate_notification_user_type(cls, v):
+        if v not in ["student", "coach", "owner"]:
+            raise ValueError('user_type must be "student", "coach", or "owner"')
+        return v
 
 class Notification(BaseModel):
     id: int
@@ -2651,7 +3053,56 @@ async def jwt_auth_middleware(request: Request, call_next):
 UPLOAD_DIR = Path("./uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 print(f" Upload directory ready at: {UPLOAD_DIR.absolute()}")
+
+# A14: Restrict UPLOAD_DIR permissions — owner rw+x, group r+x, others nothing.
+# Prevents other OS users from writing or listing the directory.
+try:
+    UPLOAD_DIR.chmod(0o750)
+except (AttributeError, NotImplementedError, OSError):
+    pass  # Windows does not support POSIX chmod — safe to skip
+
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+# ── A14: Safe upload path resolution ─────────────────────────────────────────
+def resolve_safe_upload_path(filename: str) -> Path:
+    """
+    Safely resolve a filename within UPLOAD_DIR.
+    Prevents path traversal attacks (e.g. '../../etc/passwd', '../secrets').
+    - Rejects filenames containing '..', '/', or '\\'
+    - Resolves the absolute path and confirms it is inside UPLOAD_DIR
+    Raises HTTP 400 if the path would escape the upload directory.
+    """
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    resolved = (UPLOAD_DIR / filename).resolve()
+    try:
+        resolved.relative_to(UPLOAD_DIR.resolve())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    return resolved
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── A12: File Upload Security ─────────────────────────────────────────────────
+IMAGE_MAX_SIZE_BYTES = 5 * 1024 * 1024    # 5 MB — enforced on all image uploads
+VIDEO_MAX_SIZE_BYTES = 500 * 1024 * 1024  # 500 MB — enforced on video uploads
+
+def validate_image_magic_bytes(header: bytes) -> str:
+    """
+    Inspect magic bytes to confirm image type. Returns a safe extension string
+    ('jpg', 'png', 'webp'). Raises HTTP 400 for any other file type.
+    Do NOT rely on file.content_type or filename extension — both are attacker-controlled.
+    """
+    if header[:3] == b'\xff\xd8\xff':
+        return 'jpg'
+    if header[:8] == b'\x89PNG\r\n\x1a\n':
+        return 'png'
+    if header[:4] == b'RIFF' and len(header) >= 12 and header[8:12] == b'WEBP':
+        return 'webp'
+    raise HTTPException(
+        status_code=400,
+        detail="Invalid file type. Only JPEG, PNG, and WebP images are allowed."
+    )
+# ─────────────────────────────────────────────────────────────────────────────
 
 def get_db():
     db = SessionLocal()
@@ -2697,7 +3148,7 @@ async def video_stream_options():
 
 @app.get("/video-stream/{filename}", dependencies=[Depends(require_owner)])
 async def stream_video(filename: str, request: Request):
-    file_path = UPLOAD_DIR / filename
+    file_path = resolve_safe_upload_path(filename)  # A14: path traversal protection
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Video not found")
 
@@ -2766,14 +3217,36 @@ async def stream_video(filename: str, request: Request):
 @app.post("/upload", dependencies=[Depends(require_owner)])
 async def upload_file(file: UploadFile = File(...)):
     try:
-        file_ext = os.path.splitext(file.filename)[1]
-        filename = f"{uuid.uuid4()}{file_ext}"
+        # A12: Enforce 5 MB size limit — check before reading content
+        file.file.seek(0, 2)
+        file_size = file.file.tell()
+        file.file.seek(0)
+        if file_size > IMAGE_MAX_SIZE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Maximum allowed size is {IMAGE_MAX_SIZE_BYTES // (1024 * 1024)} MB."
+            )
+
+        # A12: Validate MIME type via magic bytes — do NOT trust file.content_type or filename extension
+        header = await file.read(12)
+        await file.seek(0)
+        safe_ext = validate_image_magic_bytes(header)  # raises HTTP 400 for non-image types
+
+        # A12: Server-generated UUID filename; original filename is discarded entirely
+        filename = f"{uuid.uuid4()}.{safe_ext}"
         file_path = UPLOAD_DIR / filename
-        
+
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
-            
+        # A14: strip execute bits — uploaded files must never be executable
+        try:
+            os.chmod(file_path, 0o644)
+        except (AttributeError, NotImplementedError, OSError):
+            pass
+
         return {"url": f"/uploads/{filename}"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -4620,14 +5093,23 @@ def get_student(student_id: int):
     finally:
         db.close()
 
-@app.put("/students/{student_id}", response_model=Student, dependencies=[Depends(require_coach)])
-def update_student(student_id: int, student_update: StudentUpdate):
+@app.put("/students/{student_id}", response_model=Student)
+def update_student(student_id: int, student_update: StudentUpdate, current_user: dict = Depends(require_coach)):
     db = SessionLocal()
     try:
         student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
         if not student:
             raise HTTPException(status_code=404, detail="Student not found")
-        
+
+        # A15: Coaches may only update students enrolled in their assigned batches
+        if current_user.get("user_type") == "coach":
+            coach_id = int(current_user["sub"])
+            if not verify_coach_student_access(coach_id, student_id, db):
+                raise HTTPException(
+                    status_code=403,
+                    detail="You do not have access to update this student's record."
+                )
+
         update_data = student_update.dict(exclude_unset=True)
         for key, value in update_data.items():
             setattr(student, key, value)
@@ -5076,10 +5558,19 @@ def get_attendance(
     finally:
         db.close()
 
-@app.post("/attendance/", response_model=Attendance, dependencies=[Depends(require_coach)])
-def mark_attendance(attendance: AttendanceCreate):
+@app.post("/attendance/", response_model=Attendance)
+def mark_attendance(attendance: AttendanceCreate, current_user: dict = Depends(require_coach)):
     db = SessionLocal()
     try:
+        # A15: Coaches may only mark attendance for batches they are assigned to
+        if current_user.get("user_type") == "coach":
+            coach_id = int(current_user["sub"])
+            if not verify_coach_batch_access(coach_id, attendance.batch_id, db):
+                raise HTTPException(
+                    status_code=403,
+                    detail="You are not assigned to this batch and cannot mark attendance for it."
+                )
+
         existing = db.query(AttendanceDB).filter(
             AttendanceDB.batch_id == attendance.batch_id,
             AttendanceDB.student_id == attendance.student_id,
@@ -5131,11 +5622,22 @@ def mark_attendance(attendance: AttendanceCreate):
     finally:
         db.close()
 
-@app.post("/attendance/bulk/", response_model=List[Attendance], dependencies=[Depends(require_coach)])
-def mark_attendance_bulk(bulk: AttendanceBulkCreate):
+@app.post("/attendance/bulk/", response_model=List[Attendance])
+def mark_attendance_bulk(bulk: AttendanceBulkCreate, current_user: dict = Depends(require_coach)):
     db = SessionLocal()
     results = []
     try:
+        # A15: Coaches may only mark attendance for their assigned batches
+        if current_user.get("user_type") == "coach":
+            coach_id = int(current_user["sub"])
+            unique_batch_ids = {a.batch_id for a in bulk.attendances}
+            for bid in unique_batch_ids:
+                if not verify_coach_batch_access(coach_id, bid, db):
+                    raise HTTPException(
+                        status_code=403,
+                        detail=f"You are not assigned to batch {bid} and cannot mark attendance for it."
+                    )
+
         for attendance in bulk.attendances:
             existing = db.query(AttendanceDB).filter(
                 AttendanceDB.batch_id == attendance.batch_id,
@@ -6236,13 +6738,21 @@ def get_performance_record(record_id: int):
     finally:
         db.close()
 
-@app.post("/performance/", response_model=PerformanceFrontend, dependencies=[Depends(require_coach)])
-def create_performance_record_v2(performance_data: PerformanceFrontendCreate):
+@app.post("/performance/", response_model=PerformanceFrontend)
+def create_performance_record_v2(performance_data: PerformanceFrontendCreate, current_user: dict = Depends(require_coach)):
     """Create performance records (frontend-compatible endpoint)"""
     db = SessionLocal()
     try:
-        # Get current user for recorded_by (you may need to adjust this based on your auth)
-        recorded_by = "owner"  # Default, should come from auth context
+        # A15: Coaches may only record performance for students in their assigned batches
+        if current_user.get("user_type") == "coach":
+            coach_id = int(current_user["sub"])
+            if not verify_coach_batch_access(coach_id, performance_data.batch_id, db):
+                raise HTTPException(
+                    status_code=403,
+                    detail="You are not assigned to this batch and cannot record performance for it."
+                )
+
+        recorded_by = current_user.get("email", "coach")  # Use authenticated user's email
         
         
         # Create individual records for each skill with rating > 0
@@ -6300,8 +6810,8 @@ def create_performance_record_v2(performance_data: PerformanceFrontendCreate):
     finally:
         db.close()
 
-@app.put("/performance/{record_id}", response_model=PerformanceFrontend, dependencies=[Depends(require_coach)])
-def update_performance_record(record_id: int, performance_update: PerformanceFrontendUpdate):
+@app.put("/performance/{record_id}", response_model=PerformanceFrontend)
+def update_performance_record(record_id: int, performance_update: PerformanceFrontendUpdate, current_user: dict = Depends(require_coach)):
     """Update performance records (frontend-compatible endpoint)"""
     db = SessionLocal()
     try:
@@ -6309,6 +6819,15 @@ def update_performance_record(record_id: int, performance_update: PerformanceFro
         first_record = db.query(PerformanceDB).filter(PerformanceDB.id == record_id).first()
         if not first_record:
             raise HTTPException(status_code=404, detail="Performance record not found")
+
+        # A15: Coaches may only update performance for students in their assigned batches
+        if current_user.get("user_type") == "coach":
+            coach_id = int(current_user["sub"])
+            if not verify_coach_batch_access(coach_id, first_record.batch_id, db):
+                raise HTTPException(
+                    status_code=403,
+                    detail="You are not assigned to this batch and cannot update this performance record."
+                )
         
         # Get all records for the same date, student, and batch
         all_records = db.query(PerformanceDB).filter(
@@ -6828,9 +7347,24 @@ async def upload_video(
         if audience_type != "all" and not targets:
             raise HTTPException(status_code=400, detail="target_ids required for 'batch' or 'student' audience")
 
-        # Validate file type
+        # A12: Enforce video size limit (500 MB)
+        video.file.seek(0, 2)
+        video_size = video.file.tell()
+        video.file.seek(0)
+        if video_size > VIDEO_MAX_SIZE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Maximum allowed size for videos is {VIDEO_MAX_SIZE_BYTES // (1024 * 1024)} MB."
+            )
+
+        # A12: Validate extension against allowlist (extension-only check is acceptable for video
+        #      since magic-byte validation for all video containers is complex and not required here)
         allowed_extensions = ["mp4", "webm", "mov", "avi", "mkv", "m4v"]
-        file_extension = video.filename.split(".")[-1].lower() if video.filename else ""
+        # Sanitize: take only the last extension component; reject paths with directory separators
+        raw_filename = video.filename or ""
+        if "/" in raw_filename or "\\" in raw_filename or ".." in raw_filename:
+            raise HTTPException(status_code=400, detail="Invalid filename")
+        file_extension = raw_filename.rsplit(".", 1)[-1].lower() if "." in raw_filename else ""
 
         if file_extension not in allowed_extensions:
             raise HTTPException(
@@ -6838,13 +7372,18 @@ async def upload_video(
                 detail=f"File type not allowed. Allowed types: {', '.join(allowed_extensions)}"
             )
 
-        # Generate unique filename
+        # A12: Server-generated UUID filename; original filename is discarded
         unique_filename = f"video_{uuid.uuid4()}.{file_extension}"
         file_path = UPLOAD_DIR / unique_filename
 
         # Save file
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(video.file, buffer)
+        # A14: strip execute bits
+        try:
+            os.chmod(file_path, 0o644)
+        except (AttributeError, NotImplementedError, OSError):
+            pass
 
         # Create database record
         db_video = VideoResourceDB(
@@ -9111,33 +9650,47 @@ def check_coach_registration_status(email: str):
 @app.post("/api/upload/image", dependencies=[Depends(require_owner)])
 @limiter.limit("10/hour")
 async def upload_image(request: Request, file: UploadFile = File(...)):
-    """Upload an image file (for profile photos, etc.)"""
+    """Upload an image file (for profile photos, etc.). Accepts JPEG, PNG, WebP only; max 5 MB."""
     try:
-        # Validate file type
-        allowed_extensions = ["jpg", "jpeg", "png", "gif", "webp"]
-        file_extension = file.filename.split(".")[-1].lower()
+        # A12: Enforce 5 MB size limit
+        file.file.seek(0, 2)
+        file_size = file.file.tell()
+        file.file.seek(0)
+        if file_size > IMAGE_MAX_SIZE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Maximum allowed size is {IMAGE_MAX_SIZE_BYTES // (1024 * 1024)} MB."
+            )
 
-        if file_extension not in allowed_extensions:
-            raise HTTPException(status_code=400, detail=f"File type not allowed. Allowed types: {', '.join(allowed_extensions)}")
+        # A12: Validate MIME type via magic bytes — do NOT trust file.content_type or filename extension
+        header = await file.read(12)
+        await file.seek(0)
+        safe_ext = validate_image_magic_bytes(header)  # raises HTTP 400 for non-image types
 
-        # Generate unique filename
-        unique_filename = f"{uuid.uuid4()}.{file_extension}"
+        # A12: Server-generated UUID filename; original filename is discarded entirely
+        unique_filename = f"{uuid.uuid4()}.{safe_ext}"
         file_path = UPLOAD_DIR / unique_filename
 
         # Save file
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
+        # A14: strip execute bits
+        try:
+            os.chmod(file_path, 0o644)
+        except (AttributeError, NotImplementedError, OSError):
+            pass
 
-        # Return relative URL
         return {"url": f"/uploads/{unique_filename}", "filename": unique_filename}
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/uploads/{filename}", dependencies=[Depends(require_owner)])
 async def get_uploaded_image(filename: str):
     """Serve uploaded images"""
-    file_path = UPLOAD_DIR / filename
+    file_path = resolve_safe_upload_path(filename)  # A14: path traversal protection
 
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Image not found")

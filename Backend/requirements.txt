@@ -1,6 +1,8 @@
 # FastAPI and Server
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
+# A16: Updated from 0.104.1 — fixes PYSEC-2024-38 (ReDoS via python-multipart form handling)
+fastapi==0.115.4
+# A16: Updated from 0.24.0
+uvicorn[standard]==0.32.1
 
 # Database
 sqlalchemy==2.0.23
@@ -12,12 +14,17 @@ pydantic==2.5.0
 pydantic-settings==2.1.0
 
 # Authentication & Security
+# A16: python-jose 3.3.0 has known CVEs (PYSEC-2024-232, PYSEC-2024-233 — algorithm confusion).
+# No fixed release is currently available upstream (project is largely unmaintained).
+# Our JWT config uses HS256 (HMAC) only — NOT ECDSA — which mitigates the ECDSA-specific issues.
+# Migration to joserfc or PyJWT is recommended before public production launch.
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 slowapi==0.1.9
 
 # File handling
-python-multipart==0.0.6  # For file uploads
+# A16: Updated from 0.0.6 — fixes PYSEC-2024-38, CVE-2024-53981, CVE-2026-24486 (ReDoS / DoS)
+python-multipart==0.0.22
 
 # Environment variables
 python-dotenv==1.0.0
