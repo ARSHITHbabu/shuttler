@@ -6,14 +6,12 @@ class ApiEndpoints {
   // IMPORTANT: Change this IP to your computer's local IP address (run ipconfig on Windows)
   static String get baseUrl {
     if (kIsWeb) {
-      return 'https://localhost:8001';
+      return 'http://localhost:8001';
     }
     // Use your computer's local network IP address
     // Run get_local_ip.ps1 to find your current IP address
     // Current IP: 192.168.1.11 (updated automatically)
-    return 'https://192.168.1.11:8001';
-    // Current IP: 192.168.1.7 (updated automatically)
-    return 'https://192.168.1.7:8001';
+    return 'http://192.168.1.11:8001';
   }
 
   // Authentication
@@ -23,7 +21,7 @@ class ApiEndpoints {
   static const String changePassword = '/auth/change-password';
   static const String forgotPassword = '/auth/forgot-password';
   static const String resetPassword = '/auth/reset-password';
-  static const String sessions = '/auth/sessions';
+  static const String authSessions = '/auth/sessions';
   static String sessionRevoke(int id) => '/auth/sessions/$id';
   static const String logoutAll = '/auth/logout_all';
 

@@ -110,7 +110,7 @@ def decode_token(token: str) -> dict:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
 
-def _check_token_revoked(payload: dict) -> None:
+def _check_token_revoked(payload: dict, request: Request) -> None:
     """Check token revocation list and per-user invalidation timestamp.
     Raises HTTP 401 if the token has been revoked."""
     jti = payload.get("jti")
@@ -195,20 +195,21 @@ def _check_token_revoked(payload: dict) -> None:
         return True
 
     if user_type != 'owner':
+        path = request.url.path
         # Check student ID matching in path (e.g. /students/5, /attendance/student/5)
         # Be careful not to match /students/ and then an action without ID
         student_match = re.search(r'/(?:student|students)/(\d+)(?:/|$)', path)
         if student_match:
             s_id = student_match.group(1)
             if not check_student_access(s_id):
-                return JSONResponse(status_code=403, content={"detail": "Access denied to this student resource"})
+                raise HTTPException(status_code=403, detail="Access denied to this student resource")
                 
         # Check batch ID matching in path (e.g. /batches/5, /attendance/batch/5)
         batch_match = re.search(r'/(?:batch|batches)/(\d+)(?:/|$)', path)
         if batch_match:
             b_id = batch_match.group(1)
             if not check_batch_access(b_id):
-                return JSONResponse(status_code=403, content={"detail": "Access denied to this batch resource"})
+                raise HTTPException(status_code=403, detail="Access denied to this batch resource")
                 
         # Check coach ID matching in path
         coach_match = re.search(r'/(?:coach|coaches)/(\d+)(?:/|$)', path)
@@ -217,7 +218,7 @@ def _check_token_revoked(payload: dict) -> None:
         if coach_match and user_type == 'coach':
             c_id = coach_match.group(1)
             if str(user_id) != str(c_id):
-                return JSONResponse(status_code=403, content={"detail": "Access denied to other coach data"})
+                raise HTTPException(status_code=403, detail="Access denied to other coach data")
 
     # ==========================================================
 
@@ -265,6 +266,7 @@ def verify_coach_batch_access(coach_id: int, batch_id: int, db) -> bool:
     return bool(coach_batch or legacy)
 
 def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials = Security(security),
 ) -> dict:
     '''FastAPI dependency that validates a JWT access token.
@@ -274,7 +276,7 @@ def get_current_user(
     payload = decode_token(credentials.credentials)
     if payload.get("type") != "access":
         raise HTTPException(status_code=401, detail="Invalid token type: expected access token")
-    _check_token_revoked(payload)
+    _check_token_revoked(payload, request)
     return payload
 
 def require_owner(current_user: dict = Depends(get_current_user)) -> dict:
@@ -2882,7 +2884,7 @@ def delete_coach(coach_id: int):
         db.close()
 
 @app.post("/auth/login")
-@limiter.limit("5/15minutes")
+@limiter.limit("20/15minutes")
 def unified_login(request: Request, login_data: UnifiedLoginRequest):
     """Unified login. Returns JWT access + refresh tokens plus user data.
 
@@ -9199,7 +9201,7 @@ def check_and_create_fee_notifications(db, user_id: int, user_type: str):
 @app.get("/api/notifications/{user_id}", response_model=List[Notification], dependencies=[Depends(require_student)])
 def get_user_notifications(
     user_id: int, 
-    user_type: str = Query(..., regex="^(student|coach|owner)$"),
+    user_type: str = Query(..., pattern="^(student|coach|owner)$"),
     type: Optional[str] = None,
     is_read: Optional[bool] = None
 ):
