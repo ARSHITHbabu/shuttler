@@ -40,7 +40,7 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() {
       setState(() {}); // Update UI when tab changes
     });
@@ -96,55 +96,44 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
         ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(60),
-          child: Container(
+          child: Padding(
             padding: EdgeInsets.symmetric(
               horizontal: isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL,
               vertical: isSmallScreen ? 6 : AppDimensions.spacingM,
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _buildNeumorphicTab(
-                    isDark: isDark,
-                    label: 'Leave Requests',
-                    icon: Icons.event_busy_outlined,
-                    isSelected: _tabController.index == 0,
-                    onTap: () {
-                      if (_tabController.index != 0) {
-                        _tabController.animateTo(0);
-                      }
-                    },
+            child: NeumorphicInsetContainer(
+              padding: const EdgeInsets.all(4),
+              borderRadius: AppDimensions.radiusXl,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _buildNeumorphicTab(
+                      isDark: isDark,
+                      label: 'Leave Requests',
+                      icon: Icons.event_busy_outlined,
+                      isSelected: _tabController.index == 0,
+                      onTap: () {
+                        if (_tabController.index != 0) {
+                          _tabController.animateTo(0);
+                        }
+                      },
+                    ),
                   ),
-                ),
-                const SizedBox(width: AppDimensions.spacingM),
-                Expanded(
-                  child: _buildNeumorphicTab(
-                    isDark: isDark,
-                    label: 'Registrations',
-                    icon: Icons.person_add_outlined,
-                    isSelected: _tabController.index == 1,
-                    onTap: () {
-                      if (_tabController.index != 1) {
-                        _tabController.animateTo(1);
-                      }
-                    },
+                  Expanded(
+                    child: _buildNeumorphicTab(
+                      isDark: isDark,
+                      label: 'Registrations',
+                      icon: Icons.person_add_outlined,
+                      isSelected: _tabController.index == 1,
+                      onTap: () {
+                        if (_tabController.index != 1) {
+                          _tabController.animateTo(1);
+                        }
+                      },
+                    ),
                   ),
-                ),
-                const SizedBox(width: AppDimensions.spacingM),
-                Expanded(
-                  child: _buildNeumorphicTab(
-                    isDark: isDark,
-                    label: 'Rejoin Requests',
-                    icon: Icons.person_pin_outlined,
-                    isSelected: _tabController.index == 2,
-                    onTap: () {
-                      if (_tabController.index != 2) {
-                        _tabController.animateTo(2);
-                      }
-                    },
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -154,7 +143,6 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
         children: [
           _buildLeaveRequestsTab(isDark, statusFilter, isSmallScreen),
           _buildRegistrationRequestsTab(isDark, statusFilter, isSmallScreen),
-          _buildRejoinRequestsTab(isDark, isSmallScreen),
         ],
       ),
     );
@@ -183,8 +171,8 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
         ),
         decoration: BoxDecoration(
           color: isSelected ? cardColor : Colors.transparent,
-          borderRadius: BorderRadius.circular(AppDimensions.radiusM),
-          boxShadow: isSelected ? NeumorphicStyles.getPressedShadow() : null,
+          borderRadius: BorderRadius.circular(AppDimensions.radiusXl),
+          boxShadow: isSelected ? NeumorphicStyles.getElevatedShadow(isDark: isDark) : null,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -221,9 +209,8 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
     final screenWidth = MediaQuery.of(context).size.width;
     final isSmallScreen = screenWidth < 600;
     
-    return NeumorphicContainer(
-      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingS : AppDimensions.paddingM),
-      margin: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
+    return Padding(
+      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -236,35 +223,42 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> with SingleTick
             ),
           ),
           SizedBox(height: isSmallScreen ? 6 : AppDimensions.spacingS),
-          Wrap(
-            spacing: isSmallScreen ? 6 : AppDimensions.spacingS,
-            runSpacing: isSmallScreen ? 6 : AppDimensions.spacingS,
-            children: ['all', 'pending', 'approved', 'rejected'].map((status) {
-              final isSelected = _selectedFilter == status;
-              return GestureDetector(
-                onTap: () => setState(() => _selectedFilter = status),
-                child: NeumorphicContainer(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: isSmallScreen ? 10 : AppDimensions.paddingM,
-                    vertical: isSmallScreen ? 6 : AppDimensions.spacingS,
-                  ),
-                  color: isSelected
-                      ? (isDark ? AppColors.accent : AppColorsLight.accent)
-                      : (isDark ? AppColors.cardBackground : AppColorsLight.cardBackground),
-                  borderRadius: AppDimensions.radiusS,
-                  child: Text(
-                    status.toUpperCase(),
-                    style: TextStyle(
-                      fontSize: isSmallScreen ? 10 : 12,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                      color: isSelected
-                          ? (isDark ? AppColors.background : AppColorsLight.background)
-                          : (isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
+          NeumorphicInsetContainer(
+            padding: const EdgeInsets.all(4),
+            borderRadius: AppDimensions.radiusXl,
+            width: double.infinity,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: ['all', 'pending', 'approved', 'rejected'].map((status) {
+                final isSelected = _selectedFilter == status;
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _selectedFilter = status),
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                        vertical: isSmallScreen ? 8 : AppDimensions.spacingM,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isSelected ? (isDark ? AppColors.cardBackground : AppColorsLight.cardBackground) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(AppDimensions.radiusXl),
+                        boxShadow: isSelected ? NeumorphicStyles.getElevatedShadow(isDark: isDark) : null,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        status.toUpperCase(),
+                        style: TextStyle(
+                          fontSize: isSmallScreen ? 10 : 12,
+                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                          color: isSelected
+                              ? (isDark ? AppColors.textPrimary : AppColorsLight.textPrimary)
+                              : (isDark ? AppColors.textSecondary : AppColorsLight.textSecondary),
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              );
-            }).toList(),
+                );
+              }).toList(),
+            ),
           ),
         ],
       ),

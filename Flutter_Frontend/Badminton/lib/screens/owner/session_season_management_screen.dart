@@ -147,6 +147,39 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
     }
   }
 
+  Future<void> _archiveSession(Session session) async {
+    final confirmed = await ConfirmationDialog.show(
+      context,
+      session.isActive ? 'Archive Season' : 'Unarchive Season',
+      session.isActive ? 'Are you sure you want to archive this season?' : 'Are you sure you want to unarchive this season?',
+      confirmText: session.isActive ? 'Archive' : 'Unarchive',
+      isDestructive: session.isActive,
+      icon: session.isActive ? Icons.archive : Icons.unarchive,
+    );
+
+    if (confirmed == true && mounted) {
+      try {
+        final sessionManager = ref.read(sessionManagerProvider(status: _selectedTab).notifier);
+        final newStatus = session.isActive ? 'archived' : 'active';
+        await sessionManager.updateSession(session.id, {
+          'name': session.name,
+          'start_date': session.startDate.toIso8601String().split('T')[0],
+          'end_date': session.endDate.toIso8601String().split('T')[0],
+          'status': newStatus,
+        });
+        if (mounted) {
+          SuccessSnackbar.show(context, 'Season ${session.isActive ? 'archived' : 'unarchived'} successfully');
+          ref.invalidate(sessionListProvider(status: 'active'));
+          ref.invalidate(sessionListProvider(status: 'archived'));
+        }
+      } catch (e) {
+        if (mounted) {
+          SuccessSnackbar.showError(context, 'Failed to update season: ${e.toString()}');
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_showAddForm) {
@@ -455,6 +488,7 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
                         session: session,
                         onEdit: () => _openEditForm(session),
                         onDelete: () => _deleteSession(session.id),
+                        onArchive: () => _archiveSession(session),
                         onViewBatches: () => _viewSeasonBatches(session),
                       ),
                     );
@@ -622,12 +656,14 @@ class _SeasonCard extends StatelessWidget {
   final Session session;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final VoidCallback onArchive;
   final VoidCallback onViewBatches;
 
   const _SeasonCard({
     required this.session,
     required this.onEdit,
     required this.onDelete,
+    required this.onArchive,
     required this.onViewBatches,
   });
 
@@ -668,25 +704,6 @@ class _SeasonCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              Container(
-                padding: EdgeInsets.symmetric(
-                  horizontal: isSmallScreen ? 6 : AppDimensions.spacingS,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: session.isActive ? AppColors.success : AppColors.textSecondary,
-                  borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                ),
-                child: Text(
-                  session.status.toUpperCase(),
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
             ],
           ),
           SizedBox(height: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM),
@@ -717,6 +734,22 @@ class _SeasonCard extends StatelessWidget {
                 label: const Text(
                   'Edit',
                   style: TextStyle(color: AppColors.accent, fontSize: 12),
+                ),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isSmallScreen ? 6 : 8,
+                    vertical: 4,
+                  ),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+              TextButton.icon(
+                onPressed: onArchive,
+                icon: Icon(session.isActive ? Icons.archive : Icons.unarchive, size: 16, color: AppColors.warning),
+                label: Text(
+                  session.isActive ? 'Archive' : 'Unarchive',
+                  style: const TextStyle(color: AppColors.warning, fontSize: 12),
                 ),
                 style: TextButton.styleFrom(
                   padding: EdgeInsets.symmetric(
