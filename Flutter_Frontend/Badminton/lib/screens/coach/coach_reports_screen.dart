@@ -54,7 +54,6 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
   bool _isInitializing = true;
   
   // History State
-  int _tabIndex = 0; // 0: Generate, 1: History
   List<Map<String, dynamic>> _historyData = [];
   bool _isHistoryLoading = false;
 
@@ -92,6 +91,8 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
         setState(() => _isInitializing = false);
       }
     }
+
+    _loadHistory();
   }
 
   void _filterBatches() {
@@ -132,19 +133,18 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildTabSelector(),
+              _buildReportTypeSelector(),
               const SizedBox(height: AppDimensions.spacingL),
-              if (_tabIndex == 0) ...[
-                _buildReportTypeSelector(),
-                const SizedBox(height: AppDimensions.spacingL),
-                _buildFilters(),
-                const SizedBox(height: AppDimensions.spacingL),
-                _buildGenerateButton(),
-                const SizedBox(height: AppDimensions.spacingL),
-                if (_reportData != null) _buildReportPreview(),
-              ] else ...[
-                _buildHistoryList(),
-              ]
+              _buildFilters(),
+              const SizedBox(height: AppDimensions.spacingL),
+              _buildGenerateButton(),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: AppDimensions.spacingM),
+                child: Divider(color: AppColors.border, thickness: 1),
+              ),
+              const Text("Generated Reports", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+              const SizedBox(height: AppDimensions.spacingS),
+              _buildHistoryList(),
             ],
           ),
         ),
@@ -442,49 +442,6 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
     );
   }
 
-  Widget _buildTabSelector() {
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        children: [
-          Expanded(child: _tabButton("Generate Report", 0)),
-          Expanded(child: _tabButton("History", 1)),
-        ],
-      ),
-    );
-  }
-
-  Widget _tabButton(String title, int index) {
-      bool isSelected = _tabIndex == index;
-      return InkWell(
-        onTap: () {
-          setState(() {
-             _tabIndex = index;
-             if (index == 1) _loadHistory();
-          });
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: isSelected ? AppColors.accent : Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            title,
-            style: TextStyle(
-              color: isSelected ? Colors.white : AppColors.textPrimary,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ),
-      );
-  }
 
   Future<void> _loadHistory() async {
      setState(() => _isHistoryLoading = true);
@@ -557,7 +514,7 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
                         _reportType = ReportType.values.firstWhere((e) => e.name == item['report_type']);
                      } catch (_) {}
                    });
-                   _downloadReport(isHistory: true);
+                   _downloadReport();
                 },
               ),
             ],
@@ -592,6 +549,16 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
           break;
       }
 
+      final authState = ref.read(authProvider);
+      int? currentUserId;
+      String currentRole = 'coach';
+      authState.whenData((state) {
+        if (state is Authenticated) {
+          currentUserId = state.userId;
+          currentRole = state.userRole ?? 'coach';
+        }
+      });
+
       // Generate report
       final data = await reportService.generateReport(
         type: _reportType.name,
@@ -600,11 +567,31 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
         batchId: _selectedBatchId == 'all' ? null : _selectedBatchId,
       );
 
+      final filterSummary = data['filter_summary'] ?? 
+         "Season: ${_seasons.firstWhere((s) => s.id.toString() == _selectedSeasonId, orElse: () => Session(id: -1, name: 'Unknown', startDate: DateTime.now(), endDate: DateTime.now(), status: 'active')).name} | Batch: ${_selectedBatchId == 'all' ? 'All' : _filteredBatches.firstWhere((b) => b.id.toString() == _selectedBatchId, orElse: () => Batch(id: -1, batchName: 'Unknown', timing: '', period: '', capacity: 0, fees: '', startDate: '', createdBy: '')).batchName}";
+      
+      data['filter_summary'] = filterSummary;
+
       if (mounted) {
         setState(() {
           _reportData = data;
           _isLoading = false;
         });
+      }
+
+      if (currentUserId != null) {
+        try {
+          await reportService.saveReportHistory(
+            reportType: _reportType.name,
+            filterSummary: filterSummary,
+            reportData: data,
+            userId: currentUserId!,
+            userRole: currentRole,
+          );
+          _loadHistory();
+        } catch (e) {
+          debugPrint("History save error: $e");
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -614,120 +601,10 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
     }
   }
 
-  Widget _buildReportPreview() {
-    final filterSummary = _reportData!['filter_summary'] ?? 
-        "Season: ${_seasons.firstWhere((s) => s.id.toString() == _selectedSeasonId, orElse: () => Session(id: -1, name: 'Unknown', startDate: DateTime.now(), endDate: DateTime.now(), status: 'active')).name} | Batch: ${_selectedBatchId == 'all' ? 'All' : _filteredBatches.firstWhere((b) => b.id.toString() == _selectedBatchId, orElse: () => Batch(id: -1, batchName: 'Unknown', timing: '', period: '', capacity: 0, fees: '', startDate: '', createdBy: '')).batchName}";
-    final generatedOn = _reportData!['generated_on'] ?? DateFormat('dd MMM yyyy, hh:mm a').format(DateTime.now());
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text("Generated Report", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
-        const SizedBox(height: 12),
-        NeumorphicContainer(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                   Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.accent.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      _reportType == ReportType.attendance 
-                        ? Icons.fact_check 
-                        : Icons.insights,
-                      color: AppColors.accent,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "${_reportType.name.toUpperCase()} REPORT",
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.textPrimary),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          "$filterSummary",
-                          style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-                        ),
-                         Text(
-                          "Generated On: $generatedOn",
-                          style: TextStyle(color: AppColors.textSecondary, fontSize: 13, fontWeight: FontWeight.w500),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () => _downloadReport(isHistory: false),
-                    icon: const Icon(Icons.download, color: AppColors.accent),
-                    tooltip: "Download PDF",
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppDimensions.spacingL),
-              const Divider(color: AppColors.textSecondary),
-              const SizedBox(height: AppDimensions.spacingL),
-              
-              if (_reportData!['overview'] != null)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Overview',
-                      style: TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: AppDimensions.spacingM),
-                    ...(_reportData!['overview'] as Map<String, dynamic>).entries.map((entry) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: AppDimensions.spacingS),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              entry.key.replaceAll('_', ' ').capitalize(),
-                              style: const TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 14,
-                              ),
-                            ),
-                            Text(
-                              entry.value.toString(),
-                              style: const TextStyle(
-                                color: AppColors.textPrimary,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                  ],
-                ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
 
 
 
-  Future<void> _downloadReport({bool isHistory = false}) async {
+  Future<void> _downloadReport() async {
     try {
       // Generate PDF
       final pdf = await _generatePDF();
@@ -773,40 +650,6 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
             },
           );
         }
-      }
-
-      // Save history logic
-      if (!isHistory) {
-         try {
-           final authState = ref.read(authProvider);
-           int? userId;
-           String? userRole;
-           
-           authState.whenData((state) {
-             if (state is Authenticated) {
-               userId = state.userId;
-               userRole = state.userRole ?? 'coach';
-             }
-           });
-
-           if (userId != null && userRole != null) {
-             final reportService = ref.read(reportServiceProvider);
-             
-             // Ensure filter_summary exists
-             final filterSummary = _reportData!['filter_summary'] ?? 
-                "Season: ${_seasons.firstWhere((s) => s.id.toString() == _selectedSeasonId, orElse: () => Session(id: -1, name: 'Unknown', startDate: DateTime.now(), endDate: DateTime.now(), status: 'active')).name} | Batch: ${_selectedBatchId == 'all' ? 'All' : _filteredBatches.firstWhere((b) => b.id.toString() == _selectedBatchId, orElse: () => Batch(id: -1, batchName: 'Unknown', timing: '', period: '', capacity: 0, fees: '', startDate: '', createdBy: '')).batchName}";
-
-             await reportService.saveReportHistory(
-               reportType: _reportType.name,
-               filterSummary: filterSummary,
-               reportData: _reportData!,
-               userId: userId!,
-               userRole: userRole!,
-             );
-           }
-         } catch (e) {
-           debugPrint("History save error: $e");
-         }
       }
 
     } catch (e) {
