@@ -63,7 +63,7 @@ dependencies:
 
   # Image Handling
   image_picker: ^1.0.4
-  image_cropper: ^8.0.0
+  image_cropper: ^11.0.0
   cached_network_image: ^3.3.0
 
   # Video Playback
