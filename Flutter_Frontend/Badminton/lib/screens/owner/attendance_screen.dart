@@ -48,7 +48,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
               )
             : null,
         title: const Text(
-          'Attendance',
+          'Attendance Management',
           style: TextStyle(
             color: AppColors.textPrimary,
             fontSize: 20,

@@ -110,16 +110,14 @@ class _OwnerDashboardState extends ConsumerState<OwnerDashboard> {
                   top: false,
                   child: Container(
                     padding: EdgeInsets.symmetric(
-                      horizontal: AppDimensions.spacingXs,
-                      vertical: isSmallScreen ? 4 : AppDimensions.spacingS,
+                      horizontal: isSmallScreen ? 4 : AppDimensions.spacingS,
+                      vertical: isSmallScreen ? 8 : AppDimensions.spacingM,
                     ),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: List.generate(
                         _navItems.length,
-                        (index) => Expanded(
-                          child: _buildNavItem(index, currentIndex, isSmallScreen),
-                        ),
+                        (index) => _buildNavItem(index, currentIndex, isSmallScreen),
                       ),
                     ),
                   ),
@@ -147,12 +145,12 @@ class _OwnerDashboardState extends ConsumerState<OwnerDashboard> {
       },
       child: Container(
         padding: EdgeInsets.symmetric(
-          horizontal: isSmallScreen ? 4 : AppDimensions.paddingXs,
-          vertical: isSmallScreen ? 4 : AppDimensions.spacingXs,
+          horizontal: isSmallScreen ? AppDimensions.paddingS : AppDimensions.paddingM,
+          vertical: isSmallScreen ? 6 : AppDimensions.spacingS,
         ),
         decoration: BoxDecoration(
           color: isActive ? cardColor : Colors.transparent,
-          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+          borderRadius: BorderRadius.circular(AppDimensions.radiusM),
           boxShadow: isActive ? NeumorphicStyles.getPressedShadow() : null,
         ),
         child: Column(
@@ -164,18 +162,15 @@ class _OwnerDashboardState extends ConsumerState<OwnerDashboard> {
               size: 20,
               color: isActive ? activeColor : inactiveColor,
             ),
-            const SizedBox(height: 2),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                item.label,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: isActive ? activeColor : inactiveColor,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+            const SizedBox(height: 4),
+            Text(
+              item.label,
+              style: TextStyle(
+                fontSize: 12,
+                color: isActive ? activeColor : inactiveColor,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
