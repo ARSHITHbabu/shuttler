@@ -11,6 +11,9 @@ import '../../widgets/common/success_snackbar.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/service_providers.dart';
 import '../../widgets/common/app_logo.dart';
+import 'package:local_auth/local_auth.dart';
+import 'package:local_auth/error_codes.dart' as auth_error;
+import 'package:flutter/services.dart';
 
 /// Login screen for user authentication
 class LoginScreen extends ConsumerStatefulWidget {
@@ -27,6 +30,76 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _rememberMe = false;
   bool _obscurePassword = true;
   bool _isLoading = false;
+  final LocalAuthentication auth = LocalAuthentication();
+  bool _canCheckBiometrics = false;
+  bool _isBiometricEnabled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkBiometrics();
+  }
+
+  Future<void> _checkBiometrics() async {
+    final storageService = ref.read(storageServiceProvider);
+    
+    // Check if the user opted in previously
+    final enabled = storageService.getBiometricEnabled();
+    setState(() {
+      _isBiometricEnabled = enabled;
+    });
+
+    try {
+      final canAuthenticateWithBiometrics = await auth.canCheckBiometrics;
+      final canAuthenticate = canAuthenticateWithBiometrics || await auth.isDeviceSupported();
+      setState(() {
+        _canCheckBiometrics = canAuthenticate;
+      });
+
+      // Auto-prompt if biometrics is already fully enabled
+      if (enabled && canAuthenticate) {
+        _handleBiometricLogin();
+      }
+    } on PlatformException catch (e) {
+      debugPrint("Biometrics error: $e");
+    }
+  }
+
+  Future<void> _handleBiometricLogin() async {
+    try {
+      final didAuthenticate = await auth.authenticate(
+        localizedReason: 'Please authenticate to sign in to your Badminton account',
+        options: const AuthenticationOptions(
+          biometricOnly: true,
+          stickyAuth: true,
+        ),
+      );
+
+      if (didAuthenticate) {
+        final storageService = ref.read(storageServiceProvider);
+        final keys = await storageService.getBiometricCredentials();
+        if (keys != null) {
+          _emailController.text = keys['email']!;
+          _passwordController.text = keys['password']!;
+          _handleLogin(fromBiometric: true);
+        } else {
+          // Tokens missing for some reason
+          setState(() {
+            _isBiometricEnabled = false;
+          });
+          await storageService.setBiometricEnabled(false);
+        }
+      }
+    } on PlatformException catch (e) {
+      if (e.code == auth_error.notEnrolled) {
+        // No biometrics enrolled
+        debugPrint('No biometrics enrolled');
+      } else if (e.code == auth_error.lockedOut || e.code == auth_error.permanentlyLockedOut) {
+        // Locked out
+        debugPrint('Biometrics locked out');
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -35,8 +108,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  Future<void> _handleLogin() async {
-    if (!_formKey.currentState!.validate()) {
+  Future<void> _handleLogin({bool fromBiometric = false}) async {
+    if (!fromBiometric && !_formKey.currentState!.validate()) {
       return;
     }
 
@@ -50,6 +123,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           );
 
       if (mounted) {
+        // Offer biometric enablement on successful normal login if biometrics is natively supported but not yet enabled.
+        if (!fromBiometric && _canCheckBiometrics && !_isBiometricEnabled) {
+          final storageService = ref.read(storageServiceProvider);
+          // Auto-enable biometrics and save encrypted payload natively.
+          await storageService.saveBiometricCredentials(_emailController.text.trim(), _passwordController.text);
+        }
+
         // Check for inactive account (NEW)
         if (result['account_inactive'] == true) {
           final rejoinPending = result['rejoin_request_pending'] ?? false;
@@ -234,11 +314,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   width: double.infinity,
                   child: NeumorphicButton(
                     text: _isLoading ? 'Signing In...' : 'Sign In',
-                    onPressed: _isLoading ? null : _handleLogin,
+                    onPressed: _isLoading ? null : () => _handleLogin(),
                     isAccent: true,
                     icon: _isLoading ? null : Icons.login,
                   ),
                 ),
+                
+                // Show Biometric shortcut if it's available and user has setup their credentials
+                if (_canCheckBiometrics && _isBiometricEnabled) ...[
+                  const SizedBox(height: AppDimensions.spacingM),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.fingerprint, color: AppColors.accent),
+                      label: const Text(
+                        'Login with Biometrics', 
+                        style: TextStyle(color: AppColors.textPrimary)
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        side: BorderSide(
+                          color: AppColors.textSecondary.withValues(alpha: 0.3)
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                        ),
+                      ),
+                      onPressed: _isLoading ? null : _handleBiometricLogin,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: AppDimensions.spacingL),
 
                 // Sign Up Link

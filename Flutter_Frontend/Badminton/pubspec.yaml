@@ -85,6 +85,7 @@ dependencies:
   flutter_jailbreak_detection: ^1.10.0
   flutter_windowmanager: ^0.2.0
   crypto: ^3.0.7
+  local_auth: ^3.0.1
 
 dev_dependencies:
   flutter_test:

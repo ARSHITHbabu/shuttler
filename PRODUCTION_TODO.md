@@ -402,14 +402,14 @@
 - [x] 🔴 Remove any `NSAllowsArbitraryLoads: true` from `Info.plist`
 
 ### E7 · API Timeout Configuration (Flutter)
-- [ ] 🟠 Set Dio connection timeout: 30 seconds
-- [ ] 🟠 Set Dio receive timeout: 60 seconds (longer for file uploads)
-- [ ] 🟠 Set Dio send timeout: 30 seconds
-- [ ] 🟠 Handle timeout errors gracefully in UI with retry option
+- [x] 🟠 Set Dio connection timeout: 30 seconds
+- [x] 🟠 Set Dio receive timeout: 60 seconds (longer for file uploads)
+- [x] 🟠 Set Dio send timeout: 30 seconds
+- [x] 🟠 Handle timeout errors gracefully in UI with retry option
 
 ### E8 · Biometric Authentication (Nice-to-Have)
-- [ ] 🟢 Add `local_auth: ^2.2.0`
-- [ ] 🟢 Biometric unlock on app re-open after backgrounding (optional, for Owner/Coach)
+- [x] 🟢 Add `local_auth: ^2.2.0`
+- [x] 🟢 Biometric unlock on app re-open after backgrounding (optional, for Owner/Coach)
 
 ---
 
