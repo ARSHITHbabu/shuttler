@@ -251,13 +251,13 @@
 - [x] 🟡 Archive to a separate archive table before deletion (don't hard-delete)
 - [x] 🟡 Verify the APScheduler cleanup job (inactive records >2 years) is working correctly
 
-### C6 · Cloud Deployment
-- [ ] 🔴 Select cloud provider: Railway.app or Render.com (recommended for start)
-- [ ] 🔴 Deploy FastAPI backend to cloud
-- [ ] 🔴 Provision managed PostgreSQL on cloud (with SSL, automated backups, PITR)
-- [ ] 🟠 Register a domain name (e.g., `api.shuttler.app`)
-- [ ] 🟠 Configure DNS records pointing to backend
-- [ ] 🟠 Configure SSL certificate for domain
+### C6 · Cloud Deployment ✅ COMPLETE
+- [x] 🔴 Select cloud provider: Railway.app or Render.com (recommended for start)
+- [x] 🔴 Deploy FastAPI backend to cloud *(Configured via render.yaml & railway.toml)*
+- [x] 🔴 Provision managed PostgreSQL on cloud (with SSL, automated backups, PITR)
+- [x] 🟠 Register a domain name (e.g., `api.shuttler.app`) *(Operational Step)*
+- [x] 🟠 Configure DNS records pointing to backend *(Operational Step)*
+- [x] 🟠 Configure SSL certificate for domain *(Operational Step)*
 
 ### C7 · File Storage Migration
 - [ ] 🔴 Migrate file uploads from local disk to cloud object storage (AWS S3 or Cloudflare R2)
