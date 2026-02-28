@@ -290,15 +290,15 @@
 - [x] 🟠 Create `.env.dev`, `.env.staging`, `.env.prod` (never commit `.env.prod`)
 - [x] 🟡 Infrastructure as Code (Terraform / Pulumi) — or use managed platform defaults
 
-### C11 · Usage Capping & Quotas
-- [ ] 🟠 Per-academy API quota: 10,000 calls/day tracked in Redis
-- [ ] 🟠 Burst allowance: max 200 requests/min per academy
-- [ ] 🟠 Return HTTP 429 with `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` headers
-- [ ] 🟠 Storage quota per academy (define limits per tier); track cumulative upload size
-- [ ] 🟠 Reject uploads when quota exceeded (HTTP 413)
-- [ ] 🟡 Show storage usage dashboard in owner portal
-- [ ] 🟡 Invitation token expiry: 7 days, single-use, invalidate on student removal
-- [ ] 🟡 FCM notification rate limiting: max 10 push/student/day, max 5 announcements/owner/hour
+### C11 · Usage Capping & Quotas ✅ COMPLETE
+- [x] 🟠 Per-academy API quota: 10,000 calls/day tracked in Redis
+- [x] 🟠 Burst allowance: max 200 requests/min per academy
+- [x] 🟠 Return HTTP 429 with `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` headers
+- [x] 🟠 Storage quota per academy (define limits per tier); track cumulative upload size
+- [x] 🟠 Reject uploads when quota exceeded (HTTP 413)
+- [x] 🟡 Show storage usage dashboard in owner portal
+- [x] 🟡 Invitation token expiry: 7 days, single-use, invalidate on student removal
+- [x] 🟡 FCM notification rate limiting: max 10 push/student/day, max 5 announcements/owner/hour
 
 ### C12 · Audit Trail & Logging
 - [ ] 🟠 Create `audit_logs` table: user_id, role, action, resource_type, resource_id, old_values (JSONB), new_values (JSONB), ip_address, timestamp

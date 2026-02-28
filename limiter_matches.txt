@@ -1,0 +1,13 @@
+29: from slowapi import Limiter
+30: from slowapi.util import get_remote_address
+31: from slowapi.errors import RateLimitExceeded
+32: from slowapi.middleware import SlowAPIMiddleware
+3179: limiter = Limiter(key_func=get_user_id_or_ip, default_limits=["100/minute"])
+3182: app.state.limiter = limiter
+3183: app.add_middleware(SlowAPIMiddleware)
+3185: async def _rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
+3200: app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+3838: @limiter.limit("20/15minutes")
+4001: @limiter.limit("5/15minutes")
+4061: @limiter.limit("3/hour")
+10622: @limiter.limit("10/hour")
