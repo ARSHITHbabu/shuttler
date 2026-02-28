@@ -346,6 +346,30 @@ def require_student(current_user: dict = Depends(get_current_user)) -> dict:
         raise HTTPException(status_code=403, detail="Not enough permissions")
     return current_user
 
+def check_storage_quota(file: UploadFile = File(...)):
+    db = SessionLocal()
+    try:
+        # Assuming single academy tenant context, get the first owner
+        owner = db.query(OwnerDB).first()
+        file_size = 0
+        file.file.seek(0, 2)
+        file_size = file.file.tell()
+        file.file.seek(0)
+        
+        if owner and owner.storage_used_bytes and owner.storage_limit_bytes:
+            if owner.storage_used_bytes + file_size > owner.storage_limit_bytes:
+                raise HTTPException(status_code=413, detail=f"Storage quota ({owner.storage_limit_bytes // (1024*1024)} MB) exceeded")
+    finally:
+        db.close()
+    return file
+
+def increment_storage_quota(file_size: int, db):
+    owner = db.query(OwnerDB).first()
+    if owner:
+        owner.storage_used_bytes = (owner.storage_used_bytes or 0) + file_size
+        db.commit()
+
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -766,6 +790,8 @@ class OwnerDB(Base):
     # Ownership and Permissions:
     role = Column(String(20), default="owner")  # "owner" (primary), "co_owner"
     must_change_password = Column(Boolean, default=False)
+    storage_used_bytes = Column(Integer, default=0)
+    storage_limit_bytes = Column(Integer, default=5368709120)  # 5GB
 
     # JWT: all tokens issued before this timestamp are invalid (used for password-change revocation)
     jwt_invalidated_at = Column(DateTime(timezone=True), nullable=True)
@@ -3176,7 +3202,8 @@ def get_user_id_or_ip(request: Request) -> str:
     except Exception:
         return get_remote_address(request)
 
-limiter = Limiter(key_func=get_user_id_or_ip, default_limits=["100/minute"])
+redis_url = os.getenv("REDIS_URL", "memory://")
+limiter = Limiter(key_func=lambda req: "academy_global", default_limits=["10000/day", "200/minute"], storage_uri=redis_url, headers_enabled=True)
 
 app = FastAPI(title="Badminton Academy Management System")
 app.state.limiter = limiter
@@ -8895,6 +8922,13 @@ def update_invitation(invitation_id: int, invitation_update: InvitationUpdate):
         db.close()
 
 # ==================== Analytics Routes ====================
+
+@app.get("/analytics/storage", dependencies=[Depends(require_owner)])
+def get_storage_usage(db: Session = Depends(get_db)):
+    owner = db.query(OwnerDB).first()
+    used = owner.storage_used_bytes or 0 if owner else 0
+    limit = owner.storage_limit_bytes or 5368709120 if owner else 5368709120
+    return {"success": True, "used_bytes": used, "limit_bytes": limit, "percentage": (used / limit * 100) if limit > 0 else 0}
 
 @app.get("/analytics/dashboard", dependencies=[Depends(require_owner)])
 def get_analytics_dashboard():
