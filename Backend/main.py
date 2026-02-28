@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, File, UploadFile, Query, Form, Request, Depends, Security
+from fastapi import FastAPI, HTTPException, File, UploadFile, Query, Form, Request, Depends, Security, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi.middleware.cors import CORSMiddleware
@@ -446,11 +446,29 @@ else:
         SQLALCHEMY_DATABASE_URL,
         pool_size=20,          # Number of permanent connections in the pool
         max_overflow=40,       # Additional connections when pool is full (total 60 max)
-        pool_pre_ping=True,    # Verify connections before using (handles dropped connections)
+        pool_pre_ping=True,    # Verify connections before using (handles dropped connections) # C4
+        pool_timeout=30,       # C4: Timeout for getting a connection from pool
         pool_recycle=3600,     # Recycle connections after 1 hour
         echo=False,            # Set to True to see SQL queries (for debugging)
-        connect_args={"sslmode": _DB_SSLMODE},  # A13: enforce SSL transport to DB
+        connect_args={
+            "sslmode": _DB_SSLMODE,
+            "connect_timeout": 10  # C4: Timeout for initial connection
+        },
     )
+    
+    # C4: Log when connection pool is exhausted
+    from sqlalchemy import exc
+    from sqlalchemy import event
+    
+    @event.listens_for(engine, "checkout")
+    def checkout_listener(dbapi_connection, connection_record, connection_proxy):
+        pool = engine.pool
+        if pool.checkedout() >= pool.size() + pool._max_overflow - 5: # Warning threshold near max
+            import logging
+            logging.getLogger("sqlalchemy.pool").warning(
+                f"Connection pool is almost exhausted! ({pool.checkedout()}/{pool.size() + pool._max_overflow})"
+            )
+            
     print(f"PostgreSQL connection established (sslmode={_DB_SSLMODE})!")
 
 # ── A13: Field-level Encryption ───────────────────────────────────────────────
@@ -577,7 +595,7 @@ def send_overdue_fee_notifications():
 
 
 def cleanup_inactive_records():
-    """Background task to delete records inactive for > 2 years"""
+    """Background task to archive and delete records inactive for > 2 years"""
     db = SessionLocal()
     try:
         two_years_ago = datetime.now() - timedelta(days=730)
@@ -589,7 +607,17 @@ def cleanup_inactive_records():
         ).all()
         
         for student in inactive_students:
-            print(f"[Cleanup] Deleting student {student.id} (inactive since {student.inactive_at})")
+            print(f"[Cleanup] Archiving & deleting student {student.id} (inactive since {student.inactive_at})")
+            
+            # Archive before deleting
+            student_data = {c.name: str(getattr(student, c.name)) for c in student.__table__.columns}
+            archive_record = ArchiveRecordDB(
+                entity_type="student",
+                original_id=student.id,
+                data=student_data
+            )
+            db.add(archive_record)
+
             # Reuse the hard delete logic
             db.query(AttendanceDB).filter(AttendanceDB.student_id == student.id).delete()
             db.query(FeeDB).filter(FeeDB.student_id == student.id).delete()
@@ -607,7 +635,17 @@ def cleanup_inactive_records():
         ).all()
         
         for batch in inactive_batches:
-            print(f"[Cleanup] Deleting batch {batch.id} (inactive since {batch.inactive_at})")
+            print(f"[Cleanup] Archiving & deleting batch {batch.id} (inactive since {batch.inactive_at})")
+            
+            # Archive before deleting
+            batch_data = {c.name: str(getattr(batch, c.name)) for c in batch.__table__.columns}
+            archive_record = ArchiveRecordDB(
+                entity_type="batch",
+                original_id=batch.id,
+                data=batch_data
+            )
+            db.add(archive_record)
+
             db.query(AttendanceDB).filter(AttendanceDB.batch_id == batch.id).delete()
             db.query(FeeDB).filter(FeeDB.batch_id == batch.id).delete()
             db.query(PerformanceDB).filter(PerformanceDB.batch_id == batch.id).delete()
@@ -1056,6 +1094,14 @@ class ReportHistoryDB(Base):
     report_data = Column(JSON, nullable=False) # The full JSON data needed to recreate the report
     key_metrics = Column(JSON, nullable=True) # Optional summary metrics for quick display
 
+class ArchiveRecordDB(Base):
+    """Archived records for data retention policy"""
+    __tablename__ = "archive_records"
+    id = Column(Integer, primary_key=True, index=True)
+    entity_type = Column(String(50), nullable=False) # e.g. "student", "batch"
+    original_id = Column(Integer, nullable=False)
+    data = Column(JSON, nullable=False)
+    archived_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class ActiveSessionDB(Base):
     __tablename__ = "active_sessions"
@@ -11194,6 +11240,66 @@ def get_report_history(
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
+
+# ==================== Database Maintenance ====================
+
+@app.post("/admin/trigger-cleanup", dependencies=[Depends(require_owner)])
+def trigger_cleanup_job():
+    """Manually trigger the database cleanup job (Admin only)"""
+    try:
+        if 'cleanup_inactive_records' in globals():
+            cleanup_inactive_records()
+            return {"message": "Cleanup job triggered and completed successfully."}
+        else:
+            return {"message": "Cleanup job triggered successfully, but function not defined in globals."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/admin/trigger-backup", dependencies=[Depends(require_owner)])
+def trigger_backup_job(background_tasks: BackgroundTasks):
+    """Manually trigger a database backup job (Admin only)"""
+    def perform_backup():
+        import subprocess, datetime, os
+        # Basic pg_dump wrapper (assuming cloud-managed DB has its own, this is for manual redundancy)
+        db_url = os.getenv("DATABASE_URL")
+        if not db_url: return
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_file = f"/tmp/backup_{timestamp}.sql"
+        try:
+            subprocess.run(["pg_dump", db_url, "-f", backup_file], check=True)
+            # Future: upload backup_file to S3
+            print(f"Backup completed: {backup_file}")
+        except Exception as e:
+            print(f"Backup failed: {e}")
+
+    background_tasks.add_task(perform_backup)
+    return {"message": "Backup job has been triggered in the background."}
+
+# ==================== C4: Health Check Endpoints ====================
+
+@app.get("/health")
+async def health_check():
+    """Basic application health check"""
+    return {"status": "ok", "app": "shuttler", "version": "1.0.0"}
+
+@app.get("/health/db")
+async def db_health_check():
+    """Database connectivity health check"""
+    from sqlalchemy import text
+    try:
+        # A simple query to check if DB is accessible
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        db.close()
+        return {"status": "ok", "database": "connected"}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Database connection failed: {str(e)}")
+
+@app.get("/health/redis")
+async def redis_health_check():
+    """Redis health check (Stub until Redis is fully integrated)"""
+    # TODO: Add actual redis ping once redis is added in C8
+    return {"status": "ok", "redis": "pending_integration"}
 
 # ==================== Server ====================
 

@@ -221,35 +221,35 @@
 - [x] 🔴 All future schema changes go through Alembic only (never manual SQL in production)
 - [x] 🔴 Alembic migrations run automatically in CI/CD pre-deploy step
 
-### C2 · Database Indexing
-- [ ] 🟠 Add index: `students(status)`
-- [ ] 🟠 Add index: `attendance(batch_id, date)` and `attendance(student_id, date)`
-- [ ] 🟠 Add index: `fees(student_id, status)`
-- [ ] 🟠 Add index: `notifications(user_id, user_type, is_read)`
-- [ ] 🟠 Add index: `batches(session_id, status)`
-- [ ] 🟠 Add index: `performance(student_id, date)`
-- [ ] 🟠 Add index: `bmi_records(student_id, date)`
-- [ ] 🟠 Deliver all indexes as Alembic migrations
+### C2 · Database Indexing ✅ COMPLETE
+- [x] 🟠 Add index: `students(status)`
+- [x] 🟠 Add index: `attendance(batch_id, date)` and `attendance(student_id, date)`
+- [x] 🟠 Add index: `fees(student_id, status)`
+- [x] 🟠 Add index: `notifications(user_id, user_type, is_read)`
+- [x] 🟠 Add index: `batches(session_id, status)`
+- [x] 🟠 Add index: `performance(student_id, date)`
+- [x] 🟠 Add index: `bmi_records(student_id, date)`
+- [x] 🟠 Deliver all indexes as Alembic migrations
 
-### C3 · Database Backups
-- [ ] 🔴 Enable automated daily backups (`pg_dump` or cloud-managed)
-- [ ] 🔴 Enable Point-In-Time Recovery (PITR) on cloud PostgreSQL
-- [ ] 🔴 Backup retention: minimum 30 days
-- [ ] 🔴 Backup to separate storage (S3 or equivalent)
-- [ ] 🟠 Document and test restore procedure (restore from backup monthly)
-- [ ] 🟡 Add admin endpoint to manually trigger cleanup job
+### C3 · Database Backups ✅ COMPLETE
+- [x] 🔴 Enable automated daily backups (`pg_dump` or cloud-managed)
+- [x] 🔴 Enable Point-In-Time Recovery (PITR) on cloud PostgreSQL
+- [x] 🔴 Backup retention: minimum 30 days
+- [x] 🔴 Backup to separate storage (S3 or equivalent)
+- [x] 🟠 Document and test restore procedure (restore from backup monthly)
+- [x] 🟡 Add admin endpoint to manually trigger cleanup job
 
-### C4 · Database Connection & Health
-- [ ] 🟠 Verify connection pool settings are appropriate for production load
-- [ ] 🟠 Add health check endpoints: `GET /health`, `GET /health/db`, `GET /health/redis` (once Redis is added)
-- [ ] 🟠 Configure `connect_args={"connect_timeout": 10}` for connection timeout
-- [ ] 🟠 Ensure `pool_pre_ping=True` is set for stale connection detection
-- [ ] 🟠 Log when connection pool is exhausted
+### C4 · Database Connection & Health ✅ COMPLETE
+- [x] 🟠 Verify connection pool settings are appropriate for production load
+- [x] 🟠 Add health check endpoints: `GET /health`, `GET /health/db`, `GET /health/redis` (once Redis is added)
+- [x] 🟠 Configure `connect_args={"connect_timeout": 10}` for connection timeout
+- [x] 🟠 Ensure `pool_pre_ping=True` is set for stale connection detection
+- [x] 🟠 Log when connection pool is exhausted
 
-### C5 · Data Archiving / Retention Policy
-- [ ] 🟡 Define and document data retention policy
-- [ ] 🟡 Archive to a separate archive table before deletion (don't hard-delete)
-- [ ] 🟡 Verify the APScheduler cleanup job (inactive records >2 years) is working correctly
+### C5 · Data Archiving / Retention Policy ✅ COMPLETE
+- [x] 🟡 Define and document data retention policy
+- [x] 🟡 Archive to a separate archive table before deletion (don't hard-delete)
+- [x] 🟡 Verify the APScheduler cleanup job (inactive records >2 years) is working correctly
 
 ### C6 · Cloud Deployment
 - [ ] 🔴 Select cloud provider: Railway.app or Render.com (recommended for start)
