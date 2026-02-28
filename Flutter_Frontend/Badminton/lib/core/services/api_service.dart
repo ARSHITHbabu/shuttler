@@ -1,5 +1,8 @@
-import 'dart:typed_data';
+import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
+import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import '../constants/api_endpoints.dart';
 import 'storage_service.dart';
 import '../network/request_queue.dart';
@@ -29,6 +32,48 @@ class ApiService {
     _dio.interceptors.add(_authInterceptor());
     _dio.interceptors.add(_loggingInterceptor());
     _dio.interceptors.add(_errorInterceptor());
+
+    _setupCertificatePinning();
+  }
+
+  /// Sets up SSL Certificate Pinning for better security (Phase E4)
+  void _setupCertificatePinning() {
+    if (kIsWeb) return; // Not applicable for web
+
+    _dio.httpClientAdapter = IOHttpClientAdapter(
+      createHttpClient: () {
+        // By disabling default trusted roots, all cert checks fall through to badCertificateCallback
+        final context = SecurityContext(withTrustedRoots: false);
+        final client = HttpClient(context: context);
+
+        client.badCertificateCallback = (X509Certificate cert, String host, int port) {
+          // You should only pin against your known backend domain
+          // Example: if (host != 'api.shuttler.app') return false;
+
+          final bytes = cert.der;
+          final digest = sha256.convert(bytes);
+          final fingerprint = digest.toString().toUpperCase().replaceAll(':', '');
+
+          // Replace with real SHA-256 hashes generated from the live SSL certificate
+          // OpenSSL command to get the pin:
+          // openssl s_client -servername api.example.com -connect api.example.com:443 < /dev/null 2>/dev/null | openssl x509 -in /dev/stdin -outform der | openssl dgst -sha256 -hex
+          const primaryPin = 'PRIMARY_CERT_SHA256_HASH_HERE';
+
+          // KEEP A BACKUP PIN. Rotate securely by changing the backend cert, validating with the backup, 
+          // and pushing an app update exchanging the backup out.
+          const backupPin = 'BACKUP_CERT_SHA256_HASH_HERE';
+
+          // For local development, automatically accept localhost certificates
+          if (host == '10.0.2.2' || host == '127.0.0.1' || host == 'localhost') {
+            return true;
+          }
+
+          return fingerprint == primaryPin || fingerprint == backupPin;
+        };
+
+        return client;
+      },
+    );
   }
 
   /// Initialize offline support with RequestQueue

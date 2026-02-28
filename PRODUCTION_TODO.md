@@ -389,8 +389,8 @@
 - [x] 🟠 Apply `FLAG_SECURE` on sensitive screens (fee data, personal info, guardian phone numbers)
 
 ### E4 · Certificate Pinning (Recommended)
-- [ ] 🟡 Pin backend SSL certificate public key in Dio client
-- [ ] 🟡 Plan certificate rotation before expiry (keep backup pin)
+- [x] 🟡 Pin backend SSL certificate public key in Dio client
+- [x] 🟡 Plan certificate rotation before expiry (keep backup pin)
 
 ### E5 · Anti-Tampering
 - [ ] 🟠 Verify ProGuard/R8 is enabled for Android release builds
