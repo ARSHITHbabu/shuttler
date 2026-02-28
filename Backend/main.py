@@ -446,11 +446,29 @@ else:
         SQLALCHEMY_DATABASE_URL,
         pool_size=20,          # Number of permanent connections in the pool
         max_overflow=40,       # Additional connections when pool is full (total 60 max)
-        pool_pre_ping=True,    # Verify connections before using (handles dropped connections)
+        pool_pre_ping=True,    # Verify connections before using (handles dropped connections) # C4
+        pool_timeout=30,       # C4: Timeout for getting a connection from pool
         pool_recycle=3600,     # Recycle connections after 1 hour
         echo=False,            # Set to True to see SQL queries (for debugging)
-        connect_args={"sslmode": _DB_SSLMODE},  # A13: enforce SSL transport to DB
+        connect_args={
+            "sslmode": _DB_SSLMODE,
+            "connect_timeout": 10  # C4: Timeout for initial connection
+        },
     )
+    
+    # C4: Log when connection pool is exhausted
+    from sqlalchemy import exc
+    from sqlalchemy import event
+    
+    @event.listens_for(engine, "checkout")
+    def checkout_listener(dbapi_connection, connection_record, connection_proxy):
+        pool = engine.pool
+        if pool.checkedout() >= pool.size() + pool._max_overflow - 5: # Warning threshold near max
+            import logging
+            logging.getLogger("sqlalchemy.pool").warning(
+                f"Connection pool is almost exhausted! ({pool.checkedout()}/{pool.size() + pool._max_overflow})"
+            )
+            
     print(f"PostgreSQL connection established (sslmode={_DB_SSLMODE})!")
 
 # ── A13: Field-level Encryption ───────────────────────────────────────────────
@@ -11228,6 +11246,32 @@ def trigger_backup_job(background_tasks: BackgroundTasks):
 
     background_tasks.add_task(perform_backup)
     return {"message": "Backup job has been triggered in the background."}
+
+# ==================== C4: Health Check Endpoints ====================
+
+@app.get("/health")
+async def health_check():
+    """Basic application health check"""
+    return {"status": "ok", "app": "shuttler", "version": "1.0.0"}
+
+@app.get("/health/db")
+async def db_health_check():
+    """Database connectivity health check"""
+    from sqlalchemy import text
+    try:
+        # A simple query to check if DB is accessible
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        db.close()
+        return {"status": "ok", "database": "connected"}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Database connection failed: {str(e)}")
+
+@app.get("/health/redis")
+async def redis_health_check():
+    """Redis health check (Stub until Redis is fully integrated)"""
+    # TODO: Add actual redis ping once redis is added in C8
+    return {"status": "ok", "redis": "pending_integration"}
 
 # ==================== Server ====================
 

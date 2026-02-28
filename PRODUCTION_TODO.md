@@ -239,12 +239,12 @@
 - [x] 🟠 Document and test restore procedure (restore from backup monthly)
 - [x] 🟡 Add admin endpoint to manually trigger cleanup job
 
-### C4 · Database Connection & Health
-- [ ] 🟠 Verify connection pool settings are appropriate for production load
-- [ ] 🟠 Add health check endpoints: `GET /health`, `GET /health/db`, `GET /health/redis` (once Redis is added)
-- [ ] 🟠 Configure `connect_args={"connect_timeout": 10}` for connection timeout
-- [ ] 🟠 Ensure `pool_pre_ping=True` is set for stale connection detection
-- [ ] 🟠 Log when connection pool is exhausted
+### C4 · Database Connection & Health ✅ COMPLETE
+- [x] 🟠 Verify connection pool settings are appropriate for production load
+- [x] 🟠 Add health check endpoints: `GET /health`, `GET /health/db`, `GET /health/redis` (once Redis is added)
+- [x] 🟠 Configure `connect_args={"connect_timeout": 10}` for connection timeout
+- [x] 🟠 Ensure `pool_pre_ping=True` is set for stale connection detection
+- [x] 🟠 Log when connection pool is exhausted
 
 ### C5 · Data Archiving / Retention Policy
 - [ ] 🟡 Define and document data retention policy
