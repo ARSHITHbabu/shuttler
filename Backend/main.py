@@ -3199,7 +3199,54 @@ async def _rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded)
 
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# ── C8: Redis Cache & Cache Initialization ─────────────────────────────────
+from fastapi_cache import FastAPICache
+from fastapi_cache.backends.redis import RedisBackend
+from fastapi_cache.decorator import cache
+try:
+    from redis import asyncio as aioredis
+    _REDIS_AVAILABLE = True
+except ImportError:
+    _REDIS_AVAILABLE = False
+    print("Warning: redis package not installed.")
+
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+redis_client = None
+
+@app.on_event("startup")
+async def startup():
+    global redis_client
+    if _REDIS_AVAILABLE:
+        try:
+            redis_client = aioredis.from_url(REDIS_URL, encoding="utf-8", decode_responses=True)
+            FastAPICache.init(RedisBackend(redis_client), prefix="shuttler-cache")
+            print(f"Connected to Redis for caching at {REDIS_URL}")
+        except Exception as e:
+            print(f"Warning: Failed to connect to Redis: {e}. Caching will fail.")
+
+# Helper for resolving synchronous cache clearance
+def invalidate_cache(namespace: str):
+    """Invalidate redis cache namespace. Useful for sync endpoints."""
+    if not _REDIS_AVAILABLE or not redis_client:
+        return
+    import asyncio
+    try:
+        # FastAPI worker threads don't have an event loop running, so we can run one.
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import nest_asyncio
+            nest_asyncio.apply()
+            loop.run_until_complete(FastAPICache.clear(namespace=namespace))
+        else:
+            loop.run_until_complete(FastAPICache.clear(namespace=namespace))
+    except Exception as e:
+        try:
+            asyncio.run(FastAPICache.clear(namespace=namespace))
+        except RuntimeError:
+            pass
+
 # CORS Configuration
+
 ALLOWED_ORIGINS_STR = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8001,https://shuttler.app,https://api.shuttler.app")
 ALLOWED_ORIGINS = [origin.strip() for origin in ALLOWED_ORIGINS_STR.split(",") if origin.strip()]
 

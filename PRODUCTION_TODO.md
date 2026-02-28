@@ -266,12 +266,12 @@
 - [x] 🟠 Update Flutter to load images from CDN URLs
 - [x] 🟠 Add `boto3==1.34.0` (or equivalent) to backend requirements
 
-### C8 · Redis Cache
-- [ ] 🟠 Deploy Redis instance (Redis Cloud free tier or Railway Redis)
-- [ ] 🟠 Add `redis==5.0.1` and `fastapi-cache2==0.2.1` to backend
-- [ ] 🟠 Cache active batches list (TTL: 5 min), student list (TTL: 2 min), coach list (TTL: 5 min), calendar events (TTL: 1 hr), academy details (TTL: 1 hr)
-- [ ] 🟠 Cache invalidation: clear relevant keys on write operations
-- [ ] 🟠 Token revocation list in Redis (for JWT blacklist)
+### C8 · Redis Cache ✅ COMPLETE
+- [x] 🟠 Deploy Redis instance (Redis Cloud free tier or Railway Redis)
+- [x] 🟠 Add `redis==5.0.1` and `fastapi-cache2==0.2.1` to backend
+- [x] 🟠 Cache active batches list (TTL: 5 min), student list (TTL: 2 min), coach list (TTL: 5 min), calendar events (TTL: 1 hr), academy details (TTL: 1 hr)
+- [x] 🟠 Cache invalidation: clear relevant keys on write operations
+- [x] 🟠 Token revocation list in Redis (for JWT blacklist)
 
 ### C9 · API Layer Quality
 - [ ] 🟠 API Versioning: prefix all endpoints with `/api/v1/`

@@ -50,3 +50,7 @@ razorpay==1.4.1
 
 # S3 File Storage (C7)
 boto3==1.34.0
+
+# Redis Cache (C8)
+redis==5.0.1
+fastapi-cache2==0.2.1
