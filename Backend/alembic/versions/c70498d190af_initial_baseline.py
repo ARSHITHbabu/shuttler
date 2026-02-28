@@ -9,8 +9,10 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-
-
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import main
 # revision identifiers, used by Alembic.
 revision: str = 'c70498d190af'
 down_revision: Union[str, None] = None

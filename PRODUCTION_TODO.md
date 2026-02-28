@@ -221,15 +221,15 @@
 - [x] 🔴 All future schema changes go through Alembic only (never manual SQL in production)
 - [x] 🔴 Alembic migrations run automatically in CI/CD pre-deploy step
 
-### C2 · Database Indexing
-- [ ] 🟠 Add index: `students(status)`
-- [ ] 🟠 Add index: `attendance(batch_id, date)` and `attendance(student_id, date)`
-- [ ] 🟠 Add index: `fees(student_id, status)`
-- [ ] 🟠 Add index: `notifications(user_id, user_type, is_read)`
-- [ ] 🟠 Add index: `batches(session_id, status)`
-- [ ] 🟠 Add index: `performance(student_id, date)`
-- [ ] 🟠 Add index: `bmi_records(student_id, date)`
-- [ ] 🟠 Deliver all indexes as Alembic migrations
+### C2 · Database Indexing ✅ COMPLETE
+- [x] 🟠 Add index: `students(status)`
+- [x] 🟠 Add index: `attendance(batch_id, date)` and `attendance(student_id, date)`
+- [x] 🟠 Add index: `fees(student_id, status)`
+- [x] 🟠 Add index: `notifications(user_id, user_type, is_read)`
+- [x] 🟠 Add index: `batches(session_id, status)`
+- [x] 🟠 Add index: `performance(student_id, date)`
+- [x] 🟠 Add index: `bmi_records(student_id, date)`
+- [x] 🟠 Deliver all indexes as Alembic migrations
 
 ### C3 · Database Backups
 - [ ] 🔴 Enable automated daily backups (`pg_dump` or cloud-managed)
