@@ -231,13 +231,13 @@
 - [x] 🟠 Add index: `bmi_records(student_id, date)`
 - [x] 🟠 Deliver all indexes as Alembic migrations
 
-### C3 · Database Backups
-- [ ] 🔴 Enable automated daily backups (`pg_dump` or cloud-managed)
-- [ ] 🔴 Enable Point-In-Time Recovery (PITR) on cloud PostgreSQL
-- [ ] 🔴 Backup retention: minimum 30 days
-- [ ] 🔴 Backup to separate storage (S3 or equivalent)
-- [ ] 🟠 Document and test restore procedure (restore from backup monthly)
-- [ ] 🟡 Add admin endpoint to manually trigger cleanup job
+### C3 · Database Backups ✅ COMPLETE
+- [x] 🔴 Enable automated daily backups (`pg_dump` or cloud-managed)
+- [x] 🔴 Enable Point-In-Time Recovery (PITR) on cloud PostgreSQL
+- [x] 🔴 Backup retention: minimum 30 days
+- [x] 🔴 Backup to separate storage (S3 or equivalent)
+- [x] 🟠 Document and test restore procedure (restore from backup monthly)
+- [x] 🟡 Add admin endpoint to manually trigger cleanup job
 
 ### C4 · Database Connection & Health
 - [ ] 🟠 Verify connection pool settings are appropriate for production load

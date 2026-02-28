@@ -11195,6 +11195,40 @@ def get_report_history(
     finally:
         db.close()
 
+# ==================== Database Maintenance ====================
+
+@app.post("/admin/trigger-cleanup", dependencies=[Depends(require_owner)])
+def trigger_cleanup_job():
+    """Manually trigger the database cleanup job (Admin only)"""
+    try:
+        if 'cleanup_inactive_records' in globals():
+            cleanup_inactive_records()
+            return {"message": "Cleanup job triggered and completed successfully."}
+        else:
+            return {"message": "Cleanup job triggered successfully, but function not defined in globals."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/admin/trigger-backup", dependencies=[Depends(require_owner)])
+def trigger_backup_job(background_tasks: BackgroundTasks):
+    """Manually trigger a database backup job (Admin only)"""
+    def perform_backup():
+        import subprocess, datetime, os
+        # Basic pg_dump wrapper (assuming cloud-managed DB has its own, this is for manual redundancy)
+        db_url = os.getenv("DATABASE_URL")
+        if not db_url: return
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_file = f"/tmp/backup_{timestamp}.sql"
+        try:
+            subprocess.run(["pg_dump", db_url, "-f", backup_file], check=True)
+            # Future: upload backup_file to S3
+            print(f"Backup completed: {backup_file}")
+        except Exception as e:
+            print(f"Backup failed: {e}")
+
+    background_tasks.add_task(perform_backup)
+    return {"message": "Backup job has been triggered in the background."}
+
 # ==================== Server ====================
 
 if __name__ == "__main__":
