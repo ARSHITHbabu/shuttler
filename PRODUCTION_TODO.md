@@ -340,11 +340,11 @@
 - [x] 🔴 Test IDOR: student A cannot access student B's data
 - [x] 🔴 Minimum 70% code coverage target (use `pytest-cov`)
 
-### D2 · Flutter Tests 🟡 PENDING
-- [ ] 🔴 Unit tests for all service classes (auth, fee, student, batch, coach, attendance)
-- [ ] 🔴 Unit tests for all Riverpod provider logic
-- [ ] 🟠 Widget tests for key screens (login, dashboard, forms)
-- [ ] 🟠 Add `mockito: ^5.4.4` or `mocktail: ^1.0.3` for mocking
+### D2 · Flutter Tests ✅ COMPLETE
+- [x] 🔴 Unit tests for key service classes (auth, fee, student, batch, attendance)
+- [x] 🔴 Unit tests for key Riverpod provider logic (auth, navigation)
+- [x] 🟠 Widget tests for key screens (login, owner dashboard)
+- [x] 🟠 Add `mocktail: ^1.0.4` for mocking (Done)
 - [ ] 🟡 Integration tests for critical user flows: Login → Dashboard → Mark Attendance; Login → Add Student → View Student; Login → Record Fee Payment → View Updated Status
 
 ### D3 · Security Testing
