@@ -281,14 +281,14 @@
 - [ ] 🟠 Move PDF generation to background task (FastAPI BackgroundTasks); return job ID; notify on completion
 - [ ] 🟡 Add `GET /reports/status/{job_id}` endpoint for async report status
 
-### C10 · Docker & CI/CD
-- [ ] 🔴 Create `Backend/Dockerfile` (multi-stage build)
-- [ ] 🟠 Create `docker-compose.yml` for local dev (FastAPI + PostgreSQL + Redis)
-- [ ] 🔴 Create `.github/workflows/backend-ci.yml`: lint → test → security-scan → build → deploy-staging → deploy-prod (with approval gate)
-- [ ] 🔴 Create `.github/workflows/flutter-ci.yml`: analyze → test → build-android → build-ios → deploy
-- [ ] 🔴 Three environments: Development (localhost), Staging (`api-staging.shuttler.app`), Production (`api.shuttler.app`)
-- [ ] 🟠 Create `.env.dev`, `.env.staging`, `.env.prod` (never commit `.env.prod`)
-- [ ] 🟡 Infrastructure as Code (Terraform / Pulumi) — or use managed platform defaults
+### C10 · Docker & CI/CD ✅ COMPLETE
+- [x] 🔴 Create `Backend/Dockerfile` (multi-stage build)
+- [x] 🟠 Create `docker-compose.yml` for local dev (FastAPI + PostgreSQL + Redis)
+- [x] 🔴 Create `.github/workflows/backend-ci.yml`: lint → test → security-scan → build → deploy-staging → deploy-prod (with approval gate)
+- [x] 🔴 Create `.github/workflows/flutter-ci.yml`: analyze → test → build-android → build-ios → deploy
+- [x] 🔴 Three environments: Development (localhost), Staging (`api-staging.shuttler.app`), Production (`api.shuttler.app`)
+- [x] 🟠 Create `.env.dev`, `.env.staging`, `.env.prod` (never commit `.env.prod`)
+- [x] 🟡 Infrastructure as Code (Terraform / Pulumi) — or use managed platform defaults
 
 ### C11 · Usage Capping & Quotas
 - [ ] 🟠 Per-academy API quota: 10,000 calls/day tracked in Redis
