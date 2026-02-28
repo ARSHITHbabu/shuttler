@@ -398,8 +398,8 @@
 - [x] 🔴 Use `--dart-define=API_URL=https://api.shuttler.app` for build-time config
 
 ### E6 · App Transport Security (iOS)
-- [ ] 🔴 Ensure ALL API calls use HTTPS before iOS submission (ATS will block HTTP)
-- [ ] 🔴 Remove any `NSAllowsArbitraryLoads: true` from `Info.plist`
+- [x] 🔴 Ensure ALL API calls use HTTPS before iOS submission (ATS will block HTTP)
+- [x] 🔴 Remove any `NSAllowsArbitraryLoads: true` from `Info.plist`
 
 ### E7 · API Timeout Configuration (Flutter)
 - [ ] 🟠 Set Dio connection timeout: 30 seconds
