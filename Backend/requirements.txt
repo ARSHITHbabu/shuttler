@@ -43,7 +43,7 @@ pytest-cov==4.1.0
 pytest-mock==3.12.0
 
 # Schema registry auto-discovery
-watchdog==3.0.0  # File watcher for automatic schema registry updates (optional but recommended)
+watchdog==6.0.0  # File watcher for automatic schema registry updates (optional but recommended)
 
 # Background Tasks
 apscheduler==3.10.4
