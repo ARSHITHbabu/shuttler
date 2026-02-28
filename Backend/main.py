@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, File, UploadFile, Query, Form, Request, Depends, Security
+from fastapi import FastAPI, HTTPException, File, UploadFile, Query, Form, Request, Depends, Security, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi.middleware.cors import CORSMiddleware
@@ -595,7 +595,7 @@ def send_overdue_fee_notifications():
 
 
 def cleanup_inactive_records():
-    """Background task to delete records inactive for > 2 years"""
+    """Background task to archive and delete records inactive for > 2 years"""
     db = SessionLocal()
     try:
         two_years_ago = datetime.now() - timedelta(days=730)
@@ -607,7 +607,17 @@ def cleanup_inactive_records():
         ).all()
         
         for student in inactive_students:
-            print(f"[Cleanup] Deleting student {student.id} (inactive since {student.inactive_at})")
+            print(f"[Cleanup] Archiving & deleting student {student.id} (inactive since {student.inactive_at})")
+            
+            # Archive before deleting
+            student_data = {c.name: str(getattr(student, c.name)) for c in student.__table__.columns}
+            archive_record = ArchiveRecordDB(
+                entity_type="student",
+                original_id=student.id,
+                data=student_data
+            )
+            db.add(archive_record)
+
             # Reuse the hard delete logic
             db.query(AttendanceDB).filter(AttendanceDB.student_id == student.id).delete()
             db.query(FeeDB).filter(FeeDB.student_id == student.id).delete()
@@ -625,7 +635,17 @@ def cleanup_inactive_records():
         ).all()
         
         for batch in inactive_batches:
-            print(f"[Cleanup] Deleting batch {batch.id} (inactive since {batch.inactive_at})")
+            print(f"[Cleanup] Archiving & deleting batch {batch.id} (inactive since {batch.inactive_at})")
+            
+            # Archive before deleting
+            batch_data = {c.name: str(getattr(batch, c.name)) for c in batch.__table__.columns}
+            archive_record = ArchiveRecordDB(
+                entity_type="batch",
+                original_id=batch.id,
+                data=batch_data
+            )
+            db.add(archive_record)
+
             db.query(AttendanceDB).filter(AttendanceDB.batch_id == batch.id).delete()
             db.query(FeeDB).filter(FeeDB.batch_id == batch.id).delete()
             db.query(PerformanceDB).filter(PerformanceDB.batch_id == batch.id).delete()
@@ -1074,6 +1094,14 @@ class ReportHistoryDB(Base):
     report_data = Column(JSON, nullable=False) # The full JSON data needed to recreate the report
     key_metrics = Column(JSON, nullable=True) # Optional summary metrics for quick display
 
+class ArchiveRecordDB(Base):
+    """Archived records for data retention policy"""
+    __tablename__ = "archive_records"
+    id = Column(Integer, primary_key=True, index=True)
+    entity_type = Column(String(50), nullable=False) # e.g. "student", "batch"
+    original_id = Column(Integer, nullable=False)
+    data = Column(JSON, nullable=False)
+    archived_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class ActiveSessionDB(Base):
     __tablename__ = "active_sessions"

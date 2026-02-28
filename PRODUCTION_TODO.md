@@ -246,10 +246,10 @@
 - [x] 🟠 Ensure `pool_pre_ping=True` is set for stale connection detection
 - [x] 🟠 Log when connection pool is exhausted
 
-### C5 · Data Archiving / Retention Policy
-- [ ] 🟡 Define and document data retention policy
-- [ ] 🟡 Archive to a separate archive table before deletion (don't hard-delete)
-- [ ] 🟡 Verify the APScheduler cleanup job (inactive records >2 years) is working correctly
+### C5 · Data Archiving / Retention Policy ✅ COMPLETE
+- [x] 🟡 Define and document data retention policy
+- [x] 🟡 Archive to a separate archive table before deletion (don't hard-delete)
+- [x] 🟡 Verify the APScheduler cleanup job (inactive records >2 years) is working correctly
 
 ### C6 · Cloud Deployment
 - [ ] 🔴 Select cloud provider: Railway.app or Render.com (recommended for start)
