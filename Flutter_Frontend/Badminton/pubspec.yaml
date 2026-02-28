@@ -83,6 +83,7 @@ dependencies:
   flutter_dotenv: ^6.0.0
   printing: ^5.14.2
   flutter_jailbreak_detection: ^1.10.0
+  flutter_windowmanager: ^0.2.0
 
 dev_dependencies:
   flutter_test:

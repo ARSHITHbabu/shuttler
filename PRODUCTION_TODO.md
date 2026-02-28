@@ -385,8 +385,8 @@
 - [x] 🟠 Show warning to user on compromised device (do not silently block to avoid locking out legitimate users)
 
 ### E3 · Screenshot & Screen Recording Prevention
-- [ ] 🟠 Add `flutter_windowmanager: ^0.2.0` (Android)
-- [ ] 🟠 Apply `FLAG_SECURE` on sensitive screens (fee data, personal info, guardian phone numbers)
+- [x] 🟠 Add `flutter_windowmanager: ^0.2.0` (Android)
+- [x] 🟠 Apply `FLAG_SECURE` on sensitive screens (fee data, personal info, guardian phone numbers)
 
 ### E4 · Certificate Pinning (Recommended)
 - [ ] 🟡 Pin backend SSL certificate public key in Dio client

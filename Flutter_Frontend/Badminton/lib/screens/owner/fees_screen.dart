@@ -6,6 +6,7 @@ import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import 'tabs/coach_salary_tab.dart';
 import 'tabs/student_fees_view.dart';
+import 'package:flutter_windowmanager/flutter_windowmanager.dart';
 
 class FeesScreen extends ConsumerStatefulWidget {
   final int? selectedStudentId;
@@ -27,6 +28,7 @@ class _FeesScreenState extends ConsumerState<FeesScreen> with SingleTickerProvid
   @override
   void initState() {
     super.initState();
+    _secureScreen();
     _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) {
@@ -35,8 +37,13 @@ class _FeesScreenState extends ConsumerState<FeesScreen> with SingleTickerProvid
     });
   }
 
+  Future<void> _secureScreen() async {
+    await FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_SECURE);
+  }
+
   @override
   void dispose() {
+    FlutterWindowManager.clearFlags(FlutterWindowManager.FLAG_SECURE);
     _tabController.dispose();
     super.dispose();
   }

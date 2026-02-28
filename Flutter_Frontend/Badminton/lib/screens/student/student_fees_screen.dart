@@ -9,6 +9,7 @@ import '../../widgets/common/error_widget.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/fee_provider.dart';
 import '../../models/fee.dart';
+import 'package:flutter_windowmanager/flutter_windowmanager.dart';
 
 /// Student Fees Screen - READ-ONLY view of fee status and payment history
 /// Students can view their fee records but cannot make payments
@@ -23,6 +24,22 @@ class StudentFeesScreen extends ConsumerStatefulWidget {
 
 class _StudentFeesScreenState extends ConsumerState<StudentFeesScreen> {
   String _selectedFilter = 'all'; // 'all', 'paid', 'partial', 'pending', 'overdue'
+
+  @override
+  void initState() {
+    super.initState();
+    _secureScreen();
+  }
+
+  Future<void> _secureScreen() async {
+    await FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_SECURE);
+  }
+
+  @override
+  void dispose() {
+    FlutterWindowManager.clearFlags(FlutterWindowManager.FLAG_SECURE);
+    super.dispose();
+  }
 
   // Calculate stats from fee list
   Map<String, dynamic> _calculateStats(List<Fee> fees) {
