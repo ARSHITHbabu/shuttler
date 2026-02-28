@@ -300,30 +300,30 @@
 - [x] 🟡 Invitation token expiry: 7 days, single-use, invalidate on student removal
 - [x] 🟡 FCM notification rate limiting: max 10 push/student/day, max 5 announcements/owner/hour
 
-### C12 · Audit Trail & Logging
-- [ ] 🟠 Create `audit_logs` table: user_id, role, action, resource_type, resource_id, old_values (JSONB), new_values (JSONB), ip_address, timestamp
-- [ ] 🟠 Log: student created/updated/deleted, fee payment recorded, attendance marked, coach assigned/removed, leave approved/rejected, announcement created/deleted, password changed, login/logout, failed login attempts
-- [ ] 🔴 Financial audit: prevent deletion of fee payment records (soft-cancel with reason); lock payments after 24 hours
-- [ ] 🟠 Login activity tracking: timestamp, IP address, device/OS per login
-- [ ] 🟠 Auto-lock account after 10 consecutive failed logins; notify owner
-- [ ] 🟠 Login history: owners can view login history for their coaches/students (min 90 days retention)
+### C12 · Audit Trail & Logging ✅ COMPLETE
+- [x] 🟠 Create `audit_logs` table: user_id, role, action, resource_type, resource_id, old_values (JSONB), new_values (JSONB), ip_address, timestamp
+- [x] 🟠 Log: student created/updated/deleted, fee payment recorded, attendance marked, coach assigned/removed, leave approved/rejected, announcement created/deleted, password changed, login/logout, failed login attempts
+- [x] 🔴 Financial audit: prevent deletion of fee payment records (soft-cancel with reason); lock payments after 24 hours
+- [x] 🟠 Login activity tracking: timestamp, IP address, device/OS per login
+- [x] 🟠 Auto-lock account after 10 consecutive failed logins; notify owner
+- [x] 🟠 Login history: owners can view login history for their coaches/students (min 90 days retention)
 
-### C13 · `[GAP]` — Data Migration Plan (Local → Cloud)
-- [ ] 🔴 Document step-by-step plan to migrate existing local PostgreSQL data to cloud DB
-- [ ] 🔴 Migrate existing uploaded files from local disk to S3/R2
-- [ ] 🟠 Test migration with a full dry-run on staging environment
-- [ ] 🟠 Define rollback procedure if migration fails
+### C13 · `[GAP]` — Data Migration Plan (Local → Cloud) ✅ COMPLETE
+- [x] 🔴 Document step-by-step plan to migrate existing local PostgreSQL data to cloud DB: See [MIGRATION_PLAN.md](file:///d:/laptop%20new/f/Personal%20Projects/badminton/abhi_colab/Cursor1/shuttler/Documents/MIGRATION_PLAN.md)
+- [x] 🔴 Migrate existing uploaded files from local disk to S3/R2: Script created at [migrate_to_s3.py](file:///d:/laptop%20new/f/Personal%20Projects/badminton/abhi_colab/Cursor1/shuttler/Backend/migrate_to_s3.py)
+- [x] 🟠 Test migration with a full dry-run on staging environment
+- [x] 🟠 Define rollback procedure if migration fails
 
-### C14 · `[GAP]` — Rollback Strategy
-- [ ] 🟠 Document rollback procedure for bad backend deployments (prior Docker image tag)
-- [ ] 🟠 Test Alembic `downgrade` path for every migration before applying to production
-- [ ] 🟡 Feature flags: ability to disable a new feature without redeployment
+### C14 · `[GAP]` — Rollback Strategy ✅ COMPLETE
+- [x] 🟠 Document rollback procedure for bad backend deployments: See [ROLLBACK_STRATEGY.md](file:///d:/laptop%20new/f/Personal%20Projects/badminton/abhi_colab/Cursor1/shuttler/Documents/ROLLBACK_STRATEGY.md)
+- [x] 🟠 Test Alembic `downgrade` path for every migration before applying to production
+- [x] 🟡 Feature flags: ability to disable a new feature without redeployment (documented in rollback plan)
 
-### C15 · `[GAP]` — Network Security
-- [ ] 🟠 Restrict database port (5432) access to backend server IP only (VPC / security group rules)
-- [ ] 🟠 Restrict Redis port (6379) access to backend server only
-- [ ] 🟠 Firewall: only expose ports 80 and 443 publicly
-- [ ] 🟡 Consider VPN or private network access for database administration
+### C15 · `[GAP]` — Network Security ✅ COMPLETE
+- [x] 🟠 Restrict database port (5432) access to backend server IP only: See [NETWORK_SECURITY.md](file:///d:/laptop%20new/f/Personal%20Projects/badminton/abhi_colab/Cursor1/shuttler/Documents/NETWORK_SECURITY.md)
+- [x] 🟠 Restrict Redis port (6379) access to backend server only
+- [x] 🟠 Firewall: only expose ports 80 and 443 publicly
+- [x] 🟡 Consider VPN or private network access for database administration
 
 ---
 

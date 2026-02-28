@@ -317,6 +317,68 @@ def verify_coach_student_access(coach_id: int, student_id: int, db) -> bool:
         ).first()
     )
 
+
+def emit_audit_log(db, user_id, role, action, resource_type, resource_id=None, old_values=None, new_values=None, ip_address=None):
+    from datetime import datetime
+    try:
+        log = AuditLogDB(
+            user_id=user_id,
+            role=role,
+            action=action,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            old_values=old_values,
+            new_values=new_values,
+            ip_address=ip_address
+        )
+        db.add(log)
+        db.commit()
+    except Exception as e:
+        print(f"[AuditLog] Err: {e}")
+        db.rollback()
+
+def record_login_history(db, user_id, user_type, ip_address, user_agent, status):
+    from datetime import datetime
+    try:
+        log = LoginHistoryDB(
+            user_id=user_id,
+            user_type=user_type,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            status=status
+        )
+        db.add(log)
+        db.commit()
+    except Exception as e:
+        print(f"[LoginHistory] Err: {e}")
+        db.rollback()
+
+def check_account_lock(user):
+    from datetime import datetime
+    if hasattr(user, 'locked_until') and user.locked_until is not None:
+        if user.locked_until.replace(tzinfo=None) > datetime.utcnow():
+            raise HTTPException(status_code=403, detail="Account is locked due to multiple failed login attempts. Please contact admin.")
+
+def handle_failed_login(db, user, user_type, ip_address, user_agent):
+    from datetime import datetime, timedelta
+    if hasattr(user, 'failed_login_attempts'):
+        user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+        if user.failed_login_attempts >= 10:
+            user.locked_until = datetime.utcnow() + timedelta(hours=24)
+            print(f"[Security] Account locked for {user_type} {user.id}")
+            # Could trigger an email to owner here
+        db.commit()
+    record_login_history(db, user.id, user_type, ip_address, user_agent, "failed")
+    raise HTTPException(status_code=401, detail="Invalid email or password")
+
+def handle_successful_login(db, user, user_type, ip_address, user_agent):
+    if hasattr(user, 'failed_login_attempts') and (user.failed_login_attempts or 0) > 0:
+        user.failed_login_attempts = 0
+        user.locked_until = None
+        db.commit()
+    record_login_history(db, user.id, user_type, ip_address, user_agent, "success")
+
+
 def get_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials = Security(security),
@@ -923,6 +985,8 @@ class FeePaymentDB(Base):
     payee_name = Column(String, nullable=True)  # For non-student payees (parents, siblings, etc.)
     payment_method = Column(String, nullable=True)
     collected_by = Column(String, nullable=True)
+    is_cancelled = Column(Boolean, default=False)
+    cancel_reason = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     fee = relationship("FeeDB", back_populates="payments")
 
@@ -3932,7 +3996,8 @@ def unified_login(request: Request, login_data: UnifiedLoginRequest):
 
         # 1. Try OwnerDB
         owner = db.query(OwnerDB).filter(OwnerDB.email == login_data.email).first()
-        if owner:
+    if owner:
+        check_account_lock(owner)
             password_valid = False
             if owner.password.startswith('$2b$') or owner.password.startswith('$2a$'):
                 password_valid = verify_password(login_data.password, owner.password)
@@ -3945,7 +4010,9 @@ def unified_login(request: Request, login_data: UnifiedLoginRequest):
             if password_valid:
                 if owner.status == "inactive":
                     return {"success": False, "message": "Your account has been deactivated."}
-
+                handle_successful_login(db, owner, "owner", request.client.host if request.client else None, request.headers.get("user-agent"))
+            else:
+                handle_failed_login(db, owner, "owner", request.client.host if request.client else None, request.headers.get("user-agent"))
                 access_token, refresh_token = _make_tokens(owner.id, "owner", owner.email, owner.role or "owner")
                 return {
                     "success": True,
@@ -3970,7 +4037,8 @@ def unified_login(request: Request, login_data: UnifiedLoginRequest):
 
         # 2. Try CoachDB
         coach = db.query(CoachDB).filter(CoachDB.email == login_data.email).first()
-        if coach:
+    if coach:
+        check_account_lock(coach)
             password_valid = False
             if coach.password.startswith('$2b$') or coach.password.startswith('$2a$'):
                 password_valid = verify_password(login_data.password, coach.password)
@@ -3983,7 +4051,9 @@ def unified_login(request: Request, login_data: UnifiedLoginRequest):
             if password_valid:
                 if coach.status == "inactive":
                     return {"success": False, "message": "Your account has been deactivated."}
-
+                handle_successful_login(db, coach, "coach", request.client.host if request.client else None, request.headers.get("user-agent"))
+            else:
+                handle_failed_login(db, coach, "coach", request.client.host if request.client else None, request.headers.get("user-agent"))
                 access_token, refresh_token = _make_tokens(coach.id, "coach", coach.email, "coach")
                 return {
                     "success": True,
@@ -4005,7 +4075,8 @@ def unified_login(request: Request, login_data: UnifiedLoginRequest):
 
         # 3. Try StudentDB
         student = db.query(StudentDB).filter(StudentDB.email == login_data.email).first()
-        if student:
+    if student:
+        check_account_lock(student)
             password_valid = False
             if student.password.startswith('$2b$') or student.password.startswith('$2a$'):
                 password_valid = verify_password(login_data.password, student.password)
@@ -4034,6 +4105,7 @@ def unified_login(request: Request, login_data: UnifiedLoginRequest):
                         "student_id": student.id,
                     }
 
+                handle_successful_login(db, student, "student", request.client.host if request.client else None, request.headers.get("user-agent"))
                 access_token, refresh_token = _make_tokens(student.id, "student", student.email, "student")
                 return {
                     "success": True,
@@ -4889,8 +4961,8 @@ def login_owner(login_data: OwnerLogin):
     db = SessionLocal()
     try:
         owner = db.query(OwnerDB).filter(OwnerDB.email == login_data.email).first()
-        
-        if owner:
+    if owner:
+        check_account_lock(owner)
             # Verify password
             password_valid = False
             if owner.password.startswith('$2b$') or owner.password.startswith('$2a$'):
@@ -6866,8 +6938,8 @@ def get_fee_payments(fee_id: int):
         db.close()
 
 @app.delete("/fees/{fee_id}/payments/{payment_id}", dependencies=[Depends(require_owner)])
-def delete_fee_payment(fee_id: int, payment_id: int):
-    """Delete a payment and recalculate fee status"""
+def delete_fee_payment(fee_id: int, payment_id: int, cancel_reason: str = Body(..., embed=True), current_user: dict = Depends(require_owner)):
+    """Soft cancel a payment and recalculate fee status (C12 requirement)"""
     db = SessionLocal()
     try:
         payment = db.query(FeePaymentDB).filter(
@@ -6877,18 +6949,28 @@ def delete_fee_payment(fee_id: int, payment_id: int):
         if not payment:
             raise HTTPException(status_code=404, detail="Payment not found")
         
-        db.delete(payment)
+        # Lock check: Prevent cancellation after 24 hours
+        time_diff = datetime.utcnow() - payment.created_at.replace(tzinfo=None)
+        if time_diff.total_seconds() > 86400: # 24 hours
+            raise HTTPException(status_code=403, detail="Payments cannot be cancelled after 24 hours.")
+
+        payment.is_cancelled = True
+        payment.cancel_reason = cancel_reason
         db.commit()
         
         # Recalculate fee status
         fee = db.query(FeeDB).filter(FeeDB.id == fee_id).first()
         if fee:
-            total_paid = calculate_total_paid(fee_id, db)
+            query = db.query(func.sum(FeePaymentDB.amount)).filter(FeePaymentDB.fee_id == fee_id, FeePaymentDB.is_cancelled == False)
+            total_paid = query.scalar() or 0.0
             new_status = calculate_fee_status(fee.amount, total_paid, fee.due_date)
             fee.status = new_status
             db.commit()
         
-        return {"message": "Payment deleted successfully"}
+        # Audit log
+        emit_audit_log(db, int(current_user["sub"]), current_user["role"], "CANCEL_PAYMENT", "fee_payment", payment_id, {"amount": payment.amount}, {"is_cancelled": True, "reason": cancel_reason})
+        
+        return {"message": "Payment cancelled successfully"}
     finally:
         db.close()
 
@@ -11451,6 +11533,13 @@ def trigger_backup_job(background_tasks: BackgroundTasks):
     return {"message": "Backup job has been triggered in the background."}
 
 # ==================== C4: Health Check Endpoints ====================
+
+
+@app.get("/login-history/", dependencies=[Depends(require_owner)])
+def get_login_history(db: Session = Depends(get_db)):
+    # Returns last 90 days logins for coaches/students
+    logs = db.query(LoginHistoryDB).order_by(LoginHistoryDB.created_at.desc()).limit(200).all()
+    return logs
 
 @app.get("/health")
 async def health_check():
