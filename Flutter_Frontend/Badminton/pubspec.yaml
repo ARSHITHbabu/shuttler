@@ -82,6 +82,7 @@ dependencies:
   path_provider: ^2.1.1
   flutter_dotenv: ^6.0.0
   printing: ^5.14.2
+  flutter_jailbreak_detection: ^1.10.0
 
 dev_dependencies:
   flutter_test:

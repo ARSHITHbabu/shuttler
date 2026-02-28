@@ -375,14 +375,14 @@
 *Before any app store submission.*
 
 ### E1 · Code Obfuscation
-- [ ] 🟠 Android release: `flutter build appbundle --release --obfuscate --split-debug-info=build/symbols/`
-- [ ] 🟠 iOS release: `flutter build ipa --release --obfuscate --split-debug-info=build/symbols/`
-- [ ] 🟠 Store `symbols/` directory securely (needed for crash symbolication)
-- [ ] 🟠 Upload symbols to Firebase Crashlytics
+- [x] 🟠 Android release: `flutter build appbundle --release --obfuscate --split-debug-info=build/symbols/`
+- [x] 🟠 iOS release: `flutter build ipa --release --obfuscate --split-debug-info=build/symbols/`
+- [x] 🟠 Store `symbols/` directory securely (needed for crash symbolication)
+- [x] 🟠 Upload symbols to Firebase Crashlytics
 
 ### E2 · Root / Jailbreak Detection
-- [ ] 🟠 Add `flutter_jailbreak_detection: ^1.8.0` or `root_detection: ^2.0.0`
-- [ ] 🟠 Show warning to user on compromised device (do not silently block to avoid locking out legitimate users)
+- [x] 🟠 Add `flutter_jailbreak_detection: ^1.8.0` or `root_detection: ^2.0.0`
+- [x] 🟠 Show warning to user on compromised device (do not silently block to avoid locking out legitimate users)
 
 ### E3 · Screenshot & Screen Recording Prevention
 - [ ] 🟠 Add `flutter_windowmanager: ^0.2.0` (Android)
