@@ -761,6 +761,8 @@ class CoachDB(Base):
 
     # JWT: all tokens issued before this timestamp are invalid (used for password-change revocation)
     jwt_invalidated_at = Column(DateTime(timezone=True), nullable=True)
+    failed_login_attempts = Column(Integer, default=0)
+    locked_until = Column(DateTime(timezone=True), nullable=True)
 
     # RELATIONSHIPS (will be defined after the related models are created):
     # Note: Announcements and calendar events now support both coaches and owners via polymorphic relationships
@@ -795,6 +797,8 @@ class OwnerDB(Base):
 
     # JWT: all tokens issued before this timestamp are invalid (used for password-change revocation)
     jwt_invalidated_at = Column(DateTime(timezone=True), nullable=True)
+    failed_login_attempts = Column(Integer, default=0)
+    locked_until = Column(DateTime(timezone=True), nullable=True)
     
     # RELATIONSHIPS (will be defined after the related models are created):
     # Note: Announcements and calendar events now support both coaches and owners via polymorphic relationships
@@ -851,6 +855,8 @@ class StudentDB(Base):
 
     # JWT: all tokens issued before this timestamp are invalid (used for password-change revocation)
     jwt_invalidated_at = Column(DateTime(timezone=True), nullable=True)
+    failed_login_attempts = Column(Integer, default=0)
+    locked_until = Column(DateTime(timezone=True), nullable=True)
 
 class BatchStudentDB(Base):
     __tablename__ = "batch_students"
@@ -1184,6 +1190,30 @@ class ArchiveRecordDB(Base):
     data = Column(JSON, nullable=False)
     archived_at = Column(DateTime(timezone=True), server_default=func.now())
 
+
+class AuditLogDB(Base):
+    __tablename__ = "audit_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True)
+    role = Column(String(50))
+    action = Column(String(255))
+    resource_type = Column(String(50))
+    resource_id = Column(Integer)
+    old_values = Column(JSON, nullable=True)
+    new_values = Column(JSON, nullable=True)
+    ip_address = Column(String(100))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class LoginHistoryDB(Base):
+    __tablename__ = "login_history"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True)
+    user_type = Column(String(50))
+    ip_address = Column(String(100))
+    user_agent = Column(String(500))
+    status = Column(String(50))  # "success" or "failed"
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
 class ActiveSessionDB(Base):
     __tablename__ = "active_sessions"
     id = Column(Integer, primary_key=True, index=True)
@@ -1264,6 +1294,8 @@ def migrate_database_schema(engine):
         if 'coaches' in tables:
             check_and_add_column(engine, 'coaches', 'profile_photo', 'VARCHAR(500)', nullable=True)
             check_and_add_column(engine, 'coaches', 'fcm_token', 'VARCHAR(500)', nullable=True)
+            check_and_add_column(engine, 'coaches', 'failed_login_attempts', 'INTEGER', nullable=True, default_value='0')
+            check_and_add_column(engine, 'coaches', 'locked_until', 'TIMESTAMP WITH TIME ZONE', nullable=True)
             check_and_add_column(engine, 'coaches', 'monthly_salary', 'FLOAT', nullable=True)
             check_and_add_column(engine, 'coaches', 'joining_date', 'DATE', nullable=True)
         
