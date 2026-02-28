@@ -330,17 +330,17 @@
 ## PHASE D — Testing
 *Minimum 70% coverage target. Estimated: 2 weeks.*
 
-### D1 · Backend Tests
-- [ ] 🔴 Add `pytest==7.4.3`, `httpx==0.25.2`, `pytest-asyncio==0.21.1` to requirements
-- [ ] 🔴 Unit tests: fee calculation, status calculation, invitation token generation
-- [ ] 🔴 Integration tests for all 100+ API endpoints using `httpx` TestClient
-- [ ] 🔴 Separate test database (not production)
-- [ ] 🔴 Test authentication flows: login, token refresh, invalid token, expired token
-- [ ] 🔴 Test role-based access: student trying owner endpoints → 403; coach trying owner endpoints → 403
-- [ ] 🔴 Test IDOR: student A cannot access student B's data
-- [ ] 🔴 Minimum 70% code coverage target (use `pytest-cov`)
+### D1 · Backend Tests ✅ COMPLETE
+- [x] 🔴 Add `pytest==7.4.3`, `httpx==0.25.2`, `pytest-asyncio==0.21.1` to requirements
+- [x] 🔴 Unit tests: fee calculation, status calculation, invitation token generation
+- [x] 🔴 Integration tests for all 100+ API endpoints using `httpx` TestClient
+- [x] 🔴 Separate test database (not production)
+- [x] 🔴 Test authentication flows: login, token refresh, invalid token, expired token
+- [x] 🔴 Test role-based access: student trying owner endpoints → 403; coach trying owner endpoints → 403
+- [x] 🔴 Test IDOR: student A cannot access student B's data
+- [x] 🔴 Minimum 70% code coverage target (use `pytest-cov`)
 
-### D2 · Flutter Tests
+### D2 · Flutter Tests 🟡 PENDING
 - [ ] 🔴 Unit tests for all service classes (auth, fee, student, batch, coach, attendance)
 - [ ] 🔴 Unit tests for all Riverpod provider logic
 - [ ] 🟠 Widget tests for key screens (login, dashboard, forms)

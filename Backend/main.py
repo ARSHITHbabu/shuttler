@@ -3996,12 +3996,14 @@ def unified_login(request: Request, login_data: UnifiedLoginRequest):
 
         # 1. Try OwnerDB
         owner = db.query(OwnerDB).filter(OwnerDB.email == login_data.email).first()
-    if owner:
-        check_account_lock(owner)
+        if owner:
+            check_account_lock(owner)
+            # Verify password
             password_valid = False
             if owner.password.startswith('$2b$') or owner.password.startswith('$2a$'):
                 password_valid = verify_password(login_data.password, owner.password)
             else:
+                # Plain text password (legacy), check directly and upgrade to hash
                 password_valid = (owner.password == login_data.password)
                 if password_valid:
                     owner.password = hash_password(login_data.password)
@@ -4011,8 +4013,6 @@ def unified_login(request: Request, login_data: UnifiedLoginRequest):
                 if owner.status == "inactive":
                     return {"success": False, "message": "Your account has been deactivated."}
                 handle_successful_login(db, owner, "owner", request.client.host if request.client else None, request.headers.get("user-agent"))
-            else:
-                handle_failed_login(db, owner, "owner", request.client.host if request.client else None, request.headers.get("user-agent"))
                 access_token, refresh_token = _make_tokens(owner.id, "owner", owner.email, owner.role or "owner")
                 return {
                     "success": True,
@@ -4034,15 +4034,19 @@ def unified_login(request: Request, login_data: UnifiedLoginRequest):
                         "academy_email": owner.academy_email,
                     },
                 }
+            else:
+                handle_failed_login(db, owner, "owner", request.client.host if request.client else None, request.headers.get("user-agent"))
 
         # 2. Try CoachDB
         coach = db.query(CoachDB).filter(CoachDB.email == login_data.email).first()
-    if coach:
-        check_account_lock(coach)
+        if coach:
+            check_account_lock(coach)
+            # Verify password
             password_valid = False
             if coach.password.startswith('$2b$') or coach.password.startswith('$2a$'):
                 password_valid = verify_password(login_data.password, coach.password)
             else:
+                # Plain text password (legacy), check directly and upgrade to hash
                 password_valid = (coach.password == login_data.password)
                 if password_valid:
                     coach.password = hash_password(login_data.password)
@@ -4052,8 +4056,6 @@ def unified_login(request: Request, login_data: UnifiedLoginRequest):
                 if coach.status == "inactive":
                     return {"success": False, "message": "Your account has been deactivated."}
                 handle_successful_login(db, coach, "coach", request.client.host if request.client else None, request.headers.get("user-agent"))
-            else:
-                handle_failed_login(db, coach, "coach", request.client.host if request.client else None, request.headers.get("user-agent"))
                 access_token, refresh_token = _make_tokens(coach.id, "coach", coach.email, "coach")
                 return {
                     "success": True,
@@ -4072,21 +4074,26 @@ def unified_login(request: Request, login_data: UnifiedLoginRequest):
                         "profile_photo": coach.profile_photo,
                     },
                 }
+            else:
+                handle_failed_login(db, coach, "coach", request.client.host if request.client else None, request.headers.get("user-agent"))
 
         # 3. Try StudentDB
         student = db.query(StudentDB).filter(StudentDB.email == login_data.email).first()
-    if student:
-        check_account_lock(student)
+        if student:
+            check_account_lock(student)
+            # Verify password
             password_valid = False
             if student.password.startswith('$2b$') or student.password.startswith('$2a$'):
                 password_valid = verify_password(login_data.password, student.password)
             else:
+                # Plain text password (legacy), check directly and upgrade to hash
                 password_valid = (student.password == login_data.password)
                 if password_valid:
                     student.password = hash_password(login_data.password)
                     db.commit()
 
             if password_valid:
+                # B11: Check if profile is complete (required for students)
                 required_profile_fields = {
                     'guardian_name': student.guardian_name,
                     'guardian_phone': student.guardian_phone,
@@ -4123,6 +4130,8 @@ def unified_login(request: Request, login_data: UnifiedLoginRequest):
                         "profile_photo": student.profile_photo,
                     },
                 }
+            else:
+                handle_failed_login(db, student, "student", request.client.host if request.client else None, request.headers.get("user-agent"))
 
         return {"success": False, "message": "Invalid email or password"}
     finally:
@@ -4961,8 +4970,8 @@ def login_owner(login_data: OwnerLogin):
     db = SessionLocal()
     try:
         owner = db.query(OwnerDB).filter(OwnerDB.email == login_data.email).first()
-    if owner:
-        check_account_lock(owner)
+        if owner:
+            check_account_lock(owner)
             # Verify password
             password_valid = False
             if owner.password.startswith('$2b$') or owner.password.startswith('$2a$'):
