@@ -20,6 +20,8 @@ import '../../../widgets/forms/edit_fee_dialog.dart';
 import '../../../models/fee_payment.dart';
 import '../../../models/batch_fee_group.dart';
 import '../student_profile_screen.dart';
+import '../../../core/constants/api_endpoints.dart';
+import '../../../widgets/common/cached_profile_image.dart';
 import 'package:intl/intl.dart';
 
 class StudentFeesView extends ConsumerStatefulWidget {
@@ -341,13 +343,12 @@ class _StudentFeesViewState extends ConsumerState<StudentFeesView> {
       },
       child: Row(
         children: [
-           CircleAvatar(
-             radius: 20,
-             backgroundColor: AppColors.surfaceLight,
-             backgroundImage: studentFee.student.profilePhoto != null ? NetworkImage(studentFee.student.profilePhoto!) : null,
-             child: studentFee.student.profilePhoto == null 
-                 ? Text(studentFee.student.name[0], style: const TextStyle(color: AppColors.textPrimary)) 
-                 : null,
+           CachedProfileImage(
+             imageUrl: studentFee.student.profilePhoto != null 
+                 ? ApiEndpoints.imageUrl(studentFee.student.profilePhoto!)
+                 : '',
+             size: 40,
+             placeholderText: studentFee.student.name,
            ),
            const SizedBox(width: AppDimensions.spacingM),
            Expanded(

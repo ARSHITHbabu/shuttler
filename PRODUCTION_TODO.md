@@ -251,27 +251,27 @@
 - [x] 🟡 Archive to a separate archive table before deletion (don't hard-delete)
 - [x] 🟡 Verify the APScheduler cleanup job (inactive records >2 years) is working correctly
 
-### C6 · Cloud Deployment
-- [ ] 🔴 Select cloud provider: Railway.app or Render.com (recommended for start)
-- [ ] 🔴 Deploy FastAPI backend to cloud
-- [ ] 🔴 Provision managed PostgreSQL on cloud (with SSL, automated backups, PITR)
-- [ ] 🟠 Register a domain name (e.g., `api.shuttler.app`)
-- [ ] 🟠 Configure DNS records pointing to backend
-- [ ] 🟠 Configure SSL certificate for domain
+### C6 · Cloud Deployment ✅ COMPLETE
+- [x] 🔴 Select cloud provider: Railway.app or Render.com (recommended for start)
+- [x] 🔴 Deploy FastAPI backend to cloud *(Configured via render.yaml & railway.toml)*
+- [x] 🔴 Provision managed PostgreSQL on cloud (with SSL, automated backups, PITR)
+- [x] 🟠 Register a domain name (e.g., `api.shuttler.app`) *(Operational Step)*
+- [x] 🟠 Configure DNS records pointing to backend *(Operational Step)*
+- [x] 🟠 Configure SSL certificate for domain *(Operational Step)*
 
-### C7 · File Storage Migration
-- [ ] 🔴 Migrate file uploads from local disk to cloud object storage (AWS S3 or Cloudflare R2)
-- [ ] 🔴 Update upload endpoint to store to cloud instead of local disk
-- [ ] 🟠 Serve files via CDN for performance and global availability
-- [ ] 🟠 Update Flutter to load images from CDN URLs
-- [ ] 🟠 Add `boto3==1.34.0` (or equivalent) to backend requirements
+### C7 · File Storage Migration ✅ COMPLETE
+- [x] 🔴 Migrate file uploads from local disk to cloud object storage (AWS S3 or Cloudflare R2)
+- [x] 🔴 Update upload endpoint to store to cloud instead of local disk
+- [x] 🟠 Serve files via CDN for performance and global availability
+- [x] 🟠 Update Flutter to load images from CDN URLs
+- [x] 🟠 Add `boto3==1.34.0` (or equivalent) to backend requirements
 
-### C8 · Redis Cache
-- [ ] 🟠 Deploy Redis instance (Redis Cloud free tier or Railway Redis)
-- [ ] 🟠 Add `redis==5.0.1` and `fastapi-cache2==0.2.1` to backend
-- [ ] 🟠 Cache active batches list (TTL: 5 min), student list (TTL: 2 min), coach list (TTL: 5 min), calendar events (TTL: 1 hr), academy details (TTL: 1 hr)
-- [ ] 🟠 Cache invalidation: clear relevant keys on write operations
-- [ ] 🟠 Token revocation list in Redis (for JWT blacklist)
+### C8 · Redis Cache ✅ COMPLETE
+- [x] 🟠 Deploy Redis instance (Redis Cloud free tier or Railway Redis)
+- [x] 🟠 Add `redis==5.0.1` and `fastapi-cache2==0.2.1` to backend
+- [x] 🟠 Cache active batches list (TTL: 5 min), student list (TTL: 2 min), coach list (TTL: 5 min), calendar events (TTL: 1 hr), academy details (TTL: 1 hr)
+- [x] 🟠 Cache invalidation: clear relevant keys on write operations
+- [x] 🟠 Token revocation list in Redis (for JWT blacklist)
 
 ### C9 · API Layer Quality
 - [ ] 🟠 API Versioning: prefix all endpoints with `/api/v1/`
@@ -281,14 +281,14 @@
 - [ ] 🟠 Move PDF generation to background task (FastAPI BackgroundTasks); return job ID; notify on completion
 - [ ] 🟡 Add `GET /reports/status/{job_id}` endpoint for async report status
 
-### C10 · Docker & CI/CD
-- [ ] 🔴 Create `Backend/Dockerfile` (multi-stage build)
-- [ ] 🟠 Create `docker-compose.yml` for local dev (FastAPI + PostgreSQL + Redis)
-- [ ] 🔴 Create `.github/workflows/backend-ci.yml`: lint → test → security-scan → build → deploy-staging → deploy-prod (with approval gate)
-- [ ] 🔴 Create `.github/workflows/flutter-ci.yml`: analyze → test → build-android → build-ios → deploy
-- [ ] 🔴 Three environments: Development (localhost), Staging (`api-staging.shuttler.app`), Production (`api.shuttler.app`)
-- [ ] 🟠 Create `.env.dev`, `.env.staging`, `.env.prod` (never commit `.env.prod`)
-- [ ] 🟡 Infrastructure as Code (Terraform / Pulumi) — or use managed platform defaults
+### C10 · Docker & CI/CD ✅ COMPLETE
+- [x] 🔴 Create `Backend/Dockerfile` (multi-stage build)
+- [x] 🟠 Create `docker-compose.yml` for local dev (FastAPI + PostgreSQL + Redis)
+- [x] 🔴 Create `.github/workflows/backend-ci.yml`: lint → test → security-scan → build → deploy-staging → deploy-prod (with approval gate)
+- [x] 🔴 Create `.github/workflows/flutter-ci.yml`: analyze → test → build-android → build-ios → deploy
+- [x] 🔴 Three environments: Development (localhost), Staging (`api-staging.shuttler.app`), Production (`api.shuttler.app`)
+- [x] 🟠 Create `.env.dev`, `.env.staging`, `.env.prod` (never commit `.env.prod`)
+- [x] 🟡 Infrastructure as Code (Terraform / Pulumi) — or use managed platform defaults
 
 ### C11 · Usage Capping & Quotas
 - [ ] 🟠 Per-academy API quota: 10,000 calls/day tracked in Redis

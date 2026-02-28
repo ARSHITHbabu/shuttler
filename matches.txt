@@ -1,0 +1,13 @@
+1: from fastapi import FastAPI, HTTPException, File, UploadFile, Query, Form, Request, Depends, Security, BackgroundTasks
+155:     # DO NOT EXHAUST REQUEST BODY STREAM: we avoid reading body here to not break FastAPI request parsing
+324:     '''FastAPI dependency that validates a JWT access token.
+3169: # ==================== FastAPI App ====================
+3181: app = FastAPI(title="Badminton Academy Management System")
+3203: from fastapi_cache import FastAPICache
+3222:             FastAPICache.init(RedisBackend(redis_client), prefix="shuttler-cache")
+3234:         # FastAPI worker threads don't have an event loop running, so we can run one.
+3239:             loop.run_until_complete(FastAPICache.clear(namespace=namespace))
+3241:             loop.run_until_complete(FastAPICache.clear(namespace=namespace))
+3244:             asyncio.run(FastAPICache.clear(namespace=namespace))
+3377:     # DO NOT EXHAUST REQUEST BODY STREAM: we avoid reading body here to not break FastAPI request parsing
+4218:     # DO NOT EXHAUST REQUEST BODY STREAM: we avoid reading body here to not break FastAPI request parsing
