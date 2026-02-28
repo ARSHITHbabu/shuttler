@@ -300,13 +300,13 @@
 - [x] 🟡 Invitation token expiry: 7 days, single-use, invalidate on student removal
 - [x] 🟡 FCM notification rate limiting: max 10 push/student/day, max 5 announcements/owner/hour
 
-### C12 · Audit Trail & Logging
-- [ ] 🟠 Create `audit_logs` table: user_id, role, action, resource_type, resource_id, old_values (JSONB), new_values (JSONB), ip_address, timestamp
-- [ ] 🟠 Log: student created/updated/deleted, fee payment recorded, attendance marked, coach assigned/removed, leave approved/rejected, announcement created/deleted, password changed, login/logout, failed login attempts
-- [ ] 🔴 Financial audit: prevent deletion of fee payment records (soft-cancel with reason); lock payments after 24 hours
-- [ ] 🟠 Login activity tracking: timestamp, IP address, device/OS per login
-- [ ] 🟠 Auto-lock account after 10 consecutive failed logins; notify owner
-- [ ] 🟠 Login history: owners can view login history for their coaches/students (min 90 days retention)
+### C12 · Audit Trail & Logging ✅ COMPLETE
+- [x] 🟠 Create `audit_logs` table: user_id, role, action, resource_type, resource_id, old_values (JSONB), new_values (JSONB), ip_address, timestamp
+- [x] 🟠 Log: student created/updated/deleted, fee payment recorded, attendance marked, coach assigned/removed, leave approved/rejected, announcement created/deleted, password changed, login/logout, failed login attempts
+- [x] 🔴 Financial audit: prevent deletion of fee payment records (soft-cancel with reason); lock payments after 24 hours
+- [x] 🟠 Login activity tracking: timestamp, IP address, device/OS per login
+- [x] 🟠 Auto-lock account after 10 consecutive failed logins; notify owner
+- [x] 🟠 Login history: owners can view login history for their coaches/students (min 90 days retention)
 
 ### C13 · `[GAP]` — Data Migration Plan (Local → Cloud)
 - [ ] 🔴 Document step-by-step plan to migrate existing local PostgreSQL data to cloud DB
