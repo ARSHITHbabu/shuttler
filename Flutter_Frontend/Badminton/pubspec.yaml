@@ -96,7 +96,7 @@ dev_dependencies:
 
   # Testing
   mocktail: ^1.0.4
-  riverpod_test: ^2.1.0
+  riverpod_test: ^0.1.9
   
   # Code Generation
   build_runner: ^2.4.6

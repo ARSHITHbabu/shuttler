@@ -6,15 +6,38 @@ import 'package:badminton/providers/auth_provider.dart';
 import 'package:badminton/widgets/common/custom_text_field.dart';
 import 'package:badminton/widgets/common/neumorphic_button.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:badminton/core/services/auth_service.dart';
+import 'package:badminton/core/services/storage_service.dart';
+import 'package:badminton/core/services/api_service.dart';
+import 'package:badminton/providers/service_providers.dart';
 
-class MockAuthNotifier extends _$Auth with Mock implements Auth {}
+class MockAuthService extends Mock implements AuthService {}
+class MockStorageService extends Mock implements StorageService {}
+class MockApiService extends Mock implements ApiService {}
 
 void main() {
+  late MockAuthService mockAuthService;
+  late MockStorageService mockStorageService;
+  late MockApiService mockApiService;
+
+  setUp(() {
+    mockAuthService = MockAuthService();
+    mockStorageService = MockStorageService();
+    mockApiService = MockApiService();
+    
+    when(() => mockStorageService.isInitialized).thenReturn(true);
+    when(() => mockAuthService.isLoggedIn()).thenReturn(false);
+  });
+
   testWidgets('LoginScreen UI elements should be present', (WidgetTester tester) async {
     // Build our app and trigger a frame.
     await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(
+      ProviderScope(
+        overrides: [
+          authServiceProvider.overrideWithValue(mockAuthService),
+          storageServiceProvider.overrideWithValue(mockStorageService),
+        ],
+        child: const MaterialApp(
           home: LoginScreen(),
         ),
       ),
@@ -39,9 +62,18 @@ void main() {
   });
 
   testWidgets('LoginScreen form validation', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1080, 1920);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(
+      ProviderScope(
+        overrides: [
+          authServiceProvider.overrideWithValue(mockAuthService),
+          storageServiceProvider.overrideWithValue(mockStorageService),
+        ],
+        child: const MaterialApp(
           home: LoginScreen(),
         ),
       ),
@@ -49,7 +81,7 @@ void main() {
 
     // Tap the Sign In button without entering data
     await tester.tap(find.text('Sign In'));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     // Verify validation error messages
     expect(find.text('Email is required'), findsOneWidget);
@@ -58,8 +90,8 @@ void main() {
     // Enter invalid email
     await tester.enterText(find.byType(CustomTextField).first, 'invalid-email');
     await tester.tap(find.text('Sign In'));
-    await tester.pump();
+    await tester.pumpAndSettle();
     
-    expect(find.text('Enter a valid email address'), findsOneWidget);
+    expect(find.text('Please enter a valid email address'), findsOneWidget);
   });
 }

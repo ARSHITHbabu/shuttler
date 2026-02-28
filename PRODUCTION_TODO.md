@@ -348,10 +348,10 @@
 - [ ] 🟡 Integration tests for critical user flows: Login → Dashboard → Mark Attendance; Login → Add Student → View Student; Login → Record Fee Payment → View Updated Status
 
 ### D3 · Security Testing
-- [ ] 🟠 Run `bandit` (Python security linter) on backend: `bandit -r Backend/`
+- [x] 🟠 Run `bandit` (Python security linter) on backend: `bandit -r Backend/` (DONE - 0 High Severity issues found in production code, Medium/Low issues in dev scripts reviewed)
 - [ ] 🟠 Test SQL injection on all text input fields
-- [ ] 🟠 Test for authentication bypass (call protected endpoint without token)
-- [ ] 🟠 Test for privilege escalation (student calling owner endpoints)
+- [x] 🟠 Test for authentication bypass (call protected endpoint without token)
+- [x] 🟠 Test for privilege escalation (student calling owner endpoints)
 - [ ] 🟠 Test rate limiting is enforced correctly
 - [ ] 🟡 Run OWASP ZAP or Burp Suite for API vulnerability scanning
 

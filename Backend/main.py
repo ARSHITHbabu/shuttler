@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, File, UploadFile, Query, Form, Request, Depends, Security, BackgroundTasks
+from fastapi import FastAPI, HTTPException, File, UploadFile, Query, Form, Request, Depends, Security, BackgroundTasks, Body
 from fastapi.staticfiles import StaticFiles
 from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi.middleware.cors import CORSMiddleware
@@ -3299,7 +3299,7 @@ def get_user_id_or_ip(request: Request) -> str:
         return get_remote_address(request)
 
 redis_url = os.getenv("REDIS_URL", "memory://")
-limiter = Limiter(key_func=lambda req: "academy_global", default_limits=["10000/day", "200/minute"], storage_uri=redis_url, headers_enabled=True)
+limiter = Limiter(key_func=lambda request: "academy_global", default_limits=["10000/day", "200/minute"], storage_uri=redis_url, headers_enabled=False)
 
 app = FastAPI(title="Badminton Academy Management System")
 app.state.limiter = limiter
@@ -3417,6 +3417,8 @@ _JWT_PUBLIC_PATHS: set = {
     "/students/login",
     # Owner self-registration (first-time setup)
     "/owners/",
+    "/health",
+    "/health/redis",
 }
 
 # Path *prefixes* that are public (checked with str.startswith)
@@ -3959,13 +3961,12 @@ def delete_coach(coach_id: int):
 
 @app.post("/auth/login")
 @limiter.limit("20/15minutes")
-def unified_login(request: Request, login_data: UnifiedLoginRequest):
+def unified_login(request: Request, login_data: UnifiedLoginRequest, db: Session = Depends(get_db)):
     """Unified login. Returns JWT access + refresh tokens plus user data.
 
     Response shape:
         {success, userType, access_token, refresh_token, token_type, user}
     """
-    db = SessionLocal()
     try:
         # ── helper to build token pair ────────────────────────────────────
         def _make_tokens(user_id: int, user_type: str, email: str, role: str):
@@ -4133,9 +4134,11 @@ def unified_login(request: Request, login_data: UnifiedLoginRequest):
             else:
                 handle_failed_login(db, student, "student", request.client.host if request.client else None, request.headers.get("user-agent"))
 
-        return {"success": False, "message": "Invalid email or password"}
-    finally:
-        db.close()
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/coaches/login")
 @limiter.limit("5/15minutes")

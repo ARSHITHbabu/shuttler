@@ -1,0 +1,1165 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.10.19, pytest-9.0.2, pluggy-1.6.0 -- E:\Anaconda_Navigator\envs\tf_onnx_env\python.exe
+cachedir: .pytest_cache
+rootdir: D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend
+plugins: anyio-3.7.1, asyncio-1.3.0, cov-7.0.0, mock-3.15.1, typeguard-2.13.3
+asyncio: mode=strict, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 5 items
+
+tests/integration/test_auth.py::test_owner_login FAILED                  [ 20%]
+tests/integration/test_auth.py::test_coach_login FAILED                  [ 40%]
+tests/integration/test_auth.py::test_student_login FAILED                [ 60%]
+tests/integration/test_auth.py::test_invalid_login FAILED                [ 80%]
+tests/integration/test_auth.py::test_logout FAILED                       [100%]
+
+================================== FAILURES ===================================
+______________________________ test_owner_login _______________________________
+
+self = MemoryObjectReceiveStream(_state=MemoryObjectStreamState(max_buffer_size=0, buffer=deque([]), open_send_channels=0, open_receive_channels=0, waiting_receivers=OrderedDict(), waiting_senders=OrderedDict()), _closed=True)
+
+    async def receive(self) -> T_co:
+        await checkpoint()
+        try:
+>           return self.receive_nowait()
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\streams\memory.py:98: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = MemoryObjectReceiveStream(_state=MemoryObjectStreamState(max_buffer_size=0, buffer=deque([]), open_send_channels=0, open_receive_channels=0, waiting_receivers=OrderedDict(), waiting_senders=OrderedDict()), _closed=True)
+
+    def receive_nowait(self) -> T_co:
+        """
+        Receive the next item if it can be done without waiting.
+    
+        :return: the received item
+        :raises ~anyio.ClosedResourceError: if this send stream has been closed
+        :raises ~anyio.EndOfStream: if the buffer is empty and this stream has been
+            closed from the sending end
+        :raises ~anyio.WouldBlock: if there are no items in the buffer and no tasks
+            waiting to send
+    
+        """
+        if self._closed:
+            raise ClosedResourceError
+    
+        if self._state.waiting_senders:
+            # Get the item from the next sender
+            send_event, item = self._state.waiting_senders.popitem(last=False)
+            self._state.buffer.append(item)
+            send_event.set()
+    
+        if self._state.buffer:
+            return self._state.buffer.popleft()
+        elif not self._state.open_send_channels:
+            raise EndOfStream
+    
+>       raise WouldBlock
+E       anyio.WouldBlock
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\streams\memory.py:93: WouldBlock
+
+During handling of the above exception, another exception occurred:
+
+request = <starlette.middleware.base._CachedRequest object at 0x00000237C412EC50>
+
+    async def call_next(request: Request) -> Response:
+        async def receive_or_disconnect() -> Message:
+            if response_sent.is_set():
+                return {"type": "http.disconnect"}
+    
+            async with anyio.create_task_group() as task_group:
+    
+                async def wrap(func: Callable[[], Awaitable[T]]) -> T:
+                    result = await func()
+                    task_group.cancel_scope.cancel()
+                    return result
+    
+                task_group.start_soon(wrap, response_sent.wait)
+                message = await wrap(wrapped_receive)
+    
+            if response_sent.is_set():
+                return {"type": "http.disconnect"}
+    
+            return message
+    
+        async def send_no_error(message: Message) -> None:
+            try:
+                await send_stream.send(message)
+            except anyio.BrokenResourceError:
+                # recv_stream has been closed, i.e. response_sent has been set.
+                return
+    
+        async def coro() -> None:
+            nonlocal app_exc
+    
+            with send_stream:
+                try:
+                    await self.app(scope, receive_or_disconnect, send_no_error)
+                except Exception as exc:
+                    app_exc = exc
+    
+        task_group.start_soon(coro)
+    
+        try:
+>           message = await recv_stream.receive()
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:151: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = MemoryObjectReceiveStream(_state=MemoryObjectStreamState(max_buffer_size=0, buffer=deque([]), open_send_channels=0, open_receive_channels=0, waiting_receivers=OrderedDict(), waiting_senders=OrderedDict()), _closed=True)
+
+    async def receive(self) -> T_co:
+        await checkpoint()
+        try:
+            return self.receive_nowait()
+        except WouldBlock:
+            # Add ourselves in the queue
+            receive_event = Event()
+            container: list[T_co] = []
+            self._state.waiting_receivers[receive_event] = container
+    
+            try:
+                await receive_event.wait()
+            except get_cancelled_exc_class():
+                # Ignore the immediate cancellation if we already received an item, so as not to
+                # lose it
+                if not container:
+                    raise
+            finally:
+                self._state.waiting_receivers.pop(receive_event, None)
+    
+            if container:
+                return container[0]
+            else:
+>               raise EndOfStream
+E               anyio.EndOfStream
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\streams\memory.py:118: EndOfStream
+
+The above exception was the direct cause of the following exception:
+
+client = <starlette.testclient.TestClient object at 0x00000237C3FDFF70>
+
+    def test_owner_login(client):
+>       response = client.post(
+            "/auth/login",
+            json={"email": "owner@test.com", "password": "password123"}
+        )
+
+tests\integration\test_auth.py:4: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:546: in post
+    return super().post(
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\httpx\_client.py:1144: in post
+    return self.request(
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:445: in request
+    return super().request(
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\httpx\_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\httpx\_client.py:914: in send
+    response = self._send_handling_auth(
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\httpx\_client.py:942: in _send_handling_auth
+    response = self._send_handling_redirects(
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\httpx\_client.py:979: in _send_handling_redirects
+    response = self._send_single_request(request)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\httpx\_client.py:1014: in _send_single_request
+    response = transport.handle_request(request)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:348: in handle_request
+    raise exc
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:345: in handle_request
+    portal.call(self.app, scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\from_thread.py:277: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\concurrent\futures\_base.py:458: in result
+    return self.__get_result()
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\concurrent\futures\_base.py:403: in __get_result
+    raise self._exception
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\from_thread.py:217: in _call_func
+    retval = await retval
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\applications.py:1160: in __call__
+    await super().__call__(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\applications.py:107: in __call__
+    await self.middleware_stack(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\errors.py:186: in __call__
+    raise exc
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:193: in __call__
+    response = await self.dispatch_func(request, call_next)
+main.py:3460: in jwt_auth_middleware
+    return await call_next(request)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:168: in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:144: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:193: in __call__
+    response = await self.dispatch_func(request, call_next)
+main.py:3392: in https_redirect_middleware
+    response = await call_next(request)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:168: in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:144: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\cors.py:87: in __call__
+    await self.app(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:193: in __call__
+    response = await self.dispatch_func(request, call_next)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\slowapi\middleware.py:128: in dispatch
+    return await call_next(request)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:168: in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:144: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\_exception_handler.py:53: in wrapped_app
+    raise exc
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\middleware\asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\routing.py:716: in __call__
+    await self.middleware_stack(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\routing.py:736: in app
+    await route.handle(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\routing.py:290: in handle
+    await self.app(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\routing.py:122: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\_exception_handler.py:53: in wrapped_app
+    raise exc
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\routing.py:108: in app
+    response = await f(request)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\routing.py:532: in app
+    raw_response = await run_endpoint_function(
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\routing.py:318: in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\concurrency.py:32: in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\to_thread.py:33: in run_sync
+    return await get_asynclib().run_sync_in_worker_thread(
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\_backends\_asyncio.py:877: in run_sync_in_worker_thread
+    return await future
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\_backends\_asyncio.py:807: in run
+    result = context.run(func, *args)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\slowapi\extension.py:770: in sync_wrapper
+    self._inject_headers(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <slowapi.extension.Limiter object at 0x00000237C23EDA50>, response = None
+current_limit = (20 per 15 minute, ['academy_global', '/auth/login'])
+
+    def _inject_headers(
+        self, response: Response, current_limit: Tuple[RateLimitItem, List[str]]
+    ) -> Response:
+        if self.enabled and self._headers_enabled and current_limit is not None:
+            if not isinstance(response, Response):
+>               raise Exception(
+                    "parameter `response` must be an instance of starlette.responses.Response"
+                )
+E               Exception: parameter `response` must be an instance of starlette.responses.Response
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\slowapi\extension.py:382: Exception
+---------------------------- Captured stdout setup ----------------------------
+Connected to Redis for caching at redis://localhost:6379
+______________________________ test_coach_login _______________________________
+
+self = MemoryObjectReceiveStream(_state=MemoryObjectStreamState(max_buffer_size=0, buffer=deque([]), open_send_channels=0, open_receive_channels=0, waiting_receivers=OrderedDict(), waiting_senders=OrderedDict()), _closed=True)
+
+    async def receive(self) -> T_co:
+        await checkpoint()
+        try:
+>           return self.receive_nowait()
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\streams\memory.py:98: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = MemoryObjectReceiveStream(_state=MemoryObjectStreamState(max_buffer_size=0, buffer=deque([]), open_send_channels=0, open_receive_channels=0, waiting_receivers=OrderedDict(), waiting_senders=OrderedDict()), _closed=True)
+
+    def receive_nowait(self) -> T_co:
+        """
+        Receive the next item if it can be done without waiting.
+    
+        :return: the received item
+        :raises ~anyio.ClosedResourceError: if this send stream has been closed
+        :raises ~anyio.EndOfStream: if the buffer is empty and this stream has been
+            closed from the sending end
+        :raises ~anyio.WouldBlock: if there are no items in the buffer and no tasks
+            waiting to send
+    
+        """
+        if self._closed:
+            raise ClosedResourceError
+    
+        if self._state.waiting_senders:
+            # Get the item from the next sender
+            send_event, item = self._state.waiting_senders.popitem(last=False)
+            self._state.buffer.append(item)
+            send_event.set()
+    
+        if self._state.buffer:
+            return self._state.buffer.popleft()
+        elif not self._state.open_send_channels:
+            raise EndOfStream
+    
+>       raise WouldBlock
+E       anyio.WouldBlock
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\streams\memory.py:93: WouldBlock
+
+During handling of the above exception, another exception occurred:
+
+request = <starlette.middleware.base._CachedRequest object at 0x00000237C620D480>
+
+    async def call_next(request: Request) -> Response:
+        async def receive_or_disconnect() -> Message:
+            if response_sent.is_set():
+                return {"type": "http.disconnect"}
+    
+            async with anyio.create_task_group() as task_group:
+    
+                async def wrap(func: Callable[[], Awaitable[T]]) -> T:
+                    result = await func()
+                    task_group.cancel_scope.cancel()
+                    return result
+    
+                task_group.start_soon(wrap, response_sent.wait)
+                message = await wrap(wrapped_receive)
+    
+            if response_sent.is_set():
+                return {"type": "http.disconnect"}
+    
+            return message
+    
+        async def send_no_error(message: Message) -> None:
+            try:
+                await send_stream.send(message)
+            except anyio.BrokenResourceError:
+                # recv_stream has been closed, i.e. response_sent has been set.
+                return
+    
+        async def coro() -> None:
+            nonlocal app_exc
+    
+            with send_stream:
+                try:
+                    await self.app(scope, receive_or_disconnect, send_no_error)
+                except Exception as exc:
+                    app_exc = exc
+    
+        task_group.start_soon(coro)
+    
+        try:
+>           message = await recv_stream.receive()
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:151: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = MemoryObjectReceiveStream(_state=MemoryObjectStreamState(max_buffer_size=0, buffer=deque([]), open_send_channels=0, open_receive_channels=0, waiting_receivers=OrderedDict(), waiting_senders=OrderedDict()), _closed=True)
+
+    async def receive(self) -> T_co:
+        await checkpoint()
+        try:
+            return self.receive_nowait()
+        except WouldBlock:
+            # Add ourselves in the queue
+            receive_event = Event()
+            container: list[T_co] = []
+            self._state.waiting_receivers[receive_event] = container
+    
+            try:
+                await receive_event.wait()
+            except get_cancelled_exc_class():
+                # Ignore the immediate cancellation if we already received an item, so as not to
+                # lose it
+                if not container:
+                    raise
+            finally:
+                self._state.waiting_receivers.pop(receive_event, None)
+    
+            if container:
+                return container[0]
+            else:
+>               raise EndOfStream
+E               anyio.EndOfStream
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\streams\memory.py:118: EndOfStream
+
+The above exception was the direct cause of the following exception:
+
+client = <starlette.testclient.TestClient object at 0x00000237C3FDFF70>
+
+    def test_coach_login(client):
+>       response = client.post(
+            "/auth/login",
+            json={"email": "coach@test.com", "password": "password123"}
+        )
+
+tests\integration\test_auth.py:17: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:546: in post
+    return super().post(
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\httpx\_client.py:1144: in post
+    return self.request(
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:445: in request
+    return super().request(
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\httpx\_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\httpx\_client.py:914: in send
+    response = self._send_handling_auth(
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\httpx\_client.py:942: in _send_handling_auth
+    response = self._send_handling_redirects(
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\httpx\_client.py:979: in _send_handling_redirects
+    response = self._send_single_request(request)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\httpx\_client.py:1014: in _send_single_request
+    response = transport.handle_request(request)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:348: in handle_request
+    raise exc
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:345: in handle_request
+    portal.call(self.app, scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\from_thread.py:277: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\concurrent\futures\_base.py:458: in result
+    return self.__get_result()
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\concurrent\futures\_base.py:403: in __get_result
+    raise self._exception
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\from_thread.py:217: in _call_func
+    retval = await retval
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\applications.py:1160: in __call__
+    await super().__call__(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\applications.py:107: in __call__
+    await self.middleware_stack(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\errors.py:186: in __call__
+    raise exc
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:193: in __call__
+    response = await self.dispatch_func(request, call_next)
+main.py:3460: in jwt_auth_middleware
+    return await call_next(request)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:168: in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:144: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:193: in __call__
+    response = await self.dispatch_func(request, call_next)
+main.py:3392: in https_redirect_middleware
+    response = await call_next(request)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:168: in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:144: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\cors.py:87: in __call__
+    await self.app(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:193: in __call__
+    response = await self.dispatch_func(request, call_next)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\slowapi\middleware.py:128: in dispatch
+    return await call_next(request)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:168: in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:144: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\_exception_handler.py:53: in wrapped_app
+    raise exc
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\middleware\asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\routing.py:716: in __call__
+    await self.middleware_stack(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\routing.py:736: in app
+    await route.handle(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\routing.py:290: in handle
+    await self.app(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\routing.py:122: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\_exception_handler.py:53: in wrapped_app
+    raise exc
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\routing.py:108: in app
+    response = await f(request)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\routing.py:532: in app
+    raw_response = await run_endpoint_function(
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\routing.py:318: in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\concurrency.py:32: in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\to_thread.py:33: in run_sync
+    return await get_asynclib().run_sync_in_worker_thread(
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\_backends\_asyncio.py:877: in run_sync_in_worker_thread
+    return await future
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\_backends\_asyncio.py:807: in run
+    result = context.run(func, *args)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\slowapi\extension.py:770: in sync_wrapper
+    self._inject_headers(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <slowapi.extension.Limiter object at 0x00000237C23EDA50>, response = None
+current_limit = (20 per 15 minute, ['academy_global', '/auth/login'])
+
+    def _inject_headers(
+        self, response: Response, current_limit: Tuple[RateLimitItem, List[str]]
+    ) -> Response:
+        if self.enabled and self._headers_enabled and current_limit is not None:
+            if not isinstance(response, Response):
+>               raise Exception(
+                    "parameter `response` must be an instance of starlette.responses.Response"
+                )
+E               Exception: parameter `response` must be an instance of starlette.responses.Response
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\slowapi\extension.py:382: Exception
+_____________________________ test_student_login ______________________________
+
+self = MemoryObjectReceiveStream(_state=MemoryObjectStreamState(max_buffer_size=0, buffer=deque([]), open_send_channels=0, open_receive_channels=0, waiting_receivers=OrderedDict(), waiting_senders=OrderedDict()), _closed=True)
+
+    async def receive(self) -> T_co:
+        await checkpoint()
+        try:
+>           return self.receive_nowait()
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\streams\memory.py:98: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = MemoryObjectReceiveStream(_state=MemoryObjectStreamState(max_buffer_size=0, buffer=deque([]), open_send_channels=0, open_receive_channels=0, waiting_receivers=OrderedDict(), waiting_senders=OrderedDict()), _closed=True)
+
+    def receive_nowait(self) -> T_co:
+        """
+        Receive the next item if it can be done without waiting.
+    
+        :return: the received item
+        :raises ~anyio.ClosedResourceError: if this send stream has been closed
+        :raises ~anyio.EndOfStream: if the buffer is empty and this stream has been
+            closed from the sending end
+        :raises ~anyio.WouldBlock: if there are no items in the buffer and no tasks
+            waiting to send
+    
+        """
+        if self._closed:
+            raise ClosedResourceError
+    
+        if self._state.waiting_senders:
+            # Get the item from the next sender
+            send_event, item = self._state.waiting_senders.popitem(last=False)
+            self._state.buffer.append(item)
+            send_event.set()
+    
+        if self._state.buffer:
+            return self._state.buffer.popleft()
+        elif not self._state.open_send_channels:
+            raise EndOfStream
+    
+>       raise WouldBlock
+E       anyio.WouldBlock
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\streams\memory.py:93: WouldBlock
+
+During handling of the above exception, another exception occurred:
+
+request = <starlette.middleware.base._CachedRequest object at 0x00000237C6016080>
+
+    async def call_next(request: Request) -> Response:
+        async def receive_or_disconnect() -> Message:
+            if response_sent.is_set():
+                return {"type": "http.disconnect"}
+    
+            async with anyio.create_task_group() as task_group:
+    
+                async def wrap(func: Callable[[], Awaitable[T]]) -> T:
+                    result = await func()
+                    task_group.cancel_scope.cancel()
+                    return result
+    
+                task_group.start_soon(wrap, response_sent.wait)
+                message = await wrap(wrapped_receive)
+    
+            if response_sent.is_set():
+                return {"type": "http.disconnect"}
+    
+            return message
+    
+        async def send_no_error(message: Message) -> None:
+            try:
+                await send_stream.send(message)
+            except anyio.BrokenResourceError:
+                # recv_stream has been closed, i.e. response_sent has been set.
+                return
+    
+        async def coro() -> None:
+            nonlocal app_exc
+    
+            with send_stream:
+                try:
+                    await self.app(scope, receive_or_disconnect, send_no_error)
+                except Exception as exc:
+                    app_exc = exc
+    
+        task_group.start_soon(coro)
+    
+        try:
+>           message = await recv_stream.receive()
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:151: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = MemoryObjectReceiveStream(_state=MemoryObjectStreamState(max_buffer_size=0, buffer=deque([]), open_send_channels=0, open_receive_channels=0, waiting_receivers=OrderedDict(), waiting_senders=OrderedDict()), _closed=True)
+
+    async def receive(self) -> T_co:
+        await checkpoint()
+        try:
+            return self.receive_nowait()
+        except WouldBlock:
+            # Add ourselves in the queue
+            receive_event = Event()
+            container: list[T_co] = []
+            self._state.waiting_receivers[receive_event] = container
+    
+            try:
+                await receive_event.wait()
+            except get_cancelled_exc_class():
+                # Ignore the immediate cancellation if we already received an item, so as not to
+                # lose it
+                if not container:
+                    raise
+            finally:
+                self._state.waiting_receivers.pop(receive_event, None)
+    
+            if container:
+                return container[0]
+            else:
+>               raise EndOfStream
+E               anyio.EndOfStream
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\streams\memory.py:118: EndOfStream
+
+The above exception was the direct cause of the following exception:
+
+client = <starlette.testclient.TestClient object at 0x00000237C3FDFF70>
+
+    def test_student_login(client):
+>       response = client.post(
+            "/auth/login",
+            json={"email": "student1@test.com", "password": "password123"}
+        )
+
+tests\integration\test_auth.py:28: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:546: in post
+    return super().post(
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\httpx\_client.py:1144: in post
+    return self.request(
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:445: in request
+    return super().request(
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\httpx\_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\httpx\_client.py:914: in send
+    response = self._send_handling_auth(
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\httpx\_client.py:942: in _send_handling_auth
+    response = self._send_handling_redirects(
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\httpx\_client.py:979: in _send_handling_redirects
+    response = self._send_single_request(request)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\httpx\_client.py:1014: in _send_single_request
+    response = transport.handle_request(request)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:348: in handle_request
+    raise exc
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:345: in handle_request
+    portal.call(self.app, scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\from_thread.py:277: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\concurrent\futures\_base.py:458: in result
+    return self.__get_result()
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\concurrent\futures\_base.py:403: in __get_result
+    raise self._exception
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\from_thread.py:217: in _call_func
+    retval = await retval
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\applications.py:1160: in __call__
+    await super().__call__(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\applications.py:107: in __call__
+    await self.middleware_stack(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\errors.py:186: in __call__
+    raise exc
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:193: in __call__
+    response = await self.dispatch_func(request, call_next)
+main.py:3460: in jwt_auth_middleware
+    return await call_next(request)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:168: in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:144: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:193: in __call__
+    response = await self.dispatch_func(request, call_next)
+main.py:3392: in https_redirect_middleware
+    response = await call_next(request)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:168: in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:144: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\cors.py:87: in __call__
+    await self.app(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:193: in __call__
+    response = await self.dispatch_func(request, call_next)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\slowapi\middleware.py:128: in dispatch
+    return await call_next(request)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:168: in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:144: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\_exception_handler.py:53: in wrapped_app
+    raise exc
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\middleware\asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\routing.py:716: in __call__
+    await self.middleware_stack(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\routing.py:736: in app
+    await route.handle(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\routing.py:290: in handle
+    await self.app(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\routing.py:122: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\_exception_handler.py:53: in wrapped_app
+    raise exc
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\routing.py:108: in app
+    response = await f(request)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\routing.py:532: in app
+    raw_response = await run_endpoint_function(
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\routing.py:318: in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\concurrency.py:32: in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\to_thread.py:33: in run_sync
+    return await get_asynclib().run_sync_in_worker_thread(
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\_backends\_asyncio.py:877: in run_sync_in_worker_thread
+    return await future
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\_backends\_asyncio.py:807: in run
+    result = context.run(func, *args)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\slowapi\extension.py:770: in sync_wrapper
+    self._inject_headers(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <slowapi.extension.Limiter object at 0x00000237C23EDA50>, response = None
+current_limit = (20 per 15 minute, ['academy_global', '/auth/login'])
+
+    def _inject_headers(
+        self, response: Response, current_limit: Tuple[RateLimitItem, List[str]]
+    ) -> Response:
+        if self.enabled and self._headers_enabled and current_limit is not None:
+            if not isinstance(response, Response):
+>               raise Exception(
+                    "parameter `response` must be an instance of starlette.responses.Response"
+                )
+E               Exception: parameter `response` must be an instance of starlette.responses.Response
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\slowapi\extension.py:382: Exception
+_____________________________ test_invalid_login ______________________________
+
+client = <starlette.testclient.TestClient object at 0x00000237C3FDFF70>
+
+    def test_invalid_login(client):
+        response = client.post(
+            "/auth/login",
+            json={"email": "owner@test.com", "password": "wrongpassword"}
+        )
+        # The unified_login returns 401 via handle_failed_login
+>       assert response.status_code == 401
+E       assert 500 == 401
+E        +  where 500 = <Response [500 Internal Server Error]>.status_code
+
+tests\integration\test_auth.py:43: AssertionError
+_________________________________ test_logout _________________________________
+
+self = MemoryObjectReceiveStream(_state=MemoryObjectStreamState(max_buffer_size=0, buffer=deque([]), open_send_channels=0, open_receive_channels=0, waiting_receivers=OrderedDict(), waiting_senders=OrderedDict()), _closed=True)
+
+    async def receive(self) -> T_co:
+        await checkpoint()
+        try:
+>           return self.receive_nowait()
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\streams\memory.py:98: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = MemoryObjectReceiveStream(_state=MemoryObjectStreamState(max_buffer_size=0, buffer=deque([]), open_send_channels=0, open_receive_channels=0, waiting_receivers=OrderedDict(), waiting_senders=OrderedDict()), _closed=True)
+
+    def receive_nowait(self) -> T_co:
+        """
+        Receive the next item if it can be done without waiting.
+    
+        :return: the received item
+        :raises ~anyio.ClosedResourceError: if this send stream has been closed
+        :raises ~anyio.EndOfStream: if the buffer is empty and this stream has been
+            closed from the sending end
+        :raises ~anyio.WouldBlock: if there are no items in the buffer and no tasks
+            waiting to send
+    
+        """
+        if self._closed:
+            raise ClosedResourceError
+    
+        if self._state.waiting_senders:
+            # Get the item from the next sender
+            send_event, item = self._state.waiting_senders.popitem(last=False)
+            self._state.buffer.append(item)
+            send_event.set()
+    
+        if self._state.buffer:
+            return self._state.buffer.popleft()
+        elif not self._state.open_send_channels:
+            raise EndOfStream
+    
+>       raise WouldBlock
+E       anyio.WouldBlock
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\streams\memory.py:93: WouldBlock
+
+During handling of the above exception, another exception occurred:
+
+request = <starlette.middleware.base._CachedRequest object at 0x00000237C46EA740>
+
+    async def call_next(request: Request) -> Response:
+        async def receive_or_disconnect() -> Message:
+            if response_sent.is_set():
+                return {"type": "http.disconnect"}
+    
+            async with anyio.create_task_group() as task_group:
+    
+                async def wrap(func: Callable[[], Awaitable[T]]) -> T:
+                    result = await func()
+                    task_group.cancel_scope.cancel()
+                    return result
+    
+                task_group.start_soon(wrap, response_sent.wait)
+                message = await wrap(wrapped_receive)
+    
+            if response_sent.is_set():
+                return {"type": "http.disconnect"}
+    
+            return message
+    
+        async def send_no_error(message: Message) -> None:
+            try:
+                await send_stream.send(message)
+            except anyio.BrokenResourceError:
+                # recv_stream has been closed, i.e. response_sent has been set.
+                return
+    
+        async def coro() -> None:
+            nonlocal app_exc
+    
+            with send_stream:
+                try:
+                    await self.app(scope, receive_or_disconnect, send_no_error)
+                except Exception as exc:
+                    app_exc = exc
+    
+        task_group.start_soon(coro)
+    
+        try:
+>           message = await recv_stream.receive()
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:151: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = MemoryObjectReceiveStream(_state=MemoryObjectStreamState(max_buffer_size=0, buffer=deque([]), open_send_channels=0, open_receive_channels=0, waiting_receivers=OrderedDict(), waiting_senders=OrderedDict()), _closed=True)
+
+    async def receive(self) -> T_co:
+        await checkpoint()
+        try:
+            return self.receive_nowait()
+        except WouldBlock:
+            # Add ourselves in the queue
+            receive_event = Event()
+            container: list[T_co] = []
+            self._state.waiting_receivers[receive_event] = container
+    
+            try:
+                await receive_event.wait()
+            except get_cancelled_exc_class():
+                # Ignore the immediate cancellation if we already received an item, so as not to
+                # lose it
+                if not container:
+                    raise
+            finally:
+                self._state.waiting_receivers.pop(receive_event, None)
+    
+            if container:
+                return container[0]
+            else:
+>               raise EndOfStream
+E               anyio.EndOfStream
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\streams\memory.py:118: EndOfStream
+
+The above exception was the direct cause of the following exception:
+
+client = <starlette.testclient.TestClient object at 0x00000237C3FDFF70>
+
+    def test_logout(client):
+        # First login to get token
+>       login_resp = client.post(
+            "/auth/login",
+            json={"email": "owner@test.com", "password": "password123"}
+        )
+
+tests\integration\test_auth.py:47: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:546: in post
+    return super().post(
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\httpx\_client.py:1144: in post
+    return self.request(
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:445: in request
+    return super().request(
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\httpx\_client.py:825: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\httpx\_client.py:914: in send
+    response = self._send_handling_auth(
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\httpx\_client.py:942: in _send_handling_auth
+    response = self._send_handling_redirects(
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\httpx\_client.py:979: in _send_handling_redirects
+    response = self._send_single_request(request)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\httpx\_client.py:1014: in _send_single_request
+    response = transport.handle_request(request)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:348: in handle_request
+    raise exc
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:345: in handle_request
+    portal.call(self.app, scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\from_thread.py:277: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\concurrent\futures\_base.py:458: in result
+    return self.__get_result()
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\concurrent\futures\_base.py:403: in __get_result
+    raise self._exception
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\from_thread.py:217: in _call_func
+    retval = await retval
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\applications.py:1160: in __call__
+    await super().__call__(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\applications.py:107: in __call__
+    await self.middleware_stack(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\errors.py:186: in __call__
+    raise exc
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:193: in __call__
+    response = await self.dispatch_func(request, call_next)
+main.py:3460: in jwt_auth_middleware
+    return await call_next(request)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:168: in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:144: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:193: in __call__
+    response = await self.dispatch_func(request, call_next)
+main.py:3392: in https_redirect_middleware
+    response = await call_next(request)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:168: in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:144: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\cors.py:87: in __call__
+    await self.app(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:193: in __call__
+    response = await self.dispatch_func(request, call_next)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\slowapi\middleware.py:128: in dispatch
+    return await call_next(request)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:168: in call_next
+    raise app_exc from app_exc.__cause__ or app_exc.__context__
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\base.py:144: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\middleware\exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\_exception_handler.py:53: in wrapped_app
+    raise exc
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\middleware\asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\routing.py:716: in __call__
+    await self.middleware_stack(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\routing.py:736: in app
+    await route.handle(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\routing.py:290: in handle
+    await self.app(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\routing.py:122: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\_exception_handler.py:53: in wrapped_app
+    raise exc
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\routing.py:108: in app
+    response = await f(request)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\routing.py:532: in app
+    raw_response = await run_endpoint_function(
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\routing.py:318: in run_endpoint_function
+    return await run_in_threadpool(dependant.call, **values)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\concurrency.py:32: in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\to_thread.py:33: in run_sync
+    return await get_asynclib().run_sync_in_worker_thread(
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\_backends\_asyncio.py:877: in run_sync_in_worker_thread
+    return await future
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\anyio\_backends\_asyncio.py:807: in run
+    result = context.run(func, *args)
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\slowapi\extension.py:770: in sync_wrapper
+    self._inject_headers(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <slowapi.extension.Limiter object at 0x00000237C23EDA50>, response = None
+current_limit = (20 per 15 minute, ['academy_global', '/auth/login'])
+
+    def _inject_headers(
+        self, response: Response, current_limit: Tuple[RateLimitItem, List[str]]
+    ) -> Response:
+        if self.enabled and self._headers_enabled and current_limit is not None:
+            if not isinstance(response, Response):
+>               raise Exception(
+                    "parameter `response` must be an instance of starlette.responses.Response"
+                )
+E               Exception: parameter `response` must be an instance of starlette.responses.Response
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\slowapi\extension.py:382: Exception
+============================== warnings summary ===============================
+main.py:2030
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2030: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Coach(BaseModel):
+
+main.py:2157
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2157: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Owner(BaseModel):
+
+main.py:2277
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2277: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Session(BaseModel):
+
+main.py:2305
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2305: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class CoachInfo(BaseModel):
+
+main.py:2312
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2312: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Batch(BaseModel):
+
+main.py:2402
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2402: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Student(BaseModel):
+
+main.py:2495
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2495: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Attendance(BaseModel):
+
+main.py:2514
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2514: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class CoachAttendance(BaseModel):
+
+main.py:2539
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2539: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class CoachSalary(BaseModel):
+
+main.py:2579
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2579: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class FeePayment(BaseModel):
+
+main.py:2594
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2594: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Fee(BaseModel):
+
+main.py:2627
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2627: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Performance(BaseModel):
+
+main.py:2685
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2685: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class BMI(BaseModel):
+
+main.py:2714
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2714: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Enquiry(BaseModel):
+
+main.py:2730
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2730: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Notification(BaseModel):
+
+main.py:2845
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2845: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Schedule(BaseModel):
+
+main.py:2865
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2865: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Tournament(BaseModel):
+
+main.py:2882
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2882: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class VideoResource(BaseModel):
+
+main.py:2903
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2903: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Invitation(BaseModel):
+
+main.py:2930
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2930: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class CoachInvitation(BaseModel):
+
+main.py:2958
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2958: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class LeaveRequest(BaseModel):
+
+main.py:3020
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:3020: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class StudentRegistrationRequest(BaseModel):
+
+main.py:3058
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:3058: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class CoachRegistrationRequest(BaseModel):
+
+main.py:3136
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:3136: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Announcement(BaseModel):
+
+main.py:3211
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:3211: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Notification(BaseModel):
+
+main.py:3229
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:3229: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class NotificationPreferences(BaseModel):
+
+main.py:3266
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:3266: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class CalendarEvent(BaseModel):
+
+main.py:3339
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:3339: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\applications.py:4599
+  E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\applications.py:4599: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/integration/test_auth.py::test_owner_login - Exception: parameter `response` must be an instance of starlette.responses.Response
+FAILED tests/integration/test_auth.py::test_coach_login - Exception: parameter `response` must be an instance of starlette.responses.Response
+FAILED tests/integration/test_auth.py::test_student_login - Exception: parameter `response` must be an instance of starlette.responses.Response
+FAILED tests/integration/test_auth.py::test_invalid_login - assert 500 == 401
+ +  where 500 = <Response [500 Internal Server Error]>.status_code
+FAILED tests/integration/test_auth.py::test_logout - Exception: parameter `response` must be an instance of starlette.responses.Response
+======================= 5 failed, 29 warnings in 7.59s ========================

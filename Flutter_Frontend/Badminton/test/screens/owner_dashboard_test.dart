@@ -7,15 +7,64 @@ import 'package:badminton/screens/owner/home_screen.dart';
 import 'package:badminton/screens/owner/batches_screen.dart';
 import 'package:badminton/providers/auth_provider.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:badminton/core/services/auth_service.dart';
+import 'package:badminton/core/services/storage_service.dart';
+import 'package:badminton/core/services/api_service.dart';
+import 'package:badminton/providers/service_providers.dart';
+import 'package:badminton/providers/dashboard_provider.dart';
+import 'package:badminton/providers/owner_provider.dart';
 
-class MockAuthNotifier extends _$Auth with Mock implements Auth {}
+class MockAuthService extends Mock implements AuthService {}
+class MockStorageService extends Mock implements StorageService {}
+class MockApiService extends Mock implements ApiService {}
+
+class MockDashboardStats extends DashboardStats with Mock {
+  @override
+  Future<DashboardStatsData> build() async {
+    return DashboardStatsData(
+      totalStudents: 10,
+      totalCoaches: 2,
+      activeBatches: 3,
+      pendingFees: 1500.0,
+      todayAttendanceRate: 85.0,
+    );
+  }
+}
 
 void main() {
+  late MockAuthService mockAuthService;
+  late MockStorageService mockStorageService;
+  late MockApiService mockApiService;
+
+  setUp(() {
+    mockAuthService = MockAuthService();
+    mockStorageService = MockStorageService();
+    mockApiService = MockApiService();
+
+    when(() => mockStorageService.isInitialized).thenReturn(true);
+    when(() => mockAuthService.isLoggedIn()).thenReturn(true);
+    when(() => mockAuthService.getCurrentUserType()).thenReturn('owner');
+    when(() => mockAuthService.getCurrentUserId()).thenReturn(1);
+    when(() => mockAuthService.getCurrentUserName()).thenReturn('Owner');
+    when(() => mockAuthService.getCurrentUserEmail()).thenReturn('owner@test.com');
+    when(() => mockAuthService.getUserRole()).thenReturn('owner');
+    when(() => mockAuthService.getMustChangePassword()).thenReturn(false);
+  });
+
   testWidgets('OwnerDashboard navigation should work', (WidgetTester tester) async {
     // Build our app and trigger a frame.
     await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(
+      ProviderScope(
+        overrides: [
+          authServiceProvider.overrideWithValue(mockAuthService),
+          storageServiceProvider.overrideWithValue(mockStorageService),
+          apiServiceProvider.overrideWithValue(mockApiService),
+          ownerBottomNavIndexProvider.overrideWith((ref) => 0),
+          activeOwnerProvider.overrideWith((ref) async => null),
+          dashboardStatsProvider.overrideWith(() => MockDashboardStats()),
+          ownerUpcomingSessionsProvider.overrideWith((ref) async => []),
+        ],
+        child: const MaterialApp(
           home: OwnerDashboard(),
         ),
       ),

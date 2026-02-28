@@ -1,0 +1,36 @@
+﻿00:00 +0: loading D:/laptop new/f/Personal Projects/badminton/abhi_colab/Cursor1/shuttler/Flutter_Frontend/Badminton/test/screens/login_screen_test.dart
+00:00 +0 -1: loading D:/laptop new/f/Personal Projects/badminton/abhi_colab/Cursor1/shuttler/Flutter_Frontend/Badminton/test/screens/login_screen_test.dart [E]
+  Failed to load "D:/laptop new/f/Personal Projects/badminton/abhi_colab/Cursor1/shuttler/Flutter_Frontend/Badminton/test/screens/login_screen_test.dart":
+  Compilation failed for testPath=D:/laptop new/f/Personal Projects/badminton/abhi_colab/Cursor1/shuttler/Flutter_Frontend/Badminton/test/screens/login_screen_test.dart: test/screens/login_screen_test.dart:10:47: Error: Type 'AuthService' not found.
+  class MockAuthService extends Mock implements AuthService {}
+                                                ^^^^^^^^^^^
+  test/screens/login_screen_test.dart:11:50: Error: Type 'StorageService' not found.
+  class MockStorageService extends Mock implements StorageService {}
+                                                   ^^^^^^^^^^^^^^
+  test/screens/login_screen_test.dart:12:46: Error: Type 'ApiService' not found.
+  class MockApiService extends Mock implements ApiService {}
+                                               ^^^^^^^^^^
+  test/screens/login_screen_test.dart:31:11: Error: Undefined name 'authServiceProvider'.
+            authServiceProvider.overrideWithValue(mockAuthService),
+            ^^^^^^^^^^^^^^^^^^^
+  test/screens/login_screen_test.dart:32:11: Error: Undefined name 'storageServiceProvider'.
+            storageServiceProvider.overrideWithValue(mockStorageService),
+            ^^^^^^^^^^^^^^^^^^^^^^
+  test/screens/login_screen_test.dart:62:11: Error: Undefined name 'authServiceProvider'.
+            authServiceProvider.overrideWithValue(mockAuthService),
+            ^^^^^^^^^^^^^^^^^^^
+  test/screens/login_screen_test.dart:63:11: Error: Undefined name 'storageServiceProvider'.
+            storageServiceProvider.overrideWithValue(mockStorageService),
+            ^^^^^^^^^^^^^^^^^^^^^^
+  test/screens/login_screen_test.dart:22:35: Error: The getter 'isInitialized' isn't defined for the type 'MockStorageService'.
+   - 'MockStorageService' is from 'test/screens/login_screen_test.dart'.
+  Try correcting the name to the name of an existing getter, or defining a getter or field named 'isInitialized'.
+      when(() => mockStorageService.isInitialized).thenReturn(true);
+                                    ^^^^^^^^^^^^^
+  test/screens/login_screen_test.dart:23:32: Error: The method 'isLoggedIn' isn't defined for the type 'MockAuthService'.
+   - 'MockAuthService' is from 'test/screens/login_screen_test.dart'.
+  Try correcting the name to the name of an existing method, or defining a method named 'isLoggedIn'.
+      when(() => mockAuthService.isLoggedIn()).thenReturn(false);
+                                 ^^^^^^^^^^
+  .
+00:00 +0 -1: Some tests failed.

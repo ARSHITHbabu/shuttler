@@ -64,19 +64,23 @@ void main() {
       const pendingFee = {
         'id': 1,
         'student_id': 1,
+        'batch_id': 1,
         'amount': 1000.0,
         'total_paid': 200.0,
         'pending_amount': 800.0,
         'status': 'pending',
+        'due_date': '2024-01-01',
       };
       
       const overdueFee = {
         'id': 2,
         'student_id': 2,
+        'batch_id': 1,
         'amount': 1000.0,
         'total_paid': 0.0,
         'pending_amount': 1000.0,
         'status': 'overdue',
+        'due_date': '2024-01-01',
       };
 
       // Mock first call for 'pending' fees

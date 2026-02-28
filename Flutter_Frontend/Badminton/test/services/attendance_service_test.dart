@@ -74,8 +74,20 @@ void main() {
           .thenAnswer((_) async => Response(
                 requestOptions: RequestOptions(path: ''),
                 data: [
-                  {'status': 'present'},
-                  {'status': 'absent'},
+                  {
+                    'id': 1,
+                    'student_id': 101,
+                    'batch_id': 1,
+                    'date': '2024-01-01',
+                    'status': 'present',
+                  },
+                  {
+                    'id': 2,
+                    'student_id': 102,
+                    'batch_id': 1,
+                    'date': '2024-01-01',
+                    'status': 'absent',
+                  },
                 ],
                 statusCode: 200,
               ));
