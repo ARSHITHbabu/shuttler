@@ -393,9 +393,9 @@
 - [x] 🟡 Plan certificate rotation before expiry (keep backup pin)
 
 ### E5 · Anti-Tampering
-- [ ] 🟠 Verify ProGuard/R8 is enabled for Android release builds
-- [ ] 🔴 Remove all hardcoded secrets (API keys, URLs) from Flutter source code
-- [ ] 🔴 Use `--dart-define=API_URL=https://api.shuttler.app` for build-time config
+- [x] 🟠 Verify ProGuard/R8 is enabled for Android release builds
+- [x] 🔴 Remove all hardcoded secrets (API keys, URLs) from Flutter source code
+- [x] 🔴 Use `--dart-define=API_URL=https://api.shuttler.app` for build-time config
 
 ### E6 · App Transport Security (iOS)
 - [ ] 🔴 Ensure ALL API calls use HTTPS before iOS submission (ATS will block HTTP)

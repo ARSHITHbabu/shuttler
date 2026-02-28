@@ -5,6 +5,11 @@ class ApiEndpoints {
   // Base URL - Use localhost for web, computer's local IP for mobile/desktop
   // IMPORTANT: Change this IP to your computer's local IP address (run ipconfig on Windows)
   static String get baseUrl {
+    const envUrl = String.fromEnvironment('API_URL');
+    if (envUrl.isNotEmpty) {
+      return envUrl;
+    }
+
     if (kIsWeb) {
       return 'http://localhost:8001';
     }
