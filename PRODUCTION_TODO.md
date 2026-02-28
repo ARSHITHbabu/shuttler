@@ -259,12 +259,12 @@
 - [x] 🟠 Configure DNS records pointing to backend *(Operational Step)*
 - [x] 🟠 Configure SSL certificate for domain *(Operational Step)*
 
-### C7 · File Storage Migration
-- [ ] 🔴 Migrate file uploads from local disk to cloud object storage (AWS S3 or Cloudflare R2)
-- [ ] 🔴 Update upload endpoint to store to cloud instead of local disk
-- [ ] 🟠 Serve files via CDN for performance and global availability
-- [ ] 🟠 Update Flutter to load images from CDN URLs
-- [ ] 🟠 Add `boto3==1.34.0` (or equivalent) to backend requirements
+### C7 · File Storage Migration ✅ COMPLETE
+- [x] 🔴 Migrate file uploads from local disk to cloud object storage (AWS S3 or Cloudflare R2)
+- [x] 🔴 Update upload endpoint to store to cloud instead of local disk
+- [x] 🟠 Serve files via CDN for performance and global availability
+- [x] 🟠 Update Flutter to load images from CDN URLs
+- [x] 🟠 Add `boto3==1.34.0` (or equivalent) to backend requirements
 
 ### C8 · Redis Cache
 - [ ] 🟠 Deploy Redis instance (Redis Cloud free tier or Railway Redis)

@@ -127,7 +127,16 @@ class ApiEndpoints {
 
   // Image Upload (NEW)
   static const String uploadImage = '/api/upload/image';
-  static String imageUrl(String filename) => '/uploads/$filename';
+  static String imageUrl(String filename) {
+    if (filename.startsWith('http://') || filename.startsWith('https://')) {
+      return filename;
+    }
+    // If it already starts with /uploads as returned by backend
+    if (filename.startsWith('/uploads/')) {
+        return filename;
+    }
+    return '/uploads/$filename';
+  }
 
   // Leave Requests
   static const String leaveRequests = '/leave-requests/';

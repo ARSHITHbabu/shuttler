@@ -49,6 +49,15 @@ except ImportError:
     _SENDGRID_AVAILABLE = False
     print("Warning: sendgrid not installed. Transactional emails disabled.")
 
+# ── C7: S3 / Cloudflare R2 for File Storage ────────────────────────────────
+try:
+    import boto3
+    from botocore.exceptions import ClientError
+    _BOTO3_AVAILABLE = True
+except ImportError:
+    _BOTO3_AVAILABLE = False
+    print("Warning: boto3 not installed. Cloud file storage disabled (falling back to local disk).")
+
 # Password hashing context - use bcrypt directly to avoid passlib initialization issues
 # Fallback to passlib if direct bcrypt fails
 try:
@@ -422,6 +431,52 @@ def send_email(to_email: str, subject: str, html_content: str, plain_content: Op
     except Exception as e:
         print(f"[Email] Send failed (to={to_email}): {e}")
         return False
+
+
+# ── C7: S3 Configuration ───────────────────────────────────────────────────
+S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
+S3_CDN_URL = os.getenv("S3_CDN_URL")  # e.g., https://cdn.shuttler.app
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
+
+def get_s3_client():
+    if not _BOTO3_AVAILABLE or not S3_BUCKET_NAME:
+        return None
+    return boto3.client(
+        's3',
+        aws_access_key_id=AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+        region_name=AWS_REGION
+    )
+
+def upload_to_s3(file_obj, filename: str, content_type: str) -> Optional[str]:
+    """Uploads a file to S3 and returns the CDN/S3 URL. Returns None on failure or if not configured."""
+    s3_client = get_s3_client()
+    if not s3_client:
+        return None
+        
+    try:
+        # A13: Enforce S3 Server-Side Encryption (AES256 is default for S3 managed keys)
+        s3_client.upload_fileobj(
+            file_obj,
+            S3_BUCKET_NAME,
+            f"uploads/{filename}",
+            ExtraArgs={
+                "ContentType": content_type,
+                "ServerSideEncryption": "AES256",
+                "CacheControl": "max-age=31536000" # H4: Caching for images
+            }
+        )
+        if S3_CDN_URL:
+            # Using custom domain CDN
+            return f"{S3_CDN_URL}/uploads/{filename}"
+        else:
+            # Fallback to direct S3 URL
+            return f"https://{S3_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com/uploads/{filename}"
+    except ClientError as e:
+        print(f"[S3 Upload Error] {e}")
+        return None
 
 
 # Database setup - PostgreSQL with fallback to SQLite
@@ -10538,11 +10593,18 @@ async def upload_image(request: Request, file: UploadFile = File(...)):
 
         # A12: Server-generated UUID filename; original filename is discarded entirely
         unique_filename = f"{uuid.uuid4()}.{safe_ext}"
-        file_path = UPLOAD_DIR / unique_filename
+        
+        # C7: Attempt S3 / Cloudflare R2 Upload first
+        s3_url = upload_to_s3(file.file, unique_filename, f"image/{safe_ext}")
+        if s3_url:
+            return {"url": s3_url, "filename": unique_filename}
 
-        # Save file
+        # Save to local disk as fallback if S3 is not configured
+        file_path = UPLOAD_DIR / unique_filename
+        await file.seek(0)
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
+        
         # A14: strip execute bits
         try:
             os.chmod(file_path, 0o644)
