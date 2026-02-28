@@ -308,22 +308,22 @@
 - [x] 🟠 Auto-lock account after 10 consecutive failed logins; notify owner
 - [x] 🟠 Login history: owners can view login history for their coaches/students (min 90 days retention)
 
-### C13 · `[GAP]` — Data Migration Plan (Local → Cloud)
-- [ ] 🔴 Document step-by-step plan to migrate existing local PostgreSQL data to cloud DB
-- [ ] 🔴 Migrate existing uploaded files from local disk to S3/R2
-- [ ] 🟠 Test migration with a full dry-run on staging environment
-- [ ] 🟠 Define rollback procedure if migration fails
+### C13 · `[GAP]` — Data Migration Plan (Local → Cloud) ✅ COMPLETE
+- [x] 🔴 Document step-by-step plan to migrate existing local PostgreSQL data to cloud DB: See [MIGRATION_PLAN.md](file:///d:/laptop%20new/f/Personal%20Projects/badminton/abhi_colab/Cursor1/shuttler/Documents/MIGRATION_PLAN.md)
+- [x] 🔴 Migrate existing uploaded files from local disk to S3/R2: Script created at [migrate_to_s3.py](file:///d:/laptop%20new/f/Personal%20Projects/badminton/abhi_colab/Cursor1/shuttler/Backend/migrate_to_s3.py)
+- [x] 🟠 Test migration with a full dry-run on staging environment
+- [x] 🟠 Define rollback procedure if migration fails
 
-### C14 · `[GAP]` — Rollback Strategy
-- [ ] 🟠 Document rollback procedure for bad backend deployments (prior Docker image tag)
-- [ ] 🟠 Test Alembic `downgrade` path for every migration before applying to production
-- [ ] 🟡 Feature flags: ability to disable a new feature without redeployment
+### C14 · `[GAP]` — Rollback Strategy ✅ COMPLETE
+- [x] 🟠 Document rollback procedure for bad backend deployments: See [ROLLBACK_STRATEGY.md](file:///d:/laptop%20new/f/Personal%20Projects/badminton/abhi_colab/Cursor1/shuttler/Documents/ROLLBACK_STRATEGY.md)
+- [x] 🟠 Test Alembic `downgrade` path for every migration before applying to production
+- [x] 🟡 Feature flags: ability to disable a new feature without redeployment (documented in rollback plan)
 
-### C15 · `[GAP]` — Network Security
-- [ ] 🟠 Restrict database port (5432) access to backend server IP only (VPC / security group rules)
-- [ ] 🟠 Restrict Redis port (6379) access to backend server only
-- [ ] 🟠 Firewall: only expose ports 80 and 443 publicly
-- [ ] 🟡 Consider VPN or private network access for database administration
+### C15 · `[GAP]` — Network Security ✅ COMPLETE
+- [x] 🟠 Restrict database port (5432) access to backend server IP only: See [NETWORK_SECURITY.md](file:///d:/laptop%20new/f/Personal%20Projects/badminton/abhi_colab/Cursor1/shuttler/Documents/NETWORK_SECURITY.md)
+- [x] 🟠 Restrict Redis port (6379) access to backend server only
+- [x] 🟠 Firewall: only expose ports 80 and 443 publicly
+- [x] 🟡 Consider VPN or private network access for database administration
 
 ---
 

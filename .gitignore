@@ -2,10 +2,8 @@
 # SECURITY - Never commit these!
 # ========================================
 # Environment variables (contains DB passwords, API keys, secrets)
-.env
-.env.local
-.env.production
-.env.development
+.env*
+!.env.example
 
 # SSH keys and certificates
 *.pem
@@ -128,6 +126,20 @@ Backend/uploads/*
 postgres_docs.txt
 
 # ========================================
-# SCRIPTS
+# SCRIPTS & TOOLS
 # ========================================
 *.ps1
+# Development-specific scratch files
+patch_*.py
+fix_*.py
+*matches.txt
+endpoints.txt
+lims.txt
+models_out.txt
+owner_id.txt
+owner.txt
+fix_lines.py
+test.db
+dump.rdb
+.cursor/
+.gemini/
