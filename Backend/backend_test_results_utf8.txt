@@ -1,0 +1,56 @@
+﻿python : ImportError while 
+loading conftest 'D:\laptop 
+new\f\Personal Projects\badmi
+nton\abhi_colab\Cursor1\shutt
+ler\Backend\tests\conftest.py
+'.
+At line:1 char:1
++ python -m pytest 
+tests/integration > 
+backend_test_results.txt 2>&1
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~
+    + CategoryInfo           
+   : NotSpecified: (ImportE  
+  rror whi...s\conftest.py   
+ '.:String) [], RemoteExc    
+eption
+    + FullyQualifiedErrorId  
+   : NativeCommandError
+ 
+tests\conftest.py:5: in 
+<module>
+    from main import app, 
+Base, get_db
+main.py:6950: in <module>
+    def 
+delete_fee_payment(fee_id: 
+int, payment_id: int, 
+cancel_reason: str = 
+Body(..., embed=True), 
+current_user: dict = 
+Depends(require_owner)):
+E   NameError: name 'Body' 
+is not defined
+Firebase: FIREBASE_SERVICE_ACCOUNT_PATH not set. Push notifications disabled.
+Connecting to PostgreSQL database (sslmode=prefer)...
+PostgreSQL connection established (sslmode=prefer)!
+Field-level encryption: DISABLED (set FIELD_ENCRYPTION_KEY env var to enable in production)
+fee_payments table exists
+Table 'sessions' already exists
+Column 'session_id' already exists in 'batches' table
+video_resources table found with columns: ['id', 'student_id', 'title', 'url', 'remarks', 'uploaded_by', 'created_at', 'audience_type', 'batch_id', 'session_id']
+ video_resources table schema verified
+ video_resources table will be created by SQLAlchemy
+ leave_requests table exists
+ student_registration_requests table exists
+ coach_registration_requests table exists
+ calendar_events table schema updated for multi-table support
+ coach_attendance table schema verified
+JWT invalidation columns verified.
+ notification_preferences table exists
+ No orphaned `requests` table found.
+Database schema migration completed!
+Database tables created/verified!
+ Upload directory ready at: D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\uploads

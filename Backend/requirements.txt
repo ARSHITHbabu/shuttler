@@ -35,9 +35,12 @@ firebase-admin==6.3.0
 # Transactional email (B11)
 sendgrid==6.11.0
 
-# Testing (optional)
-# pytest==7.4.3
-# httpx==0.25.2
+# Testing
+pytest==7.4.3
+httpx==0.25.2
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+pytest-mock==3.12.0
 
 # Schema registry auto-discovery
 watchdog==3.0.0  # File watcher for automatic schema registry updates (optional but recommended)

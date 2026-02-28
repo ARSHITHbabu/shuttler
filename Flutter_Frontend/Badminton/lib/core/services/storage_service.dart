@@ -13,6 +13,9 @@ class StorageService {
   static const String _keyMustChangePassword = 'must_change_password';
   static const String _keyRememberMe = 'remember_me';
   static const String _keyFcmToken = 'fcm_token';
+  static const String _keyBiometricEnabled = 'biometric_enabled';
+  static const String _keySavedEmail = 'saved_email';
+  static const String _keySavedPassword = 'saved_password';
   
   // Academy Details
   static const String _keyAcademyName = 'academy_name';
@@ -139,6 +142,44 @@ class StorageService {
   Future<bool> saveUserId(int userId) async {
     await _ensureInitialized();
     return await _prefs!.setInt(_keyUserId, userId);
+  }
+
+  // Biometrics
+  Future<bool> setBiometricEnabled(bool enabled) async {
+    await _ensureInitialized();
+    return await _prefs!.setBool(_keyBiometricEnabled, enabled);
+  }
+
+  bool getBiometricEnabled() {
+    if (!_isInitialized) {
+      _tryInitSync();
+    }
+    if (!_isInitialized) return false;
+    return _prefs!.getBool(_keyBiometricEnabled) ?? false;
+  }
+
+  Future<void> saveBiometricCredentials(String email, String password) async {
+    await _ensureInitialized();
+    await _secureStorage.write(key: _keySavedEmail, value: email);
+    await _secureStorage.write(key: _keySavedPassword, value: password);
+    await setBiometricEnabled(true);
+  }
+
+  Future<Map<String, String>?> getBiometricCredentials() async {
+    await _ensureInitialized();
+    final email = await _secureStorage.read(key: _keySavedEmail);
+    final password = await _secureStorage.read(key: _keySavedPassword);
+    if (email != null && password != null) {
+      return {'email': email, 'password': password};
+    }
+    return null;
+  }
+
+  Future<void> clearBiometricCredentials() async {
+    await _ensureInitialized();
+    await _secureStorage.delete(key: _keySavedEmail);
+    await _secureStorage.delete(key: _keySavedPassword);
+    await setBiometricEnabled(false);
   }
 
   int? getUserId() {

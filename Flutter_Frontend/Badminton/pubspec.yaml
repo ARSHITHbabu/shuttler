@@ -82,6 +82,10 @@ dependencies:
   path_provider: ^2.1.1
   flutter_dotenv: ^6.0.0
   printing: ^5.14.2
+  flutter_jailbreak_detection: ^1.10.0
+  flutter_windowmanager: ^0.2.0
+  crypto: ^3.0.7
+  local_auth: ^3.0.1
 
 dev_dependencies:
   flutter_test:
@@ -94,6 +98,10 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
 
+  # Testing
+  mocktail: ^1.0.4
+  riverpod_test: ^0.1.9
+  
   # Code Generation
   build_runner: ^2.4.6
   riverpod_generator: ^2.3.0
