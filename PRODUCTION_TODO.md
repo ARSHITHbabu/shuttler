@@ -269,9 +269,9 @@
 ### C8 · Redis Cache ✅ COMPLETE
 - [x] 🟠 Deploy Redis instance (Redis Cloud free tier or Railway Redis)
 - [x] 🟠 Add `redis==5.0.1` and `fastapi-cache2==0.2.1` to backend
-- [x] 🟠 Cache active batches list (TTL: 5 min), student list (TTL: 2 min), coach list (TTL: 5 min), calendar events (TTL: 1 hr), academy details (TTL: 1 hr)
-- [x] 🟠 Cache invalidation: clear relevant keys on write operations
-- [x] 🟠 Token revocation list in Redis (for JWT blacklist)
+- [x] 🟠 Cache active batches list (TTL: 5 min), student list (TTL: 2 min), coach list (TTL: 5 min), calendar events (TTL: 1 hr), academy details (TTL: 1 hr) — `@cache` decorators applied to `GET /coaches/`, `GET /batches/`, `GET /students/`, `GET /api/calendar-events/`, `GET /owners/`
+- [x] 🟠 Cache invalidation: clear relevant keys on write operations — `invalidate_cache(namespace)` called in all POST/PUT/DELETE endpoints for each cached resource
+- [x] 🟠 Token revocation list in Redis (for JWT blacklist) — `_sync_redis_client` checks Redis fast-path in `_check_token_revoked()`; JTIs written to Redis with TTL on logout; `/health/redis` now performs a real ping
 
 ### C9 · API Layer Quality
 - [ ] 🟠 API Versioning: prefix all endpoints with `/api/v1/`
@@ -374,8 +374,8 @@
 ## PHASE E — Mobile App Hardening
 *Before any app store submission.*
 
-### E1 · Code Obfuscation
-- [x] 🟠 Android release: `flutter build appbundle --release --obfuscate --split-debug-info=build/symbols/`
+### E1 · Code Obfuscation ✅ COMPLETE
+- [x] 🟠 Android release: `flutter build appbundle --release --obfuscate --split-debug-info=build/symbols/` — `isMinifyEnabled = true`, `isShrinkResources = true` added to `build.gradle.kts` release config; `proguard-rules.pro` created
 - [x] 🟠 iOS release: `flutter build ipa --release --obfuscate --split-debug-info=build/symbols/`
 - [x] 🟠 Store `symbols/` directory securely (needed for crash symbolication)
 - [x] 🟠 Upload symbols to Firebase Crashlytics
@@ -388,12 +388,12 @@
 - [x] 🟠 Add `flutter_windowmanager: ^0.2.0` (Android)
 - [x] 🟠 Apply `FLAG_SECURE` on sensitive screens (fee data, personal info, guardian phone numbers)
 
-### E4 · Certificate Pinning (Recommended)
-- [x] 🟡 Pin backend SSL certificate public key in Dio client
-- [x] 🟡 Plan certificate rotation before expiry (keep backup pin)
+### E4 · Certificate Pinning (Recommended) ✅ COMPLETE
+- [x] 🟡 Pin backend SSL certificate public key in Dio client — pins loaded from `--dart-define=CERT_PIN_PRIMARY=<sha256hex>` / `CERT_PIN_BACKUP=<sha256hex>` at build time; fails closed in release when no pin set; localhost bypass in debug only
+- [x] 🟡 Plan certificate rotation before expiry (keep backup pin) — backup pin supported via `CERT_PIN_BACKUP` dart-define
 
-### E5 · Anti-Tampering
-- [x] 🟠 Verify ProGuard/R8 is enabled for Android release builds
+### E5 · Anti-Tampering ✅ COMPLETE
+- [x] 🟠 Verify ProGuard/R8 is enabled for Android release builds — `isMinifyEnabled = true` + `proguard-rules.pro` in `build.gradle.kts`; `network_security_config.xml` updated: `cleartextTrafficPermitted="false"` globally, cleartext only whitelisted for localhost/10.0.2.2/192.168.1.11; `android:usesCleartextTraffic="false"` in `AndroidManifest.xml`
 - [x] 🔴 Remove all hardcoded secrets (API keys, URLs) from Flutter source code
 - [x] 🔴 Use `--dart-define=API_URL=https://api.shuttler.app` for build-time config
 

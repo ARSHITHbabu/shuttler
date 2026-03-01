@@ -48,28 +48,31 @@ class ApiService {
         final client = HttpClient(context: context);
 
         client.badCertificateCallback = (X509Certificate cert, String host, int port) {
-          // You should only pin against your known backend domain
-          // Example: if (host != 'api.shuttler.app') return false;
+          // Always allow local dev hosts (emulator + LAN dev server) — debug mode only
+          if (host == '10.0.2.2' || host == '127.0.0.1' || host == 'localhost' ||
+              host == '192.168.1.11') {
+            return kDebugMode;
+          }
+
+          // Pins are injected at build time via --dart-define=CERT_PIN_PRIMARY=<sha256hex>
+          // OpenSSL command to derive the pin from the live cert:
+          //   openssl s_client -servername api.shuttler.app -connect api.shuttler.app:443 \
+          //     </dev/null 2>/dev/null | openssl x509 -outform der | openssl dgst -sha256 -hex
+          // Keep a backup pin and rotate: update backup first, ship update, then swap primary.
+          const primaryPin = String.fromEnvironment('CERT_PIN_PRIMARY', defaultValue: '');
+          const backupPin = String.fromEnvironment('CERT_PIN_BACKUP', defaultValue: '');
+
+          // No pins configured: fail open in debug (allows self-signed certs), fail closed in release
+          if (primaryPin.isEmpty) {
+            return kDebugMode;
+          }
 
           final bytes = cert.der;
           final digest = sha256.convert(bytes);
           final fingerprint = digest.toString().toUpperCase().replaceAll(':', '');
 
-          // Replace with real SHA-256 hashes generated from the live SSL certificate
-          // OpenSSL command to get the pin:
-          // openssl s_client -servername api.example.com -connect api.example.com:443 < /dev/null 2>/dev/null | openssl x509 -in /dev/stdin -outform der | openssl dgst -sha256 -hex
-          const primaryPin = 'PRIMARY_CERT_SHA256_HASH_HERE';
-
-          // KEEP A BACKUP PIN. Rotate securely by changing the backend cert, validating with the backup, 
-          // and pushing an app update exchanging the backup out.
-          const backupPin = 'BACKUP_CERT_SHA256_HASH_HERE';
-
-          // For local development, automatically accept localhost certificates
-          if (host == '10.0.2.2' || host == '127.0.0.1' || host == 'localhost') {
-            return true;
-          }
-
-          return fingerprint == primaryPin || fingerprint == backupPin;
+          return fingerprint == primaryPin ||
+              (backupPin.isNotEmpty && fingerprint == backupPin);
         };
 
         return client;
