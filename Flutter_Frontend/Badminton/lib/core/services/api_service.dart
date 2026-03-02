@@ -1,5 +1,8 @@
-import 'dart:typed_data';
+import 'dart:io';
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
+import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import '../constants/api_endpoints.dart';
 import 'storage_service.dart';
 import '../network/request_queue.dart';
@@ -16,8 +19,9 @@ class ApiService {
     _dio = Dio(
       BaseOptions(
         baseUrl: ApiEndpoints.baseUrl,
-        connectTimeout: const Duration(seconds: 10),
-        receiveTimeout: const Duration(seconds: 10),
+        connectTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 60),
+        sendTimeout: const Duration(seconds: 30),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
@@ -29,6 +33,51 @@ class ApiService {
     _dio.interceptors.add(_authInterceptor());
     _dio.interceptors.add(_loggingInterceptor());
     _dio.interceptors.add(_errorInterceptor());
+
+    _setupCertificatePinning();
+  }
+
+  /// Sets up SSL Certificate Pinning for better security (Phase E4)
+  void _setupCertificatePinning() {
+    if (kIsWeb) return; // Not applicable for web
+
+    _dio.httpClientAdapter = IOHttpClientAdapter(
+      createHttpClient: () {
+        // By disabling default trusted roots, all cert checks fall through to badCertificateCallback
+        final context = SecurityContext(withTrustedRoots: false);
+        final client = HttpClient(context: context);
+
+        client.badCertificateCallback = (X509Certificate cert, String host, int port) {
+          // Always allow local dev hosts (emulator + LAN dev server) — debug mode only
+          if (host == '10.0.2.2' || host == '127.0.0.1' || host == 'localhost' ||
+              host == '192.168.1.11') {
+            return kDebugMode;
+          }
+
+          // Pins are injected at build time via --dart-define=CERT_PIN_PRIMARY=<sha256hex>
+          // OpenSSL command to derive the pin from the live cert:
+          //   openssl s_client -servername api.shuttler.app -connect api.shuttler.app:443 \
+          //     </dev/null 2>/dev/null | openssl x509 -outform der | openssl dgst -sha256 -hex
+          // Keep a backup pin and rotate: update backup first, ship update, then swap primary.
+          const primaryPin = String.fromEnvironment('CERT_PIN_PRIMARY', defaultValue: '');
+          const backupPin = String.fromEnvironment('CERT_PIN_BACKUP', defaultValue: '');
+
+          // No pins configured: fail open in debug (allows self-signed certs), fail closed in release
+          if (primaryPin.isEmpty) {
+            return kDebugMode;
+          }
+
+          final bytes = cert.der;
+          final digest = sha256.convert(bytes);
+          final fingerprint = digest.toString().toUpperCase().replaceAll(':', '');
+
+          return fingerprint == primaryPin ||
+              (backupPin.isNotEmpty && fingerprint == backupPin);
+        };
+
+        return client;
+      },
+    );
   }
 
   /// Initialize offline support with RequestQueue
@@ -87,13 +136,52 @@ class ApiService {
       onError: (error, handler) async {
         // Handle 401 Unauthorized - token expired
         if (error.response?.statusCode == 401) {
+          final refreshToken = _storageService.getRefreshToken();
+          if (refreshToken != null && refreshToken.isNotEmpty) {
+            try {
+              // Use a separate Dio instance to avoid interceptor loop
+              final refreshDio = Dio(BaseOptions(baseUrl: ApiEndpoints.baseUrl));
+              final refreshResponse = await refreshDio.post(
+                '/auth/refresh',
+                data: {'refresh_token': refreshToken},
+                options: Options(
+                  headers: {'Content-Type': 'application/json'},
+                ),
+              );
+
+              if (refreshResponse.statusCode == 200) {
+                final data = refreshResponse.data;
+                final newAccessToken = data['access_token'];
+                final newRefreshToken = data['refresh_token'];
+
+                if (newAccessToken != null) {
+                  await _storageService.saveAuthToken(newAccessToken);
+                  if (newRefreshToken != null) {
+                    await _storageService.saveRefreshToken(newRefreshToken);
+                  }
+
+                  // Retry the original request with the new token
+                  final options = error.requestOptions;
+                  options.headers['Authorization'] = 'Bearer $newAccessToken';
+                  
+                  // Use a separate Dio instance to retry the request without triggering interceptors again
+                  final retryDio = Dio(BaseOptions(baseUrl: ApiEndpoints.baseUrl));
+                  final cloneReq = await retryDio.fetch(options);
+                  return handler.resolve(cloneReq);
+                }
+              }
+            } catch (e) {
+              print('🔒 Token refresh failed: $e');
+            }
+          }
+
           print('🔒 Unauthorized - clearing auth data');
           try {
             await _storageService.clearAuthData();
           } catch (e) {
             print('⚠️ Failed to clear auth data: $e');
           }
-          // TODO: Navigate to login screen
+          // The router/app state will detect clearAuthData and redirect to login
         }
 
         // Handle network errors
@@ -248,6 +336,57 @@ class ApiService {
             e.type == DioExceptionType.connectionTimeout) {
           return await _requestQueue!.queueRequest(
             method: 'PUT',
+            path: path,
+            data: data,
+            queryParameters: queryParameters,
+            options: options,
+            priority: priority,
+          );
+        }
+      }
+      rethrow;
+    }
+  }
+
+  /// PATCH request
+  Future<Response> patch(
+    String path, {
+    dynamic data,
+    Map<String, dynamic>? queryParameters,
+    Options? options,
+    RequestPriority priority = RequestPriority.normal,
+  }) async {
+    try {
+      // Use RequestQueue if available and offline
+      if (_requestQueue != null) {
+        final isConnected = await _connectivityService!.isConnected();
+        if (!isConnected) {
+          // Queue the request for later execution
+          return await _requestQueue!.queueRequest(
+            method: 'PATCH',
+            path: path,
+            data: data,
+            queryParameters: queryParameters,
+            options: options,
+            priority: priority,
+          );
+        }
+      }
+      
+      final response = await _dio.patch(
+        path,
+        data: data,
+        queryParameters: queryParameters,
+        options: options,
+      );
+      return response;
+    } catch (e) {
+      // If request fails and we have RequestQueue, try queuing it
+      if (_requestQueue != null && e is DioException) {
+        if (e.type == DioExceptionType.unknown || 
+            e.type == DioExceptionType.connectionTimeout) {
+          return await _requestQueue!.queueRequest(
+            method: 'PATCH',
             path: path,
             data: data,
             queryParameters: queryParameters,

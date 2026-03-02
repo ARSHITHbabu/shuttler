@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../core/theme/neumorphic_styles.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/owner_navigation_provider.dart';
+import '../../widgets/owner/force_change_password_dialog.dart';
 import 'home_screen.dart';
 import 'batches_screen.dart';
 import 'attendance_screen.dart';
@@ -10,15 +14,35 @@ import 'more_screen.dart';
 
 /// Owner Dashboard with bottom navigation
 /// Matches React reference: OwnerDashboard.tsx
-class OwnerDashboard extends StatefulWidget {
+class OwnerDashboard extends ConsumerStatefulWidget {
   const OwnerDashboard({super.key});
 
   @override
-  State<OwnerDashboard> createState() => _OwnerDashboardState();
+  ConsumerState<OwnerDashboard> createState() => _OwnerDashboardState();
 }
 
-class _OwnerDashboardState extends State<OwnerDashboard> {
-  int _currentIndex = 0;
+class _OwnerDashboardState extends ConsumerState<OwnerDashboard> {
+  // Navigation state is now managed by ownerBottomNavIndexProvider
+
+  @override
+  void initState() {
+    super.initState();
+    // Check if user must change password
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkForceChangePassword();
+    });
+  }
+
+  void _checkForceChangePassword() {
+    final authState = ref.read(authProvider).value;
+    if (authState is Authenticated && authState.mustChangePassword) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const ForceChangePasswordDialog(),
+      );
+    }
+  }
 
   final List<Widget> _screens = [
     const HomeScreen(),
@@ -38,6 +62,10 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+
+    final currentIndex = ref.watch(ownerBottomNavIndexProvider);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final backgroundColor = theme.scaffoldBackgroundColor;
@@ -56,7 +84,7 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
               // Content Area
               Expanded(
                 child: RepaintBoundary(
-                  child: _screens[_currentIndex],
+                  child: _screens[currentIndex],
                 ),
               ),
 
@@ -81,17 +109,15 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
                 child: SafeArea(
                   top: false,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppDimensions.spacingXs,
-                      vertical: AppDimensions.spacingS,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isSmallScreen ? 4 : AppDimensions.spacingS,
+                      vertical: isSmallScreen ? 8 : AppDimensions.spacingM,
                     ),
                     child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: List.generate(
                         _navItems.length,
-                        (index) => Expanded(
-                          child: _buildNavItem(index),
-                        ),
+                        (index) => _buildNavItem(index, currentIndex, isSmallScreen),
                       ),
                     ),
                   ),
@@ -104,9 +130,9 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
     );
   }
 
-  Widget _buildNavItem(int index) {
+  Widget _buildNavItem(int index, int currentIndex, bool isSmallScreen) {
     final item = _navItems[index];
-    final isActive = _currentIndex == index;
+    final isActive = currentIndex == index;
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final cardColor = isDark ? AppColors.cardBackground : AppColorsLight.cardBackground;
@@ -115,18 +141,16 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
 
     return GestureDetector(
       onTap: () {
-        setState(() {
-          _currentIndex = index;
-        });
+        ref.read(ownerBottomNavIndexProvider.notifier).state = index;
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppDimensions.paddingXs,
-          vertical: AppDimensions.spacingXs,
+        padding: EdgeInsets.symmetric(
+          horizontal: isSmallScreen ? AppDimensions.paddingS : AppDimensions.paddingM,
+          vertical: isSmallScreen ? 6 : AppDimensions.spacingS,
         ),
         decoration: BoxDecoration(
           color: isActive ? cardColor : Colors.transparent,
-          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+          borderRadius: BorderRadius.circular(AppDimensions.radiusM),
           boxShadow: isActive ? NeumorphicStyles.getPressedShadow() : null,
         ),
         child: Column(
@@ -138,18 +162,15 @@ class _OwnerDashboardState extends State<OwnerDashboard> {
               size: 20,
               color: isActive ? activeColor : inactiveColor,
             ),
-            const SizedBox(height: 2),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                item.label,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: isActive ? activeColor : inactiveColor,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+            const SizedBox(height: 4),
+            Text(
+              item.label,
+              style: TextStyle(
+                fontSize: 12,
+                color: isActive ? activeColor : inactiveColor,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),

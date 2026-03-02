@@ -32,7 +32,7 @@ class InvitationService {
             'student_phone': studentPhone.trim(),
           if (studentEmail != null && studentEmail.trim().isNotEmpty)
             'student_email': studentEmail.trim(),
-          if (batchId != null) 'batch_id': batchId,
+          'batch_id': ?batchId,
         },
       );
 
@@ -80,6 +80,21 @@ class InvitationService {
     }
   }
 
+  /// Get all pending invitations (owner view)
+  Future<List<Map<String, dynamic>>> getPendingInvitations() async {
+    try {
+      final response = await _apiService.get('/invitations/pending');
+      if (response.data is List) {
+        return (response.data as List)
+            .map((json) => json as Map<String, dynamic>)
+            .toList();
+      }
+      return [];
+    } catch (e) {
+      throw Exception('Failed to fetch pending invitations: ${_apiService.getErrorMessage(e)}');
+    }
+  }
+
   /// Update invitation status (approved/rejected)
   Future<Map<String, dynamic>> updateInvitationStatus(
     int invitationId,
@@ -124,7 +139,7 @@ class InvitationService {
             'coach_phone': coachPhone.trim(),
           if (coachEmail != null && coachEmail.trim().isNotEmpty)
             'coach_email': coachEmail.trim(),
-          if (experienceYears != null) 'experience_years': experienceYears,
+          'experience_years': ?experienceYears,
         },
       );
 

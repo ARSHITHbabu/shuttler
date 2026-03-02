@@ -6,7 +6,7 @@ class Announcement {
   final String title;
   final String message;
   final String targetAudience; // 'all', 'students', 'coaches'
-  final String priority; // 'normal', 'high', 'urgent'
+  final String priority; // 'General', 'Important'
   final int? createdBy; // coach_id (owner)
   final String? createdByName;
   final DateTime createdAt;
@@ -33,7 +33,7 @@ class Announcement {
       title: json['title'] as String,
       message: json['message'] as String,
       targetAudience: json['target_audience'] as String? ?? 'all',
-      priority: json['priority'] as String? ?? 'normal',
+      priority: json['priority'] as String? ?? 'General',
       createdBy: json['created_by'] as int?,
       createdByName: json['created_by_name'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
@@ -86,10 +86,9 @@ class Announcement {
   /// Get priority color
   Color get priorityColor {
     switch (priority.toLowerCase()) {
-      case 'urgent':
-        return const Color(0xFFF44336); // Red
-      case 'high':
+      case 'important':
         return const Color(0xFFFF9800); // Orange
+      case 'general':
       default:
         return const Color(0xFF4CAF50); // Green
     }

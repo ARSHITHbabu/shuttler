@@ -51,3 +51,14 @@ class OwnerList extends _$OwnerList {
     }
   }
 }
+
+/// Provider for the active owner
+@riverpod
+Future<Owner?> activeOwner(ActiveOwnerRef ref) async {
+  final ownerService = ref.watch(ownerServiceProvider);
+  final owners = await ownerService.getOwners();
+  if (owners.isNotEmpty) {
+    return owners.first; // Return the first owner for now
+  }
+  return null;
+}

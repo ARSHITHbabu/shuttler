@@ -3,6 +3,8 @@ class Performance {
   final int id;
   final int studentId;
   final String? studentName;
+  final int batchId;
+  final String? batchName;
   final DateTime date;
   final int serve; // 1-5 rating
   final int smash; // 1-5 rating
@@ -16,6 +18,8 @@ class Performance {
     required this.id,
     required this.studentId,
     this.studentName,
+    required this.batchId,
+    this.batchName,
     required this.date,
     required this.serve,
     required this.smash,
@@ -32,6 +36,8 @@ class Performance {
       id: json['id'] as int,
       studentId: json['student_id'] as int,
       studentName: json['student_name'] as String?,
+      batchId: json['batch_id'] as int? ?? 0,
+      batchName: json['batch_name'] as String?,
       date: DateTime.parse(json['date'] as String),
       serve: json['serve'] as int,
       smash: json['smash'] as int,
@@ -49,6 +55,7 @@ class Performance {
   Map<String, dynamic> toJson() {
     return {
       'student_id': studentId,
+      'batch_id': batchId,
       'date': date.toIso8601String().split('T')[0], // YYYY-MM-DD format
       'serve': serve,
       'smash': smash,
@@ -64,6 +71,8 @@ class Performance {
     int? id,
     int? studentId,
     String? studentName,
+    int? batchId,
+    String? batchName,
     DateTime? date,
     int? serve,
     int? smash,
@@ -77,6 +86,8 @@ class Performance {
       id: id ?? this.id,
       studentId: studentId ?? this.studentId,
       studentName: studentName ?? this.studentName,
+      batchId: batchId ?? this.batchId,
+      batchName: batchName ?? this.batchName,
       date: date ?? this.date,
       serve: serve ?? this.serve,
       smash: smash ?? this.smash,
@@ -95,7 +106,7 @@ class Performance {
 
   @override
   String toString() {
-    return 'Performance(id: $id, studentId: $studentId, date: $date, avgRating: ${averageRating.toStringAsFixed(1)})';
+    return 'Performance(id: $id, studentId: $studentId, batchId: $batchId, date: $date, avgRating: ${averageRating.toStringAsFixed(1)})';
   }
 
   @override

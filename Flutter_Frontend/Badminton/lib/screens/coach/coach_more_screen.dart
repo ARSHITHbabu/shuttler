@@ -6,15 +6,16 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../providers/auth_provider.dart';
 import 'coach_announcements_screen.dart';
-import 'coach_attendance_view_screen.dart';
 import 'coach_schedule_screen.dart';
-import 'coach_calendar_screen.dart';
 import 'coach_settings_screen.dart';
 import 'coach_video_management_screen.dart';
 import '../owner/bmi_tracking_screen.dart';
-import '../owner/performance_tracking_screen.dart';
+import 'coach_performance_screen.dart';
 import 'coach_fees_screen.dart';
 import 'leave_request_screen.dart';
+import 'coach_reports_screen.dart';
+import '../owner/notifications_screen.dart';
+import '../../providers/owner_provider.dart';
 
 /// Coach More Screen - Navigation hub for additional features
 class CoachMoreScreen extends ConsumerStatefulWidget {
@@ -45,6 +46,23 @@ class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
                 color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
               ),
             ),
+            ref.watch(activeOwnerProvider).when(
+                  data: (owner) => owner?.academyName != null
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            owner!.academyName!,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: isDark ? AppColors.accent : AppColorsLight.accent,
+                            ),
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                  loading: () => const SizedBox.shrink(),
+                  error: (_, __) => const SizedBox.shrink(),
+                ),
             const SizedBox(height: AppDimensions.spacingL),
 
             // Information Section
@@ -65,14 +83,14 @@ class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
             ),
             const SizedBox(height: AppDimensions.spacingS),
             _MenuItem(
-              icon: Icons.fact_check_outlined,
-              title: 'Attendance Rate',
-              subtitle: 'View attendance statistics',
+              icon: Icons.notifications_none_outlined,
+              title: 'Notifications',
+              subtitle: 'View your alerts and updates',
               isDark: isDark,
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (context) => const CoachAttendanceViewScreen(),
+                    builder: (context) => const NotificationsScreen(),
                   ),
                 );
               },
@@ -91,20 +109,7 @@ class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
                 );
               },
             ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.calendar_month_outlined,
-              title: 'Calendar',
-              subtitle: 'View academy calendar events',
-              isDark: isDark,
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const CoachCalendarScreen(),
-                  ),
-                );
-              },
-            ),
+
             const SizedBox(height: AppDimensions.spacingS),
             _MenuItem(
               icon: Icons.payments_outlined,
@@ -128,7 +133,7 @@ class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (context) => const PerformanceTrackingScreen(),
+                    builder: (context) => const CoachPerformanceScreen(),
                   ),
                 );
               },
@@ -137,7 +142,7 @@ class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
             _MenuItem(
               icon: Icons.calendar_today_outlined,
               title: 'Schedule',
-              subtitle: 'View your session schedule',
+              subtitle: 'View sessions, holidays, and academy events',
               isDark: isDark,
               onTap: () {
                 Navigator.of(context).push(
@@ -171,6 +176,20 @@ class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (context) => const LeaveRequestScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.assessment_outlined,
+              title: 'Reports',
+              subtitle: 'Generate attendance and performance reports',
+              isDark: isDark,
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const CoachReportsScreen(),
                   ),
                 );
               },

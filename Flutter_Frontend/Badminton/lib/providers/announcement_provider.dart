@@ -1,6 +1,7 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../models/announcement.dart';
 import 'service_providers.dart';
+import 'calendar_provider.dart';
 
 part 'announcement_provider.g.dart';
 
@@ -81,9 +82,13 @@ class AnnouncementManager extends _$AnnouncementManager {
         ref.invalidate(announcementByPriorityProvider(priority));
       }
       
-      // Note: Creating an announcement should trigger notifications
-      // This would typically be handled by the backend, but we can
-      // invalidate notification providers here if needed
+      // Invalidate calendar providers since announcements can appear on calendar
+      if (announcementData.containsKey('scheduled_at')) {
+        try {
+          final scheduledAt = DateTime.parse(announcementData['scheduled_at'].toString());
+          ref.invalidate(yearlyEventsProvider(scheduledAt.year));
+        } catch (_) {}
+      }
       
       await refresh();
     } catch (e) {
@@ -107,8 +112,15 @@ class AnnouncementManager extends _$AnnouncementManager {
       if (announcementData.containsKey('target_audience')) {
         ref.invalidate(announcementByAudienceProvider(announcementData['target_audience'] as String));
       }
-      if (announcementData.containsKey('priority')) {
-        ref.invalidate(announcementByPriorityProvider(announcementData['priority'] as String));
+      // Invalidate calendar providers
+      if (existing.scheduledAt != null) {
+        ref.invalidate(yearlyEventsProvider(existing.scheduledAt!.year));
+      }
+      if (announcementData.containsKey('scheduled_at')) {
+        try {
+          final scheduledAt = DateTime.parse(announcementData['scheduled_at'].toString());
+          ref.invalidate(yearlyEventsProvider(scheduledAt.year));
+        } catch (_) {}
       }
       
       await refresh();
@@ -128,6 +140,11 @@ class AnnouncementManager extends _$AnnouncementManager {
       ref.invalidate(announcementByIdProvider(id));
       ref.invalidate(announcementByAudienceProvider(existing.targetAudience));
       ref.invalidate(announcementByPriorityProvider(existing.priority));
+      
+      // Invalidate calendar providers
+      if (existing.scheduledAt != null) {
+        ref.invalidate(yearlyEventsProvider(existing.scheduledAt!.year));
+      }
       
       await refresh();
     } catch (e) {

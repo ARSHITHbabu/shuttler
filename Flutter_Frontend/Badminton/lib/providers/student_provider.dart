@@ -1,7 +1,7 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../models/student.dart';
+import '../models/coach.dart';
 import '../models/schedule.dart';
-import '../models/batch.dart';
 import '../utils/batch_time_utils.dart';
 import 'service_providers.dart';
 import 'batch_provider.dart';
@@ -62,7 +62,7 @@ class StudentList extends _$StudentList {
     }
   }
 
-  /// Delete a student
+  /// Delete a student (Soft delete - logic varies, we use deactivate for soft delete)
   Future<void> deleteStudent(int id) async {
     try {
       final studentService = ref.read(studentServiceProvider);
@@ -76,6 +76,70 @@ class StudentList extends _$StudentList {
       await refresh();
     } catch (e) {
       throw Exception('Failed to delete student: $e');
+    }
+  }
+
+  /// Deactivate a student (Soft delete)
+  Future<void> deactivateStudent(int id) async {
+    try {
+      final studentService = ref.read(studentServiceProvider);
+      await studentService.deactivateStudent(id);
+
+      // Invalidate related providers
+      ref.invalidate(studentByIdProvider(id));
+      ref.invalidate(dashboardStatsProvider);
+
+      await refresh();
+    } catch (e) {
+      throw Exception('Failed to deactivate student: $e');
+    }
+  }
+
+  /// Remove a student permanently (Hard delete)
+  Future<void> removeStudentPermanently(int id) async {
+    try {
+      final studentService = ref.read(studentServiceProvider);
+      await studentService.removeStudentPermanently(id);
+
+      // Invalidate related providers
+      ref.invalidate(studentByIdProvider(id));
+      ref.invalidate(studentBatchesProvider(id));
+      ref.invalidate(dashboardStatsProvider);
+
+      await refresh();
+    } catch (e) {
+      throw Exception('Failed to remove student permanently: $e');
+    }
+  }
+
+  /// Request to rejoin
+  Future<void> requestRejoin(int id) async {
+    try {
+      final studentService = ref.read(studentServiceProvider);
+      await studentService.requestRejoin(id);
+      
+      // Since this is called during login, we don't necessarily need to refresh 
+      // the list for the owner, but it's good practice
+      ref.invalidate(studentByIdProvider(id));
+      await refresh();
+    } catch (e) {
+      throw Exception('Failed to request rejoin: $e');
+    }
+  }
+
+  /// Approve rejoin request
+  Future<void> approveRejoin(int id) async {
+    try {
+      final studentService = ref.read(studentServiceProvider);
+      await studentService.approveRejoin(id);
+
+      // Invalidate related providers
+      ref.invalidate(studentByIdProvider(id));
+      ref.invalidate(dashboardStatsProvider);
+
+      await refresh();
+    } catch (e) {
+      throw Exception('Failed to approve rejoin request: $e');
     }
   }
 }
@@ -212,7 +276,6 @@ Future<StudentDashboardData> studentDashboard(
   // Get today's sessions and future sessions (next 7 days)
   // Only add ONE session per batch - either today (if upcoming) OR next future occurrence
   for (var batch in batches) {
-    bool batchAdded = false;
 
     // Check if batch runs today
     final runsToday =
@@ -233,42 +296,6 @@ Future<StudentDashboardData> studentDashboard(
         'location': batch.location ?? '',
         'date': DateTime(now.year, now.month, now.day).toIso8601String(),
       });
-      batchAdded = true; // Mark as added, skip future days for this batch
-    }
-
-    // Only check future days if batch wasn't added for today
-    if (!batchAdded) {
-      // Get future sessions (next 7 days)
-      for (int i = 1; i <= 7 && upcomingSessions.length < 5; i++) {
-        final checkDate = now.add(Duration(days: i));
-        final checkDayName = dayNames[checkDate.weekday - 1];
-
-        // Check if batch runs on this future day
-        final runsOnDay =
-            batch.period.toLowerCase() == 'daily' ||
-            batch.days.contains(checkDayName);
-
-        if (runsOnDay) {
-          final startTimeStr = parseBatchStartTime(batch.timing);
-          final endTimeStr = parseBatchEndTime(batch.timing);
-          final timeStr = startTimeStr != null && endTimeStr != null
-              ? '$startTimeStr - $endTimeStr'
-              : (startTimeStr ?? batch.timing);
-
-          final dateStr = DateTime(
-            checkDate.year,
-            checkDate.month,
-            checkDate.day,
-          ).toIso8601String();
-          upcomingSessions.add({
-            'batch_name': batch.name,
-            'time': timeStr,
-            'location': batch.location ?? '',
-            'date': dateStr,
-          });
-          break; // Only add one future session per batch
-        }
-      }
     }
   }
 
@@ -324,6 +351,34 @@ Future<List<Schedule>> studentSchedules(
   allSchedules.sort((a, b) => b.date.compareTo(a.date));
 
   return allSchedules;
+}
+
+
+/// Provider for student's coaches
+@riverpod
+Future<List<Coach>> studentCoaches(StudentCoachesRef ref, int studentId) async {
+  final coachService = ref.watch(coachServiceProvider);
+  // Get student batches to find assigned coaches
+  final batches = await ref.watch(studentBatchesProvider(studentId).future);
+  
+  final Set<int> coachIds = {};
+  for (final batch in batches) {
+    coachIds.addAll(batch.assignedCoachIds);
+    // Backward compatibility
+    if (batch.assignedCoachIds.isEmpty && batch.assignedCoachId != null) {
+      coachIds.add(batch.assignedCoachId!);
+    }
+  }
+
+  if (coachIds.isEmpty) {
+    return [];
+  }
+
+  // Fetch all coaches and filter
+  // This is more efficient than making N API calls if N is small, 
+  // but for larger systems we should have a bulk fetch API.
+  final allCoaches = await coachService.getCoaches();
+  return allCoaches.where((c) => coachIds.contains(c.id)).toList();
 }
 
 /// Student dashboard data class

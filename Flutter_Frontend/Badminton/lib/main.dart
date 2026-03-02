@@ -5,7 +5,10 @@ import 'core/services/storage_service.dart';
 import 'routes/app_router.dart';
 import 'providers/theme_provider.dart';
 import 'providers/service_providers.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_jailbreak_detection/flutter_jailbreak_detection.dart';
 import 'widgets/common/offline_indicator.dart';
+import 'widgets/common/app_logo.dart';
 
 void main() async {
   // Ensure Flutter is initialized
@@ -37,12 +40,57 @@ class _MyAppState extends ConsumerState<MyApp> {
   late final router = AppRouter.createRouter();
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkJailbreak();
+    });
+  }
+
+  Future<void> _checkJailbreak() async {
+    try {
+      final bool jailbroken = await FlutterJailbreakDetection.jailbroken;
+      final bool developerMode = await FlutterJailbreakDetection.developerMode;
+      if (jailbroken || developerMode) {
+        final context = router.routerDelegate.navigatorKey.currentContext;
+        if (context == null) return;
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              backgroundColor: Theme.of(context).colorScheme.surface,
+              title: const Text(
+                'Security Warning', 
+                style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)
+              ),
+              content: const Text(
+                'Your device appears to be rooted or jailbroken. For your security, please be aware that using this application on a compromised device may put your data at risk.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('I Understand'),
+                ),
+              ],
+            );
+          },
+        );
+      }
+    } on PlatformException {
+      debugPrint('Failed to get jailbreak status.');
+    } catch (e) {
+      debugPrint('Error checking jailbreak status: $e');
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final themeMode = ref.watch(themeNotifierProvider);
 
     return OfflineIndicator(
       child: MaterialApp.router(
-        title: 'Badminton Academy',
+        title: 'Pursue Badminton',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         darkTheme: AppTheme.darkTheme,
@@ -64,14 +112,12 @@ class PlaceholderScreen extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.sports_tennis,
-              size: 80,
-              color: Theme.of(context).colorScheme.primary,
+            const AppLogo(
+              height: 120,
             ),
             const SizedBox(height: 24),
             Text(
-              'Badminton Academy',
+              'Pursue Badminton',
               style: Theme.of(context).textTheme.displaySmall,
             ),
             const SizedBox(height: 16),

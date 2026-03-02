@@ -11,12 +11,16 @@ import '../../providers/theme_provider.dart';
 import '../../widgets/settings/shuttlecock_theme_toggle.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/service_providers.dart';
+import '../../providers/owner_provider.dart';
+import '../../widgets/common/app_logo.dart';
 import '../../widgets/forms/change_password_dialog.dart';
 import '../common/privacy_policy_screen.dart';
 import '../common/terms_conditions_screen.dart';
 import '../common/help_support_screen.dart';
 import 'profile_screen.dart';
 import 'academy_details_screen.dart';
+import 'owner_management_screen.dart';
+import '../common/active_sessions_screen.dart';
 
 /// Settings Screen - App settings, academy settings, account settings
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -146,6 +150,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                       const Divider(height: 1),
                       _buildActionTile(
+                        title: 'Active Sessions',
+                        icon: Icons.devices_outlined,
+                        isDark: isDark,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const ActiveSessionsScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      const Divider(height: 1),
+                      _buildActionTile(
                         title: 'Change Password',
                         icon: Icons.lock_outline,
                         isDark: isDark,
@@ -206,6 +223,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           );
                         },
                       ),
+                      const Divider(height: 1),
+                      _buildActionTile(
+                        title: 'Owner Management',
+                        icon: Icons.people_outline,
+                        isDark: isDark,
+                        onTap: () {
+                          // Navigate to Owner Management Screen
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const OwnerManagementScreen(),
+                            ),
+                          );
+                        },
+                      ),
                     ],
                   ),
 
@@ -244,19 +275,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (context) => const TermsConditionsScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                      const Divider(height: 1),
-                      _buildActionTile(
-                        title: 'Contact Support',
-                        icon: Icons.support_agent_outlined,
-                        isDark: isDark,
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => const HelpSupportScreen(userRole: 'owner'),
                             ),
                           );
                         },
@@ -309,10 +327,84 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   // App Branding
                   _buildAppBranding(isDark),
 
+                  const SizedBox(height: AppDimensions.spacingXl),
+
+                  // Contact Support at the very end as a premium card
+                  _buildSupportCard(isDark),
+
                   const SizedBox(height: 100),
                 ],
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSupportCard(bool isDark) {
+    final accentColor = isDark ? AppColors.accent : AppColorsLight.accent;
+    return NeumorphicContainer(
+      padding: const EdgeInsets.all(AppDimensions.paddingL),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: accentColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                ),
+                child: Icon(
+                  Icons.support_agent_outlined,
+                  color: accentColor,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: AppDimensions.spacingM),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Need Help?',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      'Contact our support team',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const HelpSupportScreen(userRole: 'owner'),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: accentColor,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                  ),
+                  elevation: 0,
+                ),
+                child: const Text('Support'),
+              ),
+            ],
           ),
         ],
       ),
@@ -505,28 +597,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget _buildAppBranding(bool isDark) {
     return Column(
       children: [
-        Container(
-          width: 60,
-          height: 60,
-          decoration: BoxDecoration(
-            color: isDark ? AppColors.accent : AppColorsLight.accent,
-            borderRadius: BorderRadius.circular(AppDimensions.radiusL),
-          ),
-          child: const Icon(
-            Icons.sports_tennis,
-            size: 32,
-            color: Colors.white,
-          ),
+        const AppLogo(
+          height: 80,
         ),
         const SizedBox(height: AppDimensions.spacingM),
-        Text(
-          'Shuttler',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-          ),
-        ),
+        ref.watch(activeOwnerProvider).when(
+              data: (owner) => Text(
+                owner?.academyName ?? 'Pursue Badminton',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                ),
+              ),
+              loading: () => const SizedBox(height: 20),
+              error: (_, __) => Text(
+                'Pursue Badminton',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                ),
+              ),
+            ),
         Text(
           'Badminton Academy Management',
           style: TextStyle(

@@ -9,15 +9,15 @@ import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/service_providers.dart';
+import '../../widgets/common/app_logo.dart';
+import 'package:local_auth/local_auth.dart';
+import 'package:local_auth/error_codes.dart' as auth_error;
+import 'package:flutter/services.dart';
 
 /// Login screen for user authentication
 class LoginScreen extends ConsumerStatefulWidget {
-  final String userType;
-
-  const LoginScreen({
-    super.key,
-    required this.userType,
-  });
+  const LoginScreen({super.key});
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
@@ -30,6 +30,76 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _rememberMe = false;
   bool _obscurePassword = true;
   bool _isLoading = false;
+  final LocalAuthentication auth = LocalAuthentication();
+  bool _canCheckBiometrics = false;
+  bool _isBiometricEnabled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkBiometrics();
+  }
+
+  Future<void> _checkBiometrics() async {
+    final storageService = ref.read(storageServiceProvider);
+    
+    // Check if the user opted in previously
+    final enabled = storageService.getBiometricEnabled();
+    setState(() {
+      _isBiometricEnabled = enabled;
+    });
+
+    try {
+      final canAuthenticateWithBiometrics = await auth.canCheckBiometrics;
+      final canAuthenticate = canAuthenticateWithBiometrics || await auth.isDeviceSupported();
+      setState(() {
+        _canCheckBiometrics = canAuthenticate;
+      });
+
+      // Auto-prompt if biometrics is already fully enabled
+      if (enabled && canAuthenticate) {
+        _handleBiometricLogin();
+      }
+    } on PlatformException catch (e) {
+      debugPrint("Biometrics error: $e");
+    }
+  }
+
+  Future<void> _handleBiometricLogin() async {
+    try {
+      final didAuthenticate = await auth.authenticate(
+        localizedReason: 'Please authenticate to sign in to your Badminton account',
+        options: const AuthenticationOptions(
+          biometricOnly: true,
+          stickyAuth: true,
+        ),
+      );
+
+      if (didAuthenticate) {
+        final storageService = ref.read(storageServiceProvider);
+        final keys = await storageService.getBiometricCredentials();
+        if (keys != null) {
+          _emailController.text = keys['email']!;
+          _passwordController.text = keys['password']!;
+          _handleLogin(fromBiometric: true);
+        } else {
+          // Tokens missing for some reason
+          setState(() {
+            _isBiometricEnabled = false;
+          });
+          await storageService.setBiometricEnabled(false);
+        }
+      }
+    } on PlatformException catch (e) {
+      if (e.code == auth_error.notEnrolled) {
+        // No biometrics enrolled
+        debugPrint('No biometrics enrolled');
+      } else if (e.code == auth_error.lockedOut || e.code == auth_error.permanentlyLockedOut) {
+        // Locked out
+        debugPrint('Biometrics locked out');
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -38,8 +108,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  Future<void> _handleLogin() async {
-    if (!_formKey.currentState!.validate()) {
+  Future<void> _handleLogin({bool fromBiometric = false}) async {
+    if (!fromBiometric && !_formKey.currentState!.validate()) {
       return;
     }
 
@@ -49,24 +119,39 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final result = await ref.read(authProvider.notifier).login(
             email: _emailController.text.trim(),
             password: _passwordController.text,
-            userType: widget.userType,
             rememberMe: _rememberMe,
           );
 
       if (mounted) {
+        // Offer biometric enablement on successful normal login if biometrics is natively supported but not yet enabled.
+        if (!fromBiometric && _canCheckBiometrics && !_isBiometricEnabled) {
+          final storageService = ref.read(storageServiceProvider);
+          // Auto-enable biometrics and save encrypted payload natively.
+          await storageService.saveBiometricCredentials(_emailController.text.trim(), _passwordController.text);
+        }
+
+        // Check for inactive account (NEW)
+        if (result['account_inactive'] == true) {
+          final rejoinPending = result['rejoin_request_pending'] ?? false;
+          final studentId = result['student_id'];
+          _showInactiveAccountDialog(context, studentId, rejoinPending);
+          return;
+        }
+
+        final userType = result['userType'];
+        
         // Check profile completeness for students
-        if (widget.userType == 'student') {
+        if (userType == 'student') {
           final profileComplete = result['profile_complete'] ?? false;
           if (!profileComplete) {
-            // Redirect to profile completion page
             context.go('/student-profile-complete');
             return;
           }
         }
 
-        // Navigate to appropriate dashboard based on user type
+        // Navigate based on user type
         String route;
-        switch (widget.userType) {
+        switch (userType) {
           case 'owner':
             route = '/owner-dashboard';
             break;
@@ -83,46 +168,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       }
     } catch (e) {
       if (mounted) {
-        // Extract user-friendly error message
-        String errorMessage = 'An error occurred. Please try again.';
-        if (e.toString().contains('Exception: ')) {
-          errorMessage = e.toString().replaceAll('Exception: ', '');
-        } else if (e.toString().isNotEmpty) {
-          errorMessage = e.toString();
-        }
-        
-        SuccessSnackbar.showError(context, errorMessage);
+        SuccessSnackbar.showError(context, e.toString().replaceAll('Exception: ', ''));
       }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
       }
-    }
-  }
-
-  String _getRoleTitle() {
-    switch (widget.userType) {
-      case 'owner':
-        return 'Owner';
-      case 'coach':
-        return 'Coach';
-      case 'student':
-        return 'Student';
-      default:
-        return 'User';
-    }
-  }
-
-  IconData _getRoleIcon() {
-    switch (widget.userType) {
-      case 'owner':
-        return Icons.admin_panel_settings;
-      case 'coach':
-        return Icons.person_outline;
-      case 'student':
-        return Icons.school_outlined;
-      default:
-        return Icons.person;
     }
   }
 
@@ -133,17 +184,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () {
-            // Check if we can pop, otherwise navigate to home
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go('/');
-            }
-          },
-        ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -153,17 +193,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Role Icon
-                Container(
-                  padding: const EdgeInsets.all(AppDimensions.paddingL),
-                  decoration: BoxDecoration(
-                    color: AppColors.accent.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    _getRoleIcon(),
-                    size: 64,
-                    color: AppColors.accent,
+                // App Icon
+                const Center(
+                  child: AppLogo(
+                    height: 120,
                   ),
                 ),
                 const SizedBox(height: AppDimensions.spacingL),
@@ -181,7 +214,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                 // Subtitle
                 Text(
-                  'Sign in as ${_getRoleTitle()}',
+                  'Sign in to your account',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                         color: AppColors.textSecondary,
@@ -263,7 +296,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       onPressed: _isLoading
                           ? null
                           : () {
-                              context.push('/forgot-password', extra: widget.userType);
+                              context.push('/forgot-password');
                             },
                       child: Text(
                         'Forgot Password?',
@@ -281,11 +314,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   width: double.infinity,
                   child: NeumorphicButton(
                     text: _isLoading ? 'Signing In...' : 'Sign In',
-                    onPressed: _isLoading ? null : _handleLogin,
+                    onPressed: _isLoading ? null : () => _handleLogin(),
                     isAccent: true,
                     icon: _isLoading ? null : Icons.login,
                   ),
                 ),
+                
+                // Show Biometric shortcut if it's available and user has setup their credentials
+                if (_canCheckBiometrics && _isBiometricEnabled) ...[
+                  const SizedBox(height: AppDimensions.spacingM),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.fingerprint, color: AppColors.accent),
+                      label: const Text(
+                        'Login with Biometrics', 
+                        style: TextStyle(color: AppColors.textPrimary)
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        side: BorderSide(
+                          color: AppColors.textSecondary.withValues(alpha: 0.3)
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+                        ),
+                      ),
+                      onPressed: _isLoading ? null : _handleBiometricLogin,
+                    ),
+                  ),
+                ],
                 const SizedBox(height: AppDimensions.spacingL),
 
                 // Sign Up Link
@@ -302,7 +360,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       onPressed: _isLoading
                           ? null
                           : () {
-                              context.push('/signup', extra: widget.userType);
+                              context.push('/signup');
                             },
                       child: Text(
                         'Sign Up',
@@ -329,5 +387,67 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ),
       ),
     );
+  }
+
+  void _showInactiveAccountDialog(BuildContext context, int studentId, bool isPending) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.cardBackground,
+        title: const Text('Account Inactive', style: TextStyle(color: AppColors.textPrimary)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Your account has been marked as inactive.',
+              style: TextStyle(color: AppColors.textPrimary),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              isPending
+                  ? 'Your rejoin request is currently pending owner approval. We will notify you once it\'s approved.'
+                  : 'You can request to rejoin the academy. Once requested, the owner will review and approve your reactivation.',
+              style: const TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+          if (!isPending)
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _handleRequestRejoin(studentId);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent),
+              child: const Text('Request to Rejoin'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _handleRequestRejoin(int studentId) async {
+    setState(() => _isLoading = true);
+    try {
+      final studentService = ref.read(studentServiceProvider);
+      await studentService.requestRejoin(studentId);
+      if (mounted) {
+        SuccessSnackbar.show(context, 'Rejoin request sent successfully! Please wait for owner approval.');
+      }
+    } catch (e) {
+      if (mounted) {
+        SuccessSnackbar.showError(context, 'Failed to request rejoin: ${e.toString()}');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 }

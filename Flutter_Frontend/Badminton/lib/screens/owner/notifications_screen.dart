@@ -11,10 +11,18 @@ import '../../widgets/common/confirmation_dialog.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/notification_provider.dart';
 import '../../models/notification.dart';
+import '../student/student_announcements_screen.dart';
+import '../coach/coach_announcements_screen.dart';
+import '../owner/announcement_management_screen.dart';
+import '../student/student_fees_screen.dart';
+import '../student/student_schedule_screen.dart';
+import '../coach/leave_request_screen.dart';
+import '../owner/requests_screen.dart';
 
 /// Notifications Screen - View and manage notifications
 class NotificationsScreen extends ConsumerStatefulWidget {
-  const NotificationsScreen({super.key});
+  final VoidCallback? onBack;
+  const NotificationsScreen({super.key, this.onBack});
 
   @override
   ConsumerState<NotificationsScreen> createState() => _NotificationsScreenState();
@@ -26,34 +34,45 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final authStateAsync = ref.watch(authProvider);
 
     return authStateAsync.when(
       data: (authState) {
         if (authState is! Authenticated) {
           return Scaffold(
-            backgroundColor: AppColors.background,
-            body: const Center(
-              child: Text('Please log in to view notifications'),
+            backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
+            body: Center(
+              child: Text(
+                'Please log in to view notifications',
+                style: TextStyle(color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
+              ),
             ),
           );
         }
 
-        return _buildNotificationsScreen(authState);
+        return _buildNotificationsScreen(authState, isDark);
       },
       loading: () => Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
         appBar: AppBar(
-          backgroundColor: AppColors.background,
+          backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-            onPressed: () => Navigator.of(context).pop(),
+            icon: Icon(Icons.arrow_back, color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
+            onPressed: () {
+              if (widget.onBack != null) {
+                widget.onBack!();
+              } else {
+                Navigator.of(context).pop();
+              }
+            },
           ),
-          title: const Text(
+          title: Text(
             'Notifications',
             style: TextStyle(
-              color: AppColors.textPrimary,
+              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
               fontSize: 20,
               fontWeight: FontWeight.w600,
             ),
@@ -62,18 +81,24 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         body: const Center(child: ListSkeleton(itemCount: 5)),
       ),
       error: (error, stack) => Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
         appBar: AppBar(
-          backgroundColor: AppColors.background,
+          backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-            onPressed: () => Navigator.of(context).pop(),
+            icon: Icon(Icons.arrow_back, color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
+            onPressed: () {
+              if (widget.onBack != null) {
+                widget.onBack!();
+              } else {
+                Navigator.of(context).pop();
+              }
+            },
           ),
-          title: const Text(
+          title: Text(
             'Notifications',
             style: TextStyle(
-              color: AppColors.textPrimary,
+              color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
               fontSize: 20,
               fontWeight: FontWeight.w600,
             ),
@@ -87,7 +112,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     );
   }
 
-  Widget _buildNotificationsScreen(Authenticated authState) {
+  Widget _buildNotificationsScreen(Authenticated authState, bool isDark) {
     // Build filter parameters
     String? typeFilter;
     if (_selectedFilter != 'all') {
@@ -109,25 +134,31 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     ));
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-          onPressed: () => Navigator.of(context).pop(),
+          icon: Icon(Icons.arrow_back, color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
+          onPressed: () {
+            if (widget.onBack != null) {
+              widget.onBack!();
+            } else {
+              Navigator.of(context).pop();
+            }
+          },
         ),
-        title: const Text(
+        title: Text(
           'Notifications',
           style: TextStyle(
-            color: AppColors.textPrimary,
+            color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
             fontSize: 20,
             fontWeight: FontWeight.w600,
           ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.check_circle_outline, color: AppColors.accent),
+            icon: Icon(Icons.check_circle_outline, color: isDark ? AppColors.accent : AppColorsLight.accent),
             tooltip: 'Mark all as read',
             onPressed: () => _markAllAsRead(authState),
           ),
@@ -136,7 +167,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       body: Column(
         children: [
           // Filters
-          _buildFilters(),
+          _buildFilters(isDark),
           
           // Notifications List
           Expanded(
@@ -172,7 +203,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                       final notification = notifications[index];
                       return _NotificationCard(
                         notification: notification,
-                        onTap: () => _markAsRead(notification),
+                        isDark: isDark,
+                        onTap: () => _handleNotificationTap(notification, authState),
                         onDelete: () => _deleteNotification(notification),
                       );
                     },
@@ -186,110 +218,195 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     );
   }
 
-  Widget _buildFilters() {
-    return NeumorphicContainer(
-      padding: const EdgeInsets.all(AppDimensions.paddingM),
-      margin: const EdgeInsets.all(AppDimensions.paddingL),
+  Widget _buildFilters(bool isDark) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+    
+    final accent = isDark ? AppColors.accent : AppColorsLight.accent;
+    final bg = isDark ? AppColors.background : AppColorsLight.background;
+    final textPrimary = isDark ? AppColors.textPrimary : AppColorsLight.textPrimary;
+    final textSecondary = isDark ? AppColors.textSecondary : AppColorsLight.textSecondary;
+
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL,
+        vertical: isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Filter by Type',
             style: TextStyle(
-              fontSize: 14,
+              fontSize: isSmallScreen ? 13 : 15,
               fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary,
+              color: textSecondary,
             ),
           ),
-          const SizedBox(height: AppDimensions.spacingS),
-          Wrap(
-            spacing: AppDimensions.spacingS,
-            runSpacing: AppDimensions.spacingS,
-            children: ['all', 'fee_due', 'attendance', 'announcement', 'general'].map((type) {
-              final isSelected = _selectedFilter == type;
-              return GestureDetector(
-                onTap: () => setState(() => _selectedFilter = type),
-                child: NeumorphicContainer(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppDimensions.paddingM,
-                    vertical: AppDimensions.spacingS,
-                  ),
-                  color: isSelected ? AppColors.accent : AppColors.cardBackground,
-                  borderRadius: AppDimensions.radiusS,
-                  child: Text(
-                    type == 'all' ? 'All' : type.replaceAll('_', ' ').toUpperCase(),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                      color: isSelected ? AppColors.background : AppColors.textPrimary,
+          SizedBox(height: AppDimensions.spacingM),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            child: Row(
+              children: ['all', 'fee_due', 'attendance', 'announcement', 'general'].map((type) {
+                final isSelected = _selectedFilter == type;
+                return Padding(
+                  padding: const EdgeInsets.only(right: AppDimensions.spacingM),
+                  child: GestureDetector(
+                    onTap: () => setState(() => _selectedFilter = type),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppDimensions.paddingL,
+                        vertical: AppDimensions.paddingS,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isSelected ? accent : (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.05)),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isSelected ? accent : (isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.1)),
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        type == 'all' ? 'All' : type.replaceAll('_', ' ').toUpperCase(),
+                        style: TextStyle(
+                          fontSize: isSmallScreen ? 12 : 14,
+                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                          color: isSelected ? bg : textPrimary,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              );
-            }).toList(),
+                );
+              }).toList(),
+            ),
           ),
-          const SizedBox(height: AppDimensions.spacingM),
-          const Text(
+          SizedBox(height: AppDimensions.spacingL),
+          Text(
             'Filter by Status',
             style: TextStyle(
-              fontSize: 14,
+              fontSize: isSmallScreen ? 13 : 15,
               fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary,
+              color: textSecondary,
             ),
           ),
-          const SizedBox(height: AppDimensions.spacingS),
-          Wrap(
-            spacing: AppDimensions.spacingS,
-            runSpacing: AppDimensions.spacingS,
-            children: ['all', 'unread', 'read'].map((status) {
-              final isSelected = _readFilter == status;
-              return GestureDetector(
-                onTap: () => setState(() => _readFilter = status),
-                child: NeumorphicContainer(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppDimensions.paddingM,
-                    vertical: AppDimensions.spacingS,
-                  ),
-                  color: isSelected ? AppColors.accent : AppColors.cardBackground,
-                  borderRadius: AppDimensions.radiusS,
-                  child: Text(
-                    status == 'all' ? 'All' : status.toUpperCase(),
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                      color: isSelected ? AppColors.background : AppColors.textPrimary,
+          SizedBox(height: AppDimensions.spacingM),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            child: Row(
+              children: ['all', 'unread', 'read'].map((status) {
+                final isSelected = _readFilter == status;
+                return Padding(
+                  padding: const EdgeInsets.only(right: AppDimensions.spacingM),
+                  child: GestureDetector(
+                    onTap: () => setState(() => _readFilter = status),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: AppDimensions.paddingL,
+                        vertical: AppDimensions.paddingS,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isSelected ? accent : (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.05)),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isSelected ? accent : (isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.1)),
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        status == 'all' ? 'All' : status.toUpperCase(),
+                        style: TextStyle(
+                          fontSize: isSmallScreen ? 12 : 14,
+                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                          color: isSelected ? bg : textPrimary,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              );
-            }).toList(),
+                );
+              }).toList(),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Future<void> _markAsRead(Notification notification) async {
-    if (notification.isRead) return;
-
-    try {
-      final authState = await ref.read(authProvider.future);
-      if (authState is Authenticated) {
+  Future<void> _handleNotificationTap(Notification notification, Authenticated authState) async {
+    // 1. Mark as read
+    if (!notification.isRead) {
+      try {
         final notificationManager = ref.read(notificationManagerProvider(
           userId: authState.userId,
           userType: authState.userType,
         ).notifier);
         
         await notificationManager.markAsRead(notification.id);
-        
-        if (mounted) {
-          SuccessSnackbar.showInfo(context, 'Notification marked as read');
-        }
+      } catch (e) {
+        // Silently fail marking as read, still navigate
+        debugPrint('Failed to mark as read: $e');
       }
-    } catch (e) {
-      if (mounted) {
-        SuccessSnackbar.showError(context, 'Failed to mark notification as read: ${e.toString()}');
+    }
+
+    if (!mounted) return;
+
+    // 2. Navigate based on type and user role
+    final data = notification.data ?? {};
+    
+    // Announcement Navigation
+    if (notification.type == 'announcement') {
+      if (authState.userType == 'student') {
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => const StudentAnnouncementsScreen(),
+        ));
+      } else if (authState.userType == 'coach') {
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => const CoachAnnouncementsScreen(),
+        ));
+      } else if (authState.userType == 'owner') {
+        // Owner view (using existing management screen)
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => const AnnouncementManagementScreen(),
+        ));
       }
+    }
+    // Fee Due Navigation
+    else if (notification.type == 'fee_due') {
+      if (authState.userType == 'student') {
+         Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => const StudentFeesScreen(),
+        ));
+      }
+    }
+    // Attendance/Schedule Navigation
+    else if (notification.type == 'attendance' || data.containsKey('batch_id')) {
+      if (authState.userType == 'student') {
+         Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => const StudentScheduleScreen(),
+        ));
+      }
+    }
+    // Leave Requests Navigation
+    else if (data.containsKey('leave_request_id')) {
+      if (authState.userType == 'coach') {
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => const LeaveRequestScreen(),
+        ));
+      } else if (authState.userType == 'owner') {
+         // Assuming RequestsScreen handles tabs for leave requests
+         Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => const RequestsScreen(),
+        ));
+      }
+    }
+    // Registration Request Navigation (Owner)
+    else if (data.containsKey('registration_request_id') && authState.userType == 'owner') {
+       Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => const RequestsScreen(),
+       ));
     }
   }
 
@@ -367,11 +484,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
 class _NotificationCard extends StatelessWidget {
   final Notification notification;
+  final bool isDark;
   final VoidCallback onTap;
   final VoidCallback onDelete;
 
   const _NotificationCard({
     required this.notification,
+    required this.isDark,
     required this.onTap,
     required this.onDelete,
   });
@@ -392,13 +511,13 @@ class _NotificationCard extends StatelessWidget {
   Color _getColorForType(String type) {
     switch (type) {
       case 'fee_due':
-        return AppColors.error;
+        return isDark ? AppColors.error : AppColorsLight.error;
       case 'attendance':
-        return AppColors.success;
+        return isDark ? AppColors.success : AppColorsLight.success;
       case 'announcement':
-        return AppColors.warning;
+        return isDark ? AppColors.warning : AppColorsLight.warning;
       default:
-        return AppColors.accent;
+        return isDark ? AppColors.accent : AppColorsLight.accent;
     }
   }
 
@@ -407,6 +526,10 @@ class _NotificationCard extends StatelessWidget {
     final isUnread = !notification.isRead;
     final timeAgo = _formatTimeAgo(notification.createdAt);
     final iconColor = _getColorForType(notification.type);
+    final textPrimary = isDark ? AppColors.textPrimary : AppColorsLight.textPrimary;
+    final textSecondary = isDark ? AppColors.textSecondary : AppColorsLight.textSecondary;
+    final textTertiary = isDark ? AppColors.textTertiary : AppColorsLight.textTertiary;
+    final accent = isDark ? AppColors.accent : AppColorsLight.accent;
 
     return NeumorphicContainer(
       padding: const EdgeInsets.all(AppDimensions.paddingM),
@@ -444,7 +567,7 @@ class _NotificationCard extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: isUnread ? FontWeight.w600 : FontWeight.normal,
-                          color: AppColors.textPrimary,
+                          color: textPrimary,
                         ),
                       ),
                     ),
@@ -452,8 +575,8 @@ class _NotificationCard extends StatelessWidget {
                       Container(
                         width: 8,
                         height: 8,
-                        decoration: const BoxDecoration(
-                          color: AppColors.accent,
+                        decoration: BoxDecoration(
+                          color: accent,
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -464,7 +587,7 @@ class _NotificationCard extends StatelessWidget {
                   notification.body,
                   style: TextStyle(
                     fontSize: 14,
-                    color: AppColors.textSecondary,
+                    color: textSecondary,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -472,9 +595,9 @@ class _NotificationCard extends StatelessWidget {
                 const SizedBox(height: AppDimensions.spacingS),
                 Text(
                   timeAgo,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
-                    color: AppColors.textTertiary,
+                    color: textTertiary,
                   ),
                 ),
               ],
@@ -484,7 +607,7 @@ class _NotificationCard extends StatelessWidget {
           // Delete button
           IconButton(
             icon: const Icon(Icons.delete_outline, size: 20),
-            color: AppColors.textTertiary,
+            color: textTertiary,
             onPressed: onDelete,
             tooltip: 'Delete notification',
           ),

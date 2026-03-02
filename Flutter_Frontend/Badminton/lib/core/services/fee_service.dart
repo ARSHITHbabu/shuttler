@@ -156,13 +156,25 @@ class FeeService {
   /// Calculate total pending fees
   Future<double> getTotalPendingFees() async {
     try {
-      // Backend doesn't have a "get all fees" endpoint
-      // We'll need to get fees by batch or student
-      // For now, return 0 or implement a different approach
-      // TODO: Implement proper pending fees calculation
-      return 0.0;
+      // Get all fees with 'pending' status
+      final pendingFees = await getFees(status: 'pending');
+      
+      // Get all fees with 'overdue' status
+      final overdueFees = await getFees(status: 'overdue');
+      
+      // Combine both lists
+      final allPendingFees = [...pendingFees, ...overdueFees];
+      
+      // Sum up all pending amounts
+      double totalPending = 0.0;
+      for (final fee in allPendingFees) {
+        totalPending += fee.pendingAmount;
+      }
+      
+      return totalPending;
     } catch (e) {
-      throw Exception('Failed to calculate pending fees: ${_apiService.getErrorMessage(e)}');
+      // Return 0 on error to not break the dashboard
+      return 0.0;
     }
   }
 }

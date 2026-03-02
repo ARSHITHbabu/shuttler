@@ -9,6 +9,7 @@ import '../../widgets/common/error_widget.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/fee_provider.dart';
 import '../../models/fee.dart';
+import 'package:flutter_windowmanager/flutter_windowmanager.dart';
 
 /// Student Fees Screen - READ-ONLY view of fee status and payment history
 /// Students can view their fee records but cannot make payments
@@ -22,12 +23,29 @@ class StudentFeesScreen extends ConsumerStatefulWidget {
 }
 
 class _StudentFeesScreenState extends ConsumerState<StudentFeesScreen> {
-  String _selectedFilter = 'all'; // 'all', 'paid', 'pending', 'overdue'
+  String _selectedFilter = 'all'; // 'all', 'paid', 'partial', 'pending', 'overdue'
+
+  @override
+  void initState() {
+    super.initState();
+    _secureScreen();
+  }
+
+  Future<void> _secureScreen() async {
+    await FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_SECURE);
+  }
+
+  @override
+  void dispose() {
+    FlutterWindowManager.clearFlags(FlutterWindowManager.FLAG_SECURE);
+    super.dispose();
+  }
 
   // Calculate stats from fee list
   Map<String, dynamic> _calculateStats(List<Fee> fees) {
     double totalFees = 0;
     double paidFees = 0;
+    double partialFees = 0;
     double pendingFees = 0;
     double overdueFees = 0;
     int paidCount = 0;
@@ -38,6 +56,8 @@ class _StudentFeesScreenState extends ConsumerState<StudentFeesScreen> {
       if (fee.status == 'paid') {
         paidFees += fee.amount;
         paidCount++;
+      } else if (fee.status == 'partial') {
+        partialFees += fee.pendingAmount;
       } else {
         if (fee.dueDate.isBefore(DateTime.now())) {
           overdueFees += fee.amount;
@@ -50,6 +70,7 @@ class _StudentFeesScreenState extends ConsumerState<StudentFeesScreen> {
     return {
       'total_fees': totalFees,
       'paid_fees': paidFees,
+      'partial_fees': partialFees,
       'pending_fees': pendingFees,
       'overdue_fees': overdueFees,
       'paid_count': paidCount,
@@ -65,10 +86,12 @@ class _StudentFeesScreenState extends ConsumerState<StudentFeesScreen> {
     return fees.where((fee) {
       if (_selectedFilter == 'paid') {
         return fee.status == 'paid';
+      } else if (_selectedFilter == 'partial') {
+        return fee.status == 'partial';
       } else if (_selectedFilter == 'pending') {
-        return fee.status != 'paid' && !fee.dueDate.isBefore(DateTime.now());
+        return fee.status == 'pending' && !fee.dueDate.isBefore(DateTime.now());
       } else if (_selectedFilter == 'overdue') {
-        return fee.status != 'paid' && fee.dueDate.isBefore(DateTime.now());
+        return fee.status == 'overdue' || (fee.status != 'paid' && fee.status != 'partial' && fee.dueDate.isBefore(DateTime.now()));
       }
       return true;
     }).toList();
@@ -405,6 +428,13 @@ class _StudentFeesScreenState extends ConsumerState<StudentFeesScreen> {
             ),
             const SizedBox(width: AppDimensions.spacingS),
             _FilterChip(
+              label: 'Partially Paid',
+              isSelected: _selectedFilter == 'partial',
+              isDark: isDark,
+              onTap: () => setState(() => _selectedFilter = 'partial'),
+            ),
+            const SizedBox(width: AppDimensions.spacingS),
+            _FilterChip(
               label: 'Pending',
               isSelected: _selectedFilter == 'pending',
               isDark: isDark,
@@ -559,7 +589,8 @@ class _FeeRecordCard extends StatelessWidget {
         : null;
 
     final isPaid = status == 'paid';
-    final isOverdue = !isPaid && dueDate.isBefore(DateTime.now());
+    final isPartial = status == 'partial';
+    final isOverdue = !isPaid && !isPartial && dueDate.isBefore(DateTime.now());
 
     Color statusColor;
     String statusText;
@@ -569,6 +600,10 @@ class _FeeRecordCard extends StatelessWidget {
       statusColor = isDark ? AppColors.success : AppColorsLight.success;
       statusText = 'Paid';
       statusIcon = Icons.check_circle;
+    } else if (isPartial) {
+      statusColor = Colors.teal;
+      statusText = 'Partially Paid';
+      statusIcon = Icons.timelapse;
     } else if (isOverdue) {
       statusColor = isDark ? AppColors.error : AppColorsLight.error;
       statusText = 'Overdue';

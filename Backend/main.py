@@ -1,12 +1,20 @@
-from fastapi import FastAPI, HTTPException, File, UploadFile, Query, Form
+from fastapi import FastAPI, HTTPException, File, UploadFile, Query, Form, Request, Depends, Security, BackgroundTasks, Body
+from fastapi.staticfiles import StaticFiles
+from apscheduler.schedulers.background import BackgroundScheduler
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, Text, Date, DateTime, ForeignKey, JSON, func, and_
+from fastapi.responses import FileResponse, StreamingResponse, JSONResponse, RedirectResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from jose import JWTError, jwt
+import mimetypes
+from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, Text, Date, DateTime, ForeignKey, JSON, func, and_, or_, select, TypeDecorator
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.exc import IntegrityError
-from pydantic import BaseModel
-from typing import List, Optional
+from cryptography.fernet import Fernet, InvalidToken
+from pydantic import BaseModel, field_validator, model_validator
+import html as html_lib
+import re
+from typing import List, Optional, Dict, Any, Union, Annotated, Literal
 from datetime import datetime, date, timedelta
 import json
 import os
@@ -18,6 +26,37 @@ from pathlib import Path
 from dotenv import load_dotenv
 from passlib.context import CryptContext
 import bcrypt
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+
+# ── B5: Firebase Admin SDK for FCM push notifications ──────────────────────
+try:
+    import firebase_admin
+    from firebase_admin import credentials as fb_credentials, messaging as fb_messaging
+    _FIREBASE_AVAILABLE = True
+except ImportError:
+    _FIREBASE_AVAILABLE = False
+    print("Warning: firebase-admin not installed. Push notifications disabled.")
+
+# ── B11: SendGrid for transactional email ──────────────────────────────────
+try:
+    from sendgrid import SendGridAPIClient
+    from sendgrid.helpers.mail import Mail, Content
+    _SENDGRID_AVAILABLE = True
+except ImportError:
+    _SENDGRID_AVAILABLE = False
+    print("Warning: sendgrid not installed. Transactional emails disabled.")
+
+# ── C7: S3 / Cloudflare R2 for File Storage ────────────────────────────────
+try:
+    import boto3
+    from botocore.exceptions import ClientError
+    _BOTO3_AVAILABLE = True
+except ImportError:
+    _BOTO3_AVAILABLE = False
+    print("Warning: boto3 not installed. Cloud file storage disabled (falling back to local disk).")
 
 # Password hashing context - use bcrypt directly to avoid passlib initialization issues
 # Fallback to passlib if direct bcrypt fails
@@ -26,7 +65,7 @@ try:
     test_hash = bcrypt.hashpw(b"test", bcrypt.gensalt())
     USE_DIRECT_BCRYPT = True
 except Exception as e:
-    print(f"⚠️  Direct bcrypt test failed: {e}, using passlib")
+    print(f"  Direct bcrypt test failed: {e}, using passlib")
     USE_DIRECT_BCRYPT = False
 
 if USE_DIRECT_BCRYPT:
@@ -69,33 +108,709 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     except Exception as e:
         raise
 
+# ==================== JWT Utilities ====================
+
+security = HTTPBearer()
+
+def create_access_token(data: dict, jti: str = None) -> str:
+    """Create a short-lived JWT access token (default 30 min)."""
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    token_jti = jti if jti else str(uuid.uuid4())
+    to_encode.update({"exp": expire, "type": "access", "jti": token_jti})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def create_refresh_token(data: dict, jti: str = None) -> str:
+    """Create a long-lived JWT refresh token (default 30 days)."""
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    token_jti = jti if jti else str(uuid.uuid4())
+    to_encode.update({"exp": expire, "type": "refresh", "jti": token_jti})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def decode_token(token: str) -> dict:
+    """Decode and validate a JWT token. Raises HTTP 401 on failure."""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+
+def _check_token_revoked(payload: dict, request: Request) -> None:
+    """Check token revocation list and per-user invalidation timestamp.
+    Raises HTTP 401 if the token has been revoked."""
+    jti = payload.get("jti")
+    user_id = payload.get("sub")
+    user_type = payload.get("user_type")
+    iat = payload.get("iat")
+
+    # ==================== IDOR ENFORCEMENT ====================
+    # Globally protect resources based on user_type and IDs in path
+    import json
+    import re
+    
+    # DO NOT EXHAUST REQUEST BODY STREAM: we avoid reading body here to not break FastAPI request parsing
+    
+    def check_student_access(s_id):
+        # Student can only access their own data
+        if user_type == 'student' and str(user_id) != str(s_id):
+            return False
+            
+        # Coach can only access students in their batches
+        if user_type == 'coach':
+            db = SessionLocal()
+            try:
+                # Find batches the student is in
+                batches = db.query(BatchStudentDB).filter(BatchStudentDB.student_id == int(s_id)).all()
+                if not batches:
+                    return False
+                batch_ids = [b.batch_id for b in batches]
+                
+                # Check if coach is assigned to any of these batches
+                coach_batch = db.query(BatchCoachDB).filter(
+                    BatchCoachDB.coach_id == int(user_id), 
+                    BatchCoachDB.batch_id.in_(batch_ids)
+                ).first()
+                
+                legacy = db.query(BatchDB).filter(
+                    BatchDB.id.in_(batch_ids), 
+                    BatchDB.assigned_coach_id == int(user_id)
+                ).first()
+                
+                if not coach_batch and not legacy:
+                    return False
+            except Exception:
+                return False
+            finally:
+                db.close()
+        return True
+
+    def check_batch_access(b_id):
+        if user_type == 'student':
+            db = SessionLocal()
+            try:
+                enrolled = db.query(BatchStudentDB).filter(
+                    BatchStudentDB.batch_id == int(b_id), 
+                    BatchStudentDB.student_id == int(user_id)
+                ).first()
+                if not enrolled:
+                    return False
+            except Exception:
+                return False
+            finally:
+                db.close()
+        elif user_type == 'coach':
+            db = SessionLocal()
+            try:
+                coach_batch = db.query(BatchCoachDB).filter(
+                    BatchCoachDB.coach_id == int(user_id), 
+                    BatchCoachDB.batch_id == int(b_id)
+                ).first()
+                
+                legacy = db.query(BatchDB).filter(
+                    BatchDB.id == int(b_id), 
+                    BatchDB.assigned_coach_id == int(user_id)
+                ).first()
+                
+                if not coach_batch and not legacy:
+                    return False
+            except Exception:
+                return False
+            finally:
+                db.close()
+        return True
+
+    if user_type != 'owner':
+        path = request.url.path
+        # Check student ID matching in path (e.g. /students/5, /attendance/student/5)
+        # Be careful not to match /students/ and then an action without ID
+        student_match = re.search(r'/(?:student|students)/(\d+)(?:/|$)', path)
+        if student_match:
+            s_id = student_match.group(1)
+            if not check_student_access(s_id):
+                raise HTTPException(status_code=403, detail="Access denied to this student resource")
+                
+        # Check batch ID matching in path (e.g. /batches/5, /attendance/batch/5)
+        batch_match = re.search(r'/(?:batch|batches)/(\d+)(?:/|$)', path)
+        if batch_match:
+            b_id = batch_match.group(1)
+            if not check_batch_access(b_id):
+                raise HTTPException(status_code=403, detail="Access denied to this batch resource")
+                
+        # Check coach ID matching in path
+        coach_match = re.search(r'/(?:coach|coaches)/(\d+)(?:/|$)', path)
+        # Prevent coach from accessing other coach's data, unless allowed by some specific rule.
+        # But students can access coach data to view profile.
+        if coach_match and user_type == 'coach':
+            c_id = coach_match.group(1)
+            if str(user_id) != str(c_id):
+                raise HTTPException(status_code=403, detail="Access denied to other coach data")
+
+    # ==========================================================
+
+
+    # Fast path: check Redis blacklist before opening a DB connection
+    if jti and _sync_redis_client:
+        try:
+            if _sync_redis_client.get(f"revoked:{jti}"):
+                raise HTTPException(status_code=401, detail="Token has been revoked. Please log in again.")
+        except HTTPException:
+            raise
+        except Exception:
+            pass  # Redis unavailable — fall through to DB check
+
+    db = SessionLocal()
+    try:
+        # 1. Check per-token blacklist (for explicit logout)
+        if jti and db.query(RevokedTokenDB).filter(RevokedTokenDB.jti == jti).first():
+            raise HTTPException(status_code=401, detail="Token has been revoked. Please log in again.")
+
+        # 2. Check per-user invalidation timestamp (for password change)
+        if user_id and user_type and iat:
+            user = None
+            if user_type == "owner":
+                user = db.query(OwnerDB).filter(OwnerDB.id == int(user_id)).first()
+            elif user_type == "coach":
+                user = db.query(CoachDB).filter(CoachDB.id == int(user_id)).first()
+            elif user_type == "student":
+                user = db.query(StudentDB).filter(StudentDB.id == int(user_id)).first()
+
+            if user and user.jwt_invalidated_at is not None:
+                from datetime import timezone as _tz
+                invalidated_ts = user.jwt_invalidated_at.replace(tzinfo=_tz.utc).timestamp()
+                if iat < invalidated_ts:
+                    raise HTTPException(
+                        status_code=401,
+                        detail="Session expired due to password change. Please log in again."
+                    )
+    finally:
+        db.close()
+
+
+
+def verify_coach_batch_access(coach_id: int, batch_id: int, db) -> bool:
+    coach_batch = db.query(BatchCoachDB).filter(
+        BatchCoachDB.coach_id == coach_id,
+        BatchCoachDB.batch_id == batch_id
+    ).first()
+
+    legacy = db.query(BatchDB).filter(
+        BatchDB.id == batch_id,
+        BatchDB.assigned_coach_id == coach_id
+    ).first()
+
+    return bool(coach_batch or legacy)
+
+def verify_coach_student_access(coach_id: int, student_id: int, db) -> bool:
+    """
+    A15: Verify that a student is enrolled in at least one batch assigned to this coach.
+    Used to guard student-record updates performed by coaches.
+    """
+    coach_batch_ids = [
+        row.batch_id for row in
+        db.query(BatchCoachDB.batch_id).filter(BatchCoachDB.coach_id == coach_id).all()
+    ]
+    legacy_batch_ids = [
+        row.id for row in
+        db.query(BatchDB.id).filter(BatchDB.assigned_coach_id == coach_id).all()
+    ]
+    all_batch_ids = list(set(coach_batch_ids + legacy_batch_ids))
+    if not all_batch_ids:
+        return False
+    return bool(
+        db.query(BatchStudentDB).filter(
+            BatchStudentDB.student_id == student_id,
+            BatchStudentDB.batch_id.in_(all_batch_ids)
+        ).first()
+    )
+
+
+def emit_audit_log(db, user_id, role, action, resource_type, resource_id=None, old_values=None, new_values=None, ip_address=None):
+    from datetime import datetime
+    try:
+        log = AuditLogDB(
+            user_id=user_id,
+            role=role,
+            action=action,
+            resource_type=resource_type,
+            resource_id=resource_id,
+            old_values=old_values,
+            new_values=new_values,
+            ip_address=ip_address
+        )
+        db.add(log)
+        db.commit()
+    except Exception as e:
+        print(f"[AuditLog] Err: {e}")
+        db.rollback()
+
+def record_login_history(db, user_id, user_type, ip_address, user_agent, status):
+    from datetime import datetime
+    try:
+        log = LoginHistoryDB(
+            user_id=user_id,
+            user_type=user_type,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            status=status
+        )
+        db.add(log)
+        db.commit()
+    except Exception as e:
+        print(f"[LoginHistory] Err: {e}")
+        db.rollback()
+
+def check_account_lock(user):
+    from datetime import datetime
+    if hasattr(user, 'locked_until') and user.locked_until is not None:
+        if user.locked_until.replace(tzinfo=None) > datetime.utcnow():
+            raise HTTPException(status_code=403, detail="Account is locked due to multiple failed login attempts. Please contact admin.")
+
+def handle_failed_login(db, user, user_type, ip_address, user_agent):
+    from datetime import datetime, timedelta
+    if hasattr(user, 'failed_login_attempts'):
+        user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+        if user.failed_login_attempts >= 10:
+            user.locked_until = datetime.utcnow() + timedelta(hours=24)
+            print(f"[Security] Account locked for {user_type} {user.id}")
+            # Could trigger an email to owner here
+        db.commit()
+    record_login_history(db, user.id, user_type, ip_address, user_agent, "failed")
+    raise HTTPException(status_code=401, detail="Invalid email or password")
+
+def handle_successful_login(db, user, user_type, ip_address, user_agent):
+    if hasattr(user, 'failed_login_attempts') and (user.failed_login_attempts or 0) > 0:
+        user.failed_login_attempts = 0
+        user.locked_until = None
+        db.commit()
+    record_login_history(db, user.id, user_type, ip_address, user_agent, "success")
+
+
+def get_current_user(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Security(security),
+) -> dict:
+    '''FastAPI dependency that validates a JWT access token.
+    Usage: current_user: dict = Depends(get_current_user)
+    Returns the decoded JWT payload with keys: sub, user_type, email, role, jti.
+    '''
+    payload = decode_token(credentials.credentials)
+    if payload.get("type") != "access":
+        raise HTTPException(status_code=401, detail="Invalid token type: expected access token")
+    _check_token_revoked(payload, request)
+    return payload
+
+def require_owner(current_user: dict = Depends(get_current_user)) -> dict:
+    if current_user.get("user_type") != "owner":
+        raise HTTPException(status_code=403, detail="Not enough permissions: owner required")
+    return current_user
+
+def require_coach(current_user: dict = Depends(get_current_user)) -> dict:
+    if current_user.get("user_type") not in ["owner", "coach"]:
+        raise HTTPException(status_code=403, detail="Not enough permissions: coach or owner required")
+    return current_user
+
+def require_student(current_user: dict = Depends(get_current_user)) -> dict:
+    if current_user.get("user_type") not in ["owner", "coach", "student"]:
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+    return current_user
+
+def check_storage_quota(file: UploadFile = File(...)):
+    db = SessionLocal()
+    try:
+        # Assuming single academy tenant context, get the first owner
+        owner = db.query(OwnerDB).first()
+        file_size = 0
+        file.file.seek(0, 2)
+        file_size = file.file.tell()
+        file.file.seek(0)
+        
+        if owner and owner.storage_used_bytes and owner.storage_limit_bytes:
+            if owner.storage_used_bytes + file_size > owner.storage_limit_bytes:
+                raise HTTPException(status_code=413, detail=f"Storage quota ({owner.storage_limit_bytes // (1024*1024)} MB) exceeded")
+    finally:
+        db.close()
+    return file
+
+def increment_storage_quota(file_size: int, db):
+    owner = db.query(OwnerDB).first()
+    if owner:
+        owner.storage_used_bytes = (owner.storage_used_bytes or 0) + file_size
+        db.commit()
+
+
 # Load environment variables from .env file
 load_dotenv()
+
+# ==================== JWT Configuration ====================
+SECRET_KEY = os.getenv("SECRET_KEY", "temporary-dev-key-replace-with-secure-one-for-production")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
+
+# ── B5: Firebase initialization ──────────────────────────────────────────────
+# Set FIREBASE_SERVICE_ACCOUNT_PATH in .env to path of your serviceAccountKey.json
+# If not configured, push notifications are silently skipped (app still works).
+_firebase_app = None
+if _FIREBASE_AVAILABLE:
+    _fb_cred_path = os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH", "")
+    if _fb_cred_path and os.path.exists(_fb_cred_path):
+        try:
+            if not firebase_admin._apps:
+                cred = fb_credentials.Certificate(_fb_cred_path)
+                _firebase_app = firebase_admin.initialize_app(cred)
+            else:
+                _firebase_app = firebase_admin.get_app()
+            print(f"Firebase Admin SDK initialized (FCM push notifications ENABLED)")
+        except Exception as _fb_err:
+            print(f"Warning: Firebase init failed: {_fb_err}. Push notifications disabled.")
+    else:
+        print("Firebase: FIREBASE_SERVICE_ACCOUNT_PATH not set. Push notifications disabled.")
+
+
+def send_push_notification(fcm_token: str, title: str, body: str, data: Optional[Dict[str, Any]] = None) -> bool:
+    """
+    Send a Firebase Cloud Messaging push notification.
+    Returns True on success, False on any error (non-blocking — never raises).
+    """
+    if not _FIREBASE_AVAILABLE or _firebase_app is None:
+        return False
+    if not fcm_token:
+        return False
+    try:
+        # FCM data payload values must all be strings
+        str_data = {k: str(v) for k, v in (data or {}).items()}
+        message = fb_messaging.Message(
+            notification=fb_messaging.Notification(title=title, body=body),
+            data=str_data,
+            token=fcm_token,
+            android=fb_messaging.AndroidConfig(priority="high"),
+            apns=fb_messaging.APNSConfig(
+                payload=fb_messaging.APNSPayload(
+                    aps=fb_messaging.Aps(sound="default")
+                )
+            ),
+        )
+        fb_messaging.send(message)
+        return True
+    except Exception as e:
+        print(f"[FCM] Push failed (token={fcm_token[:10]}...): {e}")
+        return False
+
+
+# ── B11: Transactional email via SendGrid ──────────────────────────────────
+def send_email(to_email: str, subject: str, html_content: str, plain_content: Optional[str] = None) -> bool:
+    """
+    Send a transactional email via SendGrid.
+    Requires SENDGRID_API_KEY and FROM_EMAIL env vars.
+    Returns True on success, False on any error (non-blocking — never raises).
+    Graceful no-op when SendGrid is not configured.
+    """
+    api_key = os.getenv("SENDGRID_API_KEY")
+    from_email = os.getenv("FROM_EMAIL", "noreply@shuttler.app")
+    if not api_key or not _SENDGRID_AVAILABLE:
+        return False
+    try:
+        message = Mail(
+            from_email=from_email,
+            to_emails=to_email,
+            subject=subject,
+            html_content=html_content,
+            plain_text_content=plain_content or "",
+        )
+        sg = SendGridAPIClient(api_key)
+        sg.send(message)
+        return True
+    except Exception as e:
+        print(f"[Email] Send failed (to={to_email}): {e}")
+        return False
+
+
+# ── C7: S3 Configuration ───────────────────────────────────────────────────
+S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
+S3_CDN_URL = os.getenv("S3_CDN_URL")  # e.g., https://cdn.shuttler.app
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
+AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
+
+def get_s3_client():
+    if not _BOTO3_AVAILABLE or not S3_BUCKET_NAME:
+        return None
+    return boto3.client(
+        's3',
+        aws_access_key_id=AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+        region_name=AWS_REGION
+    )
+
+def upload_to_s3(file_obj, filename: str, content_type: str) -> Optional[str]:
+    """Uploads a file to S3 and returns the CDN/S3 URL. Returns None on failure or if not configured."""
+    s3_client = get_s3_client()
+    if not s3_client:
+        return None
+        
+    try:
+        # A13: Enforce S3 Server-Side Encryption (AES256 is default for S3 managed keys)
+        s3_client.upload_fileobj(
+            file_obj,
+            S3_BUCKET_NAME,
+            f"uploads/{filename}",
+            ExtraArgs={
+                "ContentType": content_type,
+                "ServerSideEncryption": "AES256",
+                "CacheControl": "max-age=31536000" # H4: Caching for images
+            }
+        )
+        if S3_CDN_URL:
+            # Using custom domain CDN
+            return f"{S3_CDN_URL}/uploads/{filename}"
+        else:
+            # Fallback to direct S3 URL
+            return f"https://{S3_BUCKET_NAME}.s3.{AWS_REGION}.amazonaws.com/uploads/{filename}"
+    except ClientError as e:
+        print(f"[S3 Upload Error] {e}")
+        return None
+
 
 # Database setup - PostgreSQL with fallback to SQLite
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
 
+# A13: SSL mode for PostgreSQL connections.
+# Set DB_SSLMODE=require in production to enforce encrypted transport.
+# Use "prefer" (default) for dev — SSL if available, plaintext fallback.
+# Use "disable" only when connecting to local containerised PG with no SSL configured.
+_DB_SSLMODE = os.getenv("DB_SSLMODE", "prefer")
+
 if not SQLALCHEMY_DATABASE_URL:
-    print("⚠️  WARNING: DATABASE_URL not found in .env file!")
-    print("⚠️  Falling back to SQLite (NOT recommended for production)")
-    print("⚠️  Please update your .env file with PostgreSQL connection string")
+    print("WARNING: DATABASE_URL not found in .env file!")
+    print("Falling back to SQLite (NOT recommended for production)")
+    print("Please update your .env file with PostgreSQL connection string")
     SQLALCHEMY_DATABASE_URL = "sqlite:///./academy_portal.db"
     engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 else:
-    print(f"✅ Connecting to PostgreSQL database...")
+    print(f"Connecting to PostgreSQL database (sslmode={_DB_SSLMODE})...")
     # PostgreSQL connection with connection pooling for high concurrency
     engine = create_engine(
         SQLALCHEMY_DATABASE_URL,
-        pool_size=20,  # Number of permanent connections in the pool
-        max_overflow=40,  # Additional connections when pool is full (total 60 max)
-        pool_pre_ping=True,  # Verify connections before using (handles dropped connections)
-        pool_recycle=3600,  # Recycle connections after 1 hour
-        echo=False  # Set to True to see SQL queries (for debugging)
+        pool_size=20,          # Number of permanent connections in the pool
+        max_overflow=40,       # Additional connections when pool is full (total 60 max)
+        pool_pre_ping=True,    # Verify connections before using (handles dropped connections) # C4
+        pool_timeout=30,       # C4: Timeout for getting a connection from pool
+        pool_recycle=3600,     # Recycle connections after 1 hour
+        echo=False,            # Set to True to see SQL queries (for debugging)
+        connect_args={
+            "sslmode": _DB_SSLMODE,
+            "connect_timeout": 10  # C4: Timeout for initial connection
+        },
     )
-    print("✅ PostgreSQL connection established!")
+    
+    # C4: Log when connection pool is exhausted
+    from sqlalchemy import exc
+    from sqlalchemy import event
+    
+    @event.listens_for(engine, "checkout")
+    def checkout_listener(dbapi_connection, connection_record, connection_proxy):
+        pool = engine.pool
+        if pool.checkedout() >= pool.size() + pool._max_overflow - 5: # Warning threshold near max
+            import logging
+            logging.getLogger("sqlalchemy.pool").warning(
+                f"Connection pool is almost exhausted! ({pool.checkedout()}/{pool.size() + pool._max_overflow})"
+            )
+            
+    print(f"PostgreSQL connection established (sslmode={_DB_SSLMODE})!")
+
+# ── A13: Field-level Encryption ───────────────────────────────────────────────
+# Sensitive columns (guardian_phone, address) are encrypted at rest using Fernet
+# symmetric encryption. Set FIELD_ENCRYPTION_KEY to a valid Fernet key to enable.
+# Generate a key with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# Leave unset (or empty) in dev — fields will be stored as plaintext.
+_FIELD_KEY_RAW = os.getenv("FIELD_ENCRYPTION_KEY", "").strip()
+_fernet: Optional[Fernet] = None
+if _FIELD_KEY_RAW:
+    try:
+        _fernet = Fernet(_FIELD_KEY_RAW.encode())
+        print("Field-level encryption: ENABLED (guardian_phone, address)")
+    except Exception as _fe:
+        print(f"WARNING: FIELD_ENCRYPTION_KEY is invalid ({_fe}). Field encryption DISABLED.")
+else:
+    print("Field-level encryption: DISABLED (set FIELD_ENCRYPTION_KEY env var to enable in production)")
+
+def encrypt_field(value: Optional[str]) -> Optional[str]:
+    """Encrypt a sensitive field before storing. No-op when key is not configured."""
+    if value is None or _fernet is None:
+        return value
+    return _fernet.encrypt(value.encode()).decode()
+
+def decrypt_field(value: Optional[str]) -> Optional[str]:
+    """
+    Decrypt a sensitive field after loading.
+    Falls back to returning the raw value for legacy plaintext rows (migration-safe).
+    """
+    if value is None or _fernet is None:
+        return value
+    try:
+        return _fernet.decrypt(value.encode()).decode()
+    except (InvalidToken, Exception):
+        return value  # Legacy plaintext — not yet encrypted
+
+class EncryptedString(TypeDecorator):
+    """
+    SQLAlchemy column type that transparently encrypts on write and decrypts on read.
+    Uses Fernet symmetric encryption. Falls back to plaintext when no key is configured.
+    """
+    impl = Text
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        return encrypt_field(value)
+
+    def process_result_value(self, value, dialect):
+        return decrypt_field(value)
+# ─────────────────────────────────────────────────────────────────────────────
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
+
+def send_overdue_fee_notifications():
+    """
+    B5: Daily cron — find fees that are overdue and send a push + in-app notification
+    to students who have not yet been notified today.
+    """
+    db = SessionLocal()
+    try:
+        today = date.today()
+        today_str = today.isoformat()
+
+        overdue_fees = db.query(FeeDB).filter(
+            FeeDB.status.in_(["pending", "partial"]),
+            FeeDB.due_date < today_str,
+        ).all()
+
+        for fee in overdue_fees:
+            # Skip if we already sent a fee_due notification for this fee in the last 24 h
+            recent_notif = db.query(NotificationDB).filter(
+                NotificationDB.user_id == fee.student_id,
+                NotificationDB.user_type == "student",
+                NotificationDB.type == "fee_due",
+                NotificationDB.data["fee_id"].as_integer() == fee.id,
+                NotificationDB.created_at >= datetime.now() - timedelta(hours=23),
+            ).first()
+            if recent_notif:
+                continue
+
+            batch = db.query(BatchDB).filter(BatchDB.id == fee.batch_id).first()
+            batch_name = batch.batch_name if batch else "your batch"
+
+            total_paid = calculate_total_paid(fee.id, db)
+            pending_amount = fee.amount - total_paid
+
+            create_notification(
+                db=db,
+                user_id=fee.student_id,
+                user_type="student",
+                title="Fee Payment Overdue",
+                body=f"₹{pending_amount:.2f} for {batch_name} was due on {fee.due_date}. Please pay immediately.",
+                type="fee_due",
+                data={"fee_id": fee.id, "batch_id": fee.batch_id, "pending_amount": pending_amount},
+            )
+
+            # B11: Send overdue fee email
+            student = db.query(StudentDB).filter(StudentDB.id == fee.student_id).first()
+            if student and student.email:
+                try:
+                    reminder_html = f"""
+<html><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;">
+<div style="max-width:480px;margin:auto;background:#fff;border-radius:8px;padding:32px;">
+  <h2 style="color:#1a1a2e;">Fee Payment Overdue</h2>
+  <p>Dear {student.name},</p>
+  <p>This is an automated reminder that your fee payment for <strong>{batch_name}</strong> of <strong>₹{pending_amount:.2f}</strong> is now overdue.</p>
+  <p>Original Due Date: <strong>{fee.due_date}</strong></p>
+  <p>Please log in to your Shuttler app or contact your academy admin to complete this payment as soon as possible.</p>
+  <p style="color:#888;font-size:13px;">If you have already paid, please ignore this email.</p>
+</div></body></html>"""
+                    send_email(
+                        to_email=student.email,
+                        subject=f"Shuttler — Fee Overdue: ₹{pending_amount:.2f}",
+                        html_content=reminder_html,
+                        plain_content=f"Fee overdue: ₹{pending_amount:.2f} for {batch_name}. Please pay immediately.",
+                    )
+                except Exception as _ee:
+                    print(f"[Email] Automated fee reminder email error: {_ee}")
+    except Exception as e:
+        print(f"[Cron/FeeOverdue] Error: {e}")
+    finally:
+        db.close()
+
+
+def cleanup_inactive_records():
+    """Background task to archive and delete records inactive for > 2 years"""
+    db = SessionLocal()
+    try:
+        two_years_ago = datetime.now() - timedelta(days=730)
+        
+        # 1. Cleanup Students
+        inactive_students = db.query(StudentDB).filter(
+            StudentDB.status == "inactive",
+            StudentDB.inactive_at <= two_years_ago
+        ).all()
+        
+        for student in inactive_students:
+            print(f"[Cleanup] Archiving & deleting student {student.id} (inactive since {student.inactive_at})")
+            
+            # Archive before deleting
+            student_data = {c.name: str(getattr(student, c.name)) for c in student.__table__.columns}
+            archive_record = ArchiveRecordDB(
+                entity_type="student",
+                original_id=student.id,
+                data=student_data
+            )
+            db.add(archive_record)
+
+            # Reuse the hard delete logic
+            db.query(AttendanceDB).filter(AttendanceDB.student_id == student.id).delete()
+            db.query(FeeDB).filter(FeeDB.student_id == student.id).delete()
+            db.query(PerformanceDB).filter(PerformanceDB.student_id == student.id).delete()
+            db.query(BatchStudentDB).filter(BatchStudentDB.student_id == student.id).delete()
+            db.query(BMIDB).filter(BMIDB.student_id == student.id).delete()
+            db.query(VideoResourceDB).filter(VideoResourceDB.student_id == student.id).delete()
+            db.query(NotificationDB).filter(NotificationDB.user_id == student.id, NotificationDB.user_type == "student").delete()
+            db.delete(student)
+            
+        # 2. Cleanup Batches
+        inactive_batches = db.query(BatchDB).filter(
+            BatchDB.status == "inactive",
+            BatchDB.inactive_at <= two_years_ago
+        ).all()
+        
+        for batch in inactive_batches:
+            print(f"[Cleanup] Archiving & deleting batch {batch.id} (inactive since {batch.inactive_at})")
+            
+            # Archive before deleting
+            batch_data = {c.name: str(getattr(batch, c.name)) for c in batch.__table__.columns}
+            archive_record = ArchiveRecordDB(
+                entity_type="batch",
+                original_id=batch.id,
+                data=batch_data
+            )
+            db.add(archive_record)
+
+            db.query(AttendanceDB).filter(AttendanceDB.batch_id == batch.id).delete()
+            db.query(FeeDB).filter(FeeDB.batch_id == batch.id).delete()
+            db.query(PerformanceDB).filter(PerformanceDB.batch_id == batch.id).delete()
+            db.query(BatchStudentDB).filter(BatchStudentDB.batch_id == batch.id).delete()
+            db.query(BatchCoachDB).filter(BatchCoachDB.batch_id == batch.id).delete()
+            db.query(ScheduleDB).filter(ScheduleDB.batch_id == batch.id).delete()
+            db.delete(batch)
+            
+        db.commit()
+    except Exception as e:
+        print(f"[Cleanup Error] {e}")
+        db.rollback()
+    finally:
+        db.close()
 
 # ==================== Database Models ====================
 
@@ -109,10 +824,17 @@ class CoachDB(Base):
     specialization = Column(String, nullable=True)
     experience_years = Column(Integer, nullable=True)
     status = Column(String, default="active")  # active, inactive
+    monthly_salary = Column(Float, nullable=True)
+    joining_date = Column(Date, nullable=True)
 
     # NEW COLUMNS for Phase 0 enhancements:
     profile_photo = Column(String(500), nullable=True)  # Profile photo URL/path
     fcm_token = Column(String(500), nullable=True)  # Firebase Cloud Messaging token for push notifications
+
+    # JWT: all tokens issued before this timestamp are invalid (used for password-change revocation)
+    jwt_invalidated_at = Column(DateTime(timezone=True), nullable=True)
+    failed_login_attempts = Column(Integer, default=0)
+    locked_until = Column(DateTime(timezone=True), nullable=True)
 
     # RELATIONSHIPS (will be defined after the related models are created):
     # Note: Announcements and calendar events now support both coaches and owners via polymorphic relationships
@@ -128,10 +850,27 @@ class OwnerDB(Base):
     specialization = Column(String, nullable=True)
     experience_years = Column(Integer, nullable=True)
     status = Column(String, default="active")  # active, inactive
-    
+
     # Profile enhancements:
     profile_photo = Column(String(500), nullable=True)  # Profile photo URL/path
     fcm_token = Column(String(500), nullable=True)  # Firebase Cloud Messaging token for push notifications
+
+    # Academy Details:
+    academy_name = Column(String(255), nullable=True)
+    academy_address = Column(Text, nullable=True)
+    academy_contact = Column(String(50), nullable=True)
+    academy_email = Column(String(100), nullable=True)
+
+    # Ownership and Permissions:
+    role = Column(String(20), default="owner")  # "owner" (primary), "co_owner"
+    must_change_password = Column(Boolean, default=False)
+    storage_used_bytes = Column(Integer, default=0)
+    storage_limit_bytes = Column(Integer, default=5368709120)  # 5GB
+
+    # JWT: all tokens issued before this timestamp are invalid (used for password-change revocation)
+    jwt_invalidated_at = Column(DateTime(timezone=True), nullable=True)
+    failed_login_attempts = Column(Integer, default=0)
+    locked_until = Column(DateTime(timezone=True), nullable=True)
     
     # RELATIONSHIPS (will be defined after the related models are created):
     # Note: Announcements and calendar events now support both coaches and owners via polymorphic relationships
@@ -161,6 +900,8 @@ class BatchDB(Base):
     assigned_coach_id = Column(Integer, nullable=True)
     assigned_coach_name = Column(String, nullable=True)
     session_id = Column(Integer, ForeignKey("sessions.id"), nullable=True)  # Link to session
+    status = Column(String, default="active")  # active, inactive
+    inactive_at = Column(DateTime(timezone=True), nullable=True)
 
 class StudentDB(Base):
     __tablename__ = "students"
@@ -169,17 +910,25 @@ class StudentDB(Base):
     phone = Column(String, nullable=False)
     email = Column(String, nullable=False, unique=True)
     guardian_name = Column(String, nullable=True)  # Optional for signup, required for profile completion
-    guardian_phone = Column(String, nullable=True)  # Optional for signup, required for profile completion
+    guardian_phone = Column(EncryptedString, nullable=True)  # A13: encrypted at rest
     password = Column(String, nullable=False)
     added_by = Column(String, nullable=True)  # Optional for signup
     date_of_birth = Column(String, nullable=True)  # Required for profile completion
-    address = Column(Text, nullable=True)  # Required for profile completion
-    status = Column(String, default="active")
+    address = Column(EncryptedString, nullable=True)  # A13: encrypted at rest
+    status = Column(String, default="active") # active, inactive
+    inactive_at = Column(DateTime(timezone=True), nullable=True)
+    rejoin_request_pending = Column(Boolean, default=False)
     t_shirt_size = Column(String, nullable=True)  # Required for profile completion
+    blood_group = Column(String, nullable=True)
 
     # NEW COLUMNS for Phase 0 enhancements:
     profile_photo = Column(String(500), nullable=True)  # Profile photo URL/path, required for profile completion
     fcm_token = Column(String(500), nullable=True)  # Firebase Cloud Messaging token for push notifications
+
+    # JWT: all tokens issued before this timestamp are invalid (used for password-change revocation)
+    jwt_invalidated_at = Column(DateTime(timezone=True), nullable=True)
+    failed_login_attempts = Column(Integer, default=0)
+    locked_until = Column(DateTime(timezone=True), nullable=True)
 
 class BatchStudentDB(Base):
     __tablename__ = "batch_students"
@@ -211,7 +960,19 @@ class CoachAttendanceDB(Base):
     coach_id = Column(Integer, nullable=False)
     date = Column(String, nullable=False)
     status = Column(String, nullable=False)  
+    marked_by = Column(String, nullable=True)
     remarks = Column(Text, nullable=True)
+
+class CoachSalaryDB(Base):
+    __tablename__ = "coach_salaries"
+    id = Column(Integer, primary_key=True, index=True)
+    coach_id = Column(Integer, ForeignKey("coaches.id"), nullable=False)
+    amount = Column(Float, nullable=False)
+    payment_date = Column(String, nullable=False)
+    month = Column(String, nullable=False)  # "YYYY-MM"
+    remarks = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    coach = relationship("CoachDB")
 
 class FeeDB(Base):
     __tablename__ = "fees"
@@ -234,6 +995,8 @@ class FeePaymentDB(Base):
     payee_name = Column(String, nullable=True)  # For non-student payees (parents, siblings, etc.)
     payment_method = Column(String, nullable=True)
     collected_by = Column(String, nullable=True)
+    is_cancelled = Column(Boolean, default=False)
+    cancel_reason = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     fee = relationship("FeeDB", back_populates="payments")
 
@@ -293,12 +1056,21 @@ class TournamentDB(Base):
 class VideoResourceDB(Base):
     __tablename__ = "video_resources"
     id = Column(Integer, primary_key=True, index=True)
-    student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
+    # Keeping student_id for backward compatibility, but marking as nullable
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=True)
     title = Column(String, nullable=True)
     url = Column(String, nullable=False)
     remarks = Column(Text, nullable=True)
-    uploaded_by = Column(Integer, nullable=True)  # Owner ID who uploaded
+    uploaded_by = Column(Integer, nullable=True)  # Owner/Coach ID who uploaded
+    audience_type = Column(String(50), default="student") # "all", "batch", "student"
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class VideoTargetDB(Base):
+    """Specific targets for a video (student IDs or batch IDs)"""
+    __tablename__ = "video_targets"
+    id = Column(Integer, primary_key=True, index=True)
+    video_id = Column(Integer, ForeignKey("video_resources.id", ondelete="CASCADE"), nullable=False)
+    target_id = Column(Integer, nullable=False) # can be student_id or batch_id
 
 class InvitationDB(Base):
     __tablename__ = "invitations"
@@ -336,7 +1108,7 @@ class AnnouncementDB(Base):
     title = Column(String(255), nullable=False)
     message = Column(Text, nullable=False)
     target_audience = Column(String(50), default="all")  # "all", "students", "coaches"
-    priority = Column(String(20), default="normal")  # "normal", "high", "urgent"
+    priority = Column(String(20), default="General")  # "General", "Important"
     created_by = Column(Integer, nullable=True)  # Can be coach or owner ID
     creator_type = Column(String(20), default="coach")  # "coach" or "owner"
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -361,6 +1133,24 @@ class NotificationDB(Base):
     data = Column(JSON, nullable=True)  # Extra metadata as JSON
 
 
+class NotificationPreferencesDB(Base):
+    """Per-user notification preferences (B7)"""
+    __tablename__ = "notification_preferences"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    user_type = Column(String(20), nullable=False)  # "student", "coach", "owner"
+    # Notification type toggles — all default True (opted-in)
+    pref_attendance = Column(Boolean, default=True, nullable=False)
+    pref_performance = Column(Boolean, default=True, nullable=False)
+    pref_bmi = Column(Boolean, default=True, nullable=False)
+    pref_announcements = Column(Boolean, default=True, nullable=False)
+    pref_leave_updates = Column(Boolean, default=True, nullable=False)
+    pref_fee_payments = Column(Boolean, default=True, nullable=False)
+    pref_fee_due = Column(Boolean, default=True, nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class CalendarEventDB(Base):
     """Calendar events: holidays, tournaments, in-house events, leave"""
     __tablename__ = "calendar_events"
@@ -374,6 +1164,9 @@ class CalendarEventDB(Base):
     created_by = Column(Integer, nullable=True)  # Can be coach or owner ID
     creator_type = Column(String(20), default="coach")  # "coach" or "owner"
     related_leave_request_id = Column(Integer, nullable=True)  # Link to leave_requests table if this is a leave event
+    related_tournament_id = Column(Integer, nullable=True)     # Link to tournaments table
+    related_announcement_id = Column(Integer, nullable=True)   # Link to announcements table
+    related_schedule_id = Column(Integer, nullable=True)       # Link to schedules table
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Note: Relationships are handled via creator_type field - use creator_type to determine if created_by refers to coach or owner
@@ -394,6 +1187,17 @@ class LeaveRequestDB(Base):
     reviewed_by = Column(Integer, nullable=True)  # Owner ID who reviewed
     reviewed_at = Column(DateTime(timezone=True), nullable=True)
     review_notes = Column(Text, nullable=True)
+    
+    # Modification request columns (sub-request)
+    modification_start_date = Column(Date, nullable=True)
+    modification_end_date = Column(Date, nullable=True)
+    modification_reason = Column(Text, nullable=True)
+    modification_status = Column(String(20), nullable=True)  # "pending", "approved", "rejected"
+    
+    # History preservation (original approved details)
+    original_start_date = Column(Date, nullable=True)
+    original_end_date = Column(Date, nullable=True)
+    original_reason = Column(Text, nullable=True)
 
 class StudentRegistrationRequestDB(Base):
     """Student registration requests awaiting owner approval"""
@@ -415,6 +1219,110 @@ class StudentRegistrationRequestDB(Base):
     date_of_birth = Column(String, nullable=True)
     address = Column(Text, nullable=True)
     t_shirt_size = Column(String, nullable=True)
+    blood_group = Column(String, nullable=True)
+    
+    # Invitation tracking
+    invitation_id = Column(Integer, ForeignKey("invitations.id"), nullable=True)
+    invited_by_coach_id = Column(Integer, ForeignKey("coaches.id"), nullable=True)
+
+class CoachRegistrationRequestDB(Base):
+    """Coach registration requests awaiting owner approval"""
+    __tablename__ = "coach_registration_requests"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    email = Column(String, nullable=False, unique=True)
+    phone = Column(String, nullable=False)
+    password = Column(String, nullable=False)  # Hashed password
+    specialization = Column(String, nullable=True)
+    experience_years = Column(Integer, nullable=True)
+    status = Column(String, default="pending")  # "pending", "approved", "rejected"
+    submitted_at = Column(DateTime(timezone=True), server_default=func.now())
+    reviewed_by = Column(Integer, nullable=True)  # Owner ID who reviewed
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    review_notes = Column(Text, nullable=True)
+
+class ReportHistoryDB(Base):
+    """History of generated reports"""
+    __tablename__ = "report_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False)
+    user_role = Column(String(50), nullable=False) # "owner", "coach"
+    report_type = Column(String(50), nullable=False) # "attendance", "fee", "performance"
+    filter_summary = Column(String(255), nullable=True) # e.g. "Season: Winter 2025 | Batch: All"
+    generated_on = Column(DateTime(timezone=True), server_default=func.now())
+    report_data = Column(JSON, nullable=False) # The full JSON data needed to recreate the report
+    key_metrics = Column(JSON, nullable=True) # Optional summary metrics for quick display
+
+class ArchiveRecordDB(Base):
+    """Archived records for data retention policy"""
+    __tablename__ = "archive_records"
+    id = Column(Integer, primary_key=True, index=True)
+    entity_type = Column(String(50), nullable=False) # e.g. "student", "batch"
+    original_id = Column(Integer, nullable=False)
+    data = Column(JSON, nullable=False)
+    archived_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class AuditLogDB(Base):
+    __tablename__ = "audit_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True)
+    role = Column(String(50))
+    action = Column(String(255))
+    resource_type = Column(String(50))
+    resource_id = Column(Integer)
+    old_values = Column(JSON, nullable=True)
+    new_values = Column(JSON, nullable=True)
+    ip_address = Column(String(100))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class LoginHistoryDB(Base):
+    __tablename__ = "login_history"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True)
+    user_type = Column(String(50))
+    ip_address = Column(String(100))
+    user_agent = Column(String(500))
+    status = Column(String(50))  # "success" or "failed"
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class ActiveSessionDB(Base):
+    __tablename__ = "active_sessions"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, nullable=False, index=True)
+    user_type = Column(String(20), nullable=False)
+    jti = Column(String(255), unique=True, nullable=False, index=True) # Access token JTI
+    refresh_jti = Column(String(255), unique=True, nullable=False, index=True) # Refresh token JTI
+    ip_address = Column(String(100), nullable=True)
+    user_agent = Column(String(500), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    is_revoked = Column(Boolean, default=False)
+
+class PasswordResetTokenDB(Base):
+    __tablename__ = "password_reset_tokens"
+    id = Column(Integer, primary_key=True, index=True)
+    token_hash = Column(String(255), unique=True, nullable=False, index=True)
+    email = Column(String, nullable=False)
+    user_type = Column(String(20), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+
+class RevokedTokenDB(Base):
+    """JWT token revocation list (blacklist) for explicit logout.
+    Tokens are identified by their unique JTI (JWT ID) claim.
+    Cleanup of expired entries can be handled by a background job.
+    """
+    __tablename__ = "revoked_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    jti = Column(String(255), unique=True, nullable=False, index=True)  # JWT unique ID
+    user_id = Column(Integer, nullable=False, index=True)
+    user_type = Column(String(20), nullable=False)  # owner | coach | student
+    revoked_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)  # mirrors token expiry for cleanup
+
 
 # ==================== Database Migration Functions ====================
 
@@ -427,7 +1335,7 @@ def check_and_add_column(engine, table_name: str, column_name: str, column_type:
         columns = [col['name'] for col in inspector.get_columns(table_name)]
         
         if column_name not in columns:
-            print(f"⚠️  Column '{column_name}' missing in '{table_name}' table. Adding...")
+            print(f"Column '{column_name}' missing in '{table_name}' table. Adding...")
             try:
                 with engine.begin() as conn:
                     alter_sql = f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"
@@ -436,14 +1344,14 @@ def check_and_add_column(engine, table_name: str, column_name: str, column_type:
                     if default_value:
                         alter_sql += f" DEFAULT {default_value}"
                     conn.execute(text(alter_sql))
-                print(f"✅ Added column '{column_name}' to '{table_name}' table")
+                print(f"Added column '{column_name}' to '{table_name}' table")
                 return True
             except Exception as e:
-                print(f"❌ Error adding column '{column_name}': {e}")
+                print(f"Error adding column '{column_name}': {e}")
                 return False
         return False
     except Exception as e:
-        print(f"⚠️  Could not check columns for '{table_name}': {e}")
+        print(f"Could not check columns for '{table_name}': {e}")
         return False
 
 def migrate_database_schema(engine):
@@ -460,7 +1368,25 @@ def migrate_database_schema(engine):
         if 'coaches' in tables:
             check_and_add_column(engine, 'coaches', 'profile_photo', 'VARCHAR(500)', nullable=True)
             check_and_add_column(engine, 'coaches', 'fcm_token', 'VARCHAR(500)', nullable=True)
+            check_and_add_column(engine, 'coaches', 'failed_login_attempts', 'INTEGER', nullable=True, default_value='0')
+            check_and_add_column(engine, 'coaches', 'locked_until', 'TIMESTAMP WITH TIME ZONE', nullable=True)
+            check_and_add_column(engine, 'coaches', 'monthly_salary', 'FLOAT', nullable=True)
+            check_and_add_column(engine, 'coaches', 'joining_date', 'DATE', nullable=True)
         
+        # Migrate owners table
+        if 'owners' in tables:
+            check_and_add_column(engine, 'owners', 'academy_name', 'VARCHAR(255)', nullable=True)
+            check_and_add_column(engine, 'owners', 'academy_address', 'TEXT', nullable=True)
+            check_and_add_column(engine, 'owners', 'academy_contact', 'VARCHAR(50)', nullable=True)
+            check_and_add_column(engine, 'owners', 'academy_email', 'VARCHAR(100)', nullable=True)
+            check_and_add_column(engine, 'owners', 'role', 'VARCHAR(20)', nullable=True, default_value="'owner'")
+            check_and_add_column(engine, 'owners', 'must_change_password', 'BOOLEAN', nullable=True, default_value="FALSE")
+        
+        # Migrate batches table
+        if 'batches' in tables:
+            check_and_add_column(engine, 'batches', 'status', 'VARCHAR(20)', nullable=True, default_value="'active'")
+            check_and_add_column(engine, 'batches', 'inactive_at', 'TIMESTAMP WITH TIME ZONE', nullable=True)
+
         # Migrate students table
         if 'students' in tables:
             # Check existing columns
@@ -470,6 +1396,9 @@ def migrate_database_schema(engine):
             check_and_add_column(engine, 'students', 'profile_photo', 'VARCHAR(500)', nullable=True)
             check_and_add_column(engine, 'students', 'fcm_token', 'VARCHAR(500)', nullable=True)
             check_and_add_column(engine, 'students', 't_shirt_size', 'VARCHAR', nullable=True)
+            check_and_add_column(engine, 'students', 'blood_group', 'VARCHAR(20)', nullable=True)
+            check_and_add_column(engine, 'students', 'inactive_at', 'TIMESTAMP WITH TIME ZONE', nullable=True)
+            check_and_add_column(engine, 'students', 'rejoin_request_pending', 'BOOLEAN', nullable=True, default_value="FALSE")
             
             # Make existing columns nullable if they aren't already
             try:
@@ -492,7 +1421,7 @@ def migrate_database_schema(engine):
                         if col_info and not col_info.get('nullable', True):
                             conn.execute(text("ALTER TABLE students ALTER COLUMN added_by DROP NOT NULL"))
             except Exception as alter_error:
-                print(f"⚠️  Warning: Could not alter column constraints: {alter_error}")
+                print(f"Warning: Could not alter column constraints: {alter_error}")
         
         # Migrate announcements table - add creator_type and make created_by nullable
         if 'announcements' in tables:
@@ -525,7 +1454,7 @@ def migrate_database_schema(engine):
                             # Drop the foreign key constraint
                             drop_fk_sql = text(f"ALTER TABLE announcements DROP CONSTRAINT IF EXISTS {fk_name}")
                             conn.execute(drop_fk_sql)
-                            print(f"✅ Dropped foreign key constraint {fk_name} from announcements.created_by")
+                            print(f" Dropped foreign key constraint {fk_name} from announcements.created_by")
                             break
                     
                     # Also try to find and drop any foreign key constraint on created_by column
@@ -544,9 +1473,9 @@ def migrate_database_schema(engine):
                         fk_name = fk_row[0]
                         drop_fk_sql = text(f"ALTER TABLE announcements DROP CONSTRAINT IF EXISTS {fk_name}")
                         conn.execute(drop_fk_sql)
-                        print(f"✅ Dropped foreign key constraint {fk_name} from announcements.created_by")
+                        print(f" Dropped foreign key constraint {fk_name} from announcements.created_by")
             except Exception as alter_error:
-                print(f"⚠️  Warning: Could not alter announcements.created_by constraint: {alter_error}")
+                print(f"  Warning: Could not alter announcements.created_by constraint: {alter_error}")
         
         # Migrate calendar_events table - add creator_type and make created_by nullable
         if 'calendar_events' in tables:
@@ -578,7 +1507,73 @@ def migrate_database_schema(engine):
                             # Drop the foreign key constraint
                             drop_fk_sql = text(f"ALTER TABLE calendar_events DROP CONSTRAINT IF EXISTS {fk_name}")
                             conn.execute(drop_fk_sql)
-                            print(f"✅ Dropped foreign key constraint {fk_name} from calendar_events.created_by")
+                            print(f" Dropped foreign key constraint {fk_name} from calendar_events.created_by")
+                            break
+                    
+                    # Also try to find and drop any foreign key constraint on created_by column
+                    fk_check_all = text("""
+                        SELECT tc.constraint_name 
+                        FROM information_schema.table_constraints tc
+                        JOIN information_schema.key_column_usage kcu 
+                        ON tc.constraint_name = kcu.constraint_name
+                        WHERE tc.table_name = 'calendar_events' 
+                        AND kcu.column_name = 'created_by'
+                        AND tc.constraint_type = 'FOREIGN KEY'
+                    """)
+                    fk_results = conn.execute(fk_check_all).fetchall()
+                    for fk_row in fk_results:
+                        fk_name = fk_row[0]
+                        drop_fk_sql = text(f"ALTER TABLE calendar_events DROP CONSTRAINT IF EXISTS {fk_name}")
+                        conn.execute(drop_fk_sql)
+                        print(f" Dropped foreign key constraint {fk_name} from calendar_events.created_by")
+            except Exception as alter_error:
+                print(f"  Warning: Could not alter calendar_events.created_by constraint: {alter_error}")
+
+        # Migrate video_resources table - add batch_id and session_id, make student_id nullable
+        if 'video_resources' in tables:
+            check_and_add_column(engine, 'video_resources', 'batch_id', 'INTEGER', nullable=True)
+            check_and_add_column(engine, 'video_resources', 'session_id', 'INTEGER', nullable=True)
+            
+            # Make student_id nullable
+            try:
+                with engine.begin() as conn:
+                    columns = [col['name'] for col in inspector.get_columns('video_resources')]
+                    if 'student_id' in columns:
+                        col_info = next((col for col in inspector.get_columns('video_resources') if col['name'] == 'student_id'), None)
+                        if col_info and not col_info.get('nullable', True):
+                            conn.execute(text("ALTER TABLE video_resources ALTER COLUMN student_id DROP NOT NULL"))
+                            print(" Made video_resources.student_id nullable")
+            except Exception as e:
+                print(f"  Warning: Could not alter video_resources.student_id constraint: {e}")
+            check_and_add_column(engine, 'calendar_events', 'creator_type', 'VARCHAR(20)', nullable=True, default_value="'coach'")
+            # Make created_by nullable and remove foreign key constraint (since it can reference either coaches or owners)
+            try:
+                with engine.begin() as conn:
+                    # Check if created_by is NOT NULL and make it nullable
+                    col_info = next((col for col in inspector.get_columns('calendar_events') if col['name'] == 'created_by'), None)
+                    if col_info and not col_info.get('nullable', True):
+                        conn.execute(text("ALTER TABLE calendar_events ALTER COLUMN created_by DROP NOT NULL"))
+                    
+                    # Drop foreign key constraint if it exists (since created_by can reference either coaches or owners)
+                    fk_constraints = [
+                        'calendar_events_created_by_fkey',
+                        'calendar_events_created_by_coaches_id_fkey',
+                        'fk_calendar_events_created_by'
+                    ]
+                    
+                    for fk_name in fk_constraints:
+                        fk_check = text(f"""
+                            SELECT COUNT(*) 
+                            FROM information_schema.table_constraints 
+                            WHERE table_name = 'calendar_events' 
+                            AND constraint_name = '{fk_name}'
+                        """)
+                        result = conn.execute(fk_check).scalar()
+                        if result > 0:
+                            # Drop the foreign key constraint
+                            drop_fk_sql = text(f"ALTER TABLE calendar_events DROP CONSTRAINT IF EXISTS {fk_name}")
+                            conn.execute(drop_fk_sql)
+                            print(f" Dropped foreign key constraint {fk_name} from calendar_events.created_by")
                             break
                     
                     # Also try to find and drop any foreign key constraint on created_by column
@@ -596,9 +1591,27 @@ def migrate_database_schema(engine):
                         fk_name = fk_row[0]
                         drop_fk_sql = text(f"ALTER TABLE calendar_events DROP CONSTRAINT IF EXISTS {fk_name}")
                         conn.execute(drop_fk_sql)
-                        print(f"✅ Dropped foreign key constraint {fk_name} from calendar_events.created_by")
+                        print(f"Dropped foreign key constraint {fk_name} from calendar_events.created_by")
             except Exception as alter_error:
-                print(f"⚠️  Warning: Could not alter calendar_events.created_by constraint: {alter_error}")
+                print(f"Warning: Could not alter calendar_events.created_by constraint: {alter_error}")
+
+        # Migrate student_registration_requests table
+        if 'student_registration_requests' in tables:
+            check_and_add_column(engine, 'student_registration_requests', 't_shirt_size', 'VARCHAR', nullable=True)
+            check_and_add_column(engine, 'student_registration_requests', 'blood_group', 'VARCHAR', nullable=True)
+            check_and_add_column(engine, 'student_registration_requests', 'invitation_id', 'INTEGER', nullable=True)
+            check_and_add_column(engine, 'student_registration_requests', 'invited_by_coach_id', 'INTEGER', nullable=True)
+
+        # Migrate leave_requests table - add modification columns
+        if 'leave_requests' in tables:
+            check_and_add_column(engine, 'leave_requests', 'modification_start_date', 'DATE', nullable=True)
+            check_and_add_column(engine, 'leave_requests', 'modification_end_date', 'DATE', nullable=True)
+            check_and_add_column(engine, 'leave_requests', 'modification_reason', 'TEXT', nullable=True)
+            check_and_add_column(engine, 'leave_requests', 'modification_status', 'VARCHAR(20)', nullable=True)
+            check_and_add_column(engine, 'leave_requests', 'original_start_date', 'DATE', nullable=True)
+            check_and_add_column(engine, 'leave_requests', 'original_end_date', 'DATE', nullable=True)
+            check_and_add_column(engine, 'leave_requests', 'original_reason', 'TEXT', nullable=True)
+
         
         # Migrate fees table - add payee_student_id column
         if 'fees' in tables:
@@ -623,17 +1636,17 @@ def migrate_database_schema(engine):
                             REFERENCES students(id)
                         """)
                         conn.execute(fk_sql)
-                        print("✅ Added foreign key constraint for fees.payee_student_id")
+                        print("Added foreign key constraint for fees.payee_student_id")
             except Exception as fk_error:
                 # Foreign key might already exist or constraint name might be different
-                print(f"⚠️  Note: Foreign key constraint check: {fk_error}")
+                print(f"Note: Foreign key constraint check: {fk_error}")
         
         # Verify fee_payments table exists (should be created by Base.metadata.create_all)
         if 'fee_payments' not in tables:
-            print("⚠️  fee_payments table not found. It should be created automatically.")
-            print("⚠️  If this persists, check that FeePaymentDB model is properly defined.")
+            print("fee_payments table not found. It should be created automatically.")
+            print("If this persists, check that FeePaymentDB model is properly defined.")
         else:
-            print("✅ fee_payments table exists")
+            print("fee_payments table exists")
             # Migrate fee_payments table - add payee_name column
             check_and_add_column(engine, 'fee_payments', 'payee_name', 'VARCHAR(255)', nullable=True)
         
@@ -643,7 +1656,7 @@ def migrate_database_schema(engine):
         
         # Migrate sessions table - create if it doesn't exist
         if 'sessions' not in tables:
-            print("⚠️  Table 'sessions' missing. Creating...")
+            print("Table 'sessions' missing. Creating...")
             try:
                 with engine.begin() as conn:
                     sessions_table_sql = text("""
@@ -658,17 +1671,17 @@ def migrate_database_schema(engine):
                         )
                     """)
                     conn.execute(sessions_table_sql)
-                print("✅ Created table 'sessions'")
+                print("Created table 'sessions'")
             except Exception as e:
-                print(f"⚠️  Error creating sessions table: {e}")
+                print(f"Error creating sessions table: {e}")
         else:
-            print("✅ Table 'sessions' already exists")
+            print("Table 'sessions' already exists")
         
         # Migrate batches table - add session_id column
         if 'batches' in tables:
             columns = [col['name'] for col in inspector.get_columns('batches')]
             if 'session_id' not in columns:
-                print("⚠️  Column 'session_id' missing in 'batches' table. Adding...")
+                print("Column 'session_id' missing in 'batches' table. Adding...")
                 try:
                     with engine.begin() as conn:
                         # First, ensure sessions table exists (should already be created above)
@@ -679,7 +1692,7 @@ def migrate_database_schema(engine):
                             REFERENCES sessions(id) ON DELETE SET NULL
                         """)
                         conn.execute(alter_sql)
-                        print("✅ Added column 'session_id' to 'batches' table")
+                        print("Added column 'session_id' to 'batches' table")
                         
                         # Create index on session_id for better query performance
                         index_check = text("""
@@ -692,11 +1705,11 @@ def migrate_database_schema(engine):
                         if index_result == 0:
                             create_index_sql = text("CREATE INDEX idx_batches_session_id ON batches(session_id)")
                             conn.execute(create_index_sql)
-                            print("✅ Created index 'idx_batches_session_id' on 'batches' table")
+                            print("Created index 'idx_batches_session_id' on 'batches' table")
                 except Exception as e:
-                    print(f"⚠️  Error adding session_id column: {e}")
+                    print(f"Error adding session_id column: {e}")
             else:
-                print("✅ Column 'session_id' already exists in 'batches' table")
+                print("Column 'session_id' already exists in 'batches' table")
         
         # Migrate invitations table - add invite_token and make columns nullable
         if 'invitations' in tables:
@@ -711,17 +1724,17 @@ def migrate_database_schema(engine):
                         
                         # Add column as nullable first (to handle existing rows)
                         conn.execute(text("ALTER TABLE invitations ADD COLUMN invite_token VARCHAR(255)"))
-                        print("✅ Added invite_token column to invitations table")
+                        print(" Added invite_token column to invitations table")
                         
                         # If there are existing rows, generate tokens for them
                         if row_count > 0:
-                            print(f"⚠️  Found {row_count} existing invitation(s), generating tokens...")
+                            print(f"  Found {row_count} existing invitation(s), generating tokens...")
                             rows = conn.execute(text("SELECT id FROM invitations WHERE invite_token IS NULL")).fetchall()
                             for row in rows:
                                 token = secrets.token_urlsafe(32)
                                 conn.execute(text("UPDATE invitations SET invite_token = :token WHERE id = :id"), 
                                            {"token": token, "id": row[0]})
-                            print(f"✅ Generated tokens for {row_count} existing invitation(s)")
+                            print(f" Generated tokens for {row_count} existing invitation(s)")
                         
                         # Now make it NOT NULL
                         conn.execute(text("ALTER TABLE invitations ALTER COLUMN invite_token SET NOT NULL"))
@@ -736,7 +1749,7 @@ def migrate_database_schema(engine):
                         result = conn.execute(constraint_check).scalar()
                         if result == 0:
                             conn.execute(text("ALTER TABLE invitations ADD CONSTRAINT invitations_invite_token_key UNIQUE (invite_token)"))
-                            print("✅ Added unique constraint for invitations.invite_token")
+                            print(" Added unique constraint for invitations.invite_token")
                         
                         # Create index if it doesn't exist
                         index_check = text("""
@@ -748,9 +1761,9 @@ def migrate_database_schema(engine):
                         index_result = conn.execute(index_check).scalar()
                         if index_result == 0:
                             conn.execute(text("CREATE INDEX ix_invitations_invite_token ON invitations (invite_token)"))
-                            print("✅ Added index for invitations.invite_token")
+                            print(" Added index for invitations.invite_token")
                 except Exception as constraint_error:
-                    print(f"⚠️  Error adding invite_token column: {constraint_error}")
+                    print(f"  Error adding invite_token column: {constraint_error}")
             
             # Make student_phone, student_email, and batch_id nullable if they aren't already
             try:
@@ -759,116 +1772,233 @@ def migrate_database_schema(engine):
                         col_info = next((col for col in inspector.get_columns('invitations') if col['name'] == 'student_phone'), None)
                         if col_info and not col_info.get('nullable', True):
                             conn.execute(text("ALTER TABLE invitations ALTER COLUMN student_phone DROP NOT NULL"))
-                            print("✅ Made student_phone nullable in invitations table")
+                            print(" Made student_phone nullable in invitations table")
                     
                     if 'student_email' in columns:
                         col_info = next((col for col in inspector.get_columns('invitations') if col['name'] == 'student_email'), None)
                         if col_info and not col_info.get('nullable', True):
                             conn.execute(text("ALTER TABLE invitations ALTER COLUMN student_email DROP NOT NULL"))
-                            print("✅ Made student_email nullable in invitations table")
+                            print(" Made student_email nullable in invitations table")
                     
                     if 'batch_id' in columns:
                         col_info = next((col for col in inspector.get_columns('invitations') if col['name'] == 'batch_id'), None)
                         if col_info and not col_info.get('nullable', True):
                             conn.execute(text("ALTER TABLE invitations ALTER COLUMN batch_id DROP NOT NULL"))
-                            print("✅ Made batch_id nullable in invitations table")
+                            print(" Made batch_id nullable in invitations table")
             except Exception as alter_error:
-                print(f"⚠️  Warning: Could not alter column constraints: {alter_error}")
+                print(f"  Warning: Could not alter column constraints: {alter_error}")
 
         # Migrate video_resources table - add new columns for student video feature
         if 'video_resources' in tables:
             video_columns = [col['name'] for col in inspector.get_columns('video_resources')]
-            print(f"📹 video_resources table found with columns: {video_columns}")
+            print(f"video_resources table found with columns: {video_columns}")
 
-            # Check if this is the old schema (without student_id)
-            if 'student_id' not in video_columns:
-                print("⚠️  video_resources table has old schema. Migrating...")
-                try:
-                    with engine.begin() as conn:
-                        # Drop old video_resources table (since it has different structure)
-                        # First check if there's any data we should preserve
-                        count_result = conn.execute(text("SELECT COUNT(*) FROM video_resources")).scalar()
-                        if count_result > 0:
-                            print(f"⚠️  Found {count_result} existing videos. Backing up old data...")
-                            # For safety, rename old table instead of dropping
-                            conn.execute(text("ALTER TABLE video_resources RENAME TO video_resources_old_backup"))
-                            print("✅ Renamed old table to video_resources_old_backup")
-                        else:
-                            # No data, safe to drop
-                            conn.execute(text("DROP TABLE IF EXISTS video_resources"))
-                            print("✅ Dropped empty old video_resources table")
+            # Ensure student_id is nullable (for multi-target support)
+            try:
+                with engine.begin() as conn:
+                    col_info = next((col for col in inspector.get_columns('video_resources') if col['name'] == 'student_id'), None)
+                    if col_info and not col_info.get('nullable', True):
+                        conn.execute(text("ALTER TABLE video_resources ALTER COLUMN student_id DROP NOT NULL"))
+                        print("Made video_resources.student_id nullable")
+            except Exception as e:
+                print(f"Note: video_resources.student_id nullable migration: {e}")
 
-                        # Create new table with correct schema
-                        conn.execute(text("""
-                            CREATE TABLE video_resources (
-                                id SERIAL PRIMARY KEY,
-                                student_id INTEGER NOT NULL REFERENCES students(id),
-                                title VARCHAR,
-                                url VARCHAR NOT NULL,
-                                remarks TEXT,
-                                uploaded_by INTEGER,
-                                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-                            )
-                        """))
-                        print("✅ Created new video_resources table with student association")
+            # Add new columns
+            check_and_add_column(engine, 'video_resources', 'remarks', 'TEXT', nullable=True)
+            check_and_add_column(engine, 'video_resources', 'uploaded_by', 'INTEGER', nullable=True)
+            check_and_add_column(engine, 'video_resources', 'audience_type', 'VARCHAR(50)', nullable=True, default_value="'student'")
+            check_and_add_column(engine, 'video_resources', 'created_at', 'TIMESTAMP WITH TIME ZONE', nullable=True, default_value='NOW()')
+            print(" video_resources table schema verified")
 
-                        # Create index on student_id for faster lookups
-                        conn.execute(text("CREATE INDEX ix_video_resources_student_id ON video_resources (student_id)"))
-                        print("✅ Added index for video_resources.student_id")
-                except Exception as video_migration_error:
-                    print(f"⚠️  Error migrating video_resources table: {video_migration_error}")
-            else:
-                # Table already has student_id, just ensure other columns exist
-                check_and_add_column(engine, 'video_resources', 'remarks', 'TEXT', nullable=True)
-                check_and_add_column(engine, 'video_resources', 'uploaded_by', 'INTEGER', nullable=True)
-                check_and_add_column(engine, 'video_resources', 'created_at', 'TIMESTAMP WITH TIME ZONE', nullable=True, default_value='NOW()')
-                print("✅ video_resources table schema verified")
+        # Migrate video_targets table
+        if 'video_targets' not in tables:
+            print("  Table 'video_targets' missing. Creating...")
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("""
+                        CREATE TABLE video_targets (
+                            id SERIAL PRIMARY KEY,
+                            video_id INTEGER REFERENCES video_resources(id) ON DELETE CASCADE NOT NULL,
+                            target_id INTEGER NOT NULL
+                        )
+                    """))
+                    conn.execute(text("CREATE INDEX idx_video_targets_video_id ON video_targets(video_id)"))
+                print(" Created table 'video_targets'")
+            except Exception as e:
+                print(f"  Error creating video_targets table: {e}")
         else:
-            print("📹 video_resources table will be created by SQLAlchemy")
+            print(" video_resources table will be created by SQLAlchemy")
 
+        if 'active_sessions' not in tables:
+            print("  active_sessions table not found. Creating...")
+            try:
+                ActiveSessionDB.__table__.create(bind=engine)
+                print(" active_sessions table created!")
+            except Exception as e:
+                pass
+                
+        if 'password_reset_tokens' not in tables:
+            print("  password_reset_tokens table not found. Creating...")
+            try:
+                PasswordResetTokenDB.__table__.create(bind=engine)
+                print(" password_reset_tokens table created!")
+            except Exception as e:
+                pass
+                
         # Check if leave_requests table exists
         if 'leave_requests' not in tables:
-            print("⚠️  leave_requests table not found. Creating...")
+            print("  leave_requests table not found. Creating...")
             try:
                 LeaveRequestDB.__table__.create(bind=engine)
-                print("✅ leave_requests table created!")
+                print(" leave_requests table created!")
             except Exception as e:
-                print(f"❌ Error creating leave_requests table: {e}")
+                print(f" Error creating leave_requests table: {e}")
         else:
-            print("✅ leave_requests table exists")
+            print(" leave_requests table exists")
         
         # Check if student_registration_requests table exists
         if 'student_registration_requests' not in tables:
-            print("⚠️  student_registration_requests table not found. Creating...")
+            print("  student_registration_requests table not found. Creating...")
             try:
                 StudentRegistrationRequestDB.__table__.create(bind=engine)
-                print("✅ student_registration_requests table created!")
+                print(" student_registration_requests table created!")
             except Exception as e:
-                print(f"❌ Error creating student_registration_requests table: {e}")
+                print(f" Error creating student_registration_requests table: {e}")
         else:
-            print("✅ student_registration_requests table exists")
+            print(" student_registration_requests table exists")
+        
+        # Check if coach_registration_requests table exists
+        if 'coach_registration_requests' not in tables:
+            print("  coach_registration_requests table not found. Creating...")
+            try:
+                CoachRegistrationRequestDB.__table__.create(bind=engine)
+                print(" coach_registration_requests table created!")
+            except Exception as e:
+                print(f" Error creating coach_registration_requests table: {e}")
+        else:
+            print(" coach_registration_requests table exists")
         
         # Migrate calendar_events table - add end_date and related_leave_request_id columns
         if 'calendar_events' in tables:
             check_and_add_column(engine, 'calendar_events', 'end_date', 'DATE', nullable=True)
             check_and_add_column(engine, 'calendar_events', 'related_leave_request_id', 'INTEGER', nullable=True)
-            print("✅ calendar_events table schema updated for leave support")
+            check_and_add_column(engine, 'calendar_events', 'related_tournament_id', 'INTEGER', nullable=True)
+            check_and_add_column(engine, 'calendar_events', 'related_announcement_id', 'INTEGER', nullable=True)
+            check_and_add_column(engine, 'calendar_events', 'related_schedule_id', 'INTEGER', nullable=True)
+            print(" calendar_events table schema updated for multi-table support")
         
-        print("✅ Database schema migration completed!")
-    except Exception as e:
-        print(f"⚠️  Migration error: {e}")
+        # Migrate coach_attendance table
+        if 'coach_attendance' in tables:
+            check_and_add_column(engine, 'coach_attendance', 'marked_by', 'VARCHAR(255)', nullable=True)
+            check_and_add_column(engine, 'coach_attendance', 'remarks', 'TEXT', nullable=True)
+            print(" coach_attendance table schema verified")
+        
+        # ── JWT Phase A1: per-user token invalidation timestamp ──────────────
+        check_and_add_column(engine, 'coaches', 'jwt_invalidated_at', 'TIMESTAMP WITH TIME ZONE', nullable=True)
+        check_and_add_column(engine, 'owners', 'jwt_invalidated_at', 'TIMESTAMP WITH TIME ZONE', nullable=True)
+        check_and_add_column(engine, 'students', 'jwt_invalidated_at', 'TIMESTAMP WITH TIME ZONE', nullable=True)
+        print("JWT invalidation columns verified.")
 
-# Create tables
+        # ── B7: Notification preferences table ───────────────────────────────
+        if 'notification_preferences' not in tables:
+            print("  notification_preferences table not found. Creating...")
+            try:
+                NotificationPreferencesDB.__table__.create(bind=engine)
+                print(" notification_preferences table created!")
+            except Exception as e:
+                print(f" Error creating notification_preferences table: {e}")
+        else:
+            print(" notification_preferences table exists")
+
+        # ── B10: Drop orphaned `requests` table (no model exists for it) ─────
+        if 'requests' in tables:
+            try:
+                with engine.connect() as conn:
+                    row_count = conn.execute(
+                        __import__('sqlalchemy').text("SELECT COUNT(*) FROM requests")
+                    ).scalar()
+                    if row_count == 0:
+                        conn.execute(__import__('sqlalchemy').text("DROP TABLE requests"))
+                        conn.commit()
+                        print(" Dropped empty orphaned `requests` table.")
+                    else:
+                        print(f" WARNING: Orphaned `requests` table has {row_count} rows — manual review required before dropping.")
+            except Exception as e:
+                print(f" Could not clean up `requests` table: {e}")
+        else:
+            print(" No orphaned `requests` table found.")
+
+        print("Database schema migration completed!")
+    except Exception as e:
+        print(f"Migration error: {e}")
+
+# Create tables (also creates revoked_tokens if it doesn't exist)
 Base.metadata.create_all(bind=engine)
 
 # Run migration to add missing columns
 migrate_database_schema(engine)
 
-print("✅ Database tables created/verified!")
+print("Database tables created/verified!")
 
 # ==================== Pydantic Models ====================
 
 # Coach Models
+
+def validate_password_complexity(v: str) -> str:
+    if len(v) < 8:
+        raise ValueError("Password must be at least 8 characters long")
+    if len(v.encode('utf-8')) > 72:
+        raise ValueError("Password cannot be longer than 72 bytes")
+    if not re.search(r"[A-Z]", v):
+        raise ValueError("Password must contain at least one uppercase letter")
+    if not re.search(r"[a-z]", v):
+        raise ValueError("Password must contain at least one lowercase letter")
+    if not re.search(r"[0-9]", v):
+        raise ValueError("Password must contain at least one number")
+    return v
+
+# ── A12: Input Validation Helpers ────────────────────────────────────────────
+# RFC 5321-compatible email regex (max 254 chars per RFC 5321)
+_EMAIL_RE = re.compile(r'^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$')
+
+def validate_email_format(v: str) -> str:
+    """Validate email format and length."""
+    v = v.strip()
+    if len(v) > 254:
+        raise ValueError("Email address exceeds maximum length of 254 characters")
+    if not _EMAIL_RE.match(v):
+        raise ValueError("Invalid email address format")
+    return v
+
+def validate_phone_format(v: str) -> str:
+    """Validate phone number format: digits, spaces, +, -, (, ), . allowed; 7-15 digits required."""
+    v = v.strip()
+    if not v:
+        raise ValueError("Phone number cannot be empty")
+    # Strip formatting chars and count digits
+    digits_only = re.sub(r'[\s\-\(\)\+\.]', '', v)
+    if not digits_only.isdigit():
+        raise ValueError("Phone number may only contain digits, spaces, +, -, (, ), and .")
+    if not (7 <= len(digits_only) <= 15):
+        raise ValueError("Phone number must contain between 7 and 15 digits")
+    if len(v) > 25:
+        raise ValueError("Phone number too long (max 25 characters)")
+    return v
+
+def validate_name_field(v: str, max_len: int = 100, field_label: str = "Name") -> str:
+    """Validate a human name field: strip whitespace and enforce max length."""
+    v = v.strip()
+    if not v:
+        raise ValueError(f"{field_label} cannot be empty")
+    if len(v) > max_len:
+        raise ValueError(f"{field_label} too long (max {max_len} characters)")
+    return v
+
+def sanitize_html(v: str) -> str:
+    """HTML-escape text to prevent stored XSS when rendered in web contexts."""
+    return html_lib.escape(v, quote=True)
+# ─────────────────────────────────────────────────────────────────────────────
+
 class CoachCreate(BaseModel):
     name: str
     email: str
@@ -876,6 +2006,36 @@ class CoachCreate(BaseModel):
     password: str
     specialization: Optional[str] = None
     experience_years: Optional[int] = None
+    monthly_salary: Optional[float] = None
+    joining_date: Optional[date] = None
+
+    @field_validator('name')
+    @classmethod
+    def check_name_CoachCreate(cls, v):
+        return validate_name_field(v, max_len=100, field_label="Name")
+
+    @field_validator('email')
+    @classmethod
+    def check_email_CoachCreate(cls, v):
+        return validate_email_format(v)
+
+    @field_validator('phone')
+    @classmethod
+    def check_phone_CoachCreate(cls, v):
+        return validate_phone_format(v)
+
+    @field_validator('specialization')
+    @classmethod
+    def check_specialization_CoachCreate(cls, v):
+        if v is not None and len(v) > 200:
+            raise ValueError("Specialization too long (max 200 characters)")
+        return v
+
+    @field_validator('password')
+    @classmethod
+    def check_pwd_CoachCreate(cls, v):
+        return validate_password_complexity(v)
+
 
 class Coach(BaseModel):
     id: int
@@ -886,6 +2046,8 @@ class Coach(BaseModel):
     specialization: Optional[str] = None
     experience_years: Optional[int] = None
     status: str = "active"
+    monthly_salary: Optional[float] = None
+    joining_date: Optional[date] = None
     profile_photo: Optional[str] = None
     fcm_token: Optional[str] = None
 
@@ -893,6 +2055,10 @@ class Coach(BaseModel):
         from_attributes = True
 
 class CoachLogin(BaseModel):
+    email: str
+    password: str
+
+class UnifiedLoginRequest(BaseModel):
     email: str
     password: str
 
@@ -906,11 +2072,33 @@ class ResetPasswordRequest(BaseModel):
     new_password: str
     user_type: str  # "coach", "owner", or "student"
 
+    @field_validator('new_password')
+    @classmethod
+    def check_pwd_ResetPasswordRequest(cls, v):
+        return validate_password_complexity(v)
+
+
 class ChangePasswordRequest(BaseModel):
     email: str
     current_password: str
     new_password: str
     user_type: str  # "coach", "owner", or "student"
+
+    @field_validator('new_password')
+    @classmethod
+    def check_pwd_ChangePasswordRequest(cls, v):
+        return validate_password_complexity(v)
+
+
+class TokenRefreshRequest(BaseModel):
+    """Body for POST /auth/refresh"""
+    refresh_token: str
+
+
+class LogoutRequest(BaseModel):
+    """Body for POST /auth/logout (refresh_token is optional but recommended)"""
+    refresh_token: Optional[str] = None
+
 
 class CoachUpdate(BaseModel):
     name: Optional[str] = None
@@ -919,8 +2107,30 @@ class CoachUpdate(BaseModel):
     password: Optional[str] = None
     specialization: Optional[str] = None
     experience_years: Optional[int] = None
-    status: Optional[str] = None
+    monthly_salary: Optional[float] = None
+    joining_date: Optional[date] = None
     profile_photo: Optional[str] = None
+
+    @field_validator('name')
+    @classmethod
+    def check_name_CoachUpdate(cls, v):
+        if v is not None:
+            return validate_name_field(v, max_len=100, field_label="Name")
+        return v
+
+    @field_validator('email')
+    @classmethod
+    def check_email_CoachUpdate(cls, v):
+        if v is not None:
+            return validate_email_format(v)
+        return v
+
+    @field_validator('phone')
+    @classmethod
+    def check_phone_CoachUpdate(cls, v):
+        if v is not None:
+            return validate_phone_format(v)
+        return v
 
 # Owner Models
 class OwnerCreate(BaseModel):
@@ -930,6 +2140,29 @@ class OwnerCreate(BaseModel):
     password: str
     specialization: Optional[str] = None
     experience_years: Optional[int] = None
+    role: Literal["owner", "co_owner"] = "owner"
+    must_change_password: Optional[bool] = False
+
+    @field_validator('name')
+    @classmethod
+    def check_name_OwnerCreate(cls, v):
+        return validate_name_field(v, max_len=100, field_label="Name")
+
+    @field_validator('email')
+    @classmethod
+    def check_email_OwnerCreate(cls, v):
+        return validate_email_format(v)
+
+    @field_validator('phone')
+    @classmethod
+    def check_phone_OwnerCreate(cls, v):
+        return validate_phone_format(v)
+
+    @field_validator('password')
+    @classmethod
+    def check_pwd_OwnerCreate(cls, v):
+        return validate_password_complexity(v)
+
 
 class Owner(BaseModel):
     id: int
@@ -939,8 +2172,14 @@ class Owner(BaseModel):
     specialization: Optional[str] = None
     experience_years: Optional[int] = None
     status: str = "active"
+    role: str = "owner"
+    must_change_password: bool = False
     profile_photo: Optional[str] = None
     fcm_token: Optional[str] = None
+    academy_name: Optional[str] = None
+    academy_address: Optional[str] = None
+    academy_contact: Optional[str] = None
+    academy_email: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -956,8 +2195,57 @@ class OwnerUpdate(BaseModel):
     password: Optional[str] = None
     specialization: Optional[str] = None
     experience_years: Optional[int] = None
+    must_change_password: Optional[bool] = None
     profile_photo: Optional[str] = None
-    fcm_token: Optional[str] = None
+    academy_name: Optional[str] = None
+    academy_address: Optional[str] = None
+    academy_contact: Optional[str] = None
+    academy_email: Optional[str] = None
+
+    @field_validator('name')
+    @classmethod
+    def check_name_OwnerUpdate(cls, v):
+        if v is not None:
+            return validate_name_field(v, max_len=100, field_label="Name")
+        return v
+
+    @field_validator('email')
+    @classmethod
+    def check_email_OwnerUpdate(cls, v):
+        if v is not None:
+            return validate_email_format(v)
+        return v
+
+    @field_validator('phone')
+    @classmethod
+    def check_phone_OwnerUpdate(cls, v):
+        if v is not None:
+            return validate_phone_format(v)
+        return v
+
+    @field_validator('academy_email')
+    @classmethod
+    def check_academy_email_OwnerUpdate(cls, v):
+        if v is not None:
+            return validate_email_format(v)
+        return v
+
+    @field_validator('academy_name')
+    @classmethod
+    def check_academy_name_OwnerUpdate(cls, v):
+        if v is not None and len(v) > 200:
+            raise ValueError("Academy name too long (max 200 characters)")
+        return v
+
+    @field_validator('academy_address')
+    @classmethod
+    def check_academy_address_OwnerUpdate(cls, v):
+        if v is not None and len(v) > 500:
+            raise ValueError("Academy address too long (max 500 characters)")
+        return v
+
+class TransferOwnershipRequest(BaseModel):
+    new_owner_id: int
 
 # Batch Models
 # Session Models
@@ -967,11 +2255,34 @@ class SessionCreate(BaseModel):
     end_date: str
     status: Optional[str] = "active"
 
+    @field_validator('name')
+    @classmethod
+    def check_session_name(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("Session name cannot be empty")
+        if len(v) > 100:
+            raise ValueError("Session name too long (max 100 characters)")
+        return v
+
+    @model_validator(mode='after')
+    def validate_session_date_range(self):
+        try:
+            if self.start_date and self.end_date:
+                start = date.fromisoformat(self.start_date)
+                end = date.fromisoformat(self.end_date)
+                if end <= start:
+                    raise ValueError("end_date must be after start_date")
+        except ValueError as exc:
+            if "end_date must be" in str(exc):
+                raise
+            raise ValueError("Invalid date format. Use YYYY-MM-DD") from exc
+        return self
+
 class SessionUpdate(BaseModel):
     name: Optional[str] = None
     start_date: Optional[str] = None
     end_date: Optional[str] = None
-    status: Optional[str] = None
 
 class Session(BaseModel):
     id: int
@@ -1023,6 +2334,8 @@ class Batch(BaseModel):
     assigned_coach_ids: Optional[List[int]] = None  # New: list of coach IDs
     assigned_coaches: Optional[List[CoachInfo]] = None  # New: list of coach info objects
     session_id: Optional[int] = None
+    status: str = "active"
+    inactive_at: Optional[datetime] = None
     
     class Config:
         from_attributes = True
@@ -1054,6 +2367,48 @@ class StudentCreate(BaseModel):
     t_shirt_size: Optional[str] = None  # Required for profile completion
     blood_group: Optional[str] = None
 
+    @field_validator('name')
+    @classmethod
+    def check_name_StudentCreate(cls, v):
+        return validate_name_field(v, max_len=100, field_label="Name")
+
+    @field_validator('email')
+    @classmethod
+    def check_email_StudentCreate(cls, v):
+        return validate_email_format(v)
+
+    @field_validator('phone')
+    @classmethod
+    def check_phone_StudentCreate(cls, v):
+        return validate_phone_format(v)
+
+    @field_validator('guardian_name')
+    @classmethod
+    def check_guardian_name_StudentCreate(cls, v):
+        if v is not None:
+            return validate_name_field(v, max_len=100, field_label="Guardian name")
+        return v
+
+    @field_validator('guardian_phone')
+    @classmethod
+    def check_guardian_phone_StudentCreate(cls, v):
+        if v is not None:
+            return validate_phone_format(v)
+        return v
+
+    @field_validator('address')
+    @classmethod
+    def check_address_StudentCreate(cls, v):
+        if v is not None and len(v) > 500:
+            raise ValueError("Address too long (max 500 characters)")
+        return v
+
+    @field_validator('password')
+    @classmethod
+    def check_pwd_StudentCreate(cls, v):
+        return validate_password_complexity(v)
+
+
 class Student(BaseModel):
     id: int
     name: str
@@ -1070,6 +2425,8 @@ class Student(BaseModel):
     blood_group: Optional[str] = None
     profile_photo: Optional[str] = None
     fcm_token: Optional[str] = None
+    inactive_at: Optional[datetime] = None
+    rejoin_request_pending: bool = False
 
     class Config:
         from_attributes = True
@@ -1089,8 +2446,49 @@ class StudentUpdate(BaseModel):
     address: Optional[str] = None
     t_shirt_size: Optional[str] = None
     blood_group: Optional[str] = None
-    status: Optional[str] = None
     profile_photo: Optional[str] = None
+
+    @field_validator('name')
+    @classmethod
+    def check_name_StudentUpdate(cls, v):
+        if v is not None:
+            return validate_name_field(v, max_len=100, field_label="Name")
+        return v
+
+    @field_validator('email')
+    @classmethod
+    def check_email_StudentUpdate(cls, v):
+        if v is not None:
+            return validate_email_format(v)
+        return v
+
+    @field_validator('phone')
+    @classmethod
+    def check_phone_StudentUpdate(cls, v):
+        if v is not None:
+            return validate_phone_format(v)
+        return v
+
+    @field_validator('guardian_name')
+    @classmethod
+    def check_guardian_name_StudentUpdate(cls, v):
+        if v is not None:
+            return validate_name_field(v, max_len=100, field_label="Guardian name")
+        return v
+
+    @field_validator('guardian_phone')
+    @classmethod
+    def check_guardian_phone_StudentUpdate(cls, v):
+        if v is not None:
+            return validate_phone_format(v)
+        return v
+
+    @field_validator('address')
+    @classmethod
+    def check_address_StudentUpdate(cls, v):
+        if v is not None and len(v) > 500:
+            raise ValueError("Address too long (max 500 characters)")
+        return v
 
 # Attendance Models
 class AttendanceCreate(BaseModel):
@@ -1100,6 +2498,9 @@ class AttendanceCreate(BaseModel):
     status: str
     marked_by: str
     remarks: Optional[str] = None
+
+class AttendanceBulkCreate(BaseModel):
+    attendances: List[AttendanceCreate]
 
 class Attendance(BaseModel):
     id: int
@@ -1117,6 +2518,7 @@ class CoachAttendanceCreate(BaseModel):
     coach_id: int
     date: str
     status: str
+    marked_by: Optional[str] = None
     remarks: Optional[str] = None
 
 class CoachAttendance(BaseModel):
@@ -1124,7 +2526,35 @@ class CoachAttendance(BaseModel):
     coach_id: int
     date: str
     status: str
+    marked_by: Optional[str] = None
     remarks: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+# Coach Salary Models
+class CoachSalaryCreate(BaseModel):
+    coach_id: int
+    amount: float
+    payment_date: str
+    month: str  # "YYYY-MM"
+    remarks: Optional[str] = None
+
+class CoachSalaryUpdate(BaseModel):
+    amount: Optional[float] = None
+    payment_date: Optional[str] = None
+    month: Optional[str] = None
+    remarks: Optional[str] = None
+
+class CoachSalary(BaseModel):
+    id: int
+    coach_id: int
+    coach_name: Optional[str] = None
+    amount: float
+    payment_date: str
+    month: str
+    remarks: Optional[str] = None
+    created_at: Optional[datetime] = None
     
     class Config:
         from_attributes = True
@@ -1138,6 +2568,8 @@ class FeeCreate(BaseModel):
     payee_student_id: Optional[int] = None
     status: Optional[str] = None  # Will be calculated, optional on create
 
+_ALLOWED_PAYMENT_METHODS = {'cash', 'card', 'online', 'razorpay'}
+
 class FeePaymentCreate(BaseModel):
     fee_id: Optional[int] = None  # Optional - provided via path parameter
     amount: float
@@ -1146,6 +2578,13 @@ class FeePaymentCreate(BaseModel):
     payee_name: Optional[str] = None  # For non-student payees
     payment_method: Optional[str] = None
     collected_by: Optional[str] = None
+
+    @field_validator('payment_method')
+    @classmethod
+    def validate_payment_method(cls, v):
+        if v is not None and v.lower() not in _ALLOWED_PAYMENT_METHODS:
+            raise ValueError(f"Invalid payment method '{v}'. Allowed values: {', '.join(sorted(_ALLOWED_PAYMENT_METHODS))}")
+        return v.lower() if v is not None else v
 
 class FeePayment(BaseModel):
     id: int
@@ -1184,7 +2623,6 @@ class FeeUpdate(BaseModel):
     amount: Optional[float] = None
     due_date: Optional[str] = None
     payee_student_id: Optional[int] = None
-    status: Optional[str] = None  # Will be recalculated
 
 # Performance Models
 class PerformanceCreate(BaseModel):
@@ -1214,6 +2652,8 @@ class PerformanceFrontend(BaseModel):
     id: int
     student_id: int
     student_name: Optional[str] = None
+    batch_id: int
+    batch_name: Optional[str] = None
     date: str
     serve: int  # 1-5 rating
     smash: int  # 1-5 rating
@@ -1225,6 +2665,7 @@ class PerformanceFrontend(BaseModel):
 
 class PerformanceFrontendCreate(BaseModel):
     student_id: int
+    batch_id: int
     date: str
     serve: int = 0
     smash: int = 0
@@ -1235,6 +2676,7 @@ class PerformanceFrontendCreate(BaseModel):
 
 class PerformanceFrontendUpdate(BaseModel):
     date: Optional[str] = None
+    batch_id: Optional[int] = None
     serve: Optional[int] = None
     smash: Optional[int] = None
     footwork: Optional[int] = None
@@ -1294,8 +2736,109 @@ class Enquiry(BaseModel):
     class Config:
         from_attributes = True
 
+# Notification Models
+class Notification(BaseModel):
+    id: int
+    user_id: int
+    user_type: str
+    title: str
+    body: str
+    type: str
+    is_read: bool
+    created_at: Optional[str] = None # Return as ISO string
+    data: Optional[Dict[str, Any]] = None
+
+    class Config:
+        from_attributes = True
+
+# ==================== Helper Functions ====================
+
+def _get_notification_prefs(db, user_id: int, user_type: str):
+    """Return NotificationPreferencesDB row, auto-creating default if absent."""
+    prefs = db.query(NotificationPreferencesDB).filter(
+        NotificationPreferencesDB.user_id == user_id,
+        NotificationPreferencesDB.user_type == user_type,
+    ).first()
+    if prefs is None:
+        prefs = NotificationPreferencesDB(user_id=user_id, user_type=user_type)
+        db.add(prefs)
+        db.commit()
+        db.refresh(prefs)
+    return prefs
+
+
+# Maps notification type string → preference column name
+_NOTIF_TYPE_PREF_MAP = {
+    "attendance":   "pref_attendance",
+    "performance":  "pref_performance",
+    "bmi":          "pref_bmi",
+    "announcement": "pref_announcements",
+    "leave_update": "pref_leave_updates",
+    "fee_payment":  "pref_fee_payments",
+    "fee_due":      "pref_fee_due",
+}
+
+
+def create_notification(db, user_id: int, user_type: str, title: str, body: str, type: str = "general", data: Optional[Dict[str, Any]] = None):
+    """
+    Helper to create an in-app notification and send a FCM push.
+    B7: Respects per-user notification preferences — silently skips if disabled.
+    B5: Sends FCM push notification when FCM token available.
+    """
+    try:
+        # ── B7: check user preferences ─────────────────────────────────────
+        pref_attr = _NOTIF_TYPE_PREF_MAP.get(type)
+        if pref_attr is not None:
+            try:
+                prefs = _get_notification_prefs(db, user_id, user_type)
+                if not getattr(prefs, pref_attr, True):
+                    return None  # User has opted out of this notification type
+            except Exception as pref_err:
+                print(f"[Prefs] Could not check preferences: {pref_err}")
+
+        # ── Create in-app notification ──────────────────────────────────────
+        notification = NotificationDB(
+            user_id=user_id,
+            user_type=user_type,
+            title=title,
+            body=body,
+            type=type,
+            data=data,
+            is_read=False,
+        )
+        db.add(notification)
+        db.commit()
+        db.refresh(notification)
+
+        # ── B5: Send FCM push notification ─────────────────────────────────
+        try:
+            fcm_token = None
+            if user_type == "student":
+                user = db.query(StudentDB).filter(StudentDB.id == user_id).first()
+            elif user_type == "coach":
+                user = db.query(CoachDB).filter(CoachDB.id == user_id).first()
+            elif user_type == "owner":
+                user = db.query(OwnerDB).filter(OwnerDB.id == user_id).first()
+            else:
+                user = None
+            if user:
+                fcm_token = getattr(user, "fcm_token", None)
+            if fcm_token:
+                push_data = dict(data or {})
+                push_data["notification_id"] = str(notification.id)
+                push_data["type"] = type
+                send_push_notification(fcm_token, title, body, push_data)
+        except Exception as push_err:
+            print(f"[FCM] Push send error: {push_err}")
+
+        return notification
+    except Exception as e:
+        print(f" Error creating notification: {e}")
+        traceback.print_exc()
+        return None
+
+
 class EnquiryUpdate(BaseModel):
-    status: Optional[str] = None
     followed_up_by: Optional[str] = None
     notes: Optional[str] = None
     assigned_to: Optional[str] = None
@@ -1435,12 +2978,39 @@ class LeaveRequest(BaseModel):
     reviewed_by: Optional[int] = None
     reviewed_at: Optional[str] = None
     review_notes: Optional[str] = None
+    
+    # Modification fields
+    modification_start_date: Optional[str] = None
+    modification_end_date: Optional[str] = None
+    modification_reason: Optional[str] = None
+    modification_status: Optional[str] = None
+
+    # History fields
+    original_start_date: Optional[str] = None
+    original_end_date: Optional[str] = None
+    original_reason: Optional[str] = None
 
     class Config:
         from_attributes = True
 
 class LeaveRequestUpdate(BaseModel):
     status: str  # "approved" or "rejected"
+    review_notes: Optional[str] = None
+
+class LeaveRequestUpdateCoach(BaseModel):
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    leave_type: Optional[str] = None
+    reason: Optional[str] = None
+
+class LeaveRequestModificationCreate(BaseModel):
+    start_date: str
+    end_date: str
+    reason: str
+
+class LeaveRequestModificationReview(BaseModel):
+    action: str  # "approve", "reject_modification", "reject_all"
+    owner_id: int
     review_notes: Optional[str] = None
 
 # Student Registration Request Models
@@ -1455,6 +3025,7 @@ class StudentRegistrationRequestCreate(BaseModel):
     address: Optional[str] = None
     t_shirt_size: Optional[str] = None
     blood_group: Optional[str] = None
+    invite_token: Optional[str] = None  # To link with invitation
 
 class StudentRegistrationRequest(BaseModel):
     id: int
@@ -1473,10 +3044,44 @@ class StudentRegistrationRequest(BaseModel):
     t_shirt_size: Optional[str] = None
     blood_group: Optional[str] = None
     
+    # Invitation info
+    invitation_id: Optional[int] = None
+    invited_by_coach_id: Optional[int] = None
+    invited_by_coach_name: Optional[str] = None  # Computed field for convenience
+    
     class Config:
         from_attributes = True
 
 class StudentRegistrationRequestUpdate(BaseModel):
+    status: str  # "approved" or "rejected"
+    review_notes: Optional[str] = None
+
+# Coach Registration Request Models
+class CoachRegistrationRequestCreate(BaseModel):
+    name: str
+    email: str
+    phone: str
+    password: str
+    specialization: Optional[str] = None
+    experience_years: Optional[int] = None
+
+class CoachRegistrationRequest(BaseModel):
+    id: int
+    name: str
+    email: str
+    phone: str
+    specialization: Optional[str] = None
+    experience_years: Optional[int] = None
+    status: str  # "pending", "approved", "rejected"
+    submitted_at: str
+    reviewed_by: Optional[int] = None
+    reviewed_at: Optional[str] = None
+    review_notes: Optional[str] = None
+    
+    class Config:
+        from_attributes = True
+
+class CoachRegistrationRequestUpdate(BaseModel):
     status: str  # "approved" or "rejected"
     review_notes: Optional[str] = None
 
@@ -1492,10 +3097,51 @@ class AnnouncementCreate(BaseModel):
     title: str
     message: str
     target_audience: str = "all"
-    priority: str = "normal"
+    priority: str = "General"
     created_by: int
     creator_type: str = "coach"  # "coach" or "owner"
     scheduled_at: Optional[str] = None
+
+    @field_validator('title')
+    @classmethod
+    def sanitize_announcement_title(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("Title cannot be empty")
+        if len(v) > 255:
+            raise ValueError("Title too long (max 255 characters)")
+        return sanitize_html(v)
+
+    @field_validator('message')
+    @classmethod
+    def sanitize_announcement_message(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("Message cannot be empty")
+        if len(v) > 5000:
+            raise ValueError("Message too long (max 5000 characters)")
+        return sanitize_html(v)
+
+    @field_validator('target_audience')
+    @classmethod
+    def validate_target_audience(cls, v):
+        if v not in ["all", "students", "coaches"]:
+            raise ValueError('target_audience must be "all", "students", or "coaches"')
+        return v
+
+    @field_validator('creator_type')
+    @classmethod
+    def validate_creator_type(cls, v):
+        if v not in ["coach", "owner"]:
+            raise ValueError('creator_type must be "coach" or "owner"')
+        return v
+
+    @field_validator('priority')
+    @classmethod
+    def validate_priority(cls, v):
+        if v not in ["General", "Important"]:
+            raise ValueError('priority must be "General" or "Important"')
+        return v
 
 class Announcement(BaseModel):
     id: int
@@ -1520,6 +3166,26 @@ class AnnouncementUpdate(BaseModel):
     scheduled_at: Optional[str] = None
     is_sent: Optional[bool] = None
 
+    @field_validator('title')
+    @classmethod
+    def sanitize_ann_update_title(cls, v):
+        if v is not None:
+            v = v.strip()
+            if len(v) > 255:
+                raise ValueError("Title too long (max 255 characters)")
+            return sanitize_html(v)
+        return v
+
+    @field_validator('message')
+    @classmethod
+    def sanitize_ann_update_message(cls, v):
+        if v is not None:
+            v = v.strip()
+            if len(v) > 5000:
+                raise ValueError("Message too long (max 5000 characters)")
+            return sanitize_html(v)
+        return v
+
 # Notification Models
 class NotificationCreate(BaseModel):
     user_id: int
@@ -1528,6 +3194,29 @@ class NotificationCreate(BaseModel):
     body: str
     type: str = "general"
     data: Optional[dict] = None
+
+    @field_validator('title')
+    @classmethod
+    def sanitize_notification_title(cls, v):
+        v = v.strip()
+        if len(v) > 255:
+            raise ValueError("Notification title too long (max 255 characters)")
+        return sanitize_html(v)
+
+    @field_validator('body')
+    @classmethod
+    def sanitize_notification_body(cls, v):
+        v = v.strip()
+        if len(v) > 1000:
+            raise ValueError("Notification body too long (max 1000 characters)")
+        return sanitize_html(v)
+
+    @field_validator('user_type')
+    @classmethod
+    def validate_notification_user_type(cls, v):
+        if v not in ["student", "coach", "owner"]:
+            raise ValueError('user_type must be "student", "coach", or "owner"')
+        return v
 
 class Notification(BaseModel):
     id: int
@@ -1546,6 +3235,30 @@ class Notification(BaseModel):
 class NotificationUpdate(BaseModel):
     is_read: Optional[bool] = None
 
+# B7: Notification Preferences Models
+class NotificationPreferences(BaseModel):
+    user_id: int
+    user_type: str
+    pref_attendance: bool = True
+    pref_performance: bool = True
+    pref_bmi: bool = True
+    pref_announcements: bool = True
+    pref_leave_updates: bool = True
+    pref_fee_payments: bool = True
+    pref_fee_due: bool = True
+
+    class Config:
+        from_attributes = True
+
+class NotificationPreferencesUpdate(BaseModel):
+    pref_attendance: Optional[bool] = None
+    pref_performance: Optional[bool] = None
+    pref_bmi: Optional[bool] = None
+    pref_announcements: Optional[bool] = None
+    pref_leave_updates: Optional[bool] = None
+    pref_fee_payments: Optional[bool] = None
+    pref_fee_due: Optional[bool] = None
+
 # CalendarEvent Models
 class CalendarEventCreate(BaseModel):
     title: str
@@ -1556,6 +3269,9 @@ class CalendarEventCreate(BaseModel):
     created_by: int
     creator_type: str = "coach"  # "coach" or "owner"
     related_leave_request_id: Optional[int] = None  # Link to leave request if this is a leave event
+    related_tournament_id: Optional[int] = None     # Link to tournament
+    related_announcement_id: Optional[int] = None   # Link to announcement
+    related_schedule_id: Optional[int] = None       # Link to schedule
 
 class CalendarEvent(BaseModel):
     id: int
@@ -1567,6 +3283,9 @@ class CalendarEvent(BaseModel):
     created_by: int
     creator_type: str = "coach"  # "coach" or "owner"
     related_leave_request_id: Optional[int] = None
+    related_tournament_id: Optional[int] = None
+    related_announcement_id: Optional[int] = None
+    related_schedule_id: Optional[int] = None
     created_at: str
 
     class Config:
@@ -1581,21 +3300,405 @@ class CalendarEventUpdate(BaseModel):
 
 # ==================== FastAPI App ====================
 
-app = FastAPI(title="Badminton Academy Management System")
+def get_user_id_or_ip(request: Request) -> str:
+    """Returns the user ID if authenticated, else falls back to IP."""
+    try:
+        user = dict(request.state.current_user)
+        return str(user.get("sub", get_remote_address(request)))
+    except Exception:
+        return get_remote_address(request)
 
-# CORS
+redis_url = os.getenv("REDIS_URL", "memory://")
+limiter = Limiter(key_func=lambda request: "academy_global", default_limits=["10000/day", "200/minute"], storage_uri=redis_url, headers_enabled=False)
+
+app = FastAPI(title="Badminton Academy Management System")
+app.state.limiter = limiter
+app.add_middleware(SlowAPIMiddleware)
+
+async def _rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
+    """Return HTTP 429 with a Retry-After header parsed from the limit window."""
+    retry_after = 60  # fallback default
+    match = re.search(r'per\s+(\d+)\s*(second|minute|hour)', str(exc), re.IGNORECASE)
+    if match:
+        amount, unit = int(match.group(1)), match.group(2).lower()
+        retry_after = amount * {"second": 1, "minute": 60, "hour": 3600}[unit]
+    from fastapi.responses import JSONResponse
+    response = JSONResponse(
+        {"error": "Rate limit exceeded. Please try again later."},
+        status_code=429,
+    )
+    response.headers["Retry-After"] = str(retry_after)
+    return response
+
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# ── C8: Redis Cache & Cache Initialization ─────────────────────────────────
+from fastapi_cache import FastAPICache
+from fastapi_cache.backends.redis import RedisBackend
+from fastapi_cache.decorator import cache
+try:
+    from redis import asyncio as aioredis
+    import redis as _redis_sync_module
+    _REDIS_AVAILABLE = True
+except ImportError:
+    _REDIS_AVAILABLE = False
+    print("Warning: redis package not installed.")
+
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+redis_client = None
+# Sync Redis client used for O(1) JWT token blacklist checks in the auth middleware
+_sync_redis_client = None
+
+@app.on_event("startup")
+async def startup():
+    global redis_client, _sync_redis_client
+    if _REDIS_AVAILABLE:
+        try:
+            redis_client = aioredis.from_url(REDIS_URL, encoding="utf-8", decode_responses=True)
+            FastAPICache.init(RedisBackend(redis_client), prefix="shuttler-cache")
+            _sync_redis_client = _redis_sync_module.from_url(REDIS_URL, decode_responses=True)
+            print(f"Connected to Redis for caching at {REDIS_URL}")
+        except Exception as e:
+            print(f"Warning: Failed to connect to Redis: {e}. Caching will fail.")
+
+# Helper for resolving synchronous cache clearance
+def invalidate_cache(namespace: str):
+    """Invalidate redis cache namespace. Useful for sync endpoints."""
+    if not _REDIS_AVAILABLE or not redis_client:
+        return
+    import asyncio
+    try:
+        # FastAPI worker threads don't have an event loop running, so we can run one.
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            import nest_asyncio
+            nest_asyncio.apply()
+            loop.run_until_complete(FastAPICache.clear(namespace=namespace))
+        else:
+            loop.run_until_complete(FastAPICache.clear(namespace=namespace))
+    except Exception as e:
+        try:
+            asyncio.run(FastAPICache.clear(namespace=namespace))
+        except RuntimeError:
+            pass
+
+# CORS Configuration
+
+ALLOWED_ORIGINS_STR = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8001,https://shuttler.app,https://api.shuttler.app")
+ALLOWED_ORIGINS = [origin.strip() for origin in ALLOWED_ORIGINS_STR.split(",") if origin.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
 )
+
+# ==================== HTTPS / HSTS Middleware ====================
+@app.middleware("http")
+async def https_redirect_middleware(request: Request, call_next):
+    # Enforce HTTP -> HTTPS redirect if behind a proxy that forwards HTTP
+    if request.headers.get("x-forwarded-proto") == "http":
+        url = request.url.replace(scheme="https")
+        return RedirectResponse(url, status_code=301)
+        
+    response = await call_next(request)
+    # Enable HSTS header
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    
+    # A9: Security Headers
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    # Content-Security-Policy can be complex to tune for APIs, a basic fallback:
+    response.headers["Content-Security-Policy"] = "default-src 'self'"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    
+    return response
+
+# ==================== JWT Auth Middleware ====================
+# These paths never require a JWT token
+_JWT_PUBLIC_PATHS: set = {
+    "/",
+    "/auth/login",
+    "/auth/forgot-password",
+    "/auth/reset-password",
+    "/auth/refresh",
+    # Legacy login endpoints (to be removed after Flutter migrates to JWT in A2)
+    "/owners/login",
+    "/coaches/login",
+    "/students/login",
+    # Owner self-registration (first-time setup)
+    "/owners/",
+    "/health",
+    "/health/redis",
+}
+
+# Path *prefixes* that are public (checked with str.startswith)
+_JWT_PUBLIC_PREFIXES: tuple = (
+    "/uploads/",          # static file serving
+    "/docs",              # Swagger UI
+    "/redoc",             # ReDoc
+    "/openapi.json",      # OpenAPI schema
+    # Registration / invitation flows (pre-login)
+    "/students/registration-request",
+    "/coaches/registration-request",
+    "/students/check-registration-status/",
+    "/coaches/check-registration-status/",
+    "/coach-invitations/token/",
+    "/invitations/student/",
+    "/invitations/token/",
+    "/student-registration-requests/",
+    "/coach-registration-requests/",
+)
+
+
+@app.middleware("http")
+async def jwt_auth_middleware(request: Request, call_next):
+    """Validate JWT Bearer token for all protected routes.
+    Public paths are whitelisted above. All others require a valid access token.
+    On success the decoded payload is stored in request.state.current_user.
+    """
+    path = request.url.path
+    method = request.method
+
+    # 1. Always allow CORS pre-flight
+    if method == "OPTIONS":
+        return await call_next(request)
+
+    # 2. Allow exact public paths
+    if path in _JWT_PUBLIC_PATHS:
+        # Special-case: POST /owners/ is public (registration); other methods require auth
+        if path == "/owners/" and method != "POST":
+            pass  # fall through to token validation below
+        else:
+            return await call_next(request)
+
+    # 3. Allow public path prefixes
+    if any(path.startswith(prefix) for prefix in _JWT_PUBLIC_PREFIXES):
+        return await call_next(request)
+
+    # 4. Validate Bearer token
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Authentication required. Please log in."},
+        )
+
+    token = auth_header[len("Bearer "):]
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Invalid or expired token. Please log in again."},
+        )
+
+    if payload.get("type") != "access":
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "Invalid token type: expected access token."},
+        )
+
+    # 5. Check per-token revocation (explicit logout)
+    jti = payload.get("jti")
+    user_id = payload.get("sub")
+    user_type = payload.get("user_type")
+    iat = payload.get("iat")
+
+    # ==================== IDOR ENFORCEMENT ====================
+    # Globally protect resources based on user_type and IDs in path
+    import json
+    import re
+    
+    # DO NOT EXHAUST REQUEST BODY STREAM: we avoid reading body here to not break FastAPI request parsing
+    
+    def check_student_access(s_id):
+        # Student can only access their own data
+        if user_type == 'student' and str(user_id) != str(s_id):
+            return False
+            
+        # Coach can only access students in their batches
+        if user_type == 'coach':
+            db = SessionLocal()
+            try:
+                # Find batches the student is in
+                batches = db.query(BatchStudentDB).filter(BatchStudentDB.student_id == int(s_id)).all()
+                if not batches:
+                    return False
+                batch_ids = [b.batch_id for b in batches]
+                
+                # Check if coach is assigned to any of these batches
+                coach_batch = db.query(BatchCoachDB).filter(
+                    BatchCoachDB.coach_id == int(user_id), 
+                    BatchCoachDB.batch_id.in_(batch_ids)
+                ).first()
+                
+                legacy = db.query(BatchDB).filter(
+                    BatchDB.id.in_(batch_ids), 
+                    BatchDB.assigned_coach_id == int(user_id)
+                ).first()
+                
+                if not coach_batch and not legacy:
+                    return False
+            except Exception:
+                return False
+            finally:
+                db.close()
+        return True
+
+    def check_batch_access(b_id):
+        if user_type == 'student':
+            db = SessionLocal()
+            try:
+                enrolled = db.query(BatchStudentDB).filter(
+                    BatchStudentDB.batch_id == int(b_id), 
+                    BatchStudentDB.student_id == int(user_id)
+                ).first()
+                if not enrolled:
+                    return False
+            except Exception:
+                return False
+            finally:
+                db.close()
+        elif user_type == 'coach':
+            db = SessionLocal()
+            try:
+                coach_batch = db.query(BatchCoachDB).filter(
+                    BatchCoachDB.coach_id == int(user_id), 
+                    BatchCoachDB.batch_id == int(b_id)
+                ).first()
+                
+                legacy = db.query(BatchDB).filter(
+                    BatchDB.id == int(b_id), 
+                    BatchDB.assigned_coach_id == int(user_id)
+                ).first()
+                
+                if not coach_batch and not legacy:
+                    return False
+            except Exception:
+                return False
+            finally:
+                db.close()
+        return True
+
+    if user_type != 'owner':
+        # Check student ID matching in path (e.g. /students/5, /attendance/student/5)
+        # Be careful not to match /students/ and then an action without ID
+        student_match = re.search(r'/(?:student|students)/(\d+)(?:/|$)', path)
+        if student_match:
+            s_id = student_match.group(1)
+            if not check_student_access(s_id):
+                return JSONResponse(status_code=403, content={"detail": "Access denied to this student resource"})
+                
+        # Check batch ID matching in path (e.g. /batches/5, /attendance/batch/5)
+        batch_match = re.search(r'/(?:batch|batches)/(\d+)(?:/|$)', path)
+        if batch_match:
+            b_id = batch_match.group(1)
+            if not check_batch_access(b_id):
+                return JSONResponse(status_code=403, content={"detail": "Access denied to this batch resource"})
+                
+        # Check coach ID matching in path
+        coach_match = re.search(r'/(?:coach|coaches)/(\d+)(?:/|$)', path)
+        # Prevent coach from accessing other coach's data, unless allowed by some specific rule.
+        # But students can access coach data to view profile.
+        if coach_match and user_type == 'coach':
+            c_id = coach_match.group(1)
+            if str(user_id) != str(c_id):
+                return JSONResponse(status_code=403, content={"detail": "Access denied to other coach data"})
+
+    # ==========================================================
+
+
+    db = SessionLocal()
+    try:
+        if jti and db.query(RevokedTokenDB).filter(RevokedTokenDB.jti == jti).first():
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Token has been revoked. Please log in again."},
+            )
+
+        # 6. Check per-user invalidation timestamp (password change)
+        if user_id and user_type and iat:
+            _user = None
+            if user_type == "owner":
+                _user = db.query(OwnerDB).filter(OwnerDB.id == int(user_id)).first()
+            elif user_type == "coach":
+                _user = db.query(CoachDB).filter(CoachDB.id == int(user_id)).first()
+            elif user_type == "student":
+                _user = db.query(StudentDB).filter(StudentDB.id == int(user_id)).first()
+
+            if _user and _user.jwt_invalidated_at is not None:
+                from datetime import timezone as _tz
+                inv_ts = _user.jwt_invalidated_at.replace(tzinfo=_tz.utc).timestamp()
+                if iat < inv_ts:
+                    return JSONResponse(
+                        status_code=401,
+                        content={"detail": "Session expired due to password change. Please log in again."},
+                    )
+    finally:
+        db.close()
+
+    # 7. Attach user info to request state for downstream use
+    request.state.current_user = payload
+    return await call_next(request)
 
 # Create uploads directory for image storage
 UPLOAD_DIR = Path("./uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
-print(f"✅ Upload directory ready at: {UPLOAD_DIR.absolute()}")
+print(f" Upload directory ready at: {UPLOAD_DIR.absolute()}")
+
+# A14: Restrict UPLOAD_DIR permissions — owner rw+x, group r+x, others nothing.
+# Prevents other OS users from writing or listing the directory.
+try:
+    UPLOAD_DIR.chmod(0o750)
+except (AttributeError, NotImplementedError, OSError):
+    pass  # Windows does not support POSIX chmod — safe to skip
+
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+# ── A14: Safe upload path resolution ─────────────────────────────────────────
+def resolve_safe_upload_path(filename: str) -> Path:
+    """
+    Safely resolve a filename within UPLOAD_DIR.
+    Prevents path traversal attacks (e.g. '../../etc/passwd', '../secrets').
+    - Rejects filenames containing '..', '/', or '\\'
+    - Resolves the absolute path and confirms it is inside UPLOAD_DIR
+    Raises HTTP 400 if the path would escape the upload directory.
+    """
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    resolved = (UPLOAD_DIR / filename).resolve()
+    try:
+        resolved.relative_to(UPLOAD_DIR.resolve())
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+    return resolved
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── A12: File Upload Security ─────────────────────────────────────────────────
+IMAGE_MAX_SIZE_BYTES = 5 * 1024 * 1024    # 5 MB — enforced on all image uploads
+VIDEO_MAX_SIZE_BYTES = 500 * 1024 * 1024  # 500 MB — enforced on video uploads
+
+def validate_image_magic_bytes(header: bytes) -> str:
+    """
+    Inspect magic bytes to confirm image type. Returns a safe extension string
+    ('jpg', 'png', 'webp'). Raises HTTP 400 for any other file type.
+    Do NOT rely on file.content_type or filename extension — both are attacker-controlled.
+    """
+    if header[:3] == b'\xff\xd8\xff':
+        return 'jpg'
+    if header[:8] == b'\x89PNG\r\n\x1a\n':
+        return 'png'
+    if header[:4] == b'RIFF' and len(header) >= 12 and header[8:12] == b'WEBP':
+        return 'webp'
+    raise HTTPException(
+        status_code=400,
+        detail="Invalid file type. Only JPEG, PNG, and WebP images are allowed."
+    )
+# ─────────────────────────────────────────────────────────────────────────────
 
 def get_db():
     db = SessionLocal()
@@ -1606,13 +3709,146 @@ def get_db():
 
 # ==================== Routes ====================
 
-@app.get("/")
+@app.get("/", dependencies=[Depends(require_owner)])
 def read_root():
     return {"message": "Badminton Academy Management System API", "version": "2.0"}
 
+# Helper for range-based video streaming
+def get_video_range_chunk(file_path: Path, start: int, end: int, chunk_size: int = 256*1024):
+    """Generator that yields specific byte range of a file"""
+    try:
+        with open(file_path, "rb") as f:
+            f.seek(start)
+            remaining = (end - start) + 1
+            while remaining > 0:
+                to_read = min(chunk_size, remaining)
+                data = f.read(to_read)
+                if not data:
+                    break
+                yield data
+                remaining -= len(data)
+    except Exception as e:
+        print(f"Streaming error for {file_path}: {e}")
+
+@app.options("/video-stream/{filename}")
+async def video_stream_options():
+    return JSONResponse(
+        content="OK",
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "Range, Content-Type",
+            "Access-Control-Max-Age": "3600",
+        }
+    )
+
+@app.get("/video-stream/{filename}", dependencies=[Depends(require_owner)])
+async def stream_video(filename: str, request: Request):
+    file_path = resolve_safe_upload_path(filename)  # A14: path traversal protection
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Video not found")
+
+    file_size = file_path.stat().st_size
+    range_header = request.headers.get("range")
+    user_agent = request.headers.get("user-agent", "Unknown")
+    
+    # Extract file extension and determine content type
+    content_type, _ = mimetypes.guess_type(str(file_path))
+    content_type = content_type or "video/mp4"
+
+    # Common CORS and Range headers
+    common_headers = {
+        "Accept-Ranges": "bytes",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Expose-Headers": "Content-Range, Content-Length, Accept-Ranges",
+    }
+    
+    # Default to 200 OK if no range requested
+    if not range_header or not range_header.startswith("bytes="):
+        print(f"Full Video Request: {filename} | UA: {user_agent}")
+        return FileResponse(
+            file_path,
+            headers={**common_headers, "Content-Length": str(file_size)},
+            media_type=content_type
+        )
+
+    # Handle Range Request
+    try:
+        range_value = range_header.replace("bytes=", "")
+        start_str, end_str = range_value.split("-") if "-" in range_value else (range_value, "")
+        
+        start = int(start_str) if start_str else 0
+        end = int(end_str) if end_str else file_size - 1
+        
+        # Clamp values
+        start = max(0, start)
+        end = min(end, file_size - 1)
+        
+        if start > end:
+            raise HTTPException(status_code=416, detail="Requested range not satisfiable")
+            
+        content_length = (end - start) + 1
+        
+        print(f"Range Request: {filename} | {start}-{end}/{file_size} | UA: {user_agent}")
+        
+        return StreamingResponse(
+            get_video_range_chunk(file_path, start, end),
+            status_code=206,
+            headers={
+                **common_headers,
+                "Content-Range": f"bytes {start}-{end}/{file_size}",
+                "Content-Length": str(content_length),
+                "Content-Type": content_type,
+            },
+            media_type=content_type
+        )
+    except Exception as e:
+        print(f"Range handling error: {e}")
+        return FileResponse(
+            file_path,
+            headers={**common_headers, "Content-Length": str(file_size)},
+            media_type=content_type
+        )
+
+@app.post("/upload", dependencies=[Depends(require_owner)])
+async def upload_file(file: UploadFile = File(...)):
+    try:
+        # A12: Enforce 5 MB size limit — check before reading content
+        file.file.seek(0, 2)
+        file_size = file.file.tell()
+        file.file.seek(0)
+        if file_size > IMAGE_MAX_SIZE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Maximum allowed size is {IMAGE_MAX_SIZE_BYTES // (1024 * 1024)} MB."
+            )
+
+        # A12: Validate MIME type via magic bytes — do NOT trust file.content_type or filename extension
+        header = await file.read(12)
+        await file.seek(0)
+        safe_ext = validate_image_magic_bytes(header)  # raises HTTP 400 for non-image types
+
+        # A12: Server-generated UUID filename; original filename is discarded entirely
+        filename = f"{uuid.uuid4()}.{safe_ext}"
+        file_path = UPLOAD_DIR / filename
+
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        # A14: strip execute bits — uploaded files must never be executable
+        try:
+            os.chmod(file_path, 0o644)
+        except (AttributeError, NotImplementedError, OSError):
+            pass
+
+        return {"url": f"/uploads/{filename}"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ==================== Coach Routes ====================
 
-@app.post("/coaches/", response_model=Coach)
+@app.post("/coaches/", response_model=Coach, dependencies=[Depends(require_owner)])
 def create_coach(coach: CoachCreate):
     """Create a new coach account - saves to coaches table only"""
     db = SessionLocal()
@@ -1641,12 +3877,39 @@ def create_coach(coach: CoachCreate):
         db.commit()
         db.refresh(db_coach)
         
+        # Convert to Pydantic model before closing session
+        coach_response = Coach.model_validate(db_coach)
+
         # Verify it was saved to coaches table by querying it back
         verify_coach = db.query(CoachDB).filter(CoachDB.id == db_coach.id).first()
         if not verify_coach:
             raise HTTPException(status_code=500, detail="Error: Coach was not saved to coaches table")
-        
-        return db_coach
+
+        # B11: Send welcome email to new coach (non-blocking)
+        try:
+            welcome_html = f"""
+<html><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;">
+<div style="max-width:480px;margin:auto;background:#fff;border-radius:8px;padding:32px;">
+  <h2 style="color:#1a1a2e;">Welcome to Shuttler, {db_coach.name}!</h2>
+  <p>Your coach account has been created. Here are your login details:</p>
+  <ul style="line-height:1.8;">
+    <li><strong>Email:</strong> {db_coach.email}</li>
+    <li><strong>Role:</strong> Coach</li>
+  </ul>
+  <p>Download the Shuttler app and login with your email and the password provided by your academy admin.</p>
+  <p style="color:#888;font-size:13px;">If you have any questions, contact your academy admin.</p>
+</div></body></html>"""
+            send_email(
+                to_email=db_coach.email,
+                subject="Welcome to Shuttler — Coach Account Created",
+                html_content=welcome_html,
+                plain_content=f"Welcome to Shuttler, {db_coach.name}! Your coach account has been created. Login with: {db_coach.email}",
+            )
+        except Exception as _ee:
+            print(f"[Email] Coach welcome email error: {_ee}")
+
+        invalidate_cache("coaches")
+        return coach_response
     except IntegrityError as e:
         db.rollback()
         error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
@@ -1659,28 +3922,29 @@ def create_coach(coach: CoachCreate):
     finally:
         db.close()
 
-@app.get("/coaches/", response_model=List[Coach])
+@app.get("/coaches/", response_model=List[Coach], dependencies=[Depends(require_student)])
+@cache(namespace="coaches", expire=300)
 def get_coaches():
     db = SessionLocal()
     try:
         # Get all coaches (owners are in separate table)
         coaches = db.query(CoachDB).all()
-        return coaches
+        return [Coach.model_validate(c) for c in coaches]
     finally:
         db.close()
 
-@app.get("/coaches/{coach_id}", response_model=Coach)
+@app.get("/coaches/{coach_id}", response_model=Coach, dependencies=[Depends(require_student)])
 def get_coach(coach_id: int):
     db = SessionLocal()
     try:
         coach = db.query(CoachDB).filter(CoachDB.id == coach_id).first()
         if not coach:
             raise HTTPException(status_code=404, detail="Coach not found")
-        return coach
+        return Coach.model_validate(coach)
     finally:
         db.close()
 
-@app.put("/coaches/{coach_id}", response_model=Coach)
+@app.put("/coaches/{coach_id}", response_model=Coach, dependencies=[Depends(require_owner)])
 def update_coach(coach_id: int, coach_update: CoachUpdate):
     db = SessionLocal()
     try:
@@ -1694,11 +3958,12 @@ def update_coach(coach_id: int, coach_update: CoachUpdate):
         
         db.commit()
         db.refresh(coach)
-        return coach
+        invalidate_cache("coaches")
+        return Coach.model_validate(coach)
     finally:
         db.close()
 
-@app.delete("/coaches/{coach_id}")
+@app.delete("/coaches/{coach_id}", dependencies=[Depends(require_owner)])
 def delete_coach(coach_id: int):
     db = SessionLocal()
     try:
@@ -1707,12 +3972,195 @@ def delete_coach(coach_id: int):
             raise HTTPException(status_code=404, detail="Coach not found")
         db.delete(coach)
         db.commit()
+        invalidate_cache("coaches")
         return {"message": "Coach deleted"}
     finally:
         db.close()
 
+@app.post("/auth/login")
+@limiter.limit("20/15minutes")
+def unified_login(request: Request, login_data: UnifiedLoginRequest, db: Session = Depends(get_db)):
+    """Unified login. Returns JWT access + refresh tokens plus user data.
+
+    Response shape:
+        {success, userType, access_token, refresh_token, token_type, user}
+    """
+    try:
+        # ── helper to build token pair ────────────────────────────────────
+        def _make_tokens(user_id: int, user_type: str, email: str, role: str):
+            payload = {"sub": str(user_id), "user_type": user_type, "email": email, "role": role}
+            access_jti = str(uuid.uuid4())
+            refresh_jti = str(uuid.uuid4())
+            access_token = create_access_token(payload, jti=access_jti)
+            refresh_token = create_refresh_token(payload, jti=refresh_jti)
+            
+            # Record active session
+            expires_at = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+            client_ip = request.client.host if request and request.client else None
+            user_agent = request.headers.get("user-agent", None) if request else None
+            
+            new_session = ActiveSessionDB(
+                user_id=user_id,
+                user_type=user_type,
+                jti=access_jti,
+                refresh_jti=refresh_jti,
+                ip_address=client_ip,
+                user_agent=user_agent,
+                expires_at=expires_at
+            )
+            db.add(new_session)
+            db.commit()
+            
+            return access_token, refresh_token
+
+        # 1. Try OwnerDB
+        owner = db.query(OwnerDB).filter(OwnerDB.email == login_data.email).first()
+        if owner:
+            check_account_lock(owner)
+            # Verify password
+            password_valid = False
+            if owner.password.startswith('$2b$') or owner.password.startswith('$2a$'):
+                password_valid = verify_password(login_data.password, owner.password)
+            else:
+                # Plain text password (legacy), check directly and upgrade to hash
+                password_valid = (owner.password == login_data.password)
+                if password_valid:
+                    owner.password = hash_password(login_data.password)
+                    db.commit()
+
+            if password_valid:
+                if owner.status == "inactive":
+                    return {"success": False, "message": "Your account has been deactivated."}
+                handle_successful_login(db, owner, "owner", request.client.host if request.client else None, request.headers.get("user-agent"))
+                access_token, refresh_token = _make_tokens(owner.id, "owner", owner.email, owner.role or "owner")
+                return {
+                    "success": True,
+                    "userType": "owner",
+                    "access_token": access_token,
+                    "refresh_token": refresh_token,
+                    "token_type": "bearer",
+                    "user": {
+                        "id": owner.id,
+                        "name": owner.name,
+                        "email": owner.email,
+                        "phone": owner.phone,
+                        "role": owner.role,
+                        "must_change_password": owner.must_change_password,
+                        "profile_photo": owner.profile_photo,
+                        "academy_name": owner.academy_name,
+                        "academy_address": owner.academy_address,
+                        "academy_contact": owner.academy_contact,
+                        "academy_email": owner.academy_email,
+                    },
+                }
+            else:
+                handle_failed_login(db, owner, "owner", request.client.host if request.client else None, request.headers.get("user-agent"))
+
+        # 2. Try CoachDB
+        coach = db.query(CoachDB).filter(CoachDB.email == login_data.email).first()
+        if coach:
+            check_account_lock(coach)
+            # Verify password
+            password_valid = False
+            if coach.password.startswith('$2b$') or coach.password.startswith('$2a$'):
+                password_valid = verify_password(login_data.password, coach.password)
+            else:
+                # Plain text password (legacy), check directly and upgrade to hash
+                password_valid = (coach.password == login_data.password)
+                if password_valid:
+                    coach.password = hash_password(login_data.password)
+                    db.commit()
+
+            if password_valid:
+                if coach.status == "inactive":
+                    return {"success": False, "message": "Your account has been deactivated."}
+                handle_successful_login(db, coach, "coach", request.client.host if request.client else None, request.headers.get("user-agent"))
+                access_token, refresh_token = _make_tokens(coach.id, "coach", coach.email, "coach")
+                return {
+                    "success": True,
+                    "userType": "coach",
+                    "access_token": access_token,
+                    "refresh_token": refresh_token,
+                    "token_type": "bearer",
+                    "user": {
+                        "id": coach.id,
+                        "name": coach.name,
+                        "email": coach.email,
+                        "phone": coach.phone,
+                        "specialization": coach.specialization,
+                        "experience_years": coach.experience_years,
+                        "status": coach.status,
+                        "profile_photo": coach.profile_photo,
+                    },
+                }
+            else:
+                handle_failed_login(db, coach, "coach", request.client.host if request.client else None, request.headers.get("user-agent"))
+
+        # 3. Try StudentDB
+        student = db.query(StudentDB).filter(StudentDB.email == login_data.email).first()
+        if student:
+            check_account_lock(student)
+            # Verify password
+            password_valid = False
+            if student.password.startswith('$2b$') or student.password.startswith('$2a$'):
+                password_valid = verify_password(login_data.password, student.password)
+            else:
+                # Plain text password (legacy), check directly and upgrade to hash
+                password_valid = (student.password == login_data.password)
+                if password_valid:
+                    student.password = hash_password(login_data.password)
+                    db.commit()
+
+            if password_valid:
+                # B11: Check if profile is complete (required for students)
+                required_profile_fields = {
+                    'guardian_name': student.guardian_name,
+                    'guardian_phone': student.guardian_phone,
+                    'date_of_birth': student.date_of_birth,
+                    'address': student.address,
+                    't_shirt_size': student.t_shirt_size,
+                }
+                profile_complete = all(v is not None and str(v).strip() != '' for v in required_profile_fields.values())
+
+                if student.status == "inactive":
+                    return {
+                        "success": False,
+                        "message": "Your account is currently inactive.",
+                        "account_inactive": True,
+                        "rejoin_request_pending": student.rejoin_request_pending,
+                        "student_id": student.id,
+                    }
+
+                handle_successful_login(db, student, "student", request.client.host if request.client else None, request.headers.get("user-agent"))
+                access_token, refresh_token = _make_tokens(student.id, "student", student.email, "student")
+                return {
+                    "success": True,
+                    "userType": "student",
+                    "profile_complete": profile_complete,
+                    "access_token": access_token,
+                    "refresh_token": refresh_token,
+                    "token_type": "bearer",
+                    "user": {
+                        "id": student.id,
+                        "name": student.name,
+                        "email": student.email,
+                        "phone": student.phone,
+                        "status": student.status,
+                        "profile_photo": student.profile_photo,
+                    },
+                }
+            else:
+                handle_failed_login(db, student, "student", request.client.host if request.client else None, request.headers.get("user-agent"))
+
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/coaches/login")
-def login_coach(login_data: CoachLogin):
+@limiter.limit("5/15minutes")
+def login_coach(request: Request, login_data: CoachLogin):
     """Login endpoint for coaches only - owners should use /owners/login"""
     db = SessionLocal()
     try:
@@ -1771,42 +4219,83 @@ def login_coach(login_data: CoachLogin):
 password_reset_tokens = {}
 
 @app.post("/auth/forgot-password")
-def forgot_password(request: ForgotPasswordRequest):
+@limiter.limit("3/hour")
+def forgot_password(request: Request, rq: ForgotPasswordRequest):
+    # To avoid changing the rest of the function for rq variable:
+    request_data = rq
     """Request password reset - generates a reset token"""
     db = SessionLocal()
     try:
-        # Find user by email and type
-        if request.user_type == "coach":
-            user = db.query(CoachDB).filter(CoachDB.email == request.email).first()
-        elif request.user_type == "owner":
-            user = db.query(OwnerDB).filter(OwnerDB.email == request.email).first()
-        else:
-            user = db.query(StudentDB).filter(StudentDB.email == request.email).first()
+        # Find user by email across all tables to determine user_type
+        user = None
+        user_type = request.user_type # Use provided as hint
+
+        # Try provided type first
+        if user_type == "coach":
+            user = db.query(CoachDB).filter(CoachDB.email == request_data.email).first()
+        elif user_type == "owner":
+            user = db.query(OwnerDB).filter(OwnerDB.email == request_data.email).first()
+        elif user_type == "student":
+            user = db.query(StudentDB).filter(StudentDB.email == request_data.email).first()
+        
+        # If not found, search all
+        if not user:
+            user = db.query(OwnerDB).filter(OwnerDB.email == request_data.email).first()
+            if user: user_type = "owner"
+            else:
+                user = db.query(CoachDB).filter(CoachDB.email == request_data.email).first()
+                if user: user_type = "coach"
+                else:
+                    user = db.query(StudentDB).filter(StudentDB.email == request_data.email).first()
+                    if user: user_type = "student"
         
         if not user:
-            # Don't reveal if email exists for security
-            return {
-                "success": True,
-                "message": "If an account exists with this email, a password reset link has been sent."
-            }
+            return {"success": True, "message": "If your email is registered, you will receive a password reset token."}
         
+        import hashlib
         # Generate secure reset token
         reset_token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(reset_token.encode()).hexdigest()
         
-        # Store token with expiration (1 hour)
-        password_reset_tokens[reset_token] = {
-            "email": request.email,
-            "user_type": request.user_type,
-            "expires_at": datetime.now() + timedelta(hours=1)
-        }
+        # Store token with expiration (15 mins)
+        new_token = PasswordResetTokenDB(
+            token_hash=token_hash,
+            email=request_data.email,
+            user_type=user_type,
+            expires_at=datetime.now() + timedelta(minutes=15)
+        )
+        db.add(new_token)
+        db.commit()
         
-        # In production, send email with reset link
-        # For now, return token (in production, don't return token, send via email)
+        # B11: Send password reset email (graceful no-op if SendGrid not configured)
+        try:
+            app_name = "Shuttler"
+            reset_html = f"""
+<html><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;">
+<div style="max-width:480px;margin:auto;background:#fff;border-radius:8px;padding:32px;">
+  <h2 style="color:#1a1a2e;">Password Reset Request</h2>
+  <p>You requested a password reset for your <strong>{app_name}</strong> account.</p>
+  <p>Use the token below to reset your password. It expires in <strong>15 minutes</strong>.</p>
+  <div style="background:#f0f0f0;border-radius:6px;padding:16px;text-align:center;margin:24px 0;">
+    <span style="font-size:20px;font-weight:bold;letter-spacing:2px;color:#1a1a2e;">{reset_token}</span>
+  </div>
+  <p style="color:#888;font-size:13px;">Enter this token in the app's "Reset Password" screen along with your new password.</p>
+  <p style="color:#888;font-size:13px;">If you did not request this, ignore this email — your account is safe.</p>
+</div></body></html>"""
+            send_email(
+                to_email=request_data.email,
+                subject=f"{app_name} — Password Reset Token",
+                html_content=reset_html,
+                plain_content=f"Your {app_name} password reset token: {reset_token}\nExpires in 15 minutes.",
+            )
+        except Exception as _ee:
+            print(f"[Email] Password reset email error: {_ee}")
+
+        # Prevent account enumeration: return uniform message whether email was found or not
         return {
             "success": True,
-            "message": "Password reset token generated. Use this token to reset your password.",
-            "reset_token": reset_token,  # Remove this in production, send via email instead
-            "expires_in": 3600  # seconds
+            "message": "If your email is registered, you will receive a password reset token.",
+            "expires_in": 900
         }
     finally:
         db.close()
@@ -1816,34 +4305,30 @@ def reset_password(request: ResetPasswordRequest):
     """Reset password using reset token"""
     db = SessionLocal()
     try:
-        # Validate token
-        if request.reset_token not in password_reset_tokens:
-            return {
-                "success": False,
-                "message": "Invalid or expired reset token"
-            }
+        import hashlib
+        token_hash = hashlib.sha256(request.reset_token.encode()).hexdigest()
         
-        token_data = password_reset_tokens[request.reset_token]
+        # Validate token
+        token_entry = db.query(PasswordResetTokenDB).filter(PasswordResetTokenDB.token_hash == token_hash).first()
+        if not token_entry:
+            return {"success": False, "message": "Invalid or expired reset token"}
         
         # Check expiration
-        if datetime.now() > token_data["expires_at"]:
-            del password_reset_tokens[request.reset_token]
-            return {
-                "success": False,
-                "message": "Reset token has expired. Please request a new one."
-            }
+        if datetime.now() > token_entry.expires_at.replace(tzinfo=None):
+            db.delete(token_entry)
+            db.commit()
+            return {"success": False, "message": "Reset token has expired. Please request a new one."}
         
         # Verify email matches
-        if token_data["email"] != request.email or token_data["user_type"] != request.user_type:
-            return {
-                "success": False,
-                "message": "Invalid reset token"
-            }
+        if token_entry.email != request.email or token_entry.user_type != request.user_type:
+            return {"success": False, "message": "Invalid reset token"}
+
         
-        # Find user
-        if request.user_type == "coach":
+        # Find user using the user_type from token
+        target_user_type = token_entry.user_type
+        if target_user_type == "coach":
             user = db.query(CoachDB).filter(CoachDB.email == request.email).first()
-        elif request.user_type == "owner":
+        elif target_user_type == "owner":
             user = db.query(OwnerDB).filter(OwnerDB.email == request.email).first()
         else:
             user = db.query(StudentDB).filter(StudentDB.email == request.email).first()
@@ -1859,7 +4344,8 @@ def reset_password(request: ResetPasswordRequest):
         db.commit()
         
         # Remove used token
-        del password_reset_tokens[request.reset_token]
+        db.delete(token_entry)
+        db.commit()
         
         return {
             "success": True,
@@ -1868,9 +4354,468 @@ def reset_password(request: ResetPasswordRequest):
     finally:
         db.close()
 
+@app.post("/auth/refresh")
+def refresh_access_token(request: Request, body: TokenRefreshRequest):
+    """Exchange a valid refresh token for a new access + refresh token pair.
+
+    The old refresh token is revoked after a successful rotation.
+    """
+    payload = decode_token(body.refresh_token)
+
+    if payload.get("type") != "refresh":
+        raise HTTPException(status_code=401, detail="Invalid token type: expected refresh token")
+
+    # Check if refresh token has been explicitly revoked
+    jti = payload.get("jti")
+    user_id = payload.get("sub")
+    user_type = payload.get("user_type")
+    iat = payload.get("iat")
+
+    # ==================== IDOR ENFORCEMENT ====================
+    # Globally protect resources based on user_type and IDs in path
+    import json
+    import re
+    
+    # DO NOT EXHAUST REQUEST BODY STREAM: we avoid reading body here to not break FastAPI request parsing
+    
+    def check_student_access(s_id):
+        # Student can only access their own data
+        if user_type == 'student' and str(user_id) != str(s_id):
+            return False
+            
+        # Coach can only access students in their batches
+        if user_type == 'coach':
+            db = SessionLocal()
+            try:
+                # Find batches the student is in
+                batches = db.query(BatchStudentDB).filter(BatchStudentDB.student_id == int(s_id)).all()
+                if not batches:
+                    return False
+                batch_ids = [b.batch_id for b in batches]
+                
+                # Check if coach is assigned to any of these batches
+                coach_batch = db.query(BatchCoachDB).filter(
+                    BatchCoachDB.coach_id == int(user_id), 
+                    BatchCoachDB.batch_id.in_(batch_ids)
+                ).first()
+                
+                legacy = db.query(BatchDB).filter(
+                    BatchDB.id.in_(batch_ids), 
+                    BatchDB.assigned_coach_id == int(user_id)
+                ).first()
+                
+                if not coach_batch and not legacy:
+                    return False
+            except Exception:
+                return False
+            finally:
+                db.close()
+        return True
+
+    def check_batch_access(b_id):
+        if user_type == 'student':
+            db = SessionLocal()
+            try:
+                enrolled = db.query(BatchStudentDB).filter(
+                    BatchStudentDB.batch_id == int(b_id), 
+                    BatchStudentDB.student_id == int(user_id)
+                ).first()
+                if not enrolled:
+                    return False
+            except Exception:
+                return False
+            finally:
+                db.close()
+        elif user_type == 'coach':
+            db = SessionLocal()
+            try:
+                coach_batch = db.query(BatchCoachDB).filter(
+                    BatchCoachDB.coach_id == int(user_id), 
+                    BatchCoachDB.batch_id == int(b_id)
+                ).first()
+                
+                legacy = db.query(BatchDB).filter(
+                    BatchDB.id == int(b_id), 
+                    BatchDB.assigned_coach_id == int(user_id)
+                ).first()
+                
+                if not coach_batch and not legacy:
+                    return False
+            except Exception:
+                return False
+            finally:
+                db.close()
+        return True
+
+    if user_type != 'owner':
+        # Check student ID matching in path (e.g. /students/5, /attendance/student/5)
+        # Be careful not to match /students/ and then an action without ID
+        student_match = re.search(r'/(?:student|students)/(\d+)(?:/|$)', path)
+        if student_match:
+            s_id = student_match.group(1)
+            if not check_student_access(s_id):
+                return JSONResponse(status_code=403, content={"detail": "Access denied to this student resource"})
+                
+        # Check batch ID matching in path (e.g. /batches/5, /attendance/batch/5)
+        batch_match = re.search(r'/(?:batch|batches)/(\d+)(?:/|$)', path)
+        if batch_match:
+            b_id = batch_match.group(1)
+            if not check_batch_access(b_id):
+                return JSONResponse(status_code=403, content={"detail": "Access denied to this batch resource"})
+                
+        # Check coach ID matching in path
+        coach_match = re.search(r'/(?:coach|coaches)/(\d+)(?:/|$)', path)
+        # Prevent coach from accessing other coach's data, unless allowed by some specific rule.
+        # But students can access coach data to view profile.
+        if coach_match and user_type == 'coach':
+            c_id = coach_match.group(1)
+            if str(user_id) != str(c_id):
+                return JSONResponse(status_code=403, content={"detail": "Access denied to other coach data"})
+
+    # ==========================================================
+
+    exp = payload.get("exp")
+
+    db = SessionLocal()
+    try:
+        if jti and db.query(RevokedTokenDB).filter(RevokedTokenDB.jti == jti).first():
+            raise HTTPException(status_code=401, detail="Refresh token has been revoked. Please log in again.")
+
+        # Check per-user invalidation (password change)
+        if user_id and user_type and iat:
+            _user = None
+            if user_type == "owner":
+                _user = db.query(OwnerDB).filter(OwnerDB.id == int(user_id)).first()
+            elif user_type == "coach":
+                _user = db.query(CoachDB).filter(CoachDB.id == int(user_id)).first()
+            elif user_type == "student":
+                _user = db.query(StudentDB).filter(StudentDB.id == int(user_id)).first()
+
+            if _user and _user.jwt_invalidated_at is not None:
+                from datetime import timezone as _tz
+                inv_ts = _user.jwt_invalidated_at.replace(tzinfo=_tz.utc).timestamp()
+                if iat < inv_ts:
+                    raise HTTPException(
+                        status_code=401,
+                        detail="Session expired due to password change. Please log in again."
+                    )
+
+        # Revoke the consumed refresh token (token rotation)
+        if jti and exp:
+            from datetime import timezone as _tz
+            expires_dt = datetime.fromtimestamp(exp, tz=_tz.utc)
+            db.add(RevokedTokenDB(
+                jti=jti,
+                user_id=int(user_id),
+                user_type=user_type,
+                expires_at=expires_dt,
+            ))
+            db.commit()
+
+    finally:
+        db.close()
+
+    # Issue new token pair
+    token_data = {
+        "sub": user_id,
+        "user_type": user_type,
+        "email": payload.get("email", ""),
+        "role": payload.get("role", user_type),
+    }
+    new_access_jti = str(uuid.uuid4())
+    new_refresh_jti = str(uuid.uuid4())
+    new_access = create_access_token(token_data, jti=new_access_jti)
+    new_refresh = create_refresh_token(token_data, jti=new_refresh_jti)
+    
+    db_sess = SessionLocal()
+    try:
+        expires_at = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        client_ip = request.client.host if request and hasattr(request, 'client') and request.client else None
+        user_agent = request.headers.get("user-agent", None) if request else None
+        
+        new_session = ActiveSessionDB(
+            user_id=int(user_id),
+            user_type=user_type,
+            jti=new_access_jti,
+            refresh_jti=new_refresh_jti,
+            ip_address=client_ip,
+            user_agent=user_agent,
+            expires_at=expires_at
+        )
+        db_sess.add(new_session)
+        
+        old_session = db_sess.query(ActiveSessionDB).filter(ActiveSessionDB.refresh_jti == jti).first()
+        if old_session:
+            old_session.is_revoked = True
+            
+        db_sess.commit()
+    except Exception as e:
+        print(f"Error recording rotated session: {e}")
+    finally:
+        db_sess.close()
+
+    return {
+        "access_token": new_access,
+        "refresh_token": new_refresh,
+        "token_type": "bearer",
+    }
+
+
+
+@app.get("/auth/sessions")
+def get_active_sessions(request: Request, current_user: dict = Depends(get_current_user)):
+    """Get all active sessions for the current user."""
+    db = SessionLocal()
+    try:
+        user_id = current_user.get("sub")
+        user_type = current_user.get("user_type")
+        current_jti = current_user.get("jti")
+        
+        # Cleanup expired sessions
+        db.query(ActiveSessionDB).filter(
+            ActiveSessionDB.expires_at < datetime.utcnow()
+        ).delete()
+        db.commit()
+        
+        sessions = db.query(ActiveSessionDB).filter(
+            ActiveSessionDB.user_id == int(user_id),
+            ActiveSessionDB.user_type == user_type,
+            ActiveSessionDB.is_revoked == False
+        ).order_by(ActiveSessionDB.created_at.desc()).all()
+        
+        result = []
+        for s in sessions:
+            result.append({
+                "id": s.id,
+                "ip_address": s.ip_address,
+                "user_agent": s.user_agent,
+                "created_at": s.created_at.isoformat() if s.created_at else None,
+                "is_current": s.jti == current_jti
+            })
+        return {"success": True, "sessions": result}
+    finally:
+        db.close()
+
+@app.delete("/auth/sessions/{session_id}")
+def revoke_session(session_id: int, current_user: dict = Depends(get_current_user)):
+    """Revoke a specific active session."""
+    db = SessionLocal()
+    try:
+        user_id = current_user.get("sub")
+        user_type = current_user.get("user_type")
+        
+        session = db.query(ActiveSessionDB).filter(
+            ActiveSessionDB.id == session_id,
+            ActiveSessionDB.user_id == int(user_id),
+            ActiveSessionDB.user_type == user_type
+        ).first()
+        
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        if session.is_revoked:
+            return {"success": True, "message": "Session already revoked"}
+            
+        # Revoke the tokens explicitly
+        db.add(RevokedTokenDB(
+            jti=session.jti,
+            user_id=int(user_id),
+            user_type=user_type,
+            expires_at=session.expires_at
+        ))
+        db.add(RevokedTokenDB(
+            jti=session.refresh_jti,
+            user_id=int(user_id),
+            user_type=user_type,
+            expires_at=session.expires_at
+        ))
+        
+        session.is_revoked = True
+        db.commit()
+        
+        return {"success": True, "message": "Session revoked successfully"}
+    finally:
+        db.close()
+
+@app.post("/auth/logout_all")
+def logout_all_devices(current_user: dict = Depends(get_current_user)):
+    """Logs out the user from all devices by invalidating all previously issued tokens."""
+    db = SessionLocal()
+    try:
+        user_id = current_user.get("sub")
+        user_type = current_user.get("user_type")
+        
+        user = None
+        if user_type == "owner":
+            user = db.query(OwnerDB).filter(OwnerDB.id == int(user_id)).first()
+        elif user_type == "coach":
+            user = db.query(CoachDB).filter(CoachDB.id == int(user_id)).first()
+        elif user_type == "student":
+            user = db.query(StudentDB).filter(StudentDB.id == int(user_id)).first()
+            
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+            
+        from sqlalchemy.sql import func
+        user.jwt_invalidated_at = func.now()
+        db.commit()
+        
+        return {"success": True, "message": "Successfully logged out from all devices"}
+    finally:
+        db.close()
+
+@app.post("/auth/logout")
+def logout(body: LogoutRequest, credentials: HTTPAuthorizationCredentials = Security(security)):
+    """Revoke the current access token and (optionally) the refresh token.
+
+    The client should delete both tokens from secure storage after calling this.
+    """
+    access_payload = decode_token(credentials.credentials)
+    if access_payload.get("type") != "access":
+        raise HTTPException(status_code=401, detail="Invalid token type")
+
+    db = SessionLocal()
+    try:
+        from datetime import timezone as _tz
+
+        # Revoke access token
+        a_jti = access_payload.get("jti")
+        a_exp = access_payload.get("exp")
+        a_uid = access_payload.get("sub")
+        a_utype = access_payload.get("user_type", "unknown")
+        if a_jti and a_exp and not db.query(RevokedTokenDB).filter(RevokedTokenDB.jti == a_jti).first():
+            db.add(RevokedTokenDB(
+                jti=a_jti,
+                user_id=int(a_uid) if a_uid else 0,
+                user_type=a_utype,
+                expires_at=datetime.fromtimestamp(a_exp, tz=_tz.utc),
+            ))
+
+        # Optionally revoke refresh token
+        if body.refresh_token:
+            try:
+                r_payload = jwt.decode(body.refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+                r_jti = r_payload.get("jti")
+                r_exp = r_payload.get("exp")
+                r_uid = r_payload.get("sub")
+                r_utype = r_payload.get("user_type", a_utype)
+                if r_jti and r_exp and not db.query(RevokedTokenDB).filter(RevokedTokenDB.jti == r_jti).first():
+                    db.add(RevokedTokenDB(
+                        jti=r_jti,
+                        user_id=int(r_uid) if r_uid else 0,
+                        user_type=r_utype,
+                        expires_at=datetime.fromtimestamp(r_exp, tz=_tz.utc),
+                    ))
+                    if _sync_redis_client and r_jti and r_exp:
+                        try:
+                            r_ttl = max(1, int(r_exp - datetime.utcnow().timestamp()))
+                            _sync_redis_client.setex(f"revoked:{r_jti}", r_ttl, "1")
+                        except Exception:
+                            pass
+            except JWTError:
+                pass  # Invalid refresh token — still succeed, just skip revoking it
+
+        # Cache access token revocation in Redis for O(1) future blacklist checks
+        if _sync_redis_client and a_jti and a_exp:
+            try:
+                a_ttl = max(1, int(a_exp - datetime.utcnow().timestamp()))
+                _sync_redis_client.setex(f"revoked:{a_jti}", a_ttl, "1")
+            except Exception:
+                pass
+
+        db.commit()
+    finally:
+        db.close()
+
+    return {"success": True, "message": "Logged out successfully"}
+
+
+@app.get("/auth/me")
+def get_current_user_profile(credentials: HTTPAuthorizationCredentials = Security(security)):
+    """Return the profile of the currently authenticated user."""
+    payload = decode_token(credentials.credentials)
+    if payload.get("type") != "access":
+        raise HTTPException(status_code=401, detail="Invalid token type")
+    _check_token_revoked(payload)
+
+    user_id = payload.get("sub")
+    user_type = payload.get("user_type")
+
+    db = SessionLocal()
+    try:
+        if user_type == "owner":
+            user = db.query(OwnerDB).filter(OwnerDB.id == int(user_id)).first()
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            return {
+                "id": user.id,
+                "user_type": "owner",
+                "name": user.name,
+                "email": user.email,
+                "phone": user.phone,
+                "role": user.role,
+                "status": user.status,
+                "profile_photo": user.profile_photo,
+                "must_change_password": user.must_change_password,
+                "academy_name": user.academy_name,
+                "academy_address": user.academy_address,
+                "academy_contact": user.academy_contact,
+                "academy_email": user.academy_email,
+            }
+        elif user_type == "coach":
+            user = db.query(CoachDB).filter(CoachDB.id == int(user_id)).first()
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            return {
+                "id": user.id,
+                "user_type": "coach",
+                "name": user.name,
+                "email": user.email,
+                "phone": user.phone,
+                "specialization": user.specialization,
+                "experience_years": user.experience_years,
+                "status": user.status,
+                "profile_photo": user.profile_photo,
+            }
+        elif user_type == "student":
+            user = db.query(StudentDB).filter(StudentDB.id == int(user_id)).first()
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            required = {
+                'guardian_name': user.guardian_name,
+                'guardian_phone': user.guardian_phone,
+                'date_of_birth': user.date_of_birth,
+                'address': user.address,
+                't_shirt_size': user.t_shirt_size,
+            }
+            profile_complete = all(v is not None and str(v).strip() != '' for v in required.values())
+            return {
+                "id": user.id,
+                "user_type": "student",
+                "name": user.name,
+                "email": user.email,
+                "phone": user.phone,
+                "status": user.status,
+                "profile_photo": user.profile_photo,
+                "profile_complete": profile_complete,
+                "guardian_name": user.guardian_name,
+                "guardian_phone": user.guardian_phone,
+                "date_of_birth": user.date_of_birth,
+                "address": user.address,
+                "t_shirt_size": user.t_shirt_size,
+                "blood_group": user.blood_group,
+            }
+        else:
+            raise HTTPException(status_code=400, detail="Unknown user type in token")
+    finally:
+        db.close()
+
+
 @app.post("/auth/change-password")
 def change_password(request: ChangePasswordRequest):
-    """Change password for authenticated users - requires current password verification"""
+    """Change password for authenticated users - requires current password verification.
+    Invalidates ALL existing tokens for the user (forces re-login on all devices).
+    """
     db = SessionLocal()
     try:
         # Find user by email and type
@@ -1880,63 +4825,42 @@ def change_password(request: ChangePasswordRequest):
             user = db.query(OwnerDB).filter(OwnerDB.email == request.email).first()
         else:
             user = db.query(StudentDB).filter(StudentDB.email == request.email).first()
-        
+
         if not user:
-            return {
-                "success": False,
-                "message": "User not found"
-            }
-        
+            return {"success": False, "message": "User not found"}
+
         # Verify current password
         password_valid = False
         if user.password.startswith('$2b$') or user.password.startswith('$2a$'):
-            # Password is hashed, verify it
             password_valid = verify_password(request.current_password, user.password)
         else:
-            # Plain text password (legacy), check directly
             password_valid = (user.password == request.current_password)
-        
+
         if not password_valid:
-            return {
-                "success": False,
-                "message": "Current password is incorrect"
-            }
-        
-        # Check if new password is different from current password
+            return {"success": False, "message": "Current password is incorrect"}
+
         if request.current_password == request.new_password:
-            return {
-                "success": False,
-                "message": "New password must be different from current password"
-            }
-        
+            return {"success": False, "message": "New password must be different from current password"}
+
         # Validate new password length (bcrypt limit is 72 bytes)
-        new_password_bytes = request.new_password.encode('utf-8')
-        if len(new_password_bytes) > 72:
-            return {
-                "success": False,
-                "message": "Password cannot be longer than 72 characters"
-            }
-        
-        # Update password
+        if len(request.new_password.encode('utf-8')) > 72:
+            return {"success": False, "message": "Password cannot be longer than 72 characters"}
+
+        # Update password and invalidate ALL existing JWT tokens for this user
         user.password = hash_password(request.new_password)
+        user.jwt_invalidated_at = datetime.utcnow()
         db.commit()
-        
-        return {
-            "success": True,
-            "message": "Password changed successfully"
-        }
+
+        return {"success": True, "message": "Password changed successfully. Please log in again on all devices."}
     except Exception as e:
         db.rollback()
-        return {
-            "success": False,
-            "message": f"Failed to change password: {str(e)}"
-        }
+        return {"success": False, "message": f"Failed to change password: {str(e)}"}
     finally:
         db.close()
 
 # ==================== Owner Routes ====================
 
-@app.post("/owners/", response_model=Owner)
+@app.post("/owners/", response_model=Owner, dependencies=[Depends(require_owner)])
 def create_owner(owner: OwnerCreate):
     """Create a new owner account - saves to owners table only"""
     db = SessionLocal()
@@ -1957,6 +4881,10 @@ def create_owner(owner: OwnerCreate):
         owner_dict['password'] = hash_password(owner_dict['password'])
         owner_dict['status'] = "active"  # Default status
         
+        # If creating a co-owner, set must_change_password to True
+        if owner_dict.get('role') == 'co_owner':
+            owner_dict['must_change_password'] = True
+        
         # Explicitly create OwnerDB instance (saves to owners table)
         db_owner = OwnerDB(**owner_dict)
         
@@ -1969,15 +4897,18 @@ def create_owner(owner: OwnerCreate):
             raise HTTPException(status_code=500, detail="Internal error: Owner not mapped to owners table")
         
         db.add(db_owner)
-        db.commit()
         db.refresh(db_owner)
+        
+        # Convert to Pydantic model before closing session
+        owner_response = Owner.model_validate(db_owner)
         
         # Verify it was saved to owners table by querying it back
         verify_owner = db.query(OwnerDB).filter(OwnerDB.id == db_owner.id).first()
         if not verify_owner:
             raise HTTPException(status_code=500, detail="Error: Owner was not saved to owners table")
         
-        return db_owner
+        invalidate_cache("owners")
+        return owner_response
     except IntegrityError as e:
         db.rollback()
         error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
@@ -1997,17 +4928,18 @@ def create_owner(owner: OwnerCreate):
     finally:
         db.close()
 
-@app.get("/owners/", response_model=List[Owner])
+@app.get("/owners/", response_model=List[Owner], dependencies=[Depends(require_owner)])
+@cache(namespace="owners", expire=3600)
 def get_owners():
     """Get all owners"""
     db = SessionLocal()
     try:
         owners = db.query(OwnerDB).all()
-        return owners
+        return [Owner.model_validate(o) for o in owners]
     finally:
         db.close()
 
-@app.get("/owners/{owner_id}", response_model=Owner)
+@app.get("/owners/{owner_id}", response_model=Owner, dependencies=[Depends(require_owner)])
 def get_owner(owner_id: int):
     """Get a specific owner by ID"""
     db = SessionLocal()
@@ -2015,11 +4947,11 @@ def get_owner(owner_id: int):
         owner = db.query(OwnerDB).filter(OwnerDB.id == owner_id).first()
         if not owner:
             raise HTTPException(status_code=404, detail="Owner not found")
-        return owner
+        return Owner.model_validate(owner)
     finally:
         db.close()
 
-@app.put("/owners/{owner_id}", response_model=Owner)
+@app.put("/owners/{owner_id}", response_model=Owner, dependencies=[Depends(require_owner)])
 def update_owner(owner_id: int, owner_update: OwnerUpdate):
     """Update owner profile"""
     db = SessionLocal()
@@ -2035,20 +4967,23 @@ def update_owner(owner_id: int, owner_update: OwnerUpdate):
         # Hash password if provided
         if 'password' in update_data:
             update_data['password'] = hash_password(update_data['password'])
+            # Reset must_change_password if they are changing their password
+            update_data['must_change_password'] = False
         
         for key, value in update_data.items():
             setattr(owner, key, value)
         
         db.commit()
         db.refresh(owner)
-        return owner
+        invalidate_cache("owners")
+        return Owner.model_validate(owner)
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error updating owner: {str(e)}")
     finally:
         db.close()
 
-@app.delete("/owners/{owner_id}")
+@app.delete("/owners/{owner_id}", dependencies=[Depends(require_owner)])
 def delete_owner(owner_id: int):
     """Delete owner account"""
     db = SessionLocal()
@@ -2060,6 +4995,7 @@ def delete_owner(owner_id: int):
         
         db.delete(owner)
         db.commit()
+        invalidate_cache("owners")
         return {"message": "Owner deleted successfully"}
     except Exception as e:
         db.rollback()
@@ -2073,8 +5009,8 @@ def login_owner(login_data: OwnerLogin):
     db = SessionLocal()
     try:
         owner = db.query(OwnerDB).filter(OwnerDB.email == login_data.email).first()
-        
         if owner:
+            check_account_lock(owner)
             # Verify password
             password_valid = False
             if owner.password.startswith('$2b$') or owner.password.startswith('$2a$'):
@@ -2109,7 +5045,13 @@ def login_owner(login_data: OwnerLogin):
                     "specialization": owner.specialization,
                     "experience_years": owner.experience_years,
                     "status": owner.status,
-                    "profile_photo": owner.profile_photo
+                    "role": owner.role,
+                    "must_change_password": owner.must_change_password,
+                    "profile_photo": owner.profile_photo,
+                    "academy_name": owner.academy_name,
+                    "academy_address": owner.academy_address,
+                    "academy_contact": owner.academy_contact,
+                    "academy_email": owner.academy_email
                 }
             }
         else:
@@ -2117,6 +5059,45 @@ def login_owner(login_data: OwnerLogin):
                 "success": False,
                 "message": "Invalid email or password"
             }
+    finally:
+        db.close()
+
+@app.post("/owners/{owner_id}/transfer-ownership", dependencies=[Depends(require_owner)])
+def transfer_ownership(owner_id: int, request: TransferOwnershipRequest):
+    """
+    Transfer primary ownership to another user.
+    The current owner becomes a co_owner.
+    """
+    db = SessionLocal()
+    try:
+        # 1. Verify current owner exists and is actually the owner
+        current_owner = db.query(OwnerDB).filter(OwnerDB.id == owner_id).first()
+        if not current_owner:
+            raise HTTPException(status_code=404, detail="Current owner not found")
+        
+        if current_owner.role != "owner":
+            raise HTTPException(status_code=403, detail="Only the primary owner can transfer ownership")
+        
+        # 2. Verify new owner exists
+        new_owner = db.query(OwnerDB).filter(OwnerDB.id == request.new_owner_id).first()
+        if not new_owner:
+            raise HTTPException(status_code=404, detail="New owner not found")
+        
+        if new_owner.id == current_owner.id:
+            raise HTTPException(status_code=400, detail="Cannot transfer ownership to yourself")
+
+        # 3. Swap roles
+        new_owner.role = "owner"
+        current_owner.role = "co_owner"
+        
+        db.commit()
+        return {"success": True, "message": f"Ownership transferred to {new_owner.name}"}
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
 
@@ -2170,7 +5151,7 @@ def _get_batch_coaches(db, batch_id: int) -> List[CoachInfo]:
         # If table doesn't exist yet, return empty list
         return []
 
-@app.post("/batches/", response_model=Batch)
+@app.post("/batches/", response_model=Batch, dependencies=[Depends(require_owner)])
 def create_batch(batch: BatchCreate):
     db = SessionLocal()
     try:
@@ -2213,20 +5194,30 @@ def create_batch(batch: BatchCreate):
             assigned_coach_name=coaches[0].name if coaches else None,  # Backward compatibility
             assigned_coach_ids=coach_ids_list,
             assigned_coaches=coaches,
-            session_id=db_batch.session_id
+            session_id=db_batch.session_id,
+            status=db_batch.status,
+            inactive_at=db_batch.inactive_at
         )
         
+        invalidate_cache("batches")
         return batch_response
     finally:
         db.close()
 
-@app.get("/batches/", response_model=List[Batch])
-def get_batches():
+@app.get("/batches/", response_model=List[Batch], dependencies=[Depends(require_student)])
+@cache(namespace="batches", expire=300)
+def get_batches(status: Optional[str] = Query(None)):
     db = SessionLocal()
     try:
         # Try normal query first
         try:
-            batches_db = db.query(BatchDB).all()
+            query = db.query(BatchDB)
+            if status and status.lower() != 'all':
+                query = query.filter(BatchDB.status == status)
+            elif not status:
+                query = query.filter(BatchDB.status == "active")
+            
+            batches_db = query.all()
             batches = []
             for batch_db in batches_db:
                 # Get coaches from junction table
@@ -2247,7 +5238,9 @@ def get_batches():
                     assigned_coach_name=coaches[0].name if coaches else batch_db.assigned_coach_name,  # Backward compatibility
                     assigned_coach_ids=coach_ids_list,
                     assigned_coaches=coaches,
-                    session_id=batch_db.session_id
+                    session_id=batch_db.session_id,
+                    status=batch_db.status,
+                    inactive_at=batch_db.inactive_at
                 )
                 batches.append(batch)
             return batches
@@ -2259,7 +5252,8 @@ def get_batches():
                 from sqlalchemy import text
                 result = db.execute(text("""
                     SELECT id, batch_name, capacity, fees, start_date, timing, period, 
-                           location, created_by, assigned_coach_id, assigned_coach_name
+                           location, created_by, assigned_coach_id, assigned_coach_name,
+                           status, inactive_at
                     FROM batches
                 """))
                 batches = []
@@ -2285,6 +5279,8 @@ def get_batches():
                         assigned_coach_ids=coach_ids_list,
                         assigned_coaches=coaches,
                         session_id=None,  # Default to None if column doesn't exist
+                        status=row[11] if len(row) > 11 else "active",
+                        inactive_at=row[12] if len(row) > 12 else None
                     )
                     batches.append(batch)
                 return batches
@@ -2294,7 +5290,41 @@ def get_batches():
     finally:
         db.close()
 
-@app.get("/batches/coach/{coach_id}", response_model=List[Batch])
+@app.get("/batches/inactive/", response_model=List[Batch], dependencies=[Depends(require_student)])
+def get_inactive_batches():
+    """Get all deactivated batches"""
+    db = SessionLocal()
+    try:
+        batches_db = db.query(BatchDB).filter(BatchDB.status == "inactive").all()
+        batches = []
+        for batch_db in batches_db:
+            coaches = _get_batch_coaches(db, batch_db.id)
+            coach_ids_list = [c.id for c in coaches]
+            
+            batch = Batch(
+                id=batch_db.id,
+                batch_name=batch_db.batch_name,
+                capacity=batch_db.capacity,
+                fees=batch_db.fees,
+                start_date=batch_db.start_date,
+                timing=batch_db.timing,
+                period=batch_db.period,
+                location=batch_db.location,
+                created_by=batch_db.created_by,
+                assigned_coach_id=coach_ids_list[0] if coach_ids_list else None,
+                assigned_coach_name=coaches[0].name if coaches else None,
+                assigned_coach_ids=coach_ids_list,
+                assigned_coaches=coaches,
+                session_id=batch_db.session_id,
+                status=batch_db.status,
+                inactive_at=batch_db.inactive_at
+            )
+            batches.append(batch)
+        return batches
+    finally:
+        db.close()
+
+@app.get("/batches/coach/{coach_id}", response_model=List[Batch], dependencies=[Depends(require_student)])
 def get_coach_batches(coach_id: int):
     db = SessionLocal()
     try:
@@ -2329,7 +5359,9 @@ def get_coach_batches(coach_id: int):
                     assigned_coach_name=coaches[0].name if coaches else batch_db.assigned_coach_name,  # Backward compatibility
                     assigned_coach_ids=coach_ids_list,
                     assigned_coaches=coaches,
-                    session_id=batch_db.session_id
+                    session_id=batch_db.session_id,
+                    status=batch_db.status,
+                    inactive_at=batch_db.inactive_at
                 )
                 batches.append(batch)
             return batches
@@ -2359,7 +5391,9 @@ def get_coach_batches(coach_id: int):
                             assigned_coach_name=coaches[0].name if coaches else batch_db.assigned_coach_name,
                             assigned_coach_ids=coach_ids_list,
                             assigned_coaches=coaches,
-                            session_id=batch_db.session_id
+                            session_id=batch_db.session_id,
+                            status=batch_db.status,
+                            inactive_at=batch_db.inactive_at
                         )
                         batches.append(batch)
                     return batches
@@ -2368,7 +5402,8 @@ def get_coach_batches(coach_id: int):
                     from sqlalchemy import text
                     result = db.execute(text("""
                         SELECT id, batch_name, capacity, fees, start_date, timing, period, 
-                               location, created_by, assigned_coach_id, assigned_coach_name
+                               location, created_by, assigned_coach_id, assigned_coach_name,
+                               status, inactive_at
                         FROM batches
                         WHERE assigned_coach_id = :coach_id
                     """), {"coach_id": coach_id})
@@ -2393,6 +5428,8 @@ def get_coach_batches(coach_id: int):
                             assigned_coach_ids=coach_ids_list,
                             assigned_coaches=coaches,
                             session_id=None,
+                            status=row[11] if len(row) > 11 else "active",
+                            inactive_at=row[12] if len(row) > 12 else None
                         )
                         batches.append(batch)
                     return batches
@@ -2401,7 +5438,7 @@ def get_coach_batches(coach_id: int):
     finally:
         db.close()
 
-@app.put("/batches/{batch_id}", response_model=Batch)
+@app.put("/batches/{batch_id}", response_model=Batch, dependencies=[Depends(require_owner)])
 def update_batch(batch_id: int, batch_update: BatchUpdate):
     db = SessionLocal()
     try:
@@ -2418,7 +5455,8 @@ def update_batch(batch_id: int, batch_update: BatchUpdate):
                 from sqlalchemy import text
                 result = db.execute(text("""
                     SELECT id, batch_name, capacity, fees, start_date, timing, period, 
-                           location, created_by, assigned_coach_id, assigned_coach_name
+                           location, created_by, assigned_coach_id, assigned_coach_name,
+                           status, inactive_at
                     FROM batches
                     WHERE id = :batch_id
                 """), {"batch_id": batch_id})
@@ -2502,14 +5540,17 @@ def update_batch(batch_id: int, batch_update: BatchUpdate):
                 'period': batch.period,
                 'location': batch.location,
                 'created_by': batch.created_by,
-                'session_id': session_id_value
+                'session_id': session_id_value,
+                'status': batch.status,
+                'inactive_at': batch.inactive_at
             }
         else:
             # Re-query for response
             from sqlalchemy import text
             result = db.execute(text("""
                 SELECT id, batch_name, capacity, fees, start_date, timing, period, 
-                       location, created_by, assigned_coach_id, assigned_coach_name
+                       location, created_by, assigned_coach_id, assigned_coach_name,
+                       status, inactive_at
                 FROM batches
                 WHERE id = :batch_id
             """), {"batch_id": batch_id})
@@ -2524,7 +5565,9 @@ def update_batch(batch_id: int, batch_update: BatchUpdate):
                 'period': row[6],
                 'location': row[7],
                 'created_by': row[8],
-                'session_id': None
+                'session_id': None,
+                'status': row[11] if len(row) > 11 else "active",
+                'inactive_at': row[12] if len(row) > 12 else None
             }
         
         # Build response
@@ -2542,14 +5585,17 @@ def update_batch(batch_id: int, batch_update: BatchUpdate):
             assigned_coach_name=coaches[0].name if coaches else None,  # Backward compatibility
             assigned_coach_ids=coach_ids_list,
             assigned_coaches=coaches,
-            session_id=batch_data['session_id']
+            session_id=batch_data['session_id'],
+            status=batch_data.get('status', 'active'),
+            inactive_at=batch_data.get('inactive_at')
         )
         
+        invalidate_cache("batches")
         return batch_response
     finally:
         db.close()
 
-@app.delete("/batches/{batch_id}")
+@app.delete("/batches/{batch_id}", dependencies=[Depends(require_owner)])
 def delete_batch(batch_id: int):
     db = SessionLocal()
     try:
@@ -2558,11 +5604,71 @@ def delete_batch(batch_id: int):
             raise HTTPException(status_code=404, detail="Batch not found")
         db.delete(batch)
         db.commit()
+        invalidate_cache("batches")
         return {"message": "Batch deleted"}
     finally:
         db.close()
 
-@app.get("/batches/{batch_id}/available-students")
+@app.post("/batches/{batch_id}/deactivate", dependencies=[Depends(require_owner)])
+def deactivate_batch(batch_id: int):
+    """Soft delete a batch - moves to inactive list, keeps data for 2 years"""
+    db = SessionLocal()
+    try:
+        batch = db.query(BatchDB).filter(BatchDB.id == batch_id).first()
+        if not batch:
+            raise HTTPException(status_code=404, detail="Batch not found")
+        
+        batch.status = "inactive"
+        batch.inactive_at = datetime.now()
+        db.commit()
+        invalidate_cache("batches")
+        return {"message": "Batch deactivated successfully"}
+    finally:
+        db.close()
+
+@app.post("/batches/{batch_id}/activate", dependencies=[Depends(require_owner)])
+def activate_batch(batch_id: int):
+    """Reactivate a batch - moves back to active list"""
+    db = SessionLocal()
+    try:
+        batch = db.query(BatchDB).filter(BatchDB.id == batch_id).first()
+        if not batch:
+            raise HTTPException(status_code=404, detail="Batch not found")
+        
+        batch.status = "active"
+        batch.inactive_at = None
+        db.commit()
+        invalidate_cache("batches")
+        return {"message": "Batch activated successfully"}
+    finally:
+        db.close()
+
+@app.delete("/batches/{batch_id}/remove", dependencies=[Depends(require_owner)])
+def remove_batch_permanently(batch_id: int):
+    """Hard delete a batch and all related records (cascading)"""
+    db = SessionLocal()
+    try:
+        batch = db.query(BatchDB).filter(BatchDB.id == batch_id).first()
+        if not batch:
+            raise HTTPException(status_code=404, detail="Batch not found")
+            
+        # Manually delete related records if not handled by SQL CASCADE
+        # Note: Some models might not have batch_id as an FK with CASCADE
+        db.query(AttendanceDB).filter(AttendanceDB.batch_id == batch_id).delete()
+        db.query(FeeDB).filter(FeeDB.batch_id == batch_id).delete()
+        db.query(PerformanceDB).filter(PerformanceDB.batch_id == batch_id).delete()
+        db.query(BatchStudentDB).filter(BatchStudentDB.batch_id == batch_id).delete()
+        db.query(BatchCoachDB).filter(BatchCoachDB.batch_id == batch_id).delete()
+        db.query(ScheduleDB).filter(ScheduleDB.batch_id == batch_id).delete()
+        
+        db.delete(batch)
+        db.commit()
+        invalidate_cache("batches")
+        return {"message": "Batch and all related records deleted permanently"}
+    finally:
+        db.close()
+
+@app.get("/batches/{batch_id}/available-students", dependencies=[Depends(require_student)])
 def get_available_students_for_batch(batch_id: int):
     """Get students not yet assigned to this batch"""
     db = SessionLocal()
@@ -2584,7 +5690,7 @@ def get_available_students_for_batch(batch_id: int):
     finally:
         db.close()
 
-@app.post("/batches/{batch_id}/students/{student_id}")
+@app.post("/batches/{batch_id}/students/{student_id}", dependencies=[Depends(require_owner)])
 def assign_student_to_batch(batch_id: int, student_id: int):
     """Assign a student to a batch"""
     db = SessionLocal()
@@ -2607,11 +5713,28 @@ def assign_student_to_batch(batch_id: int, student_id: int):
         db.add(db_assignment)
         db.commit()
         
+        db.commit()
+        
+        # Notify Student
+        try:
+            batch = db.query(BatchDB).filter(BatchDB.id == batch_id).first()
+            create_notification(
+                db=db,
+                user_id=student_id,
+                user_type="student",
+                title="Added to Batch",
+                body=f"You have been added to batch: {batch.batch_name}",
+                type="general",
+                data={"batch_id": batch_id}
+            )
+        except Exception as e:
+            print(f"Error sending batch notification: {e}")
+
         return {"message": "Student assigned successfully"}
     finally:
         db.close()
 
-@app.delete("/batches/{batch_id}/students/{student_id}")
+@app.delete("/batches/{batch_id}/students/{student_id}", dependencies=[Depends(require_owner)])
 def remove_student_from_batch(batch_id: int, student_id: int):
     """Remove a student from a batch"""
     db = SessionLocal()
@@ -2633,7 +5756,7 @@ def remove_student_from_batch(batch_id: int, student_id: int):
 
 # ==================== Student Routes ====================
 
-@app.post("/students/", response_model=Student)
+@app.post("/students/", response_model=Student, dependencies=[Depends(require_coach)])
 def create_student(student: StudentCreate):
     db = SessionLocal()
     try:
@@ -2654,62 +5777,223 @@ def create_student(student: StudentCreate):
         db.add(db_student)
         db.commit()
         db.refresh(db_student)
-        return db_student
+        student_response = Student.model_validate(db_student)
+
+        # B11: Send welcome email to new student (non-blocking)
+        try:
+            welcome_html = f"""
+<html><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;">
+<div style="max-width:480px;margin:auto;background:#fff;border-radius:8px;padding:32px;">
+  <h2 style="color:#1a1a2e;">Welcome to Shuttler, {db_student.name}!</h2>
+  <p>Your student account has been created by your academy.</p>
+  <ul style="line-height:1.8;">
+    <li><strong>Email:</strong> {db_student.email}</li>
+    <li><strong>Role:</strong> Student</li>
+  </ul>
+  <p>Download the Shuttler app and login with your email and the password provided by your academy admin.</p>
+  <p style="color:#888;font-size:13px;">If you have any questions, contact your academy admin.</p>
+</div></body></html>"""
+            send_email(
+                to_email=db_student.email,
+                subject="Welcome to Shuttler — Student Account Created",
+                html_content=welcome_html,
+                plain_content=f"Welcome to Shuttler, {db_student.name}! Your student account has been created. Login with: {db_student.email}",
+            )
+        except Exception as _ee:
+            print(f"[Email] Student welcome email error: {_ee}")
+
+        invalidate_cache("students")
+        return student_response
     finally:
         db.close()
 
-@app.get("/students/", response_model=List[Student])
-def get_students():
+@app.get("/students/", response_model=List[Student], dependencies=[Depends(require_student)])
+@cache(namespace="students", expire=120)
+def get_students(include_deleted: bool = Query(False, description="Include deleted students")):
     db = SessionLocal()
     try:
-        students = db.query(StudentDB).all()
-        return students
+        query = db.query(StudentDB)
+        if not include_deleted:
+            query = query.filter(StudentDB.status == "active")
+        students = query.all()
+        return [Student.model_validate(s) for s in students]
     finally:
         db.close()
 
-@app.get("/students/{student_id}", response_model=Student)
+@app.get("/students/{student_id}", response_model=Student, dependencies=[Depends(require_student)])
 def get_student(student_id: int):
     db = SessionLocal()
     try:
         student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
         if not student:
             raise HTTPException(status_code=404, detail="Student not found")
-        return student
+        return Student.model_validate(student)
     finally:
         db.close()
 
 @app.put("/students/{student_id}", response_model=Student)
-def update_student(student_id: int, student_update: StudentUpdate):
+def update_student(student_id: int, student_update: StudentUpdate, current_user: dict = Depends(require_coach)):
     db = SessionLocal()
     try:
         student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
         if not student:
             raise HTTPException(status_code=404, detail="Student not found")
-        
+
+        # A15: Coaches may only update students enrolled in their assigned batches
+        if current_user.get("user_type") == "coach":
+            coach_id = int(current_user["sub"])
+            if not verify_coach_student_access(coach_id, student_id, db):
+                raise HTTPException(
+                    status_code=403,
+                    detail="You do not have access to update this student's record."
+                )
+
         update_data = student_update.dict(exclude_unset=True)
         for key, value in update_data.items():
             setattr(student, key, value)
         
         db.commit()
         db.refresh(student)
-        return student
+        invalidate_cache("students")
+        return Student.model_validate(student)
     finally:
         db.close()
 
-@app.delete("/students/{student_id}")
+@app.delete("/students/{student_id}", dependencies=[Depends(require_coach)])
 def delete_student(student_id: int):
+    """Soft delete a student (mark as deleted)"""
+    db = SessionLocal()
+    try:
+        # Move to inactive instead of hard deleting by default
+        student.status = "inactive"
+        student.inactive_at = datetime.now()
+        
+        db.commit()
+        invalidate_cache("students")
+        return {"message": "Student marked as inactive"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.get("/students/inactive/", response_model=List[Student], dependencies=[Depends(require_student)])
+def get_inactive_students():
+    """Get all deactivated students"""
+    db = SessionLocal()
+    try:
+        query = db.query(StudentDB).filter(StudentDB.status == "inactive")
+        students = query.all()
+        return [Student.model_validate(s) for s in students]
+    finally:
+        db.close()
+
+@app.get("/students/rejoin-requests/", response_model=List[Student], dependencies=[Depends(require_student)])
+def get_rejoin_requests():
+    """Get students who have requested to rejoin"""
+    db = SessionLocal()
+    try:
+        query = db.query(StudentDB).filter(StudentDB.rejoin_request_pending == True)
+        requests = query.all()
+        return [Student.model_validate(s) for s in requests]
+    finally:
+        db.close()
+
+@app.post("/students/{student_id}/deactivate", dependencies=[Depends(require_coach)])
+def deactivate_student(student_id: int):
+    """Soft delete a student - moves to inactive list, keeps data for 2 years"""
     db = SessionLocal()
     try:
         student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
         if not student:
             raise HTTPException(status_code=404, detail="Student not found")
-        db.delete(student)
+        
+        student.status = "inactive"
+        student.inactive_at = datetime.now()
+        student.rejoin_request_pending = False # Reset if it was pending
         db.commit()
-        return {"message": "Student deleted"}
+        invalidate_cache("students")
+        return {"message": "Student deactivated successfully"}
     finally:
         db.close()
 
-@app.get("/students/{student_id}/profile-complete")
+@app.post("/students/{student_id}/request-rejoin", dependencies=[Depends(require_coach)])
+def request_rejoin(student_id: int):
+    """Student requests to rejoin after being inactive"""
+    db = SessionLocal()
+    try:
+        student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found")
+        
+        if student.status != "inactive":
+            raise HTTPException(status_code=400, detail="Only inactive students can request to rejoin")
+            
+        student.rejoin_request_pending = True
+        db.commit()
+        
+        # Notify Owner
+        # In a real app, you'd find the owner(s) and send them a notification
+        return {"message": "Rejoin request sent to owner"}
+    finally:
+        db.close()
+
+@app.post("/students/{student_id}/approve-rejoin", dependencies=[Depends(require_coach)])
+def approve_rejoin(student_id: int):
+    """Owner approves a rejoin request"""
+    db = SessionLocal()
+    try:
+        student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found")
+            
+        student.status = "active"
+        student.inactive_at = None
+        student.rejoin_request_pending = False
+        db.commit()
+        
+        # Notify Student
+        create_notification(
+            db=db,
+            user_id=student.id,
+            user_type="student",
+            title="Rejoin Request Approved",
+            body="Your request to rejoin has been approved. Welcome back!",
+            type="general"
+        )
+        
+        return {"message": "Rejoin request approved"}
+    finally:
+        db.close()
+
+@app.delete("/students/{student_id}/remove", dependencies=[Depends(require_coach)])
+def remove_student_permanently(student_id: int):
+    """Hard delete a student and all related records (cascading)"""
+    db = SessionLocal()
+    try:
+        student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found")
+            
+        # Manually delete related records if not handled by SQL CASCADE
+        db.query(AttendanceDB).filter(AttendanceDB.student_id == student_id).delete()
+        db.query(FeeDB).filter(FeeDB.student_id == student_id).delete()
+        db.query(PerformanceDB).filter(PerformanceDB.student_id == student_id).delete()
+        db.query(BatchStudentDB).filter(BatchStudentDB.student_id == student_id).delete()
+        db.query(BMIDB).filter(BMIDB.student_id == student_id).delete()
+        db.query(VideoResourceDB).filter(VideoResourceDB.student_id == student_id).delete()
+        db.query(NotificationDB).filter(NotificationDB.user_id == student_id, NotificationDB.user_type == "student").delete()
+        
+        db.delete(student)
+        db.commit()
+        return {"message": "Student and all related records deleted permanently"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.get("/students/{student_id}/profile-complete", dependencies=[Depends(require_student)])
 def check_profile_complete(student_id: int):
     """
     Check if student profile is complete.
@@ -2727,7 +6011,6 @@ def check_profile_complete(student_id: int):
             'guardian_phone': student.guardian_phone,
             'date_of_birth': student.date_of_birth,
             'address': student.address,
-            'profile_photo': student.profile_photo,
             't_shirt_size': student.t_shirt_size,
         }
         
@@ -2771,6 +6054,15 @@ def login_student(login_data: StudentLogin):
                     student.password = hash_password(login_data.password)
                     db.commit()
             
+                if student.status == "inactive":
+                    return {
+                        "success": False,
+                        "message": "Your account is currently inactive.",
+                        "account_inactive": True,
+                        "rejoin_request_pending": student.rejoin_request_pending,
+                        "student_id": student.id
+                    }
+                
             if not password_valid:
                 return {
                     "success": False,
@@ -2788,7 +6080,6 @@ def login_student(login_data: StudentLogin):
                 'guardian_phone': student.guardian_phone,
                 'date_of_birth': student.date_of_birth,
                 'address': student.address,
-                'profile_photo': student.profile_photo,
                 't_shirt_size': student.t_shirt_size,
             }
             
@@ -2812,6 +6103,8 @@ def login_student(login_data: StudentLogin):
                     "t_shirt_size": student.t_shirt_size,
                     "status": student.status,
                     "profile_photo": student.profile_photo,
+                    "rejoin_request_pending": student.rejoin_request_pending,
+                    "inactive_at": student.inactive_at,
                     "is_linked": len(approved_batches) > 0
                 },
                 "profile_complete": profile_complete
@@ -2826,7 +6119,7 @@ def login_student(login_data: StudentLogin):
 
 # ==================== Batch-Student Assignment Routes ====================
 
-@app.post("/batch-students/")
+@app.post("/batch-students/", dependencies=[Depends(require_owner)])
 def assign_student_to_batch(assignment: BatchStudentAssign):
     db = SessionLocal()
     try:
@@ -2845,7 +6138,7 @@ def assign_student_to_batch(assignment: BatchStudentAssign):
     finally:
         db.close()
 
-@app.get("/batch-students/{batch_id}")
+@app.get("/batch-students/{batch_id}", dependencies=[Depends(require_owner)])
 def get_batch_students(batch_id: int):
     db = SessionLocal()
     try:
@@ -2859,7 +6152,7 @@ def get_batch_students(batch_id: int):
     finally:
         db.close()
 
-@app.get("/student-batches/{student_id}")
+@app.get("/student-batches/{student_id}", response_model=List[Batch], dependencies=[Depends(require_owner)])
 def get_student_batches(student_id: int):
     db = SessionLocal()
     try:
@@ -2870,8 +6163,32 @@ def get_student_batches(student_id: int):
         batch_ids = [a.batch_id for a in assignments]
         if not batch_ids:
             return []
+        
         try:
-            batches = db.query(BatchDB).filter(BatchDB.id.in_(batch_ids)).all()
+            batches_db = db.query(BatchDB).filter(BatchDB.id.in_(batch_ids)).all()
+            batches = []
+            for batch_db in batches_db:
+                # Get coaches from junction table
+                coaches = _get_batch_coaches(db, batch_db.id)
+                coach_ids_list = [c.id for c in coaches]
+                
+                batch = Batch(
+                    id=batch_db.id,
+                    batch_name=batch_db.batch_name,
+                    capacity=batch_db.capacity,
+                    fees=batch_db.fees,
+                    start_date=batch_db.start_date,
+                    timing=batch_db.timing,
+                    period=batch_db.period,
+                    location=batch_db.location,
+                    created_by=batch_db.created_by,
+                    assigned_coach_id=coach_ids_list[0] if coach_ids_list else batch_db.assigned_coach_id,
+                    assigned_coach_name=coaches[0].name if coaches else batch_db.assigned_coach_name,
+                    assigned_coach_ids=coach_ids_list,
+                    assigned_coaches=coaches,
+                    session_id=batch_db.session_id
+                )
+                batches.append(batch)
             return batches
         except Exception as e:
             # If error is about missing session_id column, rollback and use raw SQL
@@ -2884,10 +6201,15 @@ def get_student_batches(student_id: int):
                     FROM batches
                     WHERE id = ANY(:batch_ids)
                 """), {"batch_ids": batch_ids})
+                
                 batches = []
                 for row in result:
+                    batch_id = row[0]
+                    coaches = _get_batch_coaches(db, batch_id)
+                    coach_ids_list = [c.id for c in coaches]
+                    
                     batch = Batch(
-                        id=row[0],
+                        id=batch_id,
                         batch_name=row[1],
                         capacity=row[2],
                         fees=row[3],
@@ -2896,8 +6218,10 @@ def get_student_batches(student_id: int):
                         period=row[6],
                         location=row[7],
                         created_by=row[8],
-                        assigned_coach_id=row[9],
-                        assigned_coach_name=row[10],
+                        assigned_coach_id=coach_ids_list[0] if coach_ids_list else row[9],
+                        assigned_coach_name=coaches[0].name if coaches else row[10],
+                        assigned_coach_ids=coach_ids_list,
+                        assigned_coaches=coaches,
                         session_id=None,
                     )
                     batches.append(batch)
@@ -2907,7 +6231,7 @@ def get_student_batches(student_id: int):
     finally:
         db.close()
 
-@app.delete("/batch-students/{batch_id}/{student_id}")
+@app.delete("/batch-students/{batch_id}/{student_id}", dependencies=[Depends(require_owner)])
 def remove_student_from_batch(batch_id: int, student_id: int):
     db = SessionLocal()
     try:
@@ -2927,7 +6251,19 @@ def remove_student_from_batch(batch_id: int, student_id: int):
 
 # ==================== Attendance Routes ====================
 
-@app.get("/attendance/", response_model=List[Attendance])
+def attendance_db_to_response(attn_db: AttendanceDB) -> Attendance:
+    """Convert AttendanceDB to Attendance response model"""
+    return Attendance(
+        id=attn_db.id,
+        batch_id=attn_db.batch_id,
+        student_id=attn_db.student_id,
+        date=attn_db.date,
+        status=attn_db.status,
+        marked_by=attn_db.marked_by,
+        remarks=attn_db.remarks
+    )
+
+@app.get("/attendance/", response_model=List[Attendance], dependencies=[Depends(require_student)])
 def get_attendance(
     date: Optional[str] = None,
     start_date: Optional[str] = None,
@@ -2959,14 +6295,23 @@ def get_attendance(
             query = query.filter(AttendanceDB.student_id == student_id)
         
         attendance = query.order_by(AttendanceDB.date.desc()).all()
-        return attendance
+        return [attendance_db_to_response(a) for a in attendance]
     finally:
         db.close()
 
 @app.post("/attendance/", response_model=Attendance)
-def mark_attendance(attendance: AttendanceCreate):
+def mark_attendance(attendance: AttendanceCreate, current_user: dict = Depends(require_coach)):
     db = SessionLocal()
     try:
+        # A15: Coaches may only mark attendance for batches they are assigned to
+        if current_user.get("user_type") == "coach":
+            coach_id = int(current_user["sub"])
+            if not verify_coach_batch_access(coach_id, attendance.batch_id, db):
+                raise HTTPException(
+                    status_code=403,
+                    detail="You are not assigned to this batch and cannot mark attendance for it."
+                )
+
         existing = db.query(AttendanceDB).filter(
             AttendanceDB.batch_id == attendance.batch_id,
             AttendanceDB.student_id == attendance.student_id,
@@ -2978,17 +6323,111 @@ def mark_attendance(attendance: AttendanceCreate):
                 setattr(existing, key, value)
             db.commit()
             db.refresh(existing)
-            return existing
+            
+            # Notify Student on Update
+            try:
+                create_notification(
+                    db=db,
+                    user_id=existing.student_id,
+                    user_type="student",
+                    title="Attendance Updated",
+                    body=f"Your attendance for {existing.date} has been updated to: {existing.status}",
+                    type="attendance",
+                    data={"attendance_id": existing.id}
+                )
+            except Exception as e:
+                print(f"Error sending attendance update notification: {e}")
+                
+            return attendance_db_to_response(existing)
         else:
             db_attendance = AttendanceDB(**attendance.model_dump())
             db.add(db_attendance)
             db.commit()
             db.refresh(db_attendance)
-            return db_attendance
+            
+            # Notify Student on Creation
+            try:
+                create_notification(
+                    db=db,
+                    user_id=db_attendance.student_id,
+                    user_type="student",
+                    title="Attendance Marked",
+                    body=f"Your attendance for {db_attendance.date} has been marked as: {db_attendance.status}",
+                    type="attendance",
+                    data={"attendance_id": db_attendance.id}
+                )
+            except Exception as e:
+                print(f"Error sending attendance notification: {e}")
+                
+            return attendance_db_to_response(db_attendance)
     finally:
         db.close()
 
-@app.get("/attendance/batch/{batch_id}/date/{date}")
+@app.post("/attendance/bulk/", response_model=List[Attendance])
+def mark_attendance_bulk(bulk: AttendanceBulkCreate, current_user: dict = Depends(require_coach)):
+    db = SessionLocal()
+    results = []
+    try:
+        # A15: Coaches may only mark attendance for their assigned batches
+        if current_user.get("user_type") == "coach":
+            coach_id = int(current_user["sub"])
+            unique_batch_ids = {a.batch_id for a in bulk.attendances}
+            for bid in unique_batch_ids:
+                if not verify_coach_batch_access(coach_id, bid, db):
+                    raise HTTPException(
+                        status_code=403,
+                        detail=f"You are not assigned to batch {bid} and cannot mark attendance for it."
+                    )
+
+        for attendance in bulk.attendances:
+            existing = db.query(AttendanceDB).filter(
+                AttendanceDB.batch_id == attendance.batch_id,
+                AttendanceDB.student_id == attendance.student_id,
+                AttendanceDB.date == attendance.date
+            ).first()
+            
+            if existing:
+                for key, value in attendance.model_dump().items():
+                    setattr(existing, key, value)
+                db.commit()
+                db.refresh(existing)
+                results.append(attendance_db_to_response(existing))
+                
+                # Notify Student (Optional: could be throttled for bulk)
+                create_notification(
+                    db=db,
+                    user_id=existing.student_id,
+                    user_type="student",
+                    title="Attendance Updated",
+                    body=f"Your attendance for {existing.date} has been updated to: {existing.status}",
+                    type="attendance",
+                    data={"attendance_id": existing.id}
+                )
+            else:
+                db_attendance = AttendanceDB(**attendance.model_dump())
+                db.add(db_attendance)
+                db.commit()
+                db.refresh(db_attendance)
+                results.append(attendance_db_to_response(db_attendance))
+                
+                # Notify Student
+                create_notification(
+                    db=db,
+                    user_id=db_attendance.student_id,
+                    user_type="student",
+                    title="Attendance Marked",
+                    body=f"Your attendance for {db_attendance.date} has been marked as: {db_attendance.status}",
+                    type="attendance",
+                    data={"attendance_id": db_attendance.id}
+                )
+        return results
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        db.close()
+
+@app.get("/attendance/batch/{batch_id}/date/{date}", dependencies=[Depends(require_student)])
 def get_batch_attendance(batch_id: int, date: str):
     db = SessionLocal()
     try:
@@ -2996,21 +6435,32 @@ def get_batch_attendance(batch_id: int, date: str):
             AttendanceDB.batch_id == batch_id,
             AttendanceDB.date == date
         ).all()
-        return attendance
+        return [attendance_db_to_response(a) for a in attendance]
     finally:
         db.close()
 
-@app.get("/attendance/student/{student_id}")
+@app.get("/attendance/student/{student_id}", dependencies=[Depends(require_student)])
 def get_student_attendance(student_id: int):
     db = SessionLocal()
     try:
         attendance = db.query(AttendanceDB).filter(AttendanceDB.student_id == student_id).all()
-        return attendance
+        return [attendance_db_to_response(a) for a in attendance]
     finally:
         db.close()
 
+def coach_attendance_db_to_response(attn_db: CoachAttendanceDB) -> CoachAttendance:
+    """Convert CoachAttendanceDB to CoachAttendance response model"""
+    return CoachAttendance(
+        id=attn_db.id,
+        coach_id=attn_db.coach_id,
+        date=attn_db.date,
+        status=attn_db.status,
+        marked_by=attn_db.marked_by,
+        remarks=attn_db.remarks
+    )
+
 # Coach Attendance Routes
-@app.post("/coach-attendance/", response_model=CoachAttendance)
+@app.post("/coach-attendance/", response_model=CoachAttendance, dependencies=[Depends(require_coach)])
 def mark_coach_attendance(attendance: CoachAttendanceCreate):
     db = SessionLocal()
     try:
@@ -3024,31 +6474,48 @@ def mark_coach_attendance(attendance: CoachAttendanceCreate):
                 setattr(existing, key, value)
             db.commit()
             db.refresh(existing)
-            return existing
+            return coach_attendance_db_to_response(existing)
         else:
             db_attendance = CoachAttendanceDB(**attendance.model_dump())
             db.add(db_attendance)
             db.commit()
             db.refresh(db_attendance)
-            return db_attendance
+            return coach_attendance_db_to_response(db_attendance)
     finally:
         db.close()
 
-@app.get("/coach-attendance/coach/{coach_id}")
+@app.get("/coach-attendance/", dependencies=[Depends(require_student)])
+def get_coach_attendance(date: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None):
+    db = SessionLocal()
+    try:
+        query = db.query(CoachAttendanceDB)
+        if date:
+            query = query.filter(CoachAttendanceDB.date == date)
+        if start_date:
+            query = query.filter(CoachAttendanceDB.date >= start_date)
+        if end_date:
+            query = query.filter(CoachAttendanceDB.date <= end_date)
+            
+        attendance = query.all()
+        return [coach_attendance_db_to_response(a) for a in attendance]
+    finally:
+        db.close()
+
+@app.get("/coach-attendance/coach/{coach_id}", dependencies=[Depends(require_student)])
 def get_coach_attendance_history(coach_id: int):
     db = SessionLocal()
     try:
         attendance = db.query(CoachAttendanceDB).filter(CoachAttendanceDB.coach_id == coach_id).all()
-        return attendance
+        return [coach_attendance_db_to_response(a) for a in attendance]
     finally:
         db.close()
 
-@app.get("/coach-attendance/date/{date}")
+@app.get("/coach-attendance/date/{date}", dependencies=[Depends(require_student)])
 def get_all_coach_attendance(date: str):
     db = SessionLocal()
     try:
         attendance = db.query(CoachAttendanceDB).filter(CoachAttendanceDB.date == date).all()
-        return attendance
+        return [coach_attendance_db_to_response(a) for a in attendance]
     finally:
         db.close()
 
@@ -3065,8 +6532,8 @@ def calculate_fee_status(amount: float, total_paid: float, due_date: str) -> str
     # Fully paid
     if total_paid >= amount:
         return 'paid'
-    
-    # Check if overdue (7 days after due_date)
+
+    # Check if overdue (7 days after due_date) — overdue takes priority over partial
     try:
         due_date_obj = datetime.fromisoformat(due_date)
         days_overdue = (datetime.now() - due_date_obj).days
@@ -3074,8 +6541,12 @@ def calculate_fee_status(amount: float, total_paid: float, due_date: str) -> str
             return 'overdue'
     except:
         pass
-    
-    # Default to pending
+
+    # Partially paid (some payment made but not fully paid)
+    if total_paid > 0:
+        return 'partial'
+
+    # Default to pending (no payment made yet)
     return 'pending'
 
 def enrich_fee_with_payments(fee: FeeDB, db) -> dict:
@@ -3156,7 +6627,7 @@ def enrich_fee_with_payments(fee: FeeDB, db) -> dict:
         "payments": payment_list,
     }
 
-@app.post("/fees/", response_model=Fee)
+@app.post("/fees/", response_model=Fee, dependencies=[Depends(require_owner)])
 def create_fee(fee: FeeCreate):
     db = SessionLocal()
     try:
@@ -3176,7 +6647,7 @@ def create_fee(fee: FeeCreate):
     finally:
         db.close()
 
-@app.get("/fees/student/{student_id}")
+@app.get("/fees/student/{student_id}", dependencies=[Depends(require_student)])
 def get_student_fees(student_id: int):
     db = SessionLocal()
     try:
@@ -3189,7 +6660,7 @@ def get_student_fees(student_id: int):
     finally:
         db.close()
 
-@app.get("/fees/batch/{batch_id}")
+@app.get("/fees/batch/{batch_id}", dependencies=[Depends(require_student)])
 def get_batch_fees(batch_id: int):
     db = SessionLocal()
     try:
@@ -3201,7 +6672,7 @@ def get_batch_fees(batch_id: int):
     finally:
         db.close()
 
-@app.get("/fees/", response_model=List[Fee])
+@app.get("/fees/", response_model=List[Fee], dependencies=[Depends(require_student)])
 def get_all_fees(
     student_id: Optional[int] = None,
     batch_id: Optional[int] = None,
@@ -3240,7 +6711,7 @@ def get_all_fees(
     finally:
         db.close()
 
-@app.put("/fees/{fee_id}", response_model=Fee)
+@app.put("/fees/{fee_id}", response_model=Fee, dependencies=[Depends(require_owner)])
 def update_fee(fee_id: int, fee_update: FeeUpdate):
     db = SessionLocal()
     try:
@@ -3266,7 +6737,140 @@ def update_fee(fee_id: int, fee_update: FeeUpdate):
 
 # ==================== Fee Payment Routes ====================
 
-@app.post("/fees/{fee_id}/payments/", response_model=FeePayment)
+# B12: Payment Gateway Integration
+class RazorpayVerifyRequest(BaseModel):
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
+    payee_student_id: Optional[int] = None
+    payee_name: Optional[str] = None
+
+try:
+    import razorpay
+    _rzp_key_id = os.getenv("RAZORPAY_KEY_ID", "")
+    _rzp_key_secret = os.getenv("RAZORPAY_KEY_SECRET", "")
+    if _rzp_key_id and _rzp_key_secret:
+        rzp_client = razorpay.Client(auth=(_rzp_key_id, _rzp_key_secret))
+    else:
+        rzp_client = None
+except ImportError:
+    rzp_client = None
+
+@app.post("/fees/{fee_id}/checkout", dependencies=[Depends(require_student)])
+def create_razorpay_order(fee_id: int):
+    """Initialise a Razorpay Checkout order for the remaining fee amount"""
+    if not rzp_client:
+        raise HTTPException(status_code=501, detail="Payment gateway is not configured on the server")
+        
+    db = SessionLocal()
+    try:
+        fee = db.query(FeeDB).filter(FeeDB.id == fee_id).first()
+        if not fee:
+            raise HTTPException(status_code=404, detail="Fee not found")
+            
+        total_paid = calculate_total_paid(fee_id, db)
+        pending_amount = fee.amount - total_paid
+        
+        if pending_amount <= 0:
+            raise HTTPException(status_code=400, detail="Fee is already fully paid")
+            
+        order_amount = int(pending_amount * 100) # Razorpay accepts amounts in paise
+        order_currency = "INR"
+        order_receipt = f"fee_receipt_{fee.id}_{int(datetime.now().timestamp())}"
+        
+        try:
+            order = rzp_client.order.create({
+                "amount": order_amount,
+                "currency": order_currency,
+                "receipt": order_receipt,
+            })
+            return order
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to create payment order: {str(e)}")
+            
+    finally:
+        db.close()
+
+@app.post("/fees/{fee_id}/verify-payment", dependencies=[Depends(require_student)])
+def verify_razorpay_payment(fee_id: int, req: RazorpayVerifyRequest):
+    """Verify a successful Razorpay Web/App checkout and record the payment"""
+    if not rzp_client:
+        raise HTTPException(status_code=501, detail="Payment gateway is not configured")
+        
+    try:
+        # Verify signature
+        rzp_client.utility.verify_payment_signature({
+            'razorpay_order_id': req.razorpay_order_id,
+            'razorpay_payment_id': req.razorpay_payment_id,
+            'razorpay_signature': req.razorpay_signature
+        })
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Payment signature verification failed")
+        
+    db = SessionLocal()
+    try:
+        fee = db.query(FeeDB).filter(FeeDB.id == fee_id).first()
+        if not fee:
+            raise HTTPException(status_code=404, detail="Fee not found")
+            
+        # Optional payee checks
+        if req.payee_student_id and req.payee_name:
+            raise HTTPException(status_code=400, detail="Cannot specify both payee_student_id and payee_name.")
+            
+        # We need to lookup the actual payment details to know exactly how much was paid
+        try:
+            payment_info = rzp_client.payment.fetch(req.razorpay_payment_id)
+            amount_paid = payment_info['amount'] / 100.0  # Convert back from paise
+        except Exception:
+            raise HTTPException(status_code=500, detail="Could not fetch payment details from gateway")
+            
+        payment_dict = {
+            "fee_id": fee_id,
+            "amount": amount_paid,
+            "paid_date": datetime.now().strftime("%Y-%m-%d"),
+            "payee_student_id": req.payee_student_id or fee.student_id,  # default to fee student if none provided
+            "payee_name": req.payee_name,
+            "payment_method": "online",
+            "collected_by": "Razorpay Automated"
+        }
+        
+        db_payment = FeePaymentDB(**payment_dict)
+        db.add(db_payment)
+        db.commit()
+        db.refresh(db_payment)
+        
+        # Auto-update the fee status
+        new_total_paid = calculate_total_paid(fee_id, db)
+        new_status = calculate_fee_status(fee.amount, new_total_paid, fee.due_date)
+        fee.status = new_status
+        db.commit()
+        
+        # Record notification & receipt
+        try:
+            student_for_email = db.query(StudentDB).filter(StudentDB.id == fee.student_id).first()
+            if student_for_email and student_for_email.email:
+                receipt_html = f"""
+<html><body style='font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;'>
+<div style='max-width:480px;margin:auto;background:#fff;border-radius:8px;padding:32px;'>
+  <h2 style='color:#1a1a2e;'>Payment Successful</h2>
+  <p>Dear {student_for_email.name},</p>
+  <p>Your online fee payment of ₹{amount_paid:.2f} was successful via Razorpay.</p>
+  <p>Transaction ID: {req.razorpay_payment_id}</p>
+</div></body></html>"""
+                send_email(
+                    to_email=student_for_email.email,
+                    subject=f"Shuttler — Online Payment Receipt ₹{amount_paid:.2f}",
+                    html_content=receipt_html,
+                    plain_content=f"Payment of ₹{amount_paid:.2f} successful. Txn ID: {req.razorpay_payment_id}"
+                )
+        except Exception:
+            pass
+
+        return {"success": True, "message": "Payment verified and recorded", "payment_id": db_payment.id}
+    finally:
+        db.close()
+
+@app.post("/fees/{fee_id}/payments/", response_model=FeePayment, dependencies=[Depends(require_owner)])
 def create_fee_payment(fee_id: int, payment: FeePaymentCreate):
     """Add a payment to a fee"""
     db = SessionLocal()
@@ -3308,7 +6912,48 @@ def create_fee_payment(fee_id: int, payment: FeePaymentCreate):
         if db_payment.payee_student_id:
             payee = db.query(StudentDB).filter(StudentDB.id == db_payment.payee_student_id).first()
             payee_student_name = payee.name if payee else None
-        
+
+        # B5: Notify student that a fee payment was recorded
+        try:
+            create_notification(
+                db=db,
+                user_id=fee.student_id,
+                user_type="student",
+                title="Fee Payment Received",
+                body=f"A payment of ₹{db_payment.amount:.2f} has been recorded for your fee.",
+                type="fee_payment",
+                data={"fee_id": fee_id, "payment_id": db_payment.id, "amount": db_payment.amount},
+            )
+        except Exception as _ne:
+            print(f"[Notif] Fee payment notification error: {_ne}")
+
+        # B11: Send payment receipt email to student (non-blocking)
+        try:
+            student_for_email = db.query(StudentDB).filter(StudentDB.id == fee.student_id).first()
+            if student_for_email and student_for_email.email:
+                receipt_html = f"""
+<html><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;">
+<div style="max-width:480px;margin:auto;background:#fff;border-radius:8px;padding:32px;">
+  <h2 style="color:#1a1a2e;">Payment Receipt — Shuttler</h2>
+  <p>Dear {student_for_email.name},</p>
+  <p>A fee payment has been recorded for your account.</p>
+  <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+    <tr><td style="padding:8px;color:#555;">Amount Paid</td><td style="padding:8px;font-weight:bold;">₹{db_payment.amount:.2f}</td></tr>
+    <tr style="background:#f9f9f9;"><td style="padding:8px;color:#555;">Date</td><td style="padding:8px;">{db_payment.paid_date}</td></tr>
+    <tr><td style="padding:8px;color:#555;">Payment Method</td><td style="padding:8px;text-transform:capitalize;">{db_payment.payment_method}</td></tr>
+    <tr style="background:#f9f9f9;"><td style="padding:8px;color:#555;">Fee Status</td><td style="padding:8px;text-transform:capitalize;">{fee.status}</td></tr>
+  </table>
+  <p style="color:#888;font-size:13px;">This is an automated receipt. Please keep it for your records.</p>
+</div></body></html>"""
+                send_email(
+                    to_email=student_for_email.email,
+                    subject=f"Shuttler — Payment Receipt ₹{db_payment.amount:.2f}",
+                    html_content=receipt_html,
+                    plain_content=f"Payment of ₹{db_payment.amount:.2f} recorded on {db_payment.paid_date} via {db_payment.payment_method}. Fee status: {fee.status}.",
+                )
+        except Exception as _ee:
+            print(f"[Email] Fee payment receipt email error: {_ee}")
+
         return {
             "id": db_payment.id,
             "fee_id": db_payment.fee_id,
@@ -3324,7 +6969,7 @@ def create_fee_payment(fee_id: int, payment: FeePaymentCreate):
     finally:
         db.close()
 
-@app.get("/fees/{fee_id}/payments/", response_model=List[FeePayment])
+@app.get("/fees/{fee_id}/payments/", response_model=List[FeePayment], dependencies=[Depends(require_student)])
 def get_fee_payments(fee_id: int):
     """Get all payments for a fee"""
     db = SessionLocal()
@@ -3352,9 +6997,9 @@ def get_fee_payments(fee_id: int):
     finally:
         db.close()
 
-@app.delete("/fees/{fee_id}/payments/{payment_id}")
-def delete_fee_payment(fee_id: int, payment_id: int):
-    """Delete a payment and recalculate fee status"""
+@app.delete("/fees/{fee_id}/payments/{payment_id}", dependencies=[Depends(require_owner)])
+def delete_fee_payment(fee_id: int, payment_id: int, cancel_reason: str = Body(..., embed=True), current_user: dict = Depends(require_owner)):
+    """Soft cancel a payment and recalculate fee status (C12 requirement)"""
     db = SessionLocal()
     try:
         payment = db.query(FeePaymentDB).filter(
@@ -3364,24 +7009,150 @@ def delete_fee_payment(fee_id: int, payment_id: int):
         if not payment:
             raise HTTPException(status_code=404, detail="Payment not found")
         
-        db.delete(payment)
+        # Lock check: Prevent cancellation after 24 hours
+        time_diff = datetime.utcnow() - payment.created_at.replace(tzinfo=None)
+        if time_diff.total_seconds() > 86400: # 24 hours
+            raise HTTPException(status_code=403, detail="Payments cannot be cancelled after 24 hours.")
+
+        payment.is_cancelled = True
+        payment.cancel_reason = cancel_reason
         db.commit()
         
         # Recalculate fee status
         fee = db.query(FeeDB).filter(FeeDB.id == fee_id).first()
         if fee:
-            total_paid = calculate_total_paid(fee_id, db)
+            query = db.query(func.sum(FeePaymentDB.amount)).filter(FeePaymentDB.fee_id == fee_id, FeePaymentDB.is_cancelled == False)
+            total_paid = query.scalar() or 0.0
             new_status = calculate_fee_status(fee.amount, total_paid, fee.due_date)
             fee.status = new_status
             db.commit()
         
-        return {"message": "Payment deleted successfully"}
+        # Audit log
+        emit_audit_log(db, int(current_user["sub"]), current_user["role"], "CANCEL_PAYMENT", "fee_payment", payment_id, {"amount": payment.amount}, {"is_cancelled": True, "reason": cancel_reason})
+        
+        return {"message": "Payment cancelled successfully"}
+    finally:
+        db.close()
+
+# ==================== Coach Salary Routes ====================
+
+@app.post("/coach-salaries/", response_model=CoachSalary, dependencies=[Depends(require_owner)])
+def create_coach_salary(salary: CoachSalaryCreate):
+    """Record a salary payment for a coach"""
+    db = SessionLocal()
+    try:
+        # Check if record already exists for this coach and month
+        # existing = db.query(CoachSalaryDB).filter(
+        #     CoachSalaryDB.coach_id == salary.coach_id,
+        #     CoachSalaryDB.month == salary.month
+        # ).first()
+        # if existing:
+        #     raise HTTPException(status_code=400, detail=f"Salary already recorded for this coach for {salary.month}")
+        
+        db_salary = CoachSalaryDB(**salary.model_dump())
+        db.add(db_salary)
+        db.commit()
+        db.refresh(db_salary)
+        
+        # Enrich with coach name
+        coach = db.query(CoachDB).filter(CoachDB.id == db_salary.coach_id).first()
+        
+        return {
+            "id": db_salary.id,
+            "coach_id": db_salary.coach_id,
+            "coach_name": coach.name if coach else None,
+            "amount": db_salary.amount,
+            "payment_date": db_salary.payment_date,
+            "month": db_salary.month,
+            "remarks": db_salary.remarks,
+            # "created_at": db_salary.created_at
+        }
+    except IntegrityError:
+         db.rollback()
+         raise HTTPException(status_code=400, detail="Database error")
+    finally:
+        db.close()
+
+@app.get("/coach-salaries/", response_model=List[CoachSalary], dependencies=[Depends(require_owner)])
+def get_coach_salaries(month: Optional[str] = None, coach_id: Optional[int] = None):
+    """Get coach salaries, optionally filtered by month or coach"""
+    db = SessionLocal()
+    try:
+        query = db.query(CoachSalaryDB)
+        
+        if month:
+            query = query.filter(CoachSalaryDB.month == month)
+        
+        if coach_id:
+            query = query.filter(CoachSalaryDB.coach_id == coach_id)
+            
+        salaries = query.order_by(CoachSalaryDB.payment_date.desc()).all()
+        
+        result = []
+        for s in salaries:
+            coach = db.query(CoachDB).filter(CoachDB.id == s.coach_id).first()
+            result.append({
+                "id": s.id,
+                "coach_id": s.coach_id,
+                "coach_name": coach.name if coach else None,
+                "amount": s.amount,
+                "payment_date": s.payment_date,
+                "month": s.month,
+                "remarks": s.remarks,
+                # "created_at": s.created_at
+            })
+            
+        return result
+    finally:
+        db.close()
+
+@app.put("/coach-salaries/{salary_id}", response_model=CoachSalary, dependencies=[Depends(require_owner)])
+def update_coach_salary(salary_id: int, salary_update: CoachSalaryUpdate):
+    """Update a salary record"""
+    db = SessionLocal()
+    try:
+        db_salary = db.query(CoachSalaryDB).filter(CoachSalaryDB.id == salary_id).first()
+        if not db_salary:
+            raise HTTPException(status_code=404, detail="Salary record not found")
+            
+        update_data = salary_update.model_dump(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(db_salary, key, value)
+            
+        db.commit()
+        db.refresh(db_salary)
+        
+        coach = db.query(CoachDB).filter(CoachDB.id == db_salary.coach_id).first()
+        return {
+            "id": db_salary.id,
+            "coach_id": db_salary.coach_id,
+            "coach_name": coach.name if coach else None,
+            "amount": db_salary.amount,
+            "payment_date": db_salary.payment_date,
+            "month": db_salary.month,
+            "remarks": db_salary.remarks,
+        }
+    finally:
+        db.close()
+
+@app.delete("/coach-salaries/{salary_id}", dependencies=[Depends(require_owner)])
+def delete_coach_salary(salary_id: int):
+    """Delete a salary record"""
+    db = SessionLocal()
+    try:
+        db_salary = db.query(CoachSalaryDB).filter(CoachSalaryDB.id == salary_id).first()
+        if not db_salary:
+            raise HTTPException(status_code=404, detail="Salary record not found")
+            
+        db.delete(db_salary)
+        db.commit()
+        return {"message": "Salary record deleted"}
     finally:
         db.close()
 
 # ==================== Session Routes ====================
 
-@app.post("/sessions/", response_model=Session)
+@app.post("/sessions/", response_model=Session, dependencies=[Depends(require_owner)])
 def create_session(session: SessionCreate):
     """Create a new session/season"""
     db = SessionLocal()
@@ -3406,7 +7177,7 @@ def create_session(session: SessionCreate):
     finally:
         db.close()
 
-@app.get("/sessions/", response_model=List[Session])
+@app.get("/sessions/", response_model=List[Session], dependencies=[Depends(require_student)])
 def get_sessions(status: Optional[str] = None):
     """Get all sessions, optionally filtered by status"""
     db = SessionLocal()
@@ -3430,7 +7201,7 @@ def get_sessions(status: Optional[str] = None):
     finally:
         db.close()
 
-@app.get("/sessions/{session_id}", response_model=Session)
+@app.get("/sessions/{session_id}", response_model=Session, dependencies=[Depends(require_student)])
 def get_session(session_id: int):
     """Get a specific session by ID"""
     db = SessionLocal()
@@ -3450,7 +7221,7 @@ def get_session(session_id: int):
     finally:
         db.close()
 
-@app.put("/sessions/{session_id}", response_model=Session)
+@app.put("/sessions/{session_id}", response_model=Session, dependencies=[Depends(require_owner)])
 def update_session(session_id: int, session_update: SessionUpdate):
     """Update a session"""
     db = SessionLocal()
@@ -3483,7 +7254,7 @@ def update_session(session_id: int, session_update: SessionUpdate):
     finally:
         db.close()
 
-@app.delete("/sessions/{session_id}")
+@app.delete("/sessions/{session_id}", dependencies=[Depends(require_owner)])
 def delete_session(session_id: int):
     """Delete a session (only if no batches are assigned)"""
     db = SessionLocal()
@@ -3511,7 +7282,7 @@ def delete_session(session_id: int):
     finally:
         db.close()
 
-@app.get("/sessions/{session_id}/batches", response_model=List[Batch])
+@app.get("/sessions/{session_id}/batches", response_model=List[Batch], dependencies=[Depends(require_student)])
 def get_session_batches(session_id: int):
     """Get all batches assigned to a session"""
     db = SessionLocal()
@@ -3530,7 +7301,7 @@ def get_session_batches(session_id: int):
     finally:
         db.close()
 
-@app.get("/batches/{batch_id}/students", response_model=List[Student])
+@app.get("/batches/{batch_id}/students", response_model=List[Student], dependencies=[Depends(require_student)])
 def get_batch_students(batch_id: int):
     """Get all approved students enrolled in a batch"""
     db = SessionLocal()
@@ -3547,11 +7318,11 @@ def get_batch_students(batch_id: int):
         
         # Get student details
         students = db.query(StudentDB).filter(StudentDB.id.in_(student_ids)).all()
-        return students
+        return [Student.model_validate(s) for s in students]
     finally:
         db.close()
 
-@app.post("/fees/{fee_id}/notify")
+@app.post("/fees/{fee_id}/notify", dependencies=[Depends(require_owner)])
 def notify_student_about_fee(fee_id: int):
     """Send notification to student about overdue fee"""
     db = SessionLocal()
@@ -3586,22 +7357,44 @@ def notify_student_about_fee(fee_id: int):
         db.commit()
         db.refresh(notification)
         
+        # B11: Send fee overdue reminder email
+        try:
+            if student.email:
+                reminder_html = f"""
+<html><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;">
+<div style="max-width:480px;margin:auto;background:#fff;border-radius:8px;padding:32px;">
+  <h2 style="color:#1a1a2e;">Fee Payment Reminder</h2>
+  <p>Dear {student.name},</p>
+  <p>This is a polite reminder that your fee payment of <strong>₹{pending_amount:.2f}</strong> is currently overdue.</p>
+  <p>Due Date: <strong>{fee.due_date}</strong></p>
+  <p>Please log in to your Shuttler app or contact your academy admin to complete this payment.</p>
+  <p style="color:#888;font-size:13px;">If you have already paid, please ignore this email.</p>
+</div></body></html>"""
+                send_email(
+                    to_email=student.email,
+                    subject=f"Shuttler — Fee Overdue Reminder (₹{pending_amount:.2f})",
+                    html_content=reminder_html,
+                    plain_content=f"Fee overdue: ₹{pending_amount:.2f}. Please pay at your earliest convenience.",
+                )
+        except Exception as _ee:
+            print(f"[Email] Fee reminder email error: {_ee}")
+
         return {"message": "Notification sent successfully", "notification_id": notification.id}
     finally:
         db.close()
 
 # ==================== Performance Routes ====================
 
-@app.get("/performance/student/{student_id}")
+@app.get("/performance/student/{student_id}", dependencies=[Depends(require_student)])
 def get_student_performance(student_id: int):
     db = SessionLocal()
     try:
         performance = db.query(PerformanceDB).filter(PerformanceDB.student_id == student_id).all()
-        return performance
+        return [Performance.model_validate(p) for p in performance]
     finally:
         db.close()
 
-@app.get("/performance/grouped/student/{student_id}")
+@app.get("/performance/grouped/student/{student_id}", dependencies=[Depends(require_student)])
 def get_student_performance_grouped(student_id: int):
     """Get student performance records grouped by date"""
     db = SessionLocal()
@@ -3656,7 +7449,7 @@ def get_student_performance_grouped(student_id: int):
     finally:
         db.close()
 
-@app.get("/performance/grouped/all")
+@app.get("/performance/grouped/all", dependencies=[Depends(require_student)])
 def get_all_performance_grouped():
     """Get all performance records grouped by date for owner/coach view"""
     db = SessionLocal()
@@ -3709,7 +7502,7 @@ def get_all_performance_grouped():
     finally:
         db.close()
 
-@app.get("/performance/grouped/coach/{coach_name}")
+@app.get("/performance/grouped/coach/{coach_name}", dependencies=[Depends(require_student)])
 def get_coach_performance_grouped(coach_name: str):
     """Get performance records created by a specific coach"""
     db = SessionLocal()
@@ -3775,11 +7568,25 @@ def transform_performance_to_frontend(records: List[PerformanceDB], db) -> Optio
     student = db.query(StudentDB).filter(StudentDB.id == records[0].student_id).first()
     student_name = student.name if student else None
     
+    # Get batch name
+    batch_name = "Unknown"
+    try:
+        batch = db.query(BatchDB).filter(BatchDB.id == records[0].batch_id).first()
+        batch_name = batch.batch_name if batch else "Unknown"
+    except Exception:
+        # Fallback for potential migration issues
+        from sqlalchemy import text
+        result = db.execute(text("SELECT batch_name FROM batches WHERE id = :batch_id"), {"batch_id": records[0].batch_id}).first()
+        if result:
+            batch_name = result[0]
+    
     # Initialize with defaults
     result = {
         "id": records[0].id,  # Use first record's ID
         "student_id": records[0].student_id,
         "student_name": student_name,
+        "batch_id": records[0].batch_id,
+        "batch_name": batch_name,
         "date": records[0].date,
         "serve": 0,
         "smash": 0,
@@ -3814,7 +7621,7 @@ def transform_performance_to_frontend(records: List[PerformanceDB], db) -> Optio
     
     return result
 
-@app.get("/performance/", response_model=List[PerformanceFrontend])
+@app.get("/performance/", response_model=List[PerformanceFrontend], dependencies=[Depends(require_student)])
 def get_performance_records(
     student_id: Optional[int] = None,
     start_date: Optional[str] = None,
@@ -3836,10 +7643,10 @@ def get_performance_records(
         
         all_records = query.order_by(PerformanceDB.date.desc()).all()
         
-        # Group by date and student_id
+        # Group by date, student_id, and batch_id
         grouped = {}
         for record in all_records:
-            key = f"{record.date}_{record.student_id}"
+            key = f"{record.date}_{record.student_id}_{record.batch_id}"
             if key not in grouped:
                 grouped[key] = []
             grouped[key].append(record)
@@ -3855,7 +7662,51 @@ def get_performance_records(
     finally:
         db.close()
 
-@app.get("/performance/{record_id}", response_model=PerformanceFrontend)
+@app.get("/performance/completion-status", dependencies=[Depends(require_coach)])
+def get_performance_completion_status(batch_id: int, date: Optional[str] = None):
+    """B8: Get performance completion status for all students in a batch on a given date"""
+    from datetime import datetime
+    db = SessionLocal()
+    try:
+        if not date:
+            date = datetime.now().strftime("%Y-%m-%d")
+            
+        # Get all approved students in the batch
+        batch_students = db.query(BatchStudentDB).filter(
+            BatchStudentDB.batch_id == batch_id,
+            BatchStudentDB.status == "approved"
+        ).all()
+        student_ids = [bs.student_id for bs in batch_students]
+        
+        if not student_ids:
+            return []
+            
+        students = db.query(StudentDB).filter(StudentDB.id.in_(student_ids)).all()
+        student_map = {s.id: s.name for s in students}
+        
+        # Get performance records for these students on this date and batch
+        records = db.query(PerformanceDB).filter(
+            PerformanceDB.batch_id == batch_id,
+            PerformanceDB.date == date,
+            PerformanceDB.student_id.in_(student_ids)
+        ).all()
+        
+        assessed_student_ids = set([r.student_id for r in records])
+        
+        result = []
+        for sid in student_ids:
+            if sid in student_map:
+                result.append({
+                    "student_id": sid,
+                    "student_name": student_map[sid],
+                    "has_entry": sid in assessed_student_ids
+                })
+                
+        return result
+    finally:
+        db.close()
+
+@app.get("/performance/{record_id}", response_model=PerformanceFrontend, dependencies=[Depends(require_student)])
 def get_performance_record(record_id: int):
     """Get a single performance record by ID in frontend format"""
     db = SessionLocal()
@@ -3865,11 +7716,12 @@ def get_performance_record(record_id: int):
         if not first_record:
             raise HTTPException(status_code=404, detail="Performance record not found")
         
-        # Get all records for the same date and student
+        # Get all records for the same date, student, and batch
         all_records = db.query(PerformanceDB).filter(
             and_(
                 PerformanceDB.student_id == first_record.student_id,
-                PerformanceDB.date == first_record.date
+                PerformanceDB.date == first_record.date,
+                PerformanceDB.batch_id == first_record.batch_id
             )
         ).all()
         
@@ -3882,23 +7734,21 @@ def get_performance_record(record_id: int):
         db.close()
 
 @app.post("/performance/", response_model=PerformanceFrontend)
-def create_performance_record_v2(performance_data: PerformanceFrontendCreate):
+def create_performance_record_v2(performance_data: PerformanceFrontendCreate, current_user: dict = Depends(require_coach)):
     """Create performance records (frontend-compatible endpoint)"""
     db = SessionLocal()
     try:
-        # Get current user for recorded_by (you may need to adjust this based on your auth)
-        recorded_by = "owner"  # Default, should come from auth context
+        # A15: Coaches may only record performance for students in their assigned batches
+        if current_user.get("user_type") == "coach":
+            coach_id = int(current_user["sub"])
+            if not verify_coach_batch_access(coach_id, performance_data.batch_id, db):
+                raise HTTPException(
+                    status_code=403,
+                    detail="You are not assigned to this batch and cannot record performance for it."
+                )
+
+        recorded_by = current_user.get("email", "coach")  # Use authenticated user's email
         
-        # Get student to find batch_id (required by backend model)
-        student = db.query(StudentDB).filter(StudentDB.id == performance_data.student_id).first()
-        if not student:
-            raise HTTPException(status_code=404, detail="Student not found")
-        
-        # Get student's first batch enrollment, or use default
-        batch_student = db.query(BatchStudentDB).filter(
-            BatchStudentDB.student_id == performance_data.student_id
-        ).first()
-        batch_id = batch_student.batch_id if batch_student else 1
         
         # Create individual records for each skill with rating > 0
         skill_mappings = {
@@ -3914,7 +7764,7 @@ def create_performance_record_v2(performance_data: PerformanceFrontendCreate):
             if rating > 0:  # Only create record if rating is provided
                 db_performance = PerformanceDB(
                     student_id=performance_data.student_id,
-                    batch_id=batch_id,
+                    batch_id=performance_data.batch_id,
                     date=performance_data.date,
                     skill=skill,
                     rating=rating,
@@ -3933,18 +7783,33 @@ def create_performance_record_v2(performance_data: PerformanceFrontendCreate):
         for record in created_records:
             db.refresh(record)
         
-        # Get all records for this date/student to return in frontend format
+        # Get all records for this date/student/batch to return in frontend format
         all_records = db.query(PerformanceDB).filter(
             and_(
                 PerformanceDB.student_id == performance_data.student_id,
-                PerformanceDB.date == performance_data.date
+                PerformanceDB.date == performance_data.date,
+                PerformanceDB.batch_id == performance_data.batch_id
             )
         ).all()
         
         transformed = transform_performance_to_frontend(all_records, db)
         if not transformed:
             raise HTTPException(status_code=500, detail="Failed to create performance record")
-        
+
+        # B5: Notify student that performance was recorded
+        try:
+            create_notification(
+                db=db,
+                user_id=performance_data.student_id,
+                user_type="student",
+                title="Performance Recorded",
+                body=f"Your performance for {performance_data.date} has been recorded.",
+                type="performance",
+                data={"batch_id": performance_data.batch_id, "date": str(performance_data.date)},
+            )
+        except Exception as _ne:
+            print(f"[Notif] Performance POST notification error: {_ne}")
+
         return transformed
     except HTTPException:
         raise
@@ -3955,7 +7820,7 @@ def create_performance_record_v2(performance_data: PerformanceFrontendCreate):
         db.close()
 
 @app.put("/performance/{record_id}", response_model=PerformanceFrontend)
-def update_performance_record(record_id: int, performance_update: PerformanceFrontendUpdate):
+def update_performance_record(record_id: int, performance_update: PerformanceFrontendUpdate, current_user: dict = Depends(require_coach)):
     """Update performance records (frontend-compatible endpoint)"""
     db = SessionLocal()
     try:
@@ -3963,12 +7828,22 @@ def update_performance_record(record_id: int, performance_update: PerformanceFro
         first_record = db.query(PerformanceDB).filter(PerformanceDB.id == record_id).first()
         if not first_record:
             raise HTTPException(status_code=404, detail="Performance record not found")
+
+        # A15: Coaches may only update performance for students in their assigned batches
+        if current_user.get("user_type") == "coach":
+            coach_id = int(current_user["sub"])
+            if not verify_coach_batch_access(coach_id, first_record.batch_id, db):
+                raise HTTPException(
+                    status_code=403,
+                    detail="You are not assigned to this batch and cannot update this performance record."
+                )
         
-        # Get all records for the same date and student
+        # Get all records for the same date, student, and batch
         all_records = db.query(PerformanceDB).filter(
             and_(
                 PerformanceDB.student_id == first_record.student_id,
-                PerformanceDB.date == first_record.date
+                PerformanceDB.date == first_record.date,
+                PerformanceDB.batch_id == first_record.batch_id
             )
         ).all()
         
@@ -4026,14 +7901,29 @@ def update_performance_record(record_id: int, performance_update: PerformanceFro
         updated_records = db.query(PerformanceDB).filter(
             and_(
                 PerformanceDB.student_id == first_record.student_id,
-                PerformanceDB.date == new_date
+                PerformanceDB.date == new_date,
+                PerformanceDB.batch_id == first_record.batch_id
             )
         ).all()
         
         transformed = transform_performance_to_frontend(updated_records, db)
         if not transformed:
             raise HTTPException(status_code=404, detail="Performance record not found")
-        
+
+        # B5: Notify student that performance was updated
+        try:
+            create_notification(
+                db=db,
+                user_id=first_record.student_id,
+                user_type="student",
+                title="Performance Updated",
+                body=f"Your performance record for {first_record.date} has been updated.",
+                type="performance",
+                data={"batch_id": first_record.batch_id, "date": str(first_record.date)},
+            )
+        except Exception as _ne:
+            print(f"[Notif] Performance PUT notification error: {_ne}")
+
         return transformed
     except HTTPException:
         raise
@@ -4043,7 +7933,7 @@ def update_performance_record(record_id: int, performance_update: PerformanceFro
     finally:
         db.close()
 
-@app.delete("/performance/{record_id}")
+@app.delete("/performance/{record_id}", dependencies=[Depends(require_coach)])
 def delete_performance_record(record_id: int):
     """Delete performance records (all records for the same date/student)"""
     db = SessionLocal()
@@ -4053,11 +7943,12 @@ def delete_performance_record(record_id: int):
         if not first_record:
             raise HTTPException(status_code=404, detail="Performance record not found")
         
-        # Delete all records for the same date and student
+        # Delete all records for the same date, student, and batch
         all_records = db.query(PerformanceDB).filter(
             and_(
                 PerformanceDB.student_id == first_record.student_id,
-                PerformanceDB.date == first_record.date
+                PerformanceDB.date == first_record.date,
+                PerformanceDB.batch_id == first_record.batch_id
             )
         ).all()
         
@@ -4073,6 +7964,77 @@ def delete_performance_record(record_id: int):
         raise HTTPException(status_code=400, detail=str(e))
     finally:
         db.close()
+
+# ── B8: Performance Entry Completion Status ──────────────────────────────
+@app.get("/performance/completion-status", dependencies=[Depends(require_coach)])
+def get_performance_completion_status(
+    batch_id: int,
+    date: Optional[str] = None,
+    current_user: dict = Depends(require_coach),
+):
+    """
+    Return completion status of performance entries for all approved students in a
+    batch for a given date. Used by the coach portal to see who has/hasn't been assessed.
+    """
+    db = SessionLocal()
+    try:
+        target_date = date or datetime.now().strftime("%Y-%m-%d")
+
+        # A15: coaches may only view batches they are assigned to
+        if current_user.get("user_type") == "coach":
+            coach_id = int(current_user["sub"])
+            if not verify_coach_batch_access(coach_id, batch_id, db):
+                raise HTTPException(
+                    status_code=403,
+                    detail="You are not assigned to this batch.",
+                )
+
+        # Get all approved students in the batch
+        batch_students = (
+            db.query(BatchStudentDB)
+            .filter(
+                BatchStudentDB.batch_id == batch_id,
+                BatchStudentDB.status == "approved",
+            )
+            .all()
+        )
+        student_ids = [bs.student_id for bs in batch_students]
+        if not student_ids:
+            return []
+
+        # Performance records already created for this batch+date
+        perf_records = (
+            db.query(PerformanceDB)
+            .filter(
+                PerformanceDB.batch_id == batch_id,
+                PerformanceDB.date == target_date,
+                PerformanceDB.student_id.in_(student_ids),
+            )
+            .all()
+        )
+        # Map student_id → first record id (representative id for update/view)
+        assessed: Dict[int, int] = {}
+        for r in perf_records:
+            if r.student_id not in assessed:
+                assessed[r.student_id] = r.id
+
+        students = db.query(StudentDB).filter(StudentDB.id.in_(student_ids)).all()
+
+        result = [
+            {
+                "student_id": s.id,
+                "student_name": s.name,
+                "has_entry": s.id in assessed,
+                "performance_id": assessed.get(s.id),
+            }
+            for s in students
+        ]
+        # Sort: pending students first, then alphabetical
+        result.sort(key=lambda x: (x["has_entry"], x["student_name"]))
+        return result
+    finally:
+        db.close()
+
 
 # ==================== BMI Routes ====================
 
@@ -4100,7 +8062,7 @@ def bmi_db_to_response(bmi_db: BMIDB) -> BMI:
         health_status=calculate_health_status(bmi_db.bmi)
     )
 
-@app.post("/bmi/", response_model=BMI)
+@app.post("/bmi/", response_model=BMI, dependencies=[Depends(require_owner)])
 def create_bmi_record(bmi_data: BMICreate):
     db = SessionLocal()
     try:
@@ -4119,7 +8081,7 @@ def create_bmi_record(bmi_data: BMICreate):
     finally:
         db.close()
 
-@app.get("/bmi/student/{student_id}")
+@app.get("/bmi/student/{student_id}", dependencies=[Depends(require_owner)])
 def get_student_bmi(student_id: int):
     db = SessionLocal()
     try:
@@ -4130,7 +8092,7 @@ def get_student_bmi(student_id: int):
 
 # ==================== BMI Records Routes (Frontend Compatible) ====================
 
-@app.get("/bmi-records/", response_model=List[BMI])
+@app.get("/bmi-records/", response_model=List[BMI], dependencies=[Depends(require_student)])
 def get_bmi_records(
     student_id: Optional[int] = None,
     start_date: Optional[str] = None,
@@ -4155,7 +8117,7 @@ def get_bmi_records(
     finally:
         db.close()
 
-@app.get("/bmi-records/{record_id}", response_model=BMI)
+@app.get("/bmi-records/{record_id}", response_model=BMI, dependencies=[Depends(require_student)])
 def get_bmi_record(record_id: int):
     """Get a single BMI record by ID"""
     db = SessionLocal()
@@ -4167,7 +8129,7 @@ def get_bmi_record(record_id: int):
     finally:
         db.close()
 
-@app.post("/bmi-records/", response_model=BMI)
+@app.post("/bmi-records/", response_model=BMI, dependencies=[Depends(require_coach)])
 def create_bmi_record_v2(bmi_data: BMICreate):
     """Create a new BMI record (frontend compatible endpoint)"""
     db = SessionLocal()
@@ -4175,7 +8137,7 @@ def create_bmi_record_v2(bmi_data: BMICreate):
         # Calculate BMI
         height_m = bmi_data.height / 100
         bmi_value = bmi_data.weight / (height_m ** 2)
-        
+
         db_bmi = BMIDB(
             **bmi_data.dict(),
             bmi=round(bmi_value, 2)
@@ -4183,6 +8145,21 @@ def create_bmi_record_v2(bmi_data: BMICreate):
         db.add(db_bmi)
         db.commit()
         db.refresh(db_bmi)
+
+        # B5: Notify student that BMI was recorded
+        try:
+            create_notification(
+                db=db,
+                user_id=db_bmi.student_id,
+                user_type="student",
+                title="BMI Recorded",
+                body=f"Your BMI has been recorded: {db_bmi.bmi:.1f} (H:{db_bmi.height}cm W:{db_bmi.weight}kg).",
+                type="bmi",
+                data={"bmi_id": db_bmi.id, "bmi": db_bmi.bmi},
+            )
+        except Exception as _ne:
+            print(f"[Notif] BMI POST notification error: {_ne}")
+
         return bmi_db_to_response(db_bmi)
     except Exception as e:
         db.rollback()
@@ -4190,7 +8167,7 @@ def create_bmi_record_v2(bmi_data: BMICreate):
     finally:
         db.close()
 
-@app.put("/bmi-records/{record_id}", response_model=BMI)
+@app.put("/bmi-records/{record_id}", response_model=BMI, dependencies=[Depends(require_coach)])
 def update_bmi_record(record_id: int, bmi_update: BMIUpdate):
     """Update a BMI record"""
     db = SessionLocal()
@@ -4213,9 +8190,24 @@ def update_bmi_record(record_id: int, bmi_update: BMIUpdate):
         
         for key, value in update_data.items():
             setattr(db_bmi, key, value)
-        
+
         db.commit()
         db.refresh(db_bmi)
+
+        # B5: Notify student that BMI was updated
+        try:
+            create_notification(
+                db=db,
+                user_id=db_bmi.student_id,
+                user_type="student",
+                title="BMI Updated",
+                body=f"Your BMI record has been updated: {db_bmi.bmi:.1f} (H:{db_bmi.height}cm W:{db_bmi.weight}kg).",
+                type="bmi",
+                data={"bmi_id": db_bmi.id, "bmi": db_bmi.bmi},
+            )
+        except Exception as _ne:
+            print(f"[Notif] BMI PUT notification error: {_ne}")
+
         return bmi_db_to_response(db_bmi)
     except HTTPException:
         raise
@@ -4225,7 +8217,7 @@ def update_bmi_record(record_id: int, bmi_update: BMIUpdate):
     finally:
         db.close()
 
-@app.delete("/bmi-records/{record_id}")
+@app.delete("/bmi-records/{record_id}", dependencies=[Depends(require_coach)])
 def delete_bmi_record(record_id: int):
     """Delete a BMI record"""
     db = SessionLocal()
@@ -4247,7 +8239,7 @@ def delete_bmi_record(record_id: int):
 
 # ==================== Enquiry Routes ====================
 
-@app.post("/enquiries/", response_model=Enquiry)
+@app.post("/enquiries/", response_model=Enquiry, dependencies=[Depends(require_owner)])
 def create_enquiry(enquiry: EnquiryCreate):
     db = SessionLocal()
     try:
@@ -4258,29 +8250,29 @@ def create_enquiry(enquiry: EnquiryCreate):
         db.add(db_enquiry)
         db.commit()
         db.refresh(db_enquiry)
-        return db_enquiry
+        return Enquiry.model_validate(db_enquiry)
     finally:
         db.close()
 
-@app.get("/enquiries/", response_model=List[Enquiry])
+@app.get("/enquiries/", response_model=List[Enquiry], dependencies=[Depends(require_owner)])
 def get_enquiries():
     db = SessionLocal()
     try:
         enquiries = db.query(EnquiryDB).all()
-        return enquiries
+        return [Enquiry.model_validate(e) for e in enquiries]
     finally:
         db.close()
 
-@app.get("/enquiries/assigned/{assigned_to}")
+@app.get("/enquiries/assigned/{assigned_to}", dependencies=[Depends(require_owner)])
 def get_assigned_enquiries(assigned_to: str):
     db = SessionLocal()
     try:
         enquiries = db.query(EnquiryDB).filter(EnquiryDB.assigned_to == assigned_to).all()
-        return enquiries
+        return [Enquiry.model_validate(e) for e in enquiries]
     finally:
         db.close()
 
-@app.put("/enquiries/{enquiry_id}", response_model=Enquiry)
+@app.put("/enquiries/{enquiry_id}", response_model=Enquiry, dependencies=[Depends(require_owner)])
 def update_enquiry(enquiry_id: int, enquiry_update: EnquiryUpdate):
     db = SessionLocal()
     try:
@@ -4294,11 +8286,11 @@ def update_enquiry(enquiry_id: int, enquiry_update: EnquiryUpdate):
         
         db.commit()
         db.refresh(enquiry)
-        return enquiry
+        return Enquiry.model_validate(enquiry)
     finally:
         db.close()
 
-@app.delete("/enquiries/{enquiry_id}")
+@app.delete("/enquiries/{enquiry_id}", dependencies=[Depends(require_owner)])
 def delete_enquiry(enquiry_id: int):
     db = SessionLocal()
     try:
@@ -4313,43 +8305,67 @@ def delete_enquiry(enquiry_id: int):
 
 # ==================== Schedule Routes ====================
 
-@app.post("/schedules/", response_model=Schedule)
+@app.post("/schedules/", response_model=Schedule, dependencies=[Depends(require_coach)])
 def create_schedule(schedule: ScheduleCreate):
     db = SessionLocal()
     try:
-        db_schedule = ScheduleDB(**schedule.dict())
+        db_schedule = ScheduleDB(**schedule.model_dump())
         db.add(db_schedule)
         db.commit()
         db.refresh(db_schedule)
-        return db_schedule
+        
+        # Sync with CalendarEvent
+        try:
+            schedule_date = datetime.strptime(db_schedule.date, "%Y-%m-%d").date()
+            calendar_event = CalendarEventDB(
+                title=f"Session: {db_schedule.activity}",
+                event_type="event",
+                date=schedule_date,
+                description=db_schedule.description,
+                creator_type="coach", # Default to coach context for schedules
+                related_schedule_id=db_schedule.id
+            )
+            db.add(calendar_event)
+            db.commit()
+        except Exception as e:
+            print(f"Error syncing schedule to calendar: {e}")
+            
+        # Convert to Pydantic model before closing session to avoid DetachedInstanceError
+        return Schedule.model_validate(db_schedule)
     finally:
         db.close()
 
-@app.get("/schedules/batch/{batch_id}")
+@app.get("/schedules/batch/{batch_id}", dependencies=[Depends(require_student)])
 def get_batch_schedules(batch_id: int):
     db = SessionLocal()
     try:
         schedules = db.query(ScheduleDB).filter(ScheduleDB.batch_id == batch_id).all()
-        return schedules
+        return [Schedule.model_validate(s) for s in schedules]
     finally:
         db.close()
 
-@app.get("/schedules/date/{date}")
+@app.get("/schedules/date/{date}", dependencies=[Depends(require_student)])
 def get_schedules_by_date(date: str):
     db = SessionLocal()
     try:
         schedules = db.query(ScheduleDB).filter(ScheduleDB.date == date).all()
-        return schedules
+        return [Schedule.model_validate(s) for s in schedules]
     finally:
         db.close()
 
-@app.delete("/schedules/{schedule_id}")
+@app.delete("/schedules/{schedule_id}", dependencies=[Depends(require_coach)])
 def delete_schedule(schedule_id: int):
     db = SessionLocal()
     try:
         schedule = db.query(ScheduleDB).filter(ScheduleDB.id == schedule_id).first()
         if not schedule:
             raise HTTPException(status_code=404, detail="Schedule not found")
+            
+        # Remove linked calendar event
+        try:
+            db.query(CalendarEventDB).filter(CalendarEventDB.related_schedule_id == schedule_id).delete()
+        except: pass
+            
         db.delete(schedule)
         db.commit()
         return {"message": "Schedule deleted"}
@@ -4358,44 +8374,68 @@ def delete_schedule(schedule_id: int):
 
 # ==================== Tournament Routes ====================
 
-@app.post("/tournaments/", response_model=Tournament)
+@app.post("/tournaments/", response_model=Tournament, dependencies=[Depends(require_coach)])
 def create_tournament(tournament: TournamentCreate):
     db = SessionLocal()
     try:
-        db_tournament = TournamentDB(**tournament.dict())
+        db_tournament = TournamentDB(**tournament.model_dump())
         db.add(db_tournament)
         db.commit()
         db.refresh(db_tournament)
-        return db_tournament
+        
+        # Sync with CalendarEvent
+        try:
+            tournament_date = datetime.strptime(db_tournament.date, "%Y-%m-%d").date()
+            calendar_event = CalendarEventDB(
+                title=f"Tournament: {db_tournament.name}",
+                event_type="tournament",
+                date=tournament_date,
+                description=db_tournament.description,
+                creator_type="owner",
+                related_tournament_id=db_tournament.id
+            )
+            db.add(calendar_event)
+            db.commit()
+        except Exception as e:
+            print(f"Error syncing tournament to calendar: {e}")
+            
+        # Convert to Pydantic model before closing session to avoid DetachedInstanceError
+        return Tournament.model_validate(db_tournament)
     finally:
         db.close()
 
-@app.get("/tournaments/", response_model=List[Tournament])
+@app.get("/tournaments/", response_model=List[Tournament], dependencies=[Depends(require_student)])
 def get_tournaments():
     db = SessionLocal()
     try:
         tournaments = db.query(TournamentDB).all()
-        return tournaments
+        return [Tournament.model_validate(t) for t in tournaments]
     finally:
         db.close()
 
-@app.get("/tournaments/upcoming")
+@app.get("/tournaments/upcoming", dependencies=[Depends(require_student)])
 def get_upcoming_tournaments():
     db = SessionLocal()
     try:
         today = datetime.now().strftime("%Y-%m-%d")
         tournaments = db.query(TournamentDB).filter(TournamentDB.date >= today).all()
-        return tournaments
+        return [Tournament.model_validate(t) for t in tournaments]
     finally:
         db.close()
 
-@app.delete("/tournaments/{tournament_id}")
+@app.delete("/tournaments/{tournament_id}", dependencies=[Depends(require_coach)])
 def delete_tournament(tournament_id: int):
     db = SessionLocal()
     try:
         tournament = db.query(TournamentDB).filter(TournamentDB.id == tournament_id).first()
         if not tournament:
             raise HTTPException(status_code=404, detail="Tournament not found")
+            
+        # Remove linked calendar event
+        try:
+            db.query(CalendarEventDB).filter(CalendarEventDB.related_tournament_id == tournament_id).delete()
+        except: pass
+            
         db.delete(tournament)
         db.commit()
         return {"message": "Tournament deleted"}
@@ -4404,20 +8444,51 @@ def delete_tournament(tournament_id: int):
 
 # ==================== Video Resource Routes ====================
 
-@app.post("/video-resources/upload")
+@app.post("/video-resources/upload", dependencies=[Depends(require_coach)])
 async def upload_video(
-    student_id: int = Form(...),
+    audience_type: str = Form("student"), # "all", "batch", "student"
+    target_ids: Optional[str] = Form(None), # Comma-separated IDs
     title: Optional[str] = Form(None),
     remarks: Optional[str] = Form(None),
     uploaded_by: Optional[int] = Form(None),
     video: UploadFile = File(...)
 ):
-    """Upload a video file for a specific student"""
+    """Upload a video file with flexible targeting (Everyone, Batches, or Students)"""
     db = SessionLocal()
     try:
-        # Validate file type
+        # Validate audience_type
+        if audience_type not in ["all", "batch", "student"]:
+            raise HTTPException(status_code=400, detail="Invalid audience_type")
+
+        # Parse target_ids
+        targets = []
+        if target_ids:
+            try:
+                targets = [int(tid.strip()) for tid in target_ids.split(",") if tid.strip()]
+            except ValueError:
+                raise HTTPException(status_code=400, detail="target_ids must be a comma-separated list of integers")
+
+        if audience_type != "all" and not targets:
+            raise HTTPException(status_code=400, detail="target_ids required for 'batch' or 'student' audience")
+
+        # A12: Enforce video size limit (500 MB)
+        video.file.seek(0, 2)
+        video_size = video.file.tell()
+        video.file.seek(0)
+        if video_size > VIDEO_MAX_SIZE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Maximum allowed size for videos is {VIDEO_MAX_SIZE_BYTES // (1024 * 1024)} MB."
+            )
+
+        # A12: Validate extension against allowlist (extension-only check is acceptable for video
+        #      since magic-byte validation for all video containers is complex and not required here)
         allowed_extensions = ["mp4", "webm", "mov", "avi", "mkv", "m4v"]
-        file_extension = video.filename.split(".")[-1].lower() if video.filename else ""
+        # Sanitize: take only the last extension component; reject paths with directory separators
+        raw_filename = video.filename or ""
+        if "/" in raw_filename or "\\" in raw_filename or ".." in raw_filename:
+            raise HTTPException(status_code=400, detail="Invalid filename")
+        file_extension = raw_filename.rsplit(".", 1)[-1].lower() if "." in raw_filename else ""
 
         if file_extension not in allowed_extensions:
             raise HTTPException(
@@ -4425,36 +8496,42 @@ async def upload_video(
                 detail=f"File type not allowed. Allowed types: {', '.join(allowed_extensions)}"
             )
 
-        # Verify student exists
-        student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
-        if not student:
-            raise HTTPException(status_code=404, detail="Student not found")
-
-        # Generate unique filename
+        # A12: Server-generated UUID filename; original filename is discarded
         unique_filename = f"video_{uuid.uuid4()}.{file_extension}"
         file_path = UPLOAD_DIR / unique_filename
 
         # Save file
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(video.file, buffer)
+        # A14: strip execute bits
+        try:
+            os.chmod(file_path, 0o644)
+        except (AttributeError, NotImplementedError, OSError):
+            pass
 
         # Create database record
         db_video = VideoResourceDB(
-            student_id=student_id,
             title=title or video.filename,
             url=f"/uploads/{unique_filename}",
             remarks=remarks,
-            uploaded_by=uploaded_by
+            uploaded_by=uploaded_by,
+            audience_type=audience_type,
+            student_id=targets[0] if audience_type == "student" and len(targets) == 1 else None # Backward compat
         )
         db.add(db_video)
         db.commit()
         db.refresh(db_video)
 
-        # Return with student name
+        # Create target records
+        for target_id in targets:
+            db_target = VideoTargetDB(video_id=db_video.id, target_id=target_id)
+            db.add(db_target)
+        db.commit()
+
         return {
             "id": db_video.id,
-            "student_id": db_video.student_id,
-            "student_name": student.name,
+            "audience_type": db_video.audience_type,
+            "target_ids": targets,
             "title": db_video.title,
             "url": db_video.url,
             "remarks": db_video.remarks,
@@ -4464,42 +8541,106 @@ async def upload_video(
     except HTTPException:
         raise
     except Exception as e:
+        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         db.close()
 
-@app.get("/video-resources/")
+@app.get("/video-resources/", dependencies=[Depends(require_student)])
 def get_video_resources(student_id: Optional[int] = None):
-    """Get all video resources, optionally filtered by student_id"""
+    """Get video resources. If student_id provided, returns videos targeted to them directly, via their batches, or to everyone."""
     db = SessionLocal()
     try:
+        if student_id is None:
+            # For owner view - just return all videos
+            videos = db.query(VideoResourceDB).order_by(VideoResourceDB.created_at.desc()).all()
+            result = []
+            for video in videos:
+                # Get targets
+                targets = db.query(VideoTargetDB).filter(VideoTargetDB.video_id == video.id).all()
+                
+                # Resolve uploader name
+                uploader_name = "Unknown"
+                if video.uploaded_by:
+                    owner = db.query(OwnerDB).filter(OwnerDB.id == video.uploaded_by).first()
+                    if owner:
+                        uploader_name = owner.name
+                    else:
+                        coach = db.query(CoachDB).filter(CoachDB.id == video.uploaded_by).first()
+                        if coach:
+                            uploader_name = coach.name
+
+                result.append({
+                    "id": video.id,
+                    "title": video.title,
+                    "url": video.url,
+                    "remarks": video.remarks,
+                    "uploaded_by": video.uploaded_by,
+                    "uploader_name": uploader_name,
+                    "audience_type": video.audience_type,
+                    "target_ids": [t.target_id for t in targets],
+                    "created_at": video.created_at
+                })
+            return result
+
+        # For student view - complex filtering
+        # 1. Direct student targets
+        # 2. Batch targets (if student is in that batch)
+        # 3. 'all' audience
+        
+        # Get student's batches
+        batch_ids = [bs.batch_id for bs in db.query(BatchStudentDB).filter(BatchStudentDB.student_id == student_id).all()]
+
         query = db.query(VideoResourceDB)
+        
+        # Filter: (audience_type='all') OR 
+        #         (audience_type='student' AND video_id in (targets where target_id=student_id)) OR
+        #         (audience_type='batch' AND video_id in (targets where target_id in student_batch_ids))
+        
+        all_condition = VideoResourceDB.audience_type == "all"
+        
+        student_target_video_ids = db.query(VideoTargetDB.video_id).filter(
+            and_(VideoTargetDB.target_id == student_id, VideoResourceDB.audience_type == "student")
+        ).join(VideoResourceDB, VideoTargetDB.video_id == VideoResourceDB.id).scalar_subquery()
+        
+        batch_target_video_ids = db.query(VideoTargetDB.video_id).filter(
+            and_(VideoTargetDB.target_id.in_(batch_ids), VideoResourceDB.audience_type == "batch")
+        ).join(VideoResourceDB, VideoTargetDB.video_id == VideoResourceDB.id).scalar_subquery() if batch_ids else None
 
-        if student_id is not None:
-            query = query.filter(VideoResourceDB.student_id == student_id)
+        conditions = [all_condition, VideoResourceDB.id.in_(student_target_video_ids)]
+        if batch_target_video_ids is not None:
+            conditions.append(VideoResourceDB.id.in_(batch_target_video_ids))
+            
+        videos = query.filter(or_(*conditions)).order_by(VideoResourceDB.created_at.desc()).all()
 
-        videos = query.order_by(VideoResourceDB.created_at.desc()).all()
-
-        # Enrich with student names
         result = []
         for video in videos:
-            student = db.query(StudentDB).filter(StudentDB.id == video.student_id).first()
+            # Resolve uploader name
+            uploader_name = "Unknown"
+            if video.uploaded_by:
+                owner = db.query(OwnerDB).filter(OwnerDB.id == video.uploaded_by).first()
+                if owner:
+                    uploader_name = owner.name
+                else:
+                    coach = db.query(CoachDB).filter(CoachDB.id == video.uploaded_by).first()
+                    if coach:
+                        uploader_name = coach.name
+
             result.append({
                 "id": video.id,
-                "student_id": video.student_id,
-                "student_name": student.name if student else None,
                 "title": video.title,
                 "url": video.url,
                 "remarks": video.remarks,
                 "uploaded_by": video.uploaded_by,
+                "uploader_name": uploader_name,
+                "audience_type": video.audience_type,
                 "created_at": video.created_at
             })
-
         return result
     finally:
         db.close()
 
-@app.get("/video-resources/{video_id}")
+@app.get("/video-resources/{video_id}", dependencies=[Depends(require_student)])
 def get_video_resource_by_id(video_id: int):
     """Get a specific video resource by ID"""
     db = SessionLocal()
@@ -4523,7 +8664,7 @@ def get_video_resource_by_id(video_id: int):
     finally:
         db.close()
 
-@app.delete("/video-resources/{video_id}")
+@app.delete("/video-resources/{video_id}", dependencies=[Depends(require_coach)])
 def delete_video_resource(video_id: int):
     """Delete a video resource and its file"""
     db = SessionLocal()
@@ -4549,7 +8690,7 @@ def delete_video_resource(video_id: int):
 
 # ==================== Coach Invitation Routes ====================
 
-@app.post("/coach-invitations/", response_model=CoachInvitation)
+@app.post("/coach-invitations/", response_model=CoachInvitation, dependencies=[Depends(require_owner)])
 def create_coach_invitation(invitation: CoachInvitationCreate):
     """Create a coach invitation - at least phone or email must be provided"""
     # Validate that at least phone or email is provided
@@ -4585,6 +8726,30 @@ def create_coach_invitation(invitation: CoachInvitationCreate):
         base_url = os.getenv("INVITE_BASE_URL", "https://academy.app")
         invite_link = f"{base_url}/invite/coach/{invite_token}"
         
+        # B11: Send coach invitation email
+        if email:
+            try:
+                invite_html = f"""
+<html><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;">
+<div style="max-width:480px;margin:auto;background:#fff;border-radius:8px;padding:32px;">
+  <h2 style="color:#1a1a2e;">Join Shuttler Academy</h2>
+  <p>Dear {invitation.coach_name or 'Coach'},</p>
+  <p>You have been invited by <strong>{invitation.owner_name}</strong> to join their academy as a Coach on Shuttler.</p>
+  <div style="text-align:center;margin:32px 0;">
+    <a href="{invite_link}" style="background:#4CAF50;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold;">Accept Invitation</a>
+  </div>
+  <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+  <p style="word-break:break-all;color:#0066cc;background:#f0f0f0;padding:8px;border-radius:4px;">{invite_link}</p>
+</div></body></html>"""
+                send_email(
+                    to_email=email,
+                    subject="You've been invited to join Shuttler as a Coach",
+                    html_content=invite_html,
+                    plain_content=f"You've been invited by {invitation.owner_name} to join as a Coach. Use this link to accept: {invite_link}",
+                )
+            except Exception as _ee:
+                print(f"[Email] Coach invitation email error: {_ee}")
+        
         # Convert to response model with invite link
         invitation_response = CoachInvitation(
             id=db_invitation.id,
@@ -4610,7 +8775,7 @@ def create_coach_invitation(invitation: CoachInvitationCreate):
     finally:
         db.close()
 
-@app.get("/coach-invitations/", response_model=List[CoachInvitation])
+@app.get("/coach-invitations/", response_model=List[CoachInvitation], dependencies=[Depends(require_owner)])
 def get_all_coach_invitations(owner_id: Optional[int] = None):
     """Get all coach invitations, optionally filtered by owner_id"""
     db = SessionLocal()
@@ -4642,7 +8807,7 @@ def get_all_coach_invitations(owner_id: Optional[int] = None):
     finally:
         db.close()
 
-@app.get("/coach-invitations/{coach_email}")
+@app.get("/coach-invitations/{coach_email}", dependencies=[Depends(require_owner)])
 def get_coach_invitations_by_email(coach_email: str):
     """Get coach invitations by email address"""
     db = SessionLocal()
@@ -4673,7 +8838,7 @@ def get_coach_invitations_by_email(coach_email: str):
     finally:
         db.close()
 
-@app.get("/coach-invitations/token/{invite_token}")
+@app.get("/coach-invitations/token/{invite_token}", dependencies=[Depends(require_owner)])
 def get_coach_invitation_by_token(invite_token: str):
     """Get coach invitation by invite token"""
     db = SessionLocal()
@@ -4704,7 +8869,7 @@ def get_coach_invitation_by_token(invite_token: str):
     finally:
         db.close()
 
-@app.put("/coach-invitations/{invitation_id}")
+@app.put("/coach-invitations/{invitation_id}", dependencies=[Depends(require_owner)])
 def update_coach_invitation(invitation_id: int, invitation_update: CoachInvitationUpdate):
     """Update coach invitation status"""
     db = SessionLocal()
@@ -4766,7 +8931,7 @@ def update_coach_invitation(invitation_id: int, invitation_update: CoachInvitati
     finally:
         db.close()
 
-@app.post("/invitations/", response_model=Invitation)
+@app.post("/invitations/", response_model=Invitation, dependencies=[Depends(require_owner)])
 def create_invitation(invitation: InvitationCreate):
     # Validate that at least phone or email is provided
     phone = (invitation.student_phone or '').strip()
@@ -4797,6 +8962,30 @@ def create_invitation(invitation: InvitationCreate):
         base_url = os.getenv("INVITE_BASE_URL", "https://academy.app")
         invite_link = f"{base_url}/invite/{invite_token}"
         
+        # B11: Send student invitation email
+        if email:
+            try:
+                invite_html = f"""
+<html><body style="font-family:Arial,sans-serif;background:#f5f5f5;padding:20px;">
+<div style="max-width:480px;margin:auto;background:#fff;border-radius:8px;padding:32px;">
+  <h2 style="color:#1a1a2e;">Join Shuttler Academy</h2>
+  <p>Hello,</p>
+  <p>You have been invited by Coach <strong>{invitation.coach_name or 'a coach'}</strong> to join their academy as a Student on Shuttler.</p>
+  <div style="text-align:center;margin:32px 0;">
+    <a href="{invite_link}" style="background:#4CAF50;color:#fff;padding:12px 24px;text-decoration:none;border-radius:6px;font-weight:bold;">Accept Invitation</a>
+  </div>
+  <p>If the button doesn't work, you can copy and paste this link into your browser:</p>
+  <p style="word-break:break-all;color:#0066cc;background:#f0f0f0;padding:8px;border-radius:4px;">{invite_link}</p>
+</div></body></html>"""
+                send_email(
+                    to_email=email,
+                    subject="You've been invited to join Shuttler as a Student",
+                    html_content=invite_html,
+                    plain_content=f"You've been invited to join as a Student. Use this link to accept: {invite_link}",
+                )
+            except Exception as _ee:
+                print(f"[Email] Student invitation email error: {_ee}")
+        
         # Convert to response model with invite link
         invitation_response = Invitation(
             id=db_invitation.id,
@@ -4817,27 +9006,58 @@ def create_invitation(invitation: InvitationCreate):
     finally:
         db.close()
 
-@app.get("/invitations/student/{student_email}")
+
+@app.get("/invitations/pending", response_model=List[Invitation], dependencies=[Depends(require_owner)])
+def get_pending_invitations():
+    """Get all pending invitations (waiting for student registration) - owner only"""
+    db = SessionLocal()
+    try:
+        invitations = db.query(InvitationDB).filter(
+            InvitationDB.status == "pending"
+        ).order_by(InvitationDB.created_at.desc()).all()
+        
+        # Add invite links
+        base_url = os.getenv("INVITE_BASE_URL", "https://academy.app")
+        result = []
+        for inv in invitations:
+            invite_link = f"{base_url}/invite/{inv.invite_token}"
+            result.append(Invitation(
+                id=inv.id,
+                coach_id=inv.coach_id,
+                coach_name=inv.coach_name,
+                student_phone=inv.student_phone,
+                student_email=inv.student_email,
+                batch_id=inv.batch_id,
+                invite_token=inv.invite_token,
+                invite_link=invite_link,
+                status=inv.status,
+                created_at=inv.created_at
+            ))
+        return result
+    finally:
+        db.close()
+
+@app.get("/invitations/student/{student_email}", dependencies=[Depends(require_owner)])
 def get_student_invitations(student_email: str):
     db = SessionLocal()
     try:
         invitations = db.query(InvitationDB).filter(
             InvitationDB.student_email == student_email
         ).all()
-        return invitations
+        return [Invitation.model_validate(i) for i in invitations]
     finally:
         db.close()
 
-@app.get("/invitations/coach/{coach_id}")
+@app.get("/invitations/coach/{coach_id}", dependencies=[Depends(require_owner)])
 def get_coach_invitations(coach_id: int):
     db = SessionLocal()
     try:
         invitations = db.query(InvitationDB).filter(InvitationDB.coach_id == coach_id).all()
-        return invitations
+        return [Invitation.model_validate(i) for i in invitations]
     finally:
         db.close()
 
-@app.put("/invitations/{invitation_id}")
+@app.put("/invitations/{invitation_id}", dependencies=[Depends(require_owner)])
 def update_invitation(invitation_id: int, invitation_update: InvitationUpdate):
     db = SessionLocal()
     try:
@@ -4871,13 +9091,20 @@ def update_invitation(invitation_id: int, invitation_update: InvitationUpdate):
         
         db.commit()
         db.refresh(invitation)
-        return invitation
+        return Invitation.model_validate(invitation)
     finally:
         db.close()
 
 # ==================== Analytics Routes ====================
 
-@app.get("/analytics/dashboard")
+@app.get("/analytics/storage", dependencies=[Depends(require_owner)])
+def get_storage_usage(db: Session = Depends(get_db)):
+    owner = db.query(OwnerDB).first()
+    used = owner.storage_used_bytes or 0 if owner else 0
+    limit = owner.storage_limit_bytes or 5368709120 if owner else 5368709120
+    return {"success": True, "used_bytes": used, "limit_bytes": limit, "percentage": (used / limit * 100) if limit > 0 else 0}
+
+@app.get("/analytics/dashboard", dependencies=[Depends(require_owner)])
 def get_analytics_dashboard():
     db = SessionLocal()
     try:
@@ -4933,7 +9160,7 @@ def get_analytics_dashboard():
     finally:
         db.close()
 
-@app.get("/analytics/coach/{coach_id}")
+@app.get("/analytics/coach/{coach_id}", dependencies=[Depends(require_owner)])
 def get_coach_analytics(coach_id: int):
     db = SessionLocal()
     try:
@@ -4994,7 +9221,7 @@ def _db_announcement_to_pydantic(db_announcement: AnnouncementDB) -> Announcemen
         is_sent=db_announcement.is_sent
     )
 
-@app.post("/api/announcements/", response_model=Announcement)
+@app.post("/api/announcements/", response_model=Announcement, dependencies=[Depends(require_coach)])
 def create_announcement(announcement: AnnouncementCreate):
     """Create a new announcement"""
     db = SessionLocal()
@@ -5028,6 +9255,52 @@ def create_announcement(announcement: AnnouncementCreate):
         db.add(db_announcement)
         db.commit()
         db.refresh(db_announcement)
+        
+        # Sync with CalendarEvent
+        try:
+            # If scheduled_at is provided, use its date, otherwise use today's date
+            event_date = date.today()
+            if db_announcement.scheduled_at:
+                event_date = db_announcement.scheduled_at.date()
+            
+            calendar_event = CalendarEventDB(
+                title=f"Announcement: {db_announcement.title}",
+                event_type="event",
+                date=event_date,
+                description=db_announcement.message,
+                created_by=db_announcement.created_by,
+                creator_type=db_announcement.creator_type,
+                related_announcement_id=db_announcement.id
+            )
+            db.add(calendar_event)
+            db.commit()
+        except Exception as e:
+            print(f"Error syncing announcement to calendar: {e}")
+        
+        # Notify Target Audience
+        try:
+            target_users = []
+            if db_announcement.target_audience == "all":
+                target_users.extend([(s.id, "student") for s in db.query(StudentDB).filter(StudentDB.status == "active").all()])
+                target_users.extend([(c.id, "coach") for c in db.query(CoachDB).filter(CoachDB.status == "active").all()])
+            elif db_announcement.target_audience == "students":
+                target_users.extend([(s.id, "student") for s in db.query(StudentDB).filter(StudentDB.status == "active").all()])
+            elif db_announcement.target_audience == "coaches":
+                target_users.extend([(c.id, "coach") for c in db.query(CoachDB).filter(CoachDB.status == "active").all()])
+            
+            for uid, utype in target_users:
+                create_notification(
+                    db=db, 
+                    user_id=uid, 
+                    user_type=utype, 
+                    title=f"New Announcement: {db_announcement.title}", 
+                    body=db_announcement.message, 
+                    type="announcement",
+                    data={"announcement_id": db_announcement.id}
+                )
+        except Exception as e:
+            print(f"Error sending announcement notifications: {e}")
+
         return _db_announcement_to_pydantic(db_announcement)
     except HTTPException:
         db.rollback()
@@ -5038,7 +9311,7 @@ def create_announcement(announcement: AnnouncementCreate):
     finally:
         db.close()
 
-@app.get("/api/announcements/", response_model=List[Announcement])
+@app.get("/api/announcements/", response_model=List[Announcement], dependencies=[Depends(require_student)])
 def get_announcements(
     target_audience: Optional[str] = Query(None, description="Filter by target audience"),
     priority: Optional[str] = Query(None, description="Filter by priority"),
@@ -5059,7 +9332,7 @@ def get_announcements(
     finally:
         db.close()
 
-@app.get("/api/announcements/{announcement_id}", response_model=Announcement)
+@app.get("/api/announcements/{announcement_id}", response_model=Announcement, dependencies=[Depends(require_student)])
 def get_announcement(announcement_id: int):
     """Get a specific announcement by ID"""
     db = SessionLocal()
@@ -5071,7 +9344,7 @@ def get_announcement(announcement_id: int):
     finally:
         db.close()
 
-@app.put("/api/announcements/{announcement_id}", response_model=Announcement)
+@app.put("/api/announcements/{announcement_id}", response_model=Announcement, dependencies=[Depends(require_coach)])
 def update_announcement(announcement_id: int, announcement: AnnouncementUpdate):
     """Update an announcement"""
     db = SessionLocal()
@@ -5094,6 +9367,24 @@ def update_announcement(announcement_id: int, announcement: AnnouncementUpdate):
 
         db.commit()
         db.refresh(db_announcement)
+        
+        # Sync with CalendarEvent
+        try:
+            calendar_event = db.query(CalendarEventDB).filter(CalendarEventDB.related_announcement_id == announcement_id).first()
+            if calendar_event:
+                if 'title' in update_data:
+                    calendar_event.title = f"Announcement: {db_announcement.title}"
+                if 'message' in update_data:
+                    calendar_event.description = db_announcement.message
+                if 'scheduled_at' in update_data:
+                    if db_announcement.scheduled_at:
+                        calendar_event.date = db_announcement.scheduled_at.date()
+                    else:
+                        calendar_event.date = date.today()
+                db.commit()
+        except Exception as e:
+            print(f"Error updating announcement in calendar: {e}")
+            
         return _db_announcement_to_pydantic(db_announcement)
     except Exception as e:
         db.rollback()
@@ -5101,7 +9392,7 @@ def update_announcement(announcement_id: int, announcement: AnnouncementUpdate):
     finally:
         db.close()
 
-@app.delete("/api/announcements/{announcement_id}")
+@app.delete("/api/announcements/{announcement_id}", dependencies=[Depends(require_coach)])
 def delete_announcement(announcement_id: int):
     """Delete an announcement"""
     db = SessionLocal()
@@ -5110,81 +9401,14 @@ def delete_announcement(announcement_id: int):
         if not db_announcement:
             raise HTTPException(status_code=404, detail="Announcement not found")
 
+        # Remove linked calendar event
+        try:
+            db.query(CalendarEventDB).filter(CalendarEventDB.related_announcement_id == announcement_id).delete()
+        except: pass
+            
         db.delete(db_announcement)
         db.commit()
         return {"message": "Announcement deleted successfully"}
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        db.close()
-
-# ==================== Notification Endpoints ====================
-
-@app.post("/api/notifications/", response_model=Notification)
-def create_notification(notification: NotificationCreate):
-    """Create a new notification"""
-    db = SessionLocal()
-    try:
-        db_notification = NotificationDB(**notification.dict())
-        db.add(db_notification)
-        db.commit()
-        db.refresh(db_notification)
-
-        # TODO: Send push notification via FCM here (optional for Phase 0)
-        # if fcm_token exists for user, send push notification
-
-        return db_notification
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        db.close()
-
-@app.get("/api/notifications/{user_id}", response_model=List[Notification])
-def get_user_notifications(user_id: int, user_type: str):
-    """Get all notifications for a specific user"""
-    db = SessionLocal()
-    try:
-        notifications = db.query(NotificationDB).filter(
-            NotificationDB.user_id == user_id,
-            NotificationDB.user_type == user_type
-        ).order_by(NotificationDB.created_at.desc()).all()
-        return notifications
-    finally:
-        db.close()
-
-@app.put("/api/notifications/{notification_id}/read", response_model=Notification)
-def mark_notification_read(notification_id: int):
-    """Mark a notification as read"""
-    db = SessionLocal()
-    try:
-        db_notification = db.query(NotificationDB).filter(NotificationDB.id == notification_id).first()
-        if not db_notification:
-            raise HTTPException(status_code=404, detail="Notification not found")
-
-        db_notification.is_read = True
-        db.commit()
-        db.refresh(db_notification)
-        return db_notification
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        db.close()
-
-@app.delete("/api/notifications/{notification_id}")
-def delete_notification(notification_id: int):
-    """Delete a notification"""
-    db = SessionLocal()
-    try:
-        db_notification = db.query(NotificationDB).filter(NotificationDB.id == notification_id).first()
-        if not db_notification:
-            raise HTTPException(status_code=404, detail="Notification not found")
-
-        db.delete(db_notification)
-        db.commit()
-        return {"message": "Notification deleted successfully"}
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
@@ -5205,10 +9429,13 @@ def _db_event_to_pydantic(db_event: CalendarEventDB) -> CalendarEvent:
         created_by=db_event.created_by,
         creator_type=db_event.creator_type or "coach",
         related_leave_request_id=db_event.related_leave_request_id,
+        related_tournament_id=db_event.related_tournament_id,
+        related_announcement_id=db_event.related_announcement_id,
+        related_schedule_id=db_event.related_schedule_id,
         created_at=db_event.created_at.isoformat() if hasattr(db_event.created_at, 'isoformat') else str(db_event.created_at),
     )
 
-@app.post("/api/calendar-events/", response_model=CalendarEvent)
+@app.post("/api/calendar-events/", response_model=CalendarEvent, dependencies=[Depends(require_coach)])
 def create_calendar_event(event: CalendarEventCreate):
     """Create a new calendar event"""
     db = SessionLocal()
@@ -5251,6 +9478,7 @@ def create_calendar_event(event: CalendarEventCreate):
         db.add(db_event)
         db.commit()
         db.refresh(db_event)
+        invalidate_cache("calendar_events")
         return _db_event_to_pydantic(db_event)
     except HTTPException:
         db.rollback()
@@ -5273,12 +9501,13 @@ def create_calendar_event(event: CalendarEventCreate):
         # Log the full error for debugging
         import traceback
         error_trace = traceback.format_exc()
-        print(f"❌ Error creating calendar event: {error_trace}")
+        print(f" Error creating calendar event: {error_trace}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
     finally:
         db.close()
 
-@app.get("/api/calendar-events/", response_model=List[CalendarEvent])
+@app.get("/api/calendar-events/", response_model=List[CalendarEvent], dependencies=[Depends(require_student)])
+@cache(namespace="calendar_events", expire=3600)
 def get_calendar_events(start_date: Optional[str] = None, end_date: Optional[str] = None, event_type: Optional[str] = None):
     """Get calendar events, optionally filtered by date range and event type"""
     from sqlalchemy import or_
@@ -5342,7 +9571,7 @@ def get_calendar_events(start_date: Optional[str] = None, end_date: Optional[str
     finally:
         db.close()
 
-@app.get("/api/calendar-events/{event_id}", response_model=CalendarEvent)
+@app.get("/api/calendar-events/{event_id}", response_model=CalendarEvent, dependencies=[Depends(require_student)])
 def get_calendar_event(event_id: int):
     """Get a specific calendar event by ID"""
     db = SessionLocal()
@@ -5354,7 +9583,7 @@ def get_calendar_event(event_id: int):
     finally:
         db.close()
 
-@app.put("/api/calendar-events/{event_id}", response_model=CalendarEvent)
+@app.put("/api/calendar-events/{event_id}", response_model=CalendarEvent, dependencies=[Depends(require_coach)])
 def update_calendar_event(event_id: int, event: CalendarEventUpdate):
     """Update a calendar event"""
     db = SessionLocal()
@@ -5380,6 +9609,7 @@ def update_calendar_event(event_id: int, event: CalendarEventUpdate):
 
         db.commit()
         db.refresh(db_event)
+        invalidate_cache("calendar_events")
         return _db_event_to_pydantic(db_event)
     except Exception as e:
         db.rollback()
@@ -5387,7 +9617,7 @@ def update_calendar_event(event_id: int, event: CalendarEventUpdate):
     finally:
         db.close()
 
-@app.delete("/api/calendar-events/{event_id}")
+@app.delete("/api/calendar-events/{event_id}", dependencies=[Depends(require_coach)])
 def delete_calendar_event(event_id: int):
     """Delete a calendar event"""
     db = SessionLocal()
@@ -5398,6 +9628,7 @@ def delete_calendar_event(event_id: int):
 
         db.delete(db_event)
         db.commit()
+        invalidate_cache("calendar_events")
         return {"message": "Calendar event deleted successfully"}
     except Exception as e:
         db.rollback()
@@ -5407,7 +9638,7 @@ def delete_calendar_event(event_id: int):
 
 # ==================== Leave Request Routes ====================
 
-@app.post("/leave-requests/", response_model=LeaveRequest)
+@app.post("/leave-requests/", response_model=LeaveRequest, dependencies=[Depends(require_coach)])
 def create_leave_request(request: LeaveRequestCreate):
     """Create a leave request - coaches can submit leave requests"""
     db = SessionLocal()
@@ -5439,6 +9670,22 @@ def create_leave_request(request: LeaveRequestCreate):
         db.commit()
         db.refresh(db_request)
         
+        # Notify Owners
+        try:
+            owners = db.query(OwnerDB).filter(OwnerDB.role == "owner").all()
+            for owner in owners:
+                create_notification(
+                    db=db,
+                    user_id=owner.id,
+                    user_type="owner",
+                    title="New Leave Request",
+                    body=f"Coach {db_request.coach_name} has requested {db_request.leave_type} leave from {db_request.start_date} to {db_request.end_date}",
+                    type="general",
+                    data={"leave_request_id": db_request.id}
+                )
+        except Exception as e:
+            print(f"Error sending leave notifications: {e}")
+        
         # Convert to response model
         return LeaveRequest(
             id=db_request.id,
@@ -5466,7 +9713,7 @@ def create_leave_request(request: LeaveRequestCreate):
     finally:
         db.close()
 
-@app.get("/leave-requests/", response_model=List[LeaveRequest])
+@app.get("/leave-requests/", response_model=List[LeaveRequest], dependencies=[Depends(require_coach)])
 def get_leave_requests(
     coach_id: Optional[int] = None,
     status: Optional[str] = None,
@@ -5555,7 +9802,14 @@ def get_leave_requests(
                 submitted_at=req.submitted_at.isoformat() if req.submitted_at else "",
                 reviewed_by=req.reviewed_by,
                 reviewed_at=req.reviewed_at.isoformat() if req.reviewed_at else None,
-                review_notes=req.review_notes
+                review_notes=req.review_notes,
+                modification_start_date=req.modification_start_date.strftime("%Y-%m-%d") if req.modification_start_date else None,
+                modification_end_date=req.modification_end_date.strftime("%Y-%m-%d") if req.modification_end_date else None,
+                modification_reason=req.modification_reason,
+                modification_status=req.modification_status,
+                original_start_date=req.original_start_date.strftime("%Y-%m-%d") if req.original_start_date else None,
+                original_end_date=req.original_end_date.strftime("%Y-%m-%d") if req.original_end_date else None,
+                original_reason=req.original_reason
             ))
         
         # #region agent log
@@ -5595,7 +9849,7 @@ def get_leave_requests(
     finally:
         db.close()
 
-@app.get("/leave-requests/{request_id}", response_model=LeaveRequest)
+@app.get("/leave-requests/{request_id}", response_model=LeaveRequest, dependencies=[Depends(require_coach)])
 def get_leave_request(request_id: int):
     """Get a specific leave request by ID"""
     db = SessionLocal()
@@ -5615,13 +9869,20 @@ def get_leave_request(request_id: int):
             status=request.status,
             submitted_at=request.submitted_at.isoformat() if request.submitted_at else "",
             reviewed_by=request.reviewed_by,
-            reviewed_at=request.reviewed_at.isoformat() if request.reviewed_at else None,
-            review_notes=request.review_notes
-        )
+                reviewed_at=request.reviewed_at.isoformat() if request.reviewed_at else None,
+                review_notes=request.review_notes,
+                modification_start_date=request.modification_start_date.strftime("%Y-%m-%d") if request.modification_start_date else None,
+                modification_end_date=request.modification_end_date.strftime("%Y-%m-%d") if request.modification_end_date else None,
+                modification_reason=request.modification_reason,
+                modification_status=request.modification_status,
+                original_start_date=request.original_start_date.strftime("%Y-%m-%d") if request.original_start_date else None,
+                original_end_date=request.original_end_date.strftime("%Y-%m-%d") if request.original_end_date else None,
+                original_reason=request.original_reason
+            )
     finally:
         db.close()
 
-@app.put("/leave-requests/{request_id}", response_model=LeaveRequest)
+@app.put("/leave-requests/{request_id}", response_model=LeaveRequest, dependencies=[Depends(require_owner)])
 def update_leave_request(request_id: int, update: LeaveRequestUpdate, owner_id: int):
     """Update leave request status - only owners can approve/reject"""
     db = SessionLocal()
@@ -5635,17 +9896,17 @@ def update_leave_request(request_id: int, update: LeaveRequestUpdate, owner_id: 
         db_request = db.query(LeaveRequestDB).filter(LeaveRequestDB.id == request_id).first()
         if not db_request:
             raise HTTPException(status_code=404, detail="Leave request not found")
-        
-        # Validate status
-        if update.status not in ["approved", "rejected"]:
-            raise HTTPException(status_code=400, detail="Status must be 'approved' or 'rejected'")
-        
-        # Update request
-        from datetime import datetime, timedelta
+
         db_request.status = update.status
         db_request.reviewed_by = owner_id
         db_request.reviewed_at = datetime.now()
         db_request.review_notes = update.review_notes
+        
+        # Capture initial history if it's being approved for the first time
+        if update.status == "approved" and db_request.original_start_date is None:
+            db_request.original_start_date = db_request.start_date
+            db_request.original_end_date = db_request.end_date
+            db_request.original_reason = db_request.reason
         
         # If approved, create calendar event(s) for the leave period
         if update.status == "approved":
@@ -5685,6 +9946,21 @@ def update_leave_request(request_id: int, update: LeaveRequestUpdate, owner_id: 
         db.commit()
         db.refresh(db_request)
         
+        # Notify Coach
+        try:
+            notif_title = "Leave Request Approved" if update.status == "approved" else "Leave Request Rejected"
+            create_notification(
+                db=db,
+                user_id=db_request.coach_id,
+                user_type="coach", 
+                title=notif_title,
+                body=f"Your {db_request.leave_type} leave request has been {update.status}.",
+                type="general",
+                data={"leave_request_id": db_request.id, "status": update.status}
+            )
+        except Exception as e:
+            print(f"Error sending leave update notification: {e}")
+        
         # Convert to response model
         return LeaveRequest(
             id=db_request.id,
@@ -5698,7 +9974,14 @@ def update_leave_request(request_id: int, update: LeaveRequestUpdate, owner_id: 
             submitted_at=db_request.submitted_at.isoformat() if db_request.submitted_at else "",
             reviewed_by=db_request.reviewed_by,
             reviewed_at=db_request.reviewed_at.isoformat() if db_request.reviewed_at else None,
-            review_notes=db_request.review_notes
+            review_notes=db_request.review_notes,
+            modification_start_date=db_request.modification_start_date.strftime("%Y-%m-%d") if db_request.modification_start_date else None,
+            modification_end_date=db_request.modification_end_date.strftime("%Y-%m-%d") if db_request.modification_end_date else None,
+            modification_reason=db_request.modification_reason,
+            modification_status=db_request.modification_status,
+            original_start_date=db_request.original_start_date.strftime("%Y-%m-%d") if db_request.original_start_date else None,
+            original_end_date=db_request.original_end_date.strftime("%Y-%m-%d") if db_request.original_end_date else None,
+            original_reason=db_request.original_reason
         )
     except HTTPException:
         db.rollback()
@@ -5709,7 +9992,67 @@ def update_leave_request(request_id: int, update: LeaveRequestUpdate, owner_id: 
     finally:
         db.close()
 
-@app.delete("/leave-requests/{request_id}")
+@app.patch("/leave-requests/{request_id}", response_model=LeaveRequest, dependencies=[Depends(require_owner)])
+def patch_leave_request(request_id: int, update: LeaveRequestUpdateCoach, coach_id: int):
+    """Edit a pending leave request (coaches only)"""
+    db = SessionLocal()
+    try:
+        db_request = db.query(LeaveRequestDB).filter(LeaveRequestDB.id == request_id).first()
+        if not db_request:
+            raise HTTPException(status_code=404, detail="Leave request not found")
+        
+        # Verify coach owns this request
+        if db_request.coach_id != coach_id:
+            raise HTTPException(status_code=403, detail="You can only edit your own leave requests")
+        
+        # Only allow editing if status is pending
+        if db_request.status != "pending":
+            raise HTTPException(status_code=400, detail="Can only edit pending leave requests")
+        
+        # Update fields if provided
+        if update.start_date:
+            db_request.start_date = datetime.strptime(update.start_date, "%Y-%m-%d").date()
+        if update.end_date:
+            db_request.end_date = datetime.strptime(update.end_date, "%Y-%m-%d").date()
+        if update.leave_type:
+            db_request.leave_type = update.leave_type
+        if update.reason:
+            db_request.reason = update.reason
+            
+        db.commit()
+        db.refresh(db_request)
+        
+        return LeaveRequest(
+            id=db_request.id,
+            coach_id=db_request.coach_id,
+            coach_name=db_request.coach_name,
+            start_date=db_request.start_date.strftime("%Y-%m-%d"),
+            end_date=db_request.end_date.strftime("%Y-%m-%d"),
+            leave_type=db_request.leave_type,
+            reason=db_request.reason,
+            status=db_request.status,
+            submitted_at=db_request.submitted_at.isoformat() if db_request.submitted_at else "",
+            reviewed_by=db_request.reviewed_by,
+            reviewed_at=db_request.reviewed_at.isoformat() if db_request.reviewed_at else None,
+            review_notes=db_request.review_notes,
+            modification_start_date=db_request.modification_start_date.strftime("%Y-%m-%d") if db_request.modification_start_date else None,
+            modification_end_date=db_request.modification_end_date.strftime("%Y-%m-%d") if db_request.modification_end_date else None,
+            modification_reason=db_request.modification_reason,
+            modification_status=db_request.modification_status,
+            original_start_date=db_request.original_start_date.strftime("%Y-%m-%d") if db_request.original_start_date else None,
+            original_end_date=db_request.original_end_date.strftime("%Y-%m-%d") if db_request.original_end_date else None,
+            original_reason=db_request.original_reason
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error patching leave request: {str(e)}")
+    finally:
+        db.close()
+
+@app.delete("/leave-requests/{request_id}", dependencies=[Depends(require_owner)])
 def delete_leave_request(request_id: int, coach_id: int):
     """Delete a leave request - only the coach who created it can delete (if pending)"""
     db = SessionLocal()
@@ -5738,9 +10081,236 @@ def delete_leave_request(request_id: int, coach_id: int):
     finally:
         db.close()
 
+@app.post("/leave-requests/{request_id}/modify", response_model=LeaveRequest, dependencies=[Depends(require_coach)])
+def submit_leave_modification(request_id: int, modification: LeaveRequestModificationCreate):
+    """Submit a modification to an approved leave request"""
+    db = SessionLocal()
+    try:
+        db_request = db.query(LeaveRequestDB).filter(LeaveRequestDB.id == request_id).first()
+        if not db_request:
+            raise HTTPException(status_code=404, detail="Leave request not found")
+        
+        # Only allowed if original request is approved
+        if db_request.status != "approved":
+            raise HTTPException(status_code=400, detail="Only approved leave requests can be modified")
+        
+        # Verify modification date range (max 7 days)
+        from datetime import datetime
+        start = datetime.strptime(modification.start_date, "%Y-%m-%d")
+        end = datetime.strptime(modification.end_date, "%Y-%m-%d")
+        days = (end - start).days + 1
+        
+        if days > 7:
+            raise HTTPException(status_code=400, detail="Modification leave duration cannot exceed 7 days")
+        
+        if days < 1:
+            raise HTTPException(status_code=400, detail="End date must be after start date")
+        
+        # Update modification fields
+        db_request.modification_start_date = start.date()
+        db_request.modification_end_date = end.date()
+        db_request.modification_reason = modification.reason
+        db_request.modification_status = "pending"
+        
+        # Capture initial history if not already present
+        if db_request.original_start_date is None:
+            db_request.original_start_date = db_request.start_date
+            db_request.original_end_date = db_request.end_date
+            db_request.original_reason = db_request.reason
+        
+        db.commit()
+        db.refresh(db_request)
+        
+        # Determine effective response values for notifications
+        mod_start = db_request.modification_start_date.strftime("%Y-%m-%d") if db_request.modification_start_date else None
+        mod_end = db_request.modification_end_date.strftime("%Y-%m-%d") if db_request.modification_end_date else None
+        
+        # Notify Owners about the modification request
+        try:
+            owners = db.query(OwnerDB).filter(OwnerDB.role == "owner").all()
+            for owner in owners:
+                create_notification(
+                    db=db,
+                    user_id=owner.id,
+                    user_type="owner",
+                    title="Leave Modification Request",
+                    body=f"Coach {db_request.coach_name} has requested to modify their {db_request.leave_type} leave from {mod_start} to {mod_end}. Reason: {modification.reason}",
+                    type="general",
+                    data={
+                        "leave_request_id": db_request.id,
+                        "modification_status": "pending",
+                        "original_dates": f"{db_request.start_date} to {db_request.end_date}",
+                        "new_dates": f"{mod_start} to {mod_end}"
+                    }
+                )
+        except Exception as e:
+            print(f"Error sending leave modification notifications: {e}")
+        
+        return LeaveRequest(
+            id=db_request.id,
+            coach_id=db_request.coach_id,
+            coach_name=db_request.coach_name,
+            start_date=db_request.start_date.strftime("%Y-%m-%d"),
+            end_date=db_request.end_date.strftime("%Y-%m-%d"),
+            leave_type=db_request.leave_type,
+            reason=db_request.reason,
+            status=db_request.status,
+            submitted_at=db_request.submitted_at.isoformat() if db_request.submitted_at else "",
+            reviewed_by=db_request.reviewed_by,
+            reviewed_at=db_request.reviewed_at.isoformat() if db_request.reviewed_at else None,
+            review_notes=db_request.review_notes,
+            modification_start_date=mod_start,
+            modification_end_date=mod_end,
+            modification_reason=db_request.modification_reason,
+            modification_status=db_request.modification_status,
+            original_start_date=db_request.original_start_date.strftime("%Y-%m-%d") if db_request.original_start_date else None,
+            original_end_date=db_request.original_end_date.strftime("%Y-%m-%d") if db_request.original_end_date else None,
+            original_reason=db_request.original_reason
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error submitting modification: {str(e)}")
+    finally:
+        db.close()
+
+@app.put("/leave-requests/{request_id}/review-modification", response_model=LeaveRequest, dependencies=[Depends(require_owner)])
+def review_modification_request(request_id: int, review: LeaveRequestModificationReview):
+    """Review a leave modification request (approve mod, reject mod, or reject all)"""
+    db = SessionLocal()
+    try:
+        # Verify owner exists
+        owner = db.query(OwnerDB).filter(OwnerDB.id == review.owner_id).first()
+        if not owner:
+            raise HTTPException(status_code=404, detail="Owner not found")
+            
+        db_request = db.query(LeaveRequestDB).filter(LeaveRequestDB.id == request_id).first()
+        if not db_request:
+            raise HTTPException(status_code=404, detail="Leave request not found")
+        
+        if db_request.modification_status != "pending":
+            raise HTTPException(status_code=400, detail="No pending modification to review")
+            
+        if review.action == "approve":
+            # Approve Modification: Update main dates to modified dates
+            db_request.modification_status = "approved"
+            db_request.start_date = db_request.modification_start_date
+            db_request.end_date = db_request.modification_end_date
+            # Original reason is kept? Or updated? 
+            # Plan says: "Update Calendar". Reason implies we might want to append modification reason?
+            # Let's append mod reason to notes or keep purely as modification metadata.
+            # We will rely on updated start/end dates for the calendar.
+            
+            # Update Calendar Events
+            existing_event = db.query(CalendarEventDB).filter(
+                CalendarEventDB.related_leave_request_id == request_id
+            ).first()
+            
+            if existing_event:
+                existing_event.date = db_request.start_date
+                existing_event.end_date = db_request.end_date
+                existing_event.description = f"Leave request: {db_request.reason} (Modified: {db_request.modification_reason})"
+            
+        elif review.action == "reject_modification":
+            # Reject Modification: Keep original dates
+            db_request.modification_status = "rejected"
+            # No change to Calendar
+            
+        elif review.action == "reject_all":
+            # Reject Both: Cancel entire leave
+            db_request.status = "rejected"
+            db_request.modification_status = "rejected"
+            
+            # Remove from Calendar
+            existing_events = db.query(CalendarEventDB).filter(
+                CalendarEventDB.related_leave_request_id == request_id
+            ).all()
+            for event in existing_events:
+                db.delete(event)
+                
+        else:
+            raise HTTPException(status_code=400, detail="Invalid action")
+            
+        db_request.reviewed_by = review.owner_id
+        from datetime import datetime
+        db_request.reviewed_at = datetime.now()
+        if review.review_notes:
+            db_request.review_notes = review.review_notes
+
+        db.commit()
+        db.refresh(db_request)
+        
+        # Prepare response
+        mod_start = db_request.modification_start_date.strftime("%Y-%m-%d") if db_request.modification_start_date else None
+        mod_end = db_request.modification_end_date.strftime("%Y-%m-%d") if db_request.modification_end_date else None
+        
+        # Notify Coach about the modification review
+        try:
+            if review.action == "approve":
+                notif_title = "Leave Modification Approved"
+                notif_body = f"Your modification request for {db_request.leave_type} leave has been approved. New dates: {mod_start} to {mod_end}"
+            elif review.action == "reject_modification":
+                notif_title = "Leave Modification Rejected"
+                notif_body = f"Your modification request for {db_request.leave_type} leave has been rejected. Original leave dates remain: {db_request.start_date} to {db_request.end_date}"
+            elif review.action == "reject_all":
+                notif_title = "Leave Request Cancelled"
+                notif_body = f"Your {db_request.leave_type} leave request and modification have been rejected."
+            else:
+                notif_title = "Leave Modification Update"
+                notif_body = f"Your leave modification request has been reviewed."
+            
+            create_notification(
+                db=db,
+                user_id=db_request.coach_id,
+                user_type="coach",
+                title=notif_title,
+                body=notif_body,
+                type="general",
+                data={
+                    "leave_request_id": db_request.id,
+                    "action": review.action,
+                    "modification_status": db_request.modification_status
+                }
+            )
+        except Exception as e:
+            print(f"Error sending modification review notification: {e}")
+        
+        return LeaveRequest(
+            id=db_request.id,
+            coach_id=db_request.coach_id,
+            coach_name=db_request.coach_name,
+            start_date=db_request.start_date.strftime("%Y-%m-%d"),
+            end_date=db_request.end_date.strftime("%Y-%m-%d"),
+            leave_type=db_request.leave_type,
+            reason=db_request.reason,
+            status=db_request.status,
+            submitted_at=db_request.submitted_at.isoformat() if db_request.submitted_at else "",
+            reviewed_by=db_request.reviewed_by,
+            reviewed_at=db_request.reviewed_at.isoformat() if db_request.reviewed_at else None,
+            review_notes=db_request.review_notes,
+            modification_start_date=mod_start,
+            modification_end_date=mod_end,
+            modification_reason=db_request.modification_reason,
+            modification_status=db_request.modification_status,
+            original_start_date=db_request.original_start_date.strftime("%Y-%m-%d") if db_request.original_start_date else None,
+            original_end_date=db_request.original_end_date.strftime("%Y-%m-%d") if db_request.original_end_date else None,
+            original_reason=db_request.original_reason
+        )
+        
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error reviewing modification: {str(e)}")
+    finally:
+        db.close()
+
 # ==================== Student Registration Request Routes ====================
 
-@app.post("/students/registration-request", response_model=StudentRegistrationRequest)
+@app.post("/students/registration-request", response_model=StudentRegistrationRequest, dependencies=[Depends(require_coach)])
 def create_student_registration_request(request: StudentRegistrationRequestCreate):
     """Create a student registration request - requires owner approval"""
     db = SessionLocal()
@@ -5760,6 +10330,18 @@ def create_student_registration_request(request: StudentRegistrationRequestCreat
         # Hash password
         hashed_password = hash_password(request.password)
         
+        # Check for invite token and link
+        invitation_id = None
+        invited_by_coach_id = None
+        
+        if request.invite_token:
+            invitation = db.query(InvitationDB).filter(
+                InvitationDB.invite_token == request.invite_token
+            ).first()
+            if invitation:
+                invitation_id = invitation.id
+                invited_by_coach_id = invitation.coach_id
+        
         # Create registration request
         db_request = StudentRegistrationRequestDB(
             name=request.name,
@@ -5771,11 +10353,43 @@ def create_student_registration_request(request: StudentRegistrationRequestCreat
             date_of_birth=request.date_of_birth,
             address=request.address,
             t_shirt_size=request.t_shirt_size,
+            blood_group=request.blood_group,
+            invitation_id=invitation_id,
+            invited_by_coach_id=invited_by_coach_id,
             status="pending"
         )
         db.add(db_request)
         db.commit()
         db.refresh(db_request)
+        
+        # Notify Owners
+        try:
+            owners = db.query(OwnerDB).filter(OwnerDB.role == "owner").all()
+            for owner in owners:
+                notif_body = f"New registration request from {db_request.name}"
+                if invited_by_coach_id:
+                     coach = db.query(CoachDB).filter(CoachDB.id == invited_by_coach_id).first()
+                     if coach:
+                         notif_body += f" (invited by {coach.name})"
+                         
+                create_notification(
+                    db=db,
+                    user_id=owner.id,
+                    user_type="owner",
+                    title="Student Registration Request",
+                    body=notif_body,
+                    type="general",
+                    data={"registration_request_id": db_request.id}
+                )
+        except Exception as e:
+            print(f"Error sending registration notification: {e}")
+        
+        # Get coach name if invited
+        invited_by_coach_name = None
+        if invited_by_coach_id:
+            coach = db.query(CoachDB).filter(CoachDB.id == invited_by_coach_id).first()
+            if coach:
+                invited_by_coach_name = coach.name
         
         # Convert to response model
         return StudentRegistrationRequest(
@@ -5792,7 +10406,11 @@ def create_student_registration_request(request: StudentRegistrationRequestCreat
             guardian_phone=db_request.guardian_phone,
             date_of_birth=db_request.date_of_birth,
             address=db_request.address,
-            t_shirt_size=db_request.t_shirt_size
+            t_shirt_size=db_request.t_shirt_size,
+            blood_group=db_request.blood_group,
+            invitation_id=db_request.invitation_id,
+            invited_by_coach_id=db_request.invited_by_coach_id,
+            invited_by_coach_name=invited_by_coach_name
         )
     except HTTPException:
         db.rollback()
@@ -5803,7 +10421,7 @@ def create_student_registration_request(request: StudentRegistrationRequestCreat
     finally:
         db.close()
 
-@app.get("/student-registration-requests/", response_model=List[StudentRegistrationRequest])
+@app.get("/student-registration-requests/", response_model=List[StudentRegistrationRequest], dependencies=[Depends(require_owner)])
 def get_student_registration_requests(
     status: Optional[str] = Query(None, description="Filter by status: pending, approved, rejected")
 ):
@@ -5814,6 +10432,13 @@ def get_student_registration_requests(
         if status:
             query = query.filter(StudentRegistrationRequestDB.status == status)
         requests = query.order_by(StudentRegistrationRequestDB.submitted_at.desc()).all()
+        
+        # Pre-fetch coaches if needed
+        coach_map = {}
+        coach_ids = {req.invited_by_coach_id for req in requests if req.invited_by_coach_id}
+        if coach_ids:
+            coaches = db.query(CoachDB).filter(CoachDB.id.in_(coach_ids)).all()
+            coach_map = {c.id: c.name for c in coaches}
         
         # Convert to response models
         return [
@@ -5831,14 +10456,18 @@ def get_student_registration_requests(
                 guardian_phone=req.guardian_phone,
                 date_of_birth=req.date_of_birth,
                 address=req.address,
-                t_shirt_size=req.t_shirt_size
+                t_shirt_size=req.t_shirt_size,
+                blood_group=req.blood_group,
+                invitation_id=req.invitation_id,
+                invited_by_coach_id=req.invited_by_coach_id,
+                invited_by_coach_name=coach_map.get(req.invited_by_coach_id)
             )
             for req in requests
         ]
     finally:
         db.close()
 
-@app.get("/student-registration-requests/{request_id}", response_model=StudentRegistrationRequest)
+@app.get("/student-registration-requests/{request_id}", response_model=StudentRegistrationRequest, dependencies=[Depends(require_owner)])
 def get_student_registration_request(request_id: int):
     """Get a specific registration request"""
     db = SessionLocal()
@@ -5868,7 +10497,7 @@ def get_student_registration_request(request_id: int):
     finally:
         db.close()
 
-@app.put("/student-registration-requests/{request_id}", response_model=StudentRegistrationRequest)
+@app.put("/student-registration-requests/{request_id}", response_model=StudentRegistrationRequest, dependencies=[Depends(require_owner)])
 def update_registration_request_status(
     request_id: int,
     update: StudentRegistrationRequestUpdate,
@@ -5948,7 +10577,7 @@ def update_registration_request_status(
     finally:
         db.close()
 
-@app.get("/students/check-registration-status/{email}")
+@app.get("/students/check-registration-status/{email}", dependencies=[Depends(require_student)])
 def check_registration_status(email: str):
     """Check if a registration request exists for an email"""
     db = SessionLocal()
@@ -5970,42 +10599,1042 @@ def check_registration_status(email: str):
     finally:
         db.close()
 
+# ==================== Coach Registration Request Routes ====================
+
+@app.post("/coaches/registration-request", response_model=CoachRegistrationRequest, dependencies=[Depends(require_owner)])
+def create_coach_registration_request(request: CoachRegistrationRequestCreate):
+    """Create a coach registration request - requires owner approval"""
+    db = SessionLocal()
+    try:
+        # Check if email already exists in coaches table
+        existing_coach = db.query(CoachDB).filter(CoachDB.email == request.email).first()
+        if existing_coach:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        
+        # Check if email already exists in pending requests
+        existing_request = db.query(CoachRegistrationRequestDB).filter(
+            CoachRegistrationRequestDB.email == request.email
+        ).first()
+        if existing_request:
+            raise HTTPException(status_code=400, detail="Registration request already exists for this email")
+        
+        # Hash password
+        hashed_password = hash_password(request.password)
+        
+        # Create registration request
+        db_request = CoachRegistrationRequestDB(
+            name=request.name,
+            email=request.email,
+            phone=request.phone,
+            password=hashed_password,
+            specialization=request.specialization,
+            experience_years=request.experience_years,
+            status="pending"
+        )
+        db.add(db_request)
+        db.commit()
+        db.refresh(db_request)
+        
+        # Notify Owners
+        try:
+            owners = db.query(OwnerDB).filter(OwnerDB.role == "owner").all()
+            for owner in owners:
+                create_notification(
+                    db=db,
+                    user_id=owner.id,
+                    user_type="owner",
+                    title="Coach Registration Request",
+                    body=f"New coach registration request from {db_request.name}",
+                    type="general",
+                    data={"coach_registration_request_id": db_request.id}
+                )
+        except Exception as e:
+            print(f"Error sending registration notification: {e}")
+        
+        # Convert to response model
+        return CoachRegistrationRequest(
+            id=db_request.id,
+            name=db_request.name,
+            email=db_request.email,
+            phone=db_request.phone,
+            specialization=db_request.specialization,
+            experience_years=db_request.experience_years,
+            status=db_request.status,
+            submitted_at=db_request.submitted_at.isoformat() if db_request.submitted_at else "",
+            reviewed_by=db_request.reviewed_by,
+            reviewed_at=db_request.reviewed_at.isoformat() if db_request.reviewed_at else None,
+            review_notes=db_request.review_notes
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error creating coach registration request: {str(e)}")
+    finally:
+        db.close()
+
+@app.get("/coach-registration-requests/", response_model=List[CoachRegistrationRequest], dependencies=[Depends(require_owner)])
+def get_coach_registration_requests(
+    status: Optional[str] = Query(None, description="Filter by status: pending, approved, rejected")
+):
+    """Get all coach registration requests - owner only"""
+    db = SessionLocal()
+    try:
+        query = db.query(CoachRegistrationRequestDB)
+        if status:
+            query = query.filter(CoachRegistrationRequestDB.status == status)
+        requests = query.order_by(CoachRegistrationRequestDB.submitted_at.desc()).all()
+        
+        # Convert to response models
+        return [
+            CoachRegistrationRequest(
+                id=req.id,
+                name=req.name,
+                email=req.email,
+                phone=req.phone,
+                specialization=req.specialization,
+                experience_years=req.experience_years,
+                status=req.status,
+                submitted_at=req.submitted_at.isoformat() if req.submitted_at else "",
+                reviewed_by=req.reviewed_by,
+                reviewed_at=req.reviewed_at.isoformat() if req.reviewed_at else None,
+                review_notes=req.review_notes
+            )
+            for req in requests
+        ]
+    finally:
+        db.close()
+
+@app.get("/coach-registration-requests/{request_id}", response_model=CoachRegistrationRequest, dependencies=[Depends(require_owner)])
+def get_coach_registration_request(request_id: int):
+    """Get a specific coach registration request"""
+    db = SessionLocal()
+    try:
+        request = db.query(CoachRegistrationRequestDB).filter(
+            CoachRegistrationRequestDB.id == request_id
+        ).first()
+        if not request:
+            raise HTTPException(status_code=404, detail="Registration request not found")
+        
+        return CoachRegistrationRequest(
+            id=request.id,
+            name=request.name,
+            email=request.email,
+            phone=request.phone,
+            specialization=request.specialization,
+            experience_years=request.experience_years,
+            status=request.status,
+            submitted_at=request.submitted_at.isoformat() if request.submitted_at else "",
+            reviewed_by=request.reviewed_by,
+            reviewed_at=request.reviewed_at.isoformat() if request.reviewed_at else None,
+            review_notes=request.review_notes
+        )
+    finally:
+        db.close()
+
+@app.put("/coach-registration-requests/{request_id}", response_model=CoachRegistrationRequest, dependencies=[Depends(require_owner)])
+def update_coach_registration_request_status(
+    request_id: int,
+    update: CoachRegistrationRequestUpdate,
+    owner_id: int = Query(..., description="Owner ID reviewing the request")
+):
+    """Approve or reject a coach registration request"""
+    db = SessionLocal()
+    try:
+        request = db.query(CoachRegistrationRequestDB).filter(
+            CoachRegistrationRequestDB.id == request_id
+        ).first()
+        
+        if not request:
+            raise HTTPException(status_code=404, detail="Registration request not found")
+        
+        if request.status != "pending":
+            raise HTTPException(status_code=400, detail="Request has already been reviewed")
+        
+        # Update request status
+        request.status = update.status
+        request.reviewed_by = owner_id
+        request.reviewed_at = datetime.now()
+        request.review_notes = update.review_notes
+        
+        # If approved, create the coach account
+        if update.status == "approved":
+            # Check if coach already exists (race condition check)
+            existing_coach = db.query(CoachDB).filter(
+                CoachDB.email == request.email
+            ).first()
+            
+            if existing_coach:
+                raise HTTPException(status_code=400, detail="Coach with this email already exists")
+            
+            # Create coach account
+            db_coach = CoachDB(
+                name=request.name,
+                email=request.email,
+                phone=request.phone,
+                password=request.password,  # Already hashed
+                specialization=request.specialization,
+                experience_years=request.experience_years,
+                status="active"  # Active after approval
+            )
+            db.add(db_coach)
+        
+        db.commit()
+        db.refresh(request)
+        
+        # Convert to response model
+        return CoachRegistrationRequest(
+            id=request.id,
+            name=request.name,
+            email=request.email,
+            phone=request.phone,
+            specialization=request.specialization,
+            experience_years=request.experience_years,
+            status=request.status,
+            submitted_at=request.submitted_at.isoformat() if request.submitted_at else "",
+            reviewed_by=request.reviewed_by,
+            reviewed_at=request.reviewed_at.isoformat() if request.reviewed_at else None,
+            review_notes=request.review_notes
+        )
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error updating registration request: {str(e)}")
+    finally:
+        db.close()
+
+@app.get("/coaches/check-registration-status/{email}", dependencies=[Depends(require_student)])
+def check_coach_registration_status(email: str):
+    """Check if a coach registration request exists for an email"""
+    db = SessionLocal()
+    try:
+        request = db.query(CoachRegistrationRequestDB).filter(
+            CoachRegistrationRequestDB.email == email
+        ).order_by(CoachRegistrationRequestDB.submitted_at.desc()).first()
+        
+        if not request:
+            return {"exists": False}
+        
+        return {
+            "exists": True,
+            "status": request.status,
+            "submitted_at": request.submitted_at.isoformat() if request.submitted_at else None,
+            "reviewed_at": request.reviewed_at.isoformat() if request.reviewed_at else None,
+            "review_notes": request.review_notes
+        }
+    finally:
+        db.close()
+
 # ==================== Image Upload Endpoints ====================
 
-@app.post("/api/upload/image")
-async def upload_image(file: UploadFile = File(...)):
-    """Upload an image file (for profile photos, etc.)"""
+@app.post("/api/upload/image", dependencies=[Depends(require_owner)])
+@limiter.limit("10/hour")
+async def upload_image(request: Request, file: UploadFile = File(...)):
+    """Upload an image file (for profile photos, etc.). Accepts JPEG, PNG, WebP only; max 5 MB."""
     try:
-        # Validate file type
-        allowed_extensions = ["jpg", "jpeg", "png", "gif", "webp"]
-        file_extension = file.filename.split(".")[-1].lower()
+        # A12: Enforce 5 MB size limit
+        file.file.seek(0, 2)
+        file_size = file.file.tell()
+        file.file.seek(0)
+        if file_size > IMAGE_MAX_SIZE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Maximum allowed size is {IMAGE_MAX_SIZE_BYTES // (1024 * 1024)} MB."
+            )
 
-        if file_extension not in allowed_extensions:
-            raise HTTPException(status_code=400, detail=f"File type not allowed. Allowed types: {', '.join(allowed_extensions)}")
+        # A12: Validate MIME type via magic bytes — do NOT trust file.content_type or filename extension
+        header = await file.read(12)
+        await file.seek(0)
+        safe_ext = validate_image_magic_bytes(header)  # raises HTTP 400 for non-image types
 
-        # Generate unique filename
-        unique_filename = f"{uuid.uuid4()}.{file_extension}"
+        # A12: Server-generated UUID filename; original filename is discarded entirely
+        unique_filename = f"{uuid.uuid4()}.{safe_ext}"
+        
+        # C7: Attempt S3 / Cloudflare R2 Upload first
+        s3_url = upload_to_s3(file.file, unique_filename, f"image/{safe_ext}")
+        if s3_url:
+            return {"url": s3_url, "filename": unique_filename}
+
+        # Save to local disk as fallback if S3 is not configured
         file_path = UPLOAD_DIR / unique_filename
-
-        # Save file
+        await file.seek(0)
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
+        
+        # A14: strip execute bits
+        try:
+            os.chmod(file_path, 0o644)
+        except (AttributeError, NotImplementedError, OSError):
+            pass
 
-        # Return relative URL
         return {"url": f"/uploads/{unique_filename}", "filename": unique_filename}
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/uploads/{filename}")
+@app.get("/uploads/{filename}", dependencies=[Depends(require_owner)])
 async def get_uploaded_image(filename: str):
     """Serve uploaded images"""
-    file_path = UPLOAD_DIR / filename
+    file_path = resolve_safe_upload_path(filename)  # A14: path traversal protection
 
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Image not found")
 
     return FileResponse(file_path)
+
+# ==================== Notification Routes ====================
+
+def check_and_create_fee_notifications(db, user_id: int, user_type: str):
+    """
+    Check for overdue fees and create notifications if they don't exist.
+    Run this lazily when fetching notifications.
+    """
+    if user_type != 'student':
+        return
+
+    try:
+        today_str = date.today().strftime("%Y-%m-%d")
+        
+        # Find overdue fees for this student
+        overdue_fees = db.query(FeeDB).filter(
+            FeeDB.student_id == user_id,
+            FeeDB.status == "pending",
+            FeeDB.due_date < today_str
+        ).all()
+        
+        # Check if we already notified about these fees
+        # Get all fee_due notifications for this user
+        existing_notifs = db.query(NotificationDB).filter(
+            NotificationDB.user_id == user_id,
+            NotificationDB.user_type == user_type,
+            NotificationDB.type == "fee_due"
+        ).all()
+        
+        notified_fee_ids = set()
+        for n in existing_notifs:
+            if n.data and isinstance(n.data, dict) and 'fee_id' in n.data:
+                notified_fee_ids.add(n.data['fee_id'])
+        
+        # Create notifications for un-notified overdue fees
+        for fee in overdue_fees:
+            if fee.id not in notified_fee_ids:
+                # Also check batch name for context
+                batch = db.query(BatchDB).filter(BatchDB.id == fee.batch_id).first()
+                batch_name = batch.batch_name if batch else "Batch"
+                
+                create_notification(
+                    db=db,
+                    user_id=user_id,
+                    user_type=user_type,
+                    title="Fee Payment Overdue",
+                    body=f"Your fee payment of {fee.amount} for {batch_name} was due on {fee.due_date}. Please pay immediately.",
+                    type="fee_due",
+                    data={"fee_id": fee.id, "batch_id": fee.batch_id}
+                )
+    except Exception as e:
+        print(f"Error checking fee notifications: {e}")
+
+@app.get("/api/notifications/{user_id}", response_model=List[Notification], dependencies=[Depends(require_student)])
+def get_user_notifications(
+    user_id: int, 
+    user_type: str = Query(..., pattern="^(student|coach|owner)$"),
+    type: Optional[str] = None,
+    is_read: Optional[bool] = None
+):
+    """Get notifications for a user with optional filters"""
+    db = SessionLocal()
+    try:
+        # Lazy check for fees
+        if user_type == 'student':
+            check_and_create_fee_notifications(db, user_id, user_type)
+        
+        query = db.query(NotificationDB).filter(
+            NotificationDB.user_id == user_id,
+            NotificationDB.user_type == user_type
+        )
+        
+        if type and type != 'all':
+            query = query.filter(NotificationDB.type == type)
+            
+        if is_read is not None:
+            query = query.filter(NotificationDB.is_read == is_read)
+            
+        # Order by newest first
+        notifications = query.order_by(NotificationDB.created_at.desc()).all()
+        
+        # Convert to Pydantic models
+        return [
+            Notification(
+                id=n.id,
+                user_id=n.user_id,
+                user_type=n.user_type,
+                title=n.title,
+                body=n.body,
+                type=n.type,
+                is_read=n.is_read,
+                created_at=n.created_at.isoformat() if n.created_at else "",
+                data=n.data
+            ) for n in notifications
+        ]
+    finally:
+        db.close()
+
+@app.put("/api/notifications/{notification_id}/read", dependencies=[Depends(require_student)])
+def mark_notification_read(notification_id: int):
+    """Mark a notification as read"""
+    db = SessionLocal()
+    try:
+        notif = db.query(NotificationDB).filter(NotificationDB.id == notification_id).first()
+        if not notif:
+            raise HTTPException(status_code=404, detail="Notification not found")
+            
+        notif.is_read = True
+        db.commit()
+        return {"success": True}
+    finally:
+        db.close()
+
+@app.put("/api/notifications/read-all", dependencies=[Depends(require_student)])
+def mark_all_notifications_read(request: Dict[str, Any]):
+    """Mark multiple notifications as read"""
+    # Expects {"ids": [1, 2, 3]}
+    ids = request.get("ids", [])
+    if not ids:
+        return {"success": True, "count": 0}
+        
+    db = SessionLocal()
+    try:
+        db.query(NotificationDB).filter(
+            NotificationDB.id.in_(ids)
+        ).update({"is_read": True}, synchronize_session=False)
+        
+        db.commit()
+        return {"success": True, "count": len(ids)}
+    finally:
+        db.close()
+
+@app.delete("/api/notifications/{notification_id}", dependencies=[Depends(require_coach)])
+def delete_notification(notification_id: int):
+    """Delete a notification"""
+    db = SessionLocal()
+    try:
+        notif = db.query(NotificationDB).filter(NotificationDB.id == notification_id).first()
+        if not notif:
+            raise HTTPException(status_code=404, detail="Notification not found")
+
+        db.delete(notif)
+        db.commit()
+        return {"success": True}
+    finally:
+        db.close()
+
+
+# ==================== B7: Notification Preferences Endpoints ====================
+
+@app.get("/api/notifications/preferences", response_model=NotificationPreferences, dependencies=[Depends(require_student)])
+def get_notification_preferences(
+    user_id: int = Query(...),
+    user_type: str = Query(..., pattern="^(student|coach|owner)$"),
+):
+    """Get notification preferences for a user. Creates defaults if none exist."""
+    db = SessionLocal()
+    try:
+        prefs = _get_notification_prefs(db, user_id, user_type)
+        return NotificationPreferences(
+            user_id=prefs.user_id,
+            user_type=prefs.user_type,
+            pref_attendance=prefs.pref_attendance,
+            pref_performance=prefs.pref_performance,
+            pref_bmi=prefs.pref_bmi,
+            pref_announcements=prefs.pref_announcements,
+            pref_leave_updates=prefs.pref_leave_updates,
+            pref_fee_payments=prefs.pref_fee_payments,
+            pref_fee_due=prefs.pref_fee_due,
+        )
+    finally:
+        db.close()
+
+
+@app.put("/api/notifications/preferences", response_model=NotificationPreferences, dependencies=[Depends(require_student)])
+def update_notification_preferences(
+    user_id: int = Query(...),
+    user_type: str = Query(..., pattern="^(student|coach|owner)$"),
+    updates: NotificationPreferencesUpdate = ...,
+):
+    """Update notification preferences for a user."""
+    db = SessionLocal()
+    try:
+        prefs = _get_notification_prefs(db, user_id, user_type)
+        update_data = updates.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(prefs, field, value)
+        db.commit()
+        db.refresh(prefs)
+        return NotificationPreferences(
+            user_id=prefs.user_id,
+            user_type=prefs.user_type,
+            pref_attendance=prefs.pref_attendance,
+            pref_performance=prefs.pref_performance,
+            pref_bmi=prefs.pref_bmi,
+            pref_announcements=prefs.pref_announcements,
+            pref_leave_updates=prefs.pref_leave_updates,
+            pref_fee_payments=prefs.pref_fee_payments,
+            pref_fee_due=prefs.pref_fee_due,
+        )
+    finally:
+        db.close()
+
+
+# ==================== Report Models & Endpoints ====================
+
+class ReportFilter(BaseModel):
+    type: str  # attendance, fee, performance
+    filter_type: str  # season, year, month
+    filter_value: str  # season_id, year, or YYYY-MM
+    batch_id: str  # batch_id or 'all'
+    generated_by_name: Optional[str] = "Admin"
+    generated_by_role: Optional[str] = "Owner"
+
+@app.post("/api/reports/generate", dependencies=[Depends(require_coach)])
+def generate_report(filter: ReportFilter):
+    """Generate standardized reports for Attendance and Fees"""
+    db = SessionLocal()
+    try:
+        # 1. Determine Date Range & Context
+        start_date = None
+        end_date = None
+        filter_summary = ""
+        season_ids = [] # List of season IDs relevant to the filter
+        
+        if filter.filter_type == 'season':
+            session = db.query(SessionDB).filter(SessionDB.id == int(filter.filter_value)).first()
+            if not session:
+                raise HTTPException(status_code=404, detail="Season not found")
+            start_date = session.start_date
+            end_date = session.end_date
+            season_ids = [session.id]
+            filter_summary = f"Season: {session.name}"
+            
+        elif filter.filter_type == 'year':
+            year = filter.filter_value
+            start_date = f"{year}-01-01"
+            end_date = f"{year}-12-31"
+            # Find seasons in this year
+            sessions = db.query(SessionDB).filter(
+                or_(
+                    SessionDB.start_date.like(f"{year}%"),
+                    SessionDB.end_date.like(f"{year}%")
+                )
+            ).all()
+            season_ids = [s.id for s in sessions]
+            filter_summary = f"Year: {year}"
+            
+        elif filter.filter_type == 'month':
+            # invalid format handling needed in prod, assuming YYYY-MM
+            y, m = filter.filter_value.split('-')
+            import calendar
+            last_day = calendar.monthrange(int(y), int(m))[1]
+            start_date = f"{filter.filter_value}-01"
+            end_date = f"{filter.filter_value}-{last_day}"
+            filter_summary = f"Month: {filter.filter_value}"
+            # Find active seasons overlap (optional)
+            
+        # 2. Determine Batches
+        target_batch_ids = []
+        batch_map = {} # id -> name
+        
+        if str(filter.batch_id).lower() == 'all':
+            query = db.query(BatchDB)
+            if filter.filter_type == 'season':
+                query = query.filter(BatchDB.session_id == int(filter.filter_value))
+            # For year/month, filter by seasons if found
+            if season_ids and filter.filter_type == 'year':
+                query = query.filter(BatchDB.session_id.in_(season_ids))
+            
+            batches = query.all()
+            target_batch_ids = [b.id for b in batches]
+            batch_map = {b.id: b.batch_name for b in batches}
+            filter_summary += " | All Batches"
+        else:
+            b_id = int(filter.batch_id)
+            batch = db.query(BatchDB).filter(BatchDB.id == b_id).first()
+            if batch:
+                target_batch_ids = [b_id]
+                batch_map = {b_id: batch.batch_name}
+                filter_summary += f" | Batch: {batch.batch_name}"
+
+        # 3. Generate Data
+        overview = {}
+        breakdown = []
+        student_details = []
+
+        if filter.type == 'attendance':
+            # ATTENDANCE LOGIC
+            query = db.query(AttendanceDB).filter(
+                AttendanceDB.date >= start_date,
+                AttendanceDB.date <= end_date,
+                AttendanceDB.batch_id.in_(target_batch_ids)
+            )
+            records = query.all()
+            
+            total_recs = len(records)
+            present = sum(1 for r in records if r.status.lower() == 'present')
+            absent = sum(1 for r in records if r.status.lower() == 'absent')
+            
+            student_count_query = db.query(BatchStudentDB).filter(
+                BatchStudentDB.batch_id.in_(target_batch_ids),
+                BatchStudentDB.status.in_(['approved', 'active'])
+            )
+            total_students = student_count_query.count()
+            
+            overview = {
+                "total_students": total_students,
+                "total_conducted": len(set(r.date + str(r.batch_id) for r in records)), 
+                "present_count": present,
+                "absent_count": absent,
+                "attendance_rate": round((present / total_recs * 100) if total_recs > 0 else 0, 1)
+            }
+            
+            # Breakdown by Batch
+            for b_id in target_batch_ids:
+                b_recs = [r for r in records if r.batch_id == b_id]
+                b_present = sum(1 for r in b_recs if r.status.lower() == 'present')
+                b_total = len(b_recs)
+                b_stud_count = db.query(BatchStudentDB).filter(
+                    BatchStudentDB.batch_id == b_id,
+                    BatchStudentDB.status.in_(['approved', 'active'])
+                ).count()
+                
+                breakdown.append({
+                    "name": batch_map.get(b_id, "Unknown"),
+                    "total_students": b_stud_count,
+                    "classes_conducted": len(set(r.date for r in b_recs)),
+                    "attendance_rate": round((b_present / b_total * 100) if b_total > 0 else 0, 1)
+                })
+                
+            # Student Details (Only if specific batch)
+            if str(filter.batch_id).lower() != 'all':
+                students = db.query(
+                    StudentDB.name, StudentDB.phone, StudentDB.email, StudentDB.id
+                ).join(BatchStudentDB, BatchStudentDB.student_id == StudentDB.id)\
+                 .filter(BatchStudentDB.batch_id == int(filter.batch_id)).all()
+                 
+                for s in students:
+                    s_recs = [r for r in records if r.student_id == s.id]
+                    s_present = sum(1 for r in s_recs if r.status.lower() == 'present')
+                    s_total = len(s_recs)
+                    student_details.append({
+                        "name": s.name,
+                        "phone": s.phone,
+                        "email": s.email,
+                        "classes_assigned": s_total, 
+                        "classes_attended": s_present,
+                        "classes_absent": s_total - s_present,
+                        "attendance_percentage": round((s_present / s_total * 100) if s_total > 0 else 0, 1)
+                    })
+
+        elif filter.type == 'fee':
+            # FEE LOGIC
+            query = db.query(FeeDB).filter(
+                FeeDB.due_date >= start_date,
+                FeeDB.due_date <= end_date,
+                FeeDB.batch_id.in_(target_batch_ids)
+            )
+            fees = query.all()
+            
+            total_expected = sum(f.amount for f in fees)
+            fee_ids = [f.id for f in fees]
+            payments = db.query(FeePaymentDB).filter(FeePaymentDB.fee_id.in_(fee_ids)).all()
+            total_collected = sum(p.amount for p in payments)
+            
+            pending_amount = total_expected - total_collected
+            if pending_amount < 0: pending_amount = 0
+            
+            overdue_amt = sum(f.amount for f in fees if f.status == 'overdue') 
+            
+            student_count_query = db.query(BatchStudentDB).filter(
+                BatchStudentDB.batch_id.in_(target_batch_ids),
+                BatchStudentDB.status.in_(['approved', 'active'])
+            )
+            total_students = student_count_query.count()
+
+            overview = {
+                "total_students": total_students,
+                "total_expected": total_expected,
+                "total_collected": total_collected,
+                "pending_amount": pending_amount,
+                "overdue_amount": overdue_amt
+            }
+            
+            # Breakdown by Batch
+            for b_id in target_batch_ids:
+                b_fees = [f for f in fees if f.batch_id == b_id]
+                b_fee_ids = [f.id for f in b_fees]
+                b_payments = [p for p in payments if p.fee_id in b_fee_ids]
+                
+                b_expected = sum(f.amount for f in b_fees)
+                b_collected = sum(p.amount for p in b_payments)
+                b_pending_count = sum(1 for f in b_fees if f.status != 'paid')
+                
+                b_stud_count = db.query(BatchStudentDB).filter(
+                    BatchStudentDB.batch_id == b_id,
+                    BatchStudentDB.status.in_(['approved', 'active'])
+                ).count()
+
+                breakdown.append({
+                    "name": batch_map.get(b_id, "Unknown"),
+                    "total_students": b_stud_count,
+                    "expected": b_expected,
+                    "collected": b_collected,
+                    "pending_count": b_pending_count
+                })
+
+            # Student Details
+            if str(filter.batch_id).lower() != 'all':
+                students = db.query(
+                    StudentDB.name, StudentDB.phone, StudentDB.email, StudentDB.id
+                ).join(BatchStudentDB, BatchStudentDB.student_id == StudentDB.id)\
+                 .filter(BatchStudentDB.batch_id == int(filter.batch_id)).all()
+                 
+                for s in students:
+                    s_fees = [f for f in fees if f.student_id == s.id]
+                    s_expected = sum(f.amount for f in s_fees)
+                    s_collected_ids = [f.id for f in s_fees]
+                    s_collected = sum(p.amount for p in payments if p.fee_id in s_collected_ids)
+                    
+                    s_status = "Paid"
+                    if s_collected < s_expected:
+                        s_status = "Pending"
+                        if any(f.status == 'overdue' for f in s_fees):
+                             s_status = "Overdue"
+                    if s_expected == 0:
+                        s_status = "N/A"
+
+                    student_details.append({
+                        "name": s.name,
+                        "phone": s.phone,
+                        "email": s.email,
+                        "total_fee": s_expected,
+                        "amount_paid": s_collected,
+                        "pending_amount": max(0, s_expected - s_collected),
+                        "payment_status": s_status
+                    })
+
+        elif filter.type == 'performance':
+            # PERFORMANCE LOGIC
+            from sqlalchemy import func
+            query = db.query(PerformanceDB).filter(
+                PerformanceDB.date >= start_date,
+                PerformanceDB.date <= end_date,
+                PerformanceDB.batch_id.in_(target_batch_ids)
+            )
+            reviews = query.all()
+            
+            # Average Ratings (Overall for the selection)
+            avg_overall = db.query(func.avg(PerformanceDB.rating)).filter(
+                PerformanceDB.date >= start_date,
+                PerformanceDB.date <= end_date,
+                PerformanceDB.batch_id.in_(target_batch_ids)
+            ).scalar() or 0
+            
+            # Group reviews by (batch_id, student_id)
+            student_reviews_map = {}
+            for r in reviews:
+                key = (r.batch_id, r.student_id)
+                if key not in student_reviews_map:
+                    student_reviews_map[key] = []
+                student_reviews_map[key].append(r)
+
+            # Get students for each batch
+            batch_students = db.query(BatchStudentDB, StudentDB).join(
+                StudentDB, StudentDB.id == BatchStudentDB.student_id
+            ).filter(
+                BatchStudentDB.batch_id.in_(target_batch_ids),
+                BatchStudentDB.status.in_(['approved', 'active'])
+            ).all()
+
+            # Process all students by batch
+            batch_results = {} # batch_id -> list of student performances
+            for bs, s in batch_students:
+                if bs.batch_id not in batch_results:
+                    batch_results[bs.batch_id] = []
+                
+                s_recs = student_reviews_map.get((bs.batch_id, s.id), [])
+                
+                # Aggregate by skill
+                skill_scores = {}
+                for r in s_recs:
+                    if r.skill not in skill_scores:
+                        skill_scores[r.skill] = []
+                    skill_scores[r.skill].append(r.rating)
+                
+                skill_averages = {skill: round(sum(scores)/len(scores), 1) for skill, scores in skill_scores.items()}
+                # Map standard skill names if they exist, or just use what we have
+                # Standard skills from frontend: Serve, Smash, Footwork, Defense, Stamina
+                
+                overall_avg = round(sum(r.rating for r in s_recs)/len(s_recs), 1) if s_recs else 0
+                
+                batch_results[bs.batch_id].append({
+                    "id": s.id,
+                    "name": s.name,
+                    "phone": s.phone,
+                    "email": s.email,
+                    "skill_breakdown": skill_averages,
+                    "average_rating": overall_avg,
+                    "reviews_count": len(s_recs),
+                    "last_review": s_recs[-1].date if s_recs else "N/A"
+                })
+
+            # Overview (For summary count context)
+            all_skill_scores = {}
+            for r in reviews:
+                if r.skill not in all_skill_scores:
+                    all_skill_scores[r.skill] = []
+                all_skill_scores[r.skill].append(r.rating)
+            
+            skill_averages_overall = {skill: round(sum(scores)/len(scores), 1) for skill, scores in all_skill_scores.items()}
+
+            overview = {
+                "total_students": len(batch_students),
+                "reviews_count": len(reviews),
+                "students_reviewed": len(student_reviews_map),
+                "average_rating": round(float(avg_overall), 1),
+                "skill_averages": skill_averages_overall
+            }
+            
+            # Breakdown (Batch summaries + student details)
+            breakdown = []
+            for b_id in target_batch_ids:
+                b_studs = batch_results.get(b_id, [])
+                if not b_studs: continue
+                
+                reviewed_studs = [s for s in b_studs if s['reviews_count'] > 0]
+                b_avg = sum(s['average_rating'] for s in reviewed_studs) / len(reviewed_studs) if reviewed_studs else 0
+                
+                breakdown.append({
+                    "id": b_id,
+                    "name": batch_map.get(b_id, "Unknown"),
+                    "total_students": len(b_studs),
+                    "reviews_count": sum(s['reviews_count'] for s in b_studs),
+                    "average_rating": round(b_avg, 1),
+                    "students": b_studs 
+                })
+
+            # Flat student details for Backward Compatibility
+            if str(filter.batch_id).lower() != 'all':
+                student_details = batch_results.get(int(filter.batch_id), [])
+            else:
+                for b_id in target_batch_ids:
+                    student_details.extend(batch_results.get(b_id, []))
+
+        # 4. Generate Trend Data (Time Series for Line Chart)
+        trend_data = {"labels": [], "values": []}
+        if filter.filter_type in ['year', 'season']:
+            monthly_groups = {} # YYYY-MM -> stats
+            
+            if filter.type == 'attendance':
+                for r in records:
+                    m = r.date[:7]
+                    if m not in monthly_groups: monthly_groups[m] = {"p": 0, "t": 0}
+                    monthly_groups[m]["t"] += 1
+                    if r.status.lower() == 'present': monthly_groups[m]["p"] += 1
+                
+                sorted_months = sorted(monthly_groups.keys())
+                trend_data = {
+                    "labels": sorted_months,
+                    "values": [round((monthly_groups[m]["p"] / monthly_groups[m]["t"] * 100), 1) for m in sorted_months]
+                }
+            elif filter.type == 'fee':
+                for f in fees:
+                    m = f.due_date[:7]
+                    if m not in monthly_groups: monthly_groups[m] = {"c": 0}
+                    # Get payments for this fee and check their dates? 
+                    # For simplicity, we use fee due date month and aggregate its collected amount
+                    f_payments = [p.amount for p in payments if p.fee_id == f.id]
+                    monthly_groups[m]["c"] += sum(f_payments)
+                
+                sorted_months = sorted(monthly_groups.keys())
+                trend_data = {
+                    "labels": sorted_months,
+                    "values": [monthly_groups[m]["c"] for m in sorted_months]
+                }
+            elif filter.type == 'performance':
+                for r in reviews:
+                    m = r.date[:7]
+                    if m not in monthly_groups: monthly_groups[m] = {"r": 0, "c": 0}
+                    monthly_groups[m]["r"] += r.rating
+                    monthly_groups[m]["c"] += 1
+                
+                sorted_months = sorted(monthly_groups.keys())
+                trend_data = {
+                    "labels": sorted_months,
+                    "values": [round(monthly_groups[m]["r"] / monthly_groups[m]["c"], 1) for m in sorted_months]
+                }
+
+        # 5. Final Response Construction
+        generated_by = f"{filter.generated_by_name} ({filter.generated_by_role})"
+        
+        return {
+            "period": filter_summary,
+            "generated_on": datetime.now().strftime("%d %b %Y, %I:%M %p"),
+            "generated_by": generated_by,
+            "filter_summary": filter_summary,
+            "overview": overview,
+            "breakdown": breakdown,
+            "student_details": student_details,
+            "report_type": filter.type,
+            "chart_data": {
+                "labels": [b['name'] for b in breakdown],
+                "values": [b.get('attendance_rate') or b.get('collected') or b.get('average_rating') or 0 for b in breakdown]
+            },
+            "trend_data": trend_data
+        }
+
+    except Exception as e:
+        print(f"Error generating report: {e}")
+        data = traceback.format_exc()
+        print(data)
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+
+# ==================== Server ====================
+
+
+# ==================== Report History Endpoints ====================
+
+class SaveReportHistoryRequest(BaseModel):
+    report_type: str
+    filter_summary: str
+    report_data: Dict[str, Any]
+    key_metrics: Optional[Dict[str, Any]] = None
+    user_id: int
+    user_role: str
+
+@app.post("/api/reports/history", dependencies=[Depends(require_coach)])
+def save_report_history(request: SaveReportHistoryRequest):
+    """Save generated report to history"""
+    db = SessionLocal()
+    try:
+        history_entry = ReportHistoryDB(
+            user_id=request.user_id,
+            user_role=request.user_role,
+            report_type=request.report_type,
+            filter_summary=request.filter_summary,
+            report_data=request.report_data,
+            key_metrics=request.key_metrics
+        )
+        
+        db.add(history_entry)
+        db.commit()
+        db.refresh(history_entry)
+        
+        return {"status": "success", "id": history_entry.id}
+    except Exception as e:
+        db.rollback()
+        print(f"Error saving report history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+@app.get("/api/reports/history", dependencies=[Depends(require_coach)])
+def get_report_history(
+    user_id: int = Query(..., description="User ID to fetch history for"),
+    user_role: str = Query(..., description="User Role (owner, coach)")
+):
+    """Get report history for specific user"""
+    db = SessionLocal()
+    try:
+        history = db.query(ReportHistoryDB).filter(
+            ReportHistoryDB.user_id == user_id,
+            ReportHistoryDB.user_role == user_role
+        ).order_by(ReportHistoryDB.generated_on.desc()).all()
+        return history
+    except Exception as e:
+        print(f"Error fetching report history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
+
+# ==================== Database Maintenance ====================
+
+@app.post("/admin/trigger-cleanup", dependencies=[Depends(require_owner)])
+def trigger_cleanup_job():
+    """Manually trigger the database cleanup job (Admin only)"""
+    try:
+        if 'cleanup_inactive_records' in globals():
+            cleanup_inactive_records()
+            return {"message": "Cleanup job triggered and completed successfully."}
+        else:
+            return {"message": "Cleanup job triggered successfully, but function not defined in globals."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/admin/trigger-backup", dependencies=[Depends(require_owner)])
+def trigger_backup_job(background_tasks: BackgroundTasks):
+    """Manually trigger a database backup job (Admin only)"""
+    def perform_backup():
+        import subprocess, datetime, os
+        # Basic pg_dump wrapper (assuming cloud-managed DB has its own, this is for manual redundancy)
+        db_url = os.getenv("DATABASE_URL")
+        if not db_url: return
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_file = f"/tmp/backup_{timestamp}.sql"
+        try:
+            subprocess.run(["pg_dump", db_url, "-f", backup_file], check=True)
+            # Future: upload backup_file to S3
+            print(f"Backup completed: {backup_file}")
+        except Exception as e:
+            print(f"Backup failed: {e}")
+
+    background_tasks.add_task(perform_backup)
+    return {"message": "Backup job has been triggered in the background."}
+
+# ==================== C4: Health Check Endpoints ====================
+
+
+@app.get("/login-history/", dependencies=[Depends(require_owner)])
+def get_login_history(db: Session = Depends(get_db)):
+    # Returns last 90 days logins for coaches/students
+    logs = db.query(LoginHistoryDB).order_by(LoginHistoryDB.created_at.desc()).limit(200).all()
+    return logs
+
+@app.get("/health")
+async def health_check():
+    """Basic application health check"""
+    return {"status": "ok", "app": "shuttler", "version": "1.0.0"}
+
+@app.get("/health/db")
+async def db_health_check():
+    """Database connectivity health check"""
+    from sqlalchemy import text
+    try:
+        # A simple query to check if DB is accessible
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        db.close()
+        return {"status": "ok", "database": "connected"}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Database connection failed: {str(e)}")
+
+@app.get("/health/redis")
+async def redis_health_check():
+    """Redis connectivity health check"""
+    if not _REDIS_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Redis package not installed")
+    if not redis_client:
+        raise HTTPException(status_code=503, detail="Redis not connected (check REDIS_URL env var)")
+    try:
+        await redis_client.ping()
+        return {"status": "ok", "redis": "connected"}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Redis ping failed: {str(e)}")
 
 # ==================== Server ====================
 
@@ -6023,10 +11652,21 @@ if __name__ == "__main__":
         # Don't crash if watcher fails
         print(f"[Schema Watcher] Could not start: {e}")
     
-    print("🚀 Starting Badminton Academy Management System API...")
-    print("📖 API Documentation (Local): http://127.0.0.1:8000/docs")
-    print("📖 API Documentation (Network): http://192.168.1.7:8000/docs")
-    print("📊 Alternative Docs: http://127.0.0.1:8000/redoc")
-    print("📱 Mobile devices can connect to: http://192.168.1.7:8000")
+    print("Starting Badminton Academy Management System API...")
+    print("API Documentation (Local): http://127.0.0.1:8001/docs")
+    print("API Documentation (Network): http://192.168.1.11:8001/docs")
+    print("Alternative Docs: http://127.0.0.1:8001/redoc")
+    print("Mobile devices can connect to: http://192.168.1.11:8001")
     # host="0.0.0.0" allows connections from any device on the network
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    
+    # Start background scheduler
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(cleanup_inactive_records, 'interval', days=1)
+    # B5: Daily overdue-fee push notifications
+    scheduler.add_job(send_overdue_fee_notifications, 'cron', hour=9, minute=0)
+    scheduler.start()
+    print("Background scheduler started (cleanup: daily, overdue-fee alerts: 09:00).")
+    
+    uvicorn.run(app, host="0.0.0.0", port=8001)
+
+

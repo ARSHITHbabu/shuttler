@@ -155,6 +155,25 @@ class _OwnerByIdProviderElement extends AutoDisposeFutureProviderElement<Owner>
   int get id => (origin as OwnerByIdProvider).id;
 }
 
+String _$activeOwnerHash() => r'e65c9d28770bb1d88721700290f88983170fa7a5';
+
+/// Provider for the active owner
+///
+/// Copied from [activeOwner].
+@ProviderFor(activeOwner)
+final activeOwnerProvider = AutoDisposeFutureProvider<Owner?>.internal(
+  activeOwner,
+  name: r'activeOwnerProvider',
+  debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+      ? null
+      : _$activeOwnerHash,
+  dependencies: null,
+  allTransitiveDependencies: null,
+);
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef ActiveOwnerRef = AutoDisposeFutureProviderRef<Owner?>;
 String _$ownerListHash() => r'd015997cbf79d41a73e4d62fcc60d4cd10e0e841';
 
 /// Provider for owner list state

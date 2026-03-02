@@ -17,6 +17,8 @@ import '../../models/batch.dart';
 import '../../core/services/fee_service.dart';
 import '../../core/services/batch_enrollment_service.dart';
 import '../../providers/batch_provider.dart';
+import '../../providers/fee_provider.dart';
+import '../../core/utils/string_extensions.dart';
 import 'performance_tracking_screen.dart';
 import 'bmi_tracking_screen.dart';
 import 'fees_screen.dart';
@@ -32,7 +34,7 @@ class StudentsScreen extends ConsumerStatefulWidget {
 
 class _StudentsScreenState extends ConsumerState<StudentsScreen> {
   final TextEditingController _searchController = TextEditingController();
-  String _selectedFilter = 'all'; // 'all', 'active', 'inactive'
+  String _selectedFilter = 'active'; // 'active', 'inactive'
   String _searchQuery = '';
 
   @override
@@ -58,7 +60,7 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: const Text(
-          'Students',
+          'Student Management',
           style: TextStyle(
             color: AppColors.textPrimary,
             fontSize: 20,
@@ -105,12 +107,6 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                   child: Row(
                     children: [
                       _FilterChip(
-                        label: 'All',
-                        isSelected: _selectedFilter == 'all',
-                        onTap: () => setState(() => _selectedFilter = 'all'),
-                      ),
-                      const SizedBox(width: AppDimensions.spacingS),
-                      _FilterChip(
                         label: 'Active',
                         isSelected: _selectedFilter == 'active',
                         onTap: () => setState(() => _selectedFilter = 'active'),
@@ -145,14 +141,17 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                   } else if (_selectedFilter == 'inactive') {
                     return student.status == 'inactive';
                   }
-                  return true;
+                  return student.status == 'active'; // Fallback
                 }).toList();
 
                 // Sort filtered students alphabetically by name
                 filteredStudents.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
                 if (filteredStudents.isEmpty) {
-                  if (_selectedFilter == 'all' && _searchQuery.isEmpty) {
+                  if (_searchQuery.isEmpty) {
+                    if (_selectedFilter == 'inactive') {
+                      return EmptyState.noInactiveStudents();
+                    }
                     return EmptyState.noStudents(
                       onAdd: () => _showAddStudentDialog(context),
                     );
@@ -218,105 +217,6 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                                           ),
                                         ),
                                       ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: AppDimensions.spacingM,
-                                          vertical: AppDimensions.spacingS,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: student.status == 'active'
-                                              ? AppColors.success
-                                              : AppColors.error,
-                                          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                                        ),
-                                        child: Text(
-                                          student.status.toUpperCase(),
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                                      PopupMenuButton(
-                                        icon: const Icon(Icons.more_vert, size: 20, color: AppColors.textSecondary),
-                                        color: AppColors.cardBackground,
-                                        itemBuilder: (context) => [
-                                          PopupMenuItem(
-                                            child: const Row(
-                                              children: [
-                                                Icon(Icons.edit, size: 18, color: AppColors.textPrimary),
-                                                SizedBox(width: 8),
-                                                Text('Edit', style: TextStyle(color: AppColors.textPrimary)),
-                                              ],
-                                            ),
-                                            onTap: () {
-                                              Future.delayed(Duration.zero, () {
-                                                _showEditStudentDialog(context, student);
-                                              });
-                                            },
-                                          ),
-                                          PopupMenuItem(
-                                            child: Row(
-                                              children: [
-                                                Icon(
-                                                  student.status == 'active' 
-                                                      ? Icons.person_off 
-                                                      : Icons.person,
-                                                  size: 18,
-                                                  color: student.status == 'active' 
-                                                      ? AppColors.error 
-                                                      : AppColors.success,
-                                                ),
-                                                const SizedBox(width: 8),
-                                                Text(
-                                                  student.status == 'active' 
-                                                      ? 'Mark Inactive' 
-                                                      : 'Mark Active',
-                                                  style: TextStyle(
-                                                    color: student.status == 'active' 
-                                                        ? AppColors.error 
-                                                        : AppColors.success,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            onTap: () {
-                                              Future.delayed(Duration.zero, () {
-                                                _toggleStudentStatus(context, student);
-                                              });
-                                            },
-                                          ),
-                                          PopupMenuItem(
-                                            child: const Row(
-                                              children: [
-                                                Icon(Icons.group_add, size: 18, color: AppColors.textPrimary),
-                                                SizedBox(width: 8),
-                                                Text('Manage Batches', style: TextStyle(color: AppColors.textPrimary)),
-                                              ],
-                                            ),
-                                            onTap: () {
-                                              Future.delayed(Duration.zero, () {
-                                                _showManageBatchesDialog(context, student);
-                                              });
-                                            },
-                                          ),
-                                          PopupMenuItem(
-                                            child: const Row(
-                                              children: [
-                                                Icon(Icons.delete, size: 18, color: AppColors.error),
-                                                SizedBox(width: 8),
-                                                Text('Delete', style: TextStyle(color: AppColors.error)),
-                                              ],
-                                            ),
-                                            onTap: () {
-                                              Future.delayed(Duration.zero, () {
-                                                _showDeleteConfirmation(context, student);
-                                              });
-                                            },
-                                          ),
-                                        ],
-                                      ),
                                     ],
                                   ),
                                   const SizedBox(height: AppDimensions.spacingM),
@@ -338,76 +238,7 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
                                       value: student.phone,
                                     ),
                                   ],
-                                  if (student.guardianName != null && student.guardianName!.isNotEmpty) ...[
-                                    const SizedBox(height: AppDimensions.spacingS),
-                                    _InfoRow(
-                                      icon: Icons.person_outline,
-                                      label: 'Guardian',
-                                      value: student.guardianName!,
-                                    ),
-                                  ],
-                                  if (student.guardianPhone != null && student.guardianPhone!.isNotEmpty) ...[
-                                    const SizedBox(height: AppDimensions.spacingS),
-                                    _InfoRow(
-                                      icon: Icons.phone_outlined,
-                                      label: 'Guardian Phone',
-                                      value: student.guardianPhone!,
-                                    ),
-                                  ],
                                   const SizedBox(height: AppDimensions.spacingM),
-                                  // Action Buttons
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: _ActionButton(
-                                          icon: Icons.trending_up,
-                                          label: 'Performance',
-                                          onTap: () {
-                                            Navigator.of(context).push(
-                                              MaterialPageRoute(
-                                                builder: (context) => PerformanceTrackingScreen(
-                                                  initialStudent: student,
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                      const SizedBox(width: AppDimensions.spacingS),
-                                      Expanded(
-                                        child: _ActionButton(
-                                          icon: Icons.monitor_weight,
-                                          label: 'BMI',
-                                          onTap: () {
-                                            Navigator.of(context).push(
-                                              MaterialPageRoute(
-                                                builder: (context) => BMITrackingScreen(
-                                                  initialStudent: student,
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                      const SizedBox(width: AppDimensions.spacingS),
-                                      Expanded(
-                                        child: _ActionButton(
-                                          icon: Icons.attach_money,
-                                          label: 'Fees',
-                                          onTap: () {
-                                            Navigator.of(context).push(
-                                              MaterialPageRoute(
-                                                builder: (context) => FeesScreen(
-                                                  selectedStudentId: student.id,
-                                                  selectedStudentName: student.name,
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                    ],
-                                  ),
                                 ],
                               ),
                             ),
@@ -807,35 +638,189 @@ class _StudentsScreenState extends ConsumerState<StudentsScreen> {
 
 
   void _toggleStudentStatus(BuildContext context, Student student) async {
+    final newStatus = student.status == 'active' ? 'inactive' : 'active';
+    final actionName = newStatus == 'active' ? 'activate' : 'deactivate';
+
+    showDialog(
+      context: context,
+      builder: (context) => ConfirmationDialog(
+        title: '${actionName.capitalize()} Student',
+        message: 'Are you sure you want to $actionName ${student.name}?',
+        confirmText: actionName.capitalize(),
+        isDestructive: newStatus == 'inactive',
+        onConfirm: () async {
+          try {
+            if (newStatus == 'inactive') {
+              await ref.read(studentListProvider.notifier).deactivateStudent(student.id);
+            } else {
+              await ref.read(studentListProvider.notifier).approveRejoin(student.id);
+            }
+            if (mounted) {
+              Navigator.of(context).pop();
+              SuccessSnackbar.show(context, 'Student ${actionName}d successfully');
+            }
+          } catch (e) {
+            if (mounted) {
+              SuccessSnackbar.showError(context, 'Failed to $actionName student: ${e.toString()}');
+            }
+          }
+        },
+      ),
+    );
+  }
+
+  void _showApproveRejoinDialog(BuildContext context, Student student) {
+    showDialog(
+      context: context,
+      builder: (context) => ConfirmationDialog(
+        title: 'Approve Rejoin Request',
+        message: '${student.name} has requested to rejoin. Do you want to approve this request?',
+        confirmText: 'Approve',
+        onConfirm: () async {
+          try {
+            await ref.read(studentListProvider.notifier).approveRejoin(student.id);
+            if (mounted) {
+              Navigator.of(context).pop();
+              SuccessSnackbar.show(context, 'Rejoin request approved for ${student.name}');
+            }
+          } catch (e) {
+            if (mounted) {
+              SuccessSnackbar.showError(context, 'Failed to approve rejoin: ${e.toString()}');
+            }
+          }
+        },
+      ),
+    );
+  }
+
+  void _showDeleteConfirmation(BuildContext context, Student student) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppColors.cardBackground,
+        title: const Text('Delete Student', style: TextStyle(color: AppColors.textPrimary)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Choose how you want to remove ${student.name}:',
+                style: const TextStyle(color: AppColors.textPrimary)),
+            const SizedBox(height: 16),
+            _DeleteOption(
+              title: 'Deactivate (Soft Delete)',
+              description: 'Hide student from UI but keep data for 2 years (reports).',
+              icon: Icons.person_off,
+              color: AppColors.warning,
+              onTap: () {
+                Navigator.pop(context);
+                _deactivateStudent(student);
+              },
+            ),
+            const SizedBox(height: 12),
+            _DeleteOption(
+              title: 'Delete Permanently (Hard Delete)',
+              description: 'Immediately wipe all attendance, fee, and performance data.',
+              icon: Icons.delete_forever,
+              color: AppColors.error,
+              onTap: () {
+                Navigator.pop(context);
+                _removeStudentPermanently(student);
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _deactivateStudent(Student student) async {
     try {
-      final newStatus = student.status == 'active' ? 'inactive' : 'active';
-      await ref.read(studentListProvider.notifier).updateStudent(student.id, {'status': newStatus});
+      await ref.read(studentListProvider.notifier).deactivateStudent(student.id);
       if (mounted) {
-        SuccessSnackbar.show(context, 'Student ${newStatus == 'active' ? 'activated' : 'deactivated'} successfully');
+        SuccessSnackbar.show(context, 'Student Profile deactivated successfully');
       }
     } catch (e) {
       if (mounted) {
-        SuccessSnackbar.showError(context, 'Failed to update student status: ${e.toString()}');
+        SuccessSnackbar.showError(context, 'Failed to deactivate student: ${e.toString()}');
       }
     }
   }
 
-  void _showDeleteConfirmation(BuildContext context, Student student) {
-    ConfirmationDialog.showDelete(
-      context,
-      student.name,
-      onConfirm: () async {
-        try {
-          await ref.read(studentListProvider.notifier).deleteStudent(student.id);
-          if (mounted) {
-            SuccessSnackbar.show(context, 'Student deleted successfully');
+  void _removeStudentPermanently(Student student) async {
+    showDialog(
+      context: context,
+      builder: (context) => ConfirmationDialog(
+        title: 'Permanent Deletion',
+        message: 'This action CANNOT be undone. All data for ${student.name} will be permanently destroyed. Are you absolutely sure?',
+        confirmText: 'Delete Forever',
+        isDestructive: true,
+        onConfirm: () async {
+          try {
+            await ref.read(studentListProvider.notifier).removeStudentPermanently(student.id);
+            if (mounted) {
+              Navigator.of(context).pop();
+              SuccessSnackbar.show(context, 'Student deleted permanently');
+            }
+          } catch (e) {
+            if (mounted) {
+              SuccessSnackbar.showError(context, 'Failed to delete student: ${e.toString()}');
+            }
           }
-        } catch (e) {
-          if (mounted) {
-            SuccessSnackbar.showError(context, 'Failed to delete student: ${e.toString()}');
-          }
-        }
-      },
+        },
+      ),
+    );
+  }
+}
+
+class _DeleteOption extends StatelessWidget {
+  final String title;
+  final String description;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _DeleteOption({
+    required this.title,
+    required this.description,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          border: Border.all(color: color.withOpacity(0.3)),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 14)),
+                  const SizedBox(height: 4),
+                  Text(description, style: const TextStyle(color: AppColors.textSecondary, fontSize: 11)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -931,90 +916,111 @@ class _StudentBatchAndFeeStatus extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final studentBatchesAsync = ref.watch(studentBatchesProvider(studentId));
-    final feeService = ref.watch(feeServiceProvider);
+    final feesAsync = ref.watch(feeByStudentProvider(studentId));
 
-    return FutureBuilder<String?>(
-      future: _getFeeStatus(feeService, studentId),
-      builder: (context, feeSnapshot) {
-        return studentBatchesAsync.when(
+    return Column(
+      children: [
+        // Batches Row
+        studentBatchesAsync.when(
           data: (batches) {
-            final feeStatus = feeSnapshot.data;
+            if (batches.isEmpty) return const SizedBox.shrink();
             return Column(
               children: [
-                if (batches.isNotEmpty) ...[
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(Icons.group, size: 16, color: AppColors.textSecondary),
-                      const SizedBox(width: AppDimensions.spacingS),
-                      Expanded(
-                        child: Wrap(
-                          spacing: AppDimensions.spacingS,
-                          runSpacing: AppDimensions.spacingS,
-                          children: batches.map((batch) {
-                            return Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: AppDimensions.spacingS,
-                                vertical: 4,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.group, size: 16, color: AppColors.textSecondary),
+                    const SizedBox(width: AppDimensions.spacingS),
+                    Expanded(
+                      child: Wrap(
+                        spacing: AppDimensions.spacingS,
+                        runSpacing: AppDimensions.spacingS,
+                        children: batches.map((batch) {
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppDimensions.spacingS,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.accent.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                              border: Border.all(
+                                color: AppColors.accent.withOpacity(0.3),
+                                width: 1,
                               ),
-                              decoration: BoxDecoration(
-                                color: AppColors.accent.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                                border: Border.all(
-                                  color: AppColors.accent.withOpacity(0.3),
-                                  width: 1,
-                                ),
+                            ),
+                            child: Text(
+                              batch.batchName,
+                              style: const TextStyle(
+                                color: AppColors.accent,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
                               ),
-                              child: Text(
-                                batch.batchName,
-                                style: const TextStyle(
-                                  color: AppColors.accent,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            );
-                          }).toList(),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppDimensions.spacingS),
+              ],
+            );
+          },
+          loading: () => const SizedBox.shrink(),
+          error: (_, __) => const SizedBox.shrink(),
+        ),
+
+        // Fee Status Row
+        feesAsync.when(
+          data: (fees) {
+            String? feeStatus;
+            if (fees.isNotEmpty) {
+              final pendingFees = fees.where((f) => f.status != 'paid').toList();
+              if (pendingFees.isNotEmpty) {
+                final overdueFees = pendingFees.where((f) => f.isOverdue).toList();
+                feeStatus = overdueFees.isNotEmpty ? 'overdue' : 'pending';
+              } else {
+                feeStatus = 'paid';
+              }
+            }
+
+            if (feeStatus == null) return const SizedBox.shrink();
+
+            return Column(
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.attach_money, size: 16, color: AppColors.textSecondary),
+                    const SizedBox(width: AppDimensions.spacingS),
+                    const Text(
+                      'Fee Status: ',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 14,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppDimensions.spacingS,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _getFeeStatusColor(feeStatus),
+                        borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                      ),
+                      child: Text(
+                        feeStatus.toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: AppDimensions.spacingS),
-                ],
-                if (feeStatus != null) ...[
-                  Row(
-                    children: [
-                      const Icon(Icons.attach_money, size: 16, color: AppColors.textSecondary),
-                      const SizedBox(width: AppDimensions.spacingS),
-                      const Text(
-                        'Fee Status: ',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 14,
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppDimensions.spacingS,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _getFeeStatusColor(feeStatus),
-                          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                        ),
-                        child: Text(
-                          feeStatus.toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppDimensions.spacingS),
-                ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppDimensions.spacingS),
               ],
             );
           },
@@ -1024,7 +1030,6 @@ class _StudentBatchAndFeeStatus extends ConsumerWidget {
               child: Shimmer.fromColors(
                 baseColor: AppColors.cardBackground,
                 highlightColor: AppColors.surfaceLight,
-                period: const Duration(milliseconds: 1200),
                 child: Container(
                   width: 60,
                   height: 16,
@@ -1036,29 +1041,13 @@ class _StudentBatchAndFeeStatus extends ConsumerWidget {
               ),
             ),
           ),
-          error: (error, stack) => const SizedBox.shrink(),
-        );
-      },
+          error: (_, __) => const SizedBox.shrink(),
+        ),
+      ],
     );
   }
 
-  Future<String?> _getFeeStatus(FeeService feeService, int studentId) async {
-    try {
-      final fees = await feeService.getFees(studentId: studentId);
-      if (fees.isNotEmpty) {
-        final pendingFees = fees.where((f) => f.status != 'paid').toList();
-        if (pendingFees.isNotEmpty) {
-          final overdueFees = pendingFees.where((f) => f.isOverdue).toList();
-          return overdueFees.isNotEmpty ? 'overdue' : 'pending';
-        } else {
-          return 'paid';
-        }
-      }
-    } catch (e) {
-      // Skip if fees fetch fails
-    }
-    return null;
-  }
+
 
   Color _getFeeStatusColor(String status) {
     switch (status.toLowerCase()) {

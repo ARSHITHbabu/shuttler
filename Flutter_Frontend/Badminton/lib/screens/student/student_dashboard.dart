@@ -98,6 +98,9 @@ class _StudentDashboardState extends State<StudentDashboard> {
   }
 
   Widget _buildNavItem(int index) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+
     final item = _navItems[index];
     final isActive = _currentIndex == index;
     final theme = Theme.of(context);
@@ -113,8 +116,8 @@ class _StudentDashboardState extends State<StudentDashboard> {
         });
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppDimensions.paddingM,
+        padding: EdgeInsets.symmetric(
+          horizontal: isSmallScreen ? AppDimensions.paddingS : AppDimensions.paddingM,
           vertical: AppDimensions.spacingS,
         ),
         decoration: BoxDecoration(

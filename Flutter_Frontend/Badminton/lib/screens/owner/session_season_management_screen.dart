@@ -14,7 +14,7 @@ import '../../providers/batch_provider.dart';
 import '../../models/session.dart';
 import '../../models/batch.dart';
 
-/// Session/Season Management Screen - Manage sessions that group batches
+/// Season Management Screen - Manage seasons that group batches
 /// Separate from SessionManagementScreen which manages practice/tournament/camp sessions
 class SessionSeasonManagementScreen extends ConsumerStatefulWidget {
   const SessionSeasonManagementScreen({super.key});
@@ -64,7 +64,7 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
 
   Future<void> _saveSession() async {
     if (_nameController.text.trim().isEmpty) {
-      SuccessSnackbar.showError(context, 'Please enter session name');
+      SuccessSnackbar.showError(context, 'Please enter season name');
       return;
     }
 
@@ -98,12 +98,12 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
       if (_editingSession != null) {
         await sessionManager.updateSession(_editingSession!.id, sessionData);
         if (mounted) {
-          SuccessSnackbar.show(context, 'Session updated successfully');
+          SuccessSnackbar.show(context, 'Season updated successfully');
         }
       } else {
         await sessionManager.createSession(sessionData);
         if (mounted) {
-          SuccessSnackbar.show(context, 'Session created successfully');
+          SuccessSnackbar.show(context, 'Season created successfully');
         }
       }
 
@@ -129,7 +129,7 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
   Future<void> _deleteSession(int id) async {
     final confirmed = await ConfirmationDialog.showDelete(
       context,
-      'Session',
+      'Season',
     );
 
     if (confirmed == true && mounted) {
@@ -141,7 +141,40 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
         }
       } catch (e) {
         if (mounted) {
-          SuccessSnackbar.showError(context, 'Failed to delete session: ${e.toString()}');
+          SuccessSnackbar.showError(context, 'Failed to delete season: ${e.toString()}');
+        }
+      }
+    }
+  }
+
+  Future<void> _archiveSession(Session session) async {
+    final confirmed = await ConfirmationDialog.show(
+      context,
+      session.isActive ? 'Archive Season' : 'Unarchive Season',
+      session.isActive ? 'Are you sure you want to archive this season?' : 'Are you sure you want to unarchive this season?',
+      confirmText: session.isActive ? 'Archive' : 'Unarchive',
+      isDestructive: session.isActive,
+      icon: session.isActive ? Icons.archive : Icons.unarchive,
+    );
+
+    if (confirmed == true && mounted) {
+      try {
+        final sessionManager = ref.read(sessionManagerProvider(status: _selectedTab).notifier);
+        final newStatus = session.isActive ? 'archived' : 'active';
+        await sessionManager.updateSession(session.id, {
+          'name': session.name,
+          'start_date': session.startDate.toIso8601String().split('T')[0],
+          'end_date': session.endDate.toIso8601String().split('T')[0],
+          'status': newStatus,
+        });
+        if (mounted) {
+          SuccessSnackbar.show(context, 'Season ${session.isActive ? 'archived' : 'unarchived'} successfully');
+          ref.invalidate(sessionListProvider(status: 'active'));
+          ref.invalidate(sessionListProvider(status: 'archived'));
+        }
+      } catch (e) {
+        if (mounted) {
+          SuccessSnackbar.showError(context, 'Failed to update season: ${e.toString()}');
         }
       }
     }
@@ -163,7 +196,7 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: const Text(
-          'Session Management',
+          'Season Management',
           style: TextStyle(
             color: AppColors.textPrimary,
             fontSize: 20,
@@ -182,6 +215,9 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
   }
 
   Widget _buildAddForm() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -201,7 +237,7 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
           },
         ),
         title: Text(
-          _editingSession != null ? 'Edit Session' : 'Create Session',
+          _editingSession != null ? 'Edit Season' : 'Create Season',
           style: const TextStyle(
             color: AppColors.textPrimary,
             fontSize: 20,
@@ -210,17 +246,17 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(AppDimensions.paddingL),
+        padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             CustomTextField(
               controller: _nameController,
-              label: 'Session Name',
+              label: 'Season Name',
               hint: 'e.g., Fall 2026, Winter 2026',
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
-                  return 'Please enter session name';
+                  return 'Please enter season name';
                 }
                 return null;
               },
@@ -346,7 +382,7 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
                       ),
                     )
                   : Text(
-                      _editingSession != null ? 'Update Session' : 'Create Session',
+                      _editingSession != null ? 'Update Season' : 'Create Season',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 16,
@@ -363,12 +399,15 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
   Widget _buildSessionList() {
     final statusFilter = _selectedTab == 'active' ? 'active' : 'archived';
     final sessionsAsync = ref.watch(sessionListProvider(status: statusFilter));
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
 
     return Column(
       children: [
         // Tabs
         Container(
-          margin: const EdgeInsets.all(AppDimensions.paddingL),
+          margin: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
+          padding: const EdgeInsets.all(4),
           decoration: BoxDecoration(
             color: AppColors.cardBackground,
             borderRadius: BorderRadius.circular(AppDimensions.radiusM),
@@ -382,6 +421,7 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
                   onTap: () => setState(() => _selectedTab = 'active'),
                 ),
               ),
+              const SizedBox(width: 4),
               Expanded(
                 child: _TabButton(
                   label: 'Archived',
@@ -425,7 +465,7 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
                           ),
                           const SizedBox(height: AppDimensions.spacingM),
                           Text(
-                            'No $_selectedTab sessions',
+                            'No $_selectedTab seasons',
                             style: const TextStyle(
                               fontSize: 16,
                               color: AppColors.textSecondary,
@@ -438,17 +478,18 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
                 }
 
                 return ListView.builder(
-                  padding: const EdgeInsets.all(AppDimensions.paddingL),
+                  padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
                   itemCount: sessions.length,
                   itemBuilder: (context, index) {
                     final session = sessions[index];
                     return Padding(
                       padding: const EdgeInsets.only(bottom: AppDimensions.spacingM),
-                      child: _SessionCard(
+                      child: _SeasonCard(
                         session: session,
                         onEdit: () => _openEditForm(session),
                         onDelete: () => _deleteSession(session.id),
-                        onViewBatches: () => _viewSessionBatches(session),
+                        onArchive: () => _archiveSession(session),
+                        onViewBatches: () => _viewSeasonBatches(session),
                       ),
                     );
                   },
@@ -461,12 +502,15 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
     );
   }
 
-  void _viewSessionBatches(Session session) async {
+  void _viewSeasonBatches(Session session) async {
     // Navigate to batches screen filtered by session
     // For now, show a dialog with batch count
-    final batchesAsync = ref.read(batchListProvider);
-    batchesAsync.whenData((batches) {
-      final sessionBatches = batches.where((b) => b.sessionId == session.id).toList();
+    try {
+      final batches = await ref.read(batchListProvider.future);
+      final seasonBatches = batches.where((b) => b.sessionId == session.id).toList();
+      
+      if (!mounted) return;
+      
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -475,9 +519,45 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
             'Batches in ${session.name}',
             style: const TextStyle(color: AppColors.textPrimary),
           ),
-          content: Text(
-            '${sessionBatches.length} batch${sessionBatches.length == 1 ? '' : 'es'} assigned to this session.',
-            style: const TextStyle(color: AppColors.textSecondary),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: seasonBatches.isEmpty
+                ? const Text(
+                    'No batches assigned to this season.',
+                    style: TextStyle(color: AppColors.textSecondary),
+                  )
+                : SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${seasonBatches.length} batch${seasonBatches.length == 1 ? '' : 'es'} assigned:',
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        ...seasonBatches.map((b) => Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.circle, size: 8, color: AppColors.accent),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  b.batchName,
+                                  style: const TextStyle(color: AppColors.textPrimary),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )),
+                      ],
+                    ),
+                  ),
           ),
           actions: [
             TextButton(
@@ -487,7 +567,11 @@ class _SessionSeasonManagementScreenState extends ConsumerState<SessionSeasonMan
           ],
         ),
       );
-    });
+    } catch (e) {
+      if (mounted) {
+        SuccessSnackbar.showError(context, 'Failed to load batches: ${e.toString()}');
+      }
+    }
   }
 }
 
@@ -568,23 +652,28 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
-class _SessionCard extends StatelessWidget {
+class _SeasonCard extends StatelessWidget {
   final Session session;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final VoidCallback onArchive;
   final VoidCallback onViewBatches;
 
-  const _SessionCard({
+  const _SeasonCard({
     required this.session,
     required this.onEdit,
     required this.onDelete,
+    required this.onArchive,
     required this.onViewBatches,
   });
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+    
     return NeumorphicContainer(
-      padding: const EdgeInsets.all(AppDimensions.paddingM),
+      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingS : AppDimensions.paddingM),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -596,8 +685,8 @@ class _SessionCard extends StatelessWidget {
                   children: [
                     Text(
                       session.name,
-                      style: const TextStyle(
-                        fontSize: 18,
+                      style: TextStyle(
+                        fontSize: isSmallScreen ? 16 : 18,
                         fontWeight: FontWeight.w600,
                         color: AppColors.textPrimary,
                       ),
@@ -605,44 +694,38 @@ class _SessionCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       '${DateFormat('dd MMM, yyyy').format(session.startDate)} - ${DateFormat('dd MMM, yyyy').format(session.endDate)}',
-                      style: const TextStyle(
-                        fontSize: 14,
+                      style: TextStyle(
+                        fontSize: isSmallScreen ? 12 : 14,
                         color: AppColors.textSecondary,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppDimensions.spacingS,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: session.isActive ? AppColors.success : AppColors.textSecondary,
-                  borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                ),
-                child: Text(
-                  session.status.toUpperCase(),
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
             ],
           ),
-          const SizedBox(height: AppDimensions.spacingM),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+          SizedBox(height: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM),
+          Wrap(
+            alignment: WrapAlignment.end,
+            spacing: isSmallScreen ? 4 : AppDimensions.spacingS,
+            runSpacing: isSmallScreen ? 4 : AppDimensions.spacingS,
             children: [
               TextButton.icon(
                 onPressed: onViewBatches,
                 icon: const Icon(Icons.list, size: 16, color: AppColors.textSecondary),
-                label: const Text(
-                  'View Batches',
-                  style: TextStyle(color: AppColors.textSecondary),
+                label: Text(
+                  isSmallScreen ? 'Batches' : 'View Batches',
+                  style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+                ),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isSmallScreen ? 6 : 8,
+                    vertical: 4,
+                  ),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
               ),
               TextButton.icon(
@@ -650,7 +733,31 @@ class _SessionCard extends StatelessWidget {
                 icon: const Icon(Icons.edit, size: 16, color: AppColors.accent),
                 label: const Text(
                   'Edit',
-                  style: TextStyle(color: AppColors.accent),
+                  style: TextStyle(color: AppColors.accent, fontSize: 12),
+                ),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isSmallScreen ? 6 : 8,
+                    vertical: 4,
+                  ),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+              TextButton.icon(
+                onPressed: onArchive,
+                icon: Icon(session.isActive ? Icons.archive : Icons.unarchive, size: 16, color: AppColors.warning),
+                label: Text(
+                  session.isActive ? 'Archive' : 'Unarchive',
+                  style: const TextStyle(color: AppColors.warning, fontSize: 12),
+                ),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isSmallScreen ? 6 : 8,
+                    vertical: 4,
+                  ),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
               ),
               TextButton.icon(
@@ -658,7 +765,15 @@ class _SessionCard extends StatelessWidget {
                 icon: const Icon(Icons.delete, size: 16, color: AppColors.error),
                 label: const Text(
                   'Delete',
-                  style: TextStyle(color: AppColors.error),
+                  style: TextStyle(color: AppColors.error, fontSize: 12),
+                ),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: isSmallScreen ? 6 : 8,
+                    vertical: 4,
+                  ),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
               ),
             ],

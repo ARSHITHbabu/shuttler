@@ -12,6 +12,7 @@ import '../../providers/batch_provider.dart';
 import '../../models/coach.dart';
 import '../../widgets/forms/add_coach_dialog.dart';
 import '../../widgets/forms/edit_coach_dialog.dart';
+import '../../widgets/dialogs/coach_details_dialog.dart';
 
 /// Coaches List Screen - Shows all coaches with add button
 class CoachesScreen extends ConsumerStatefulWidget {
@@ -105,6 +106,7 @@ class _CoachesScreenState extends ConsumerState<CoachesScreen> {
                 final coach = sortedCoaches[index];
                 return NeumorphicContainer(
                   key: ValueKey(coach.id),
+                  onTap: () => _showCoachDetails(context, coach),
                   padding: const EdgeInsets.all(AppDimensions.paddingM),
                   margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
                   child: Column(
@@ -396,6 +398,10 @@ class _CoachesScreenState extends ConsumerState<CoachesScreen> {
         }
       },
     );
+  }
+
+  void _showCoachDetails(BuildContext context, Coach coach) {
+    CoachDetailsDialog.show(context, coach);
   }
 }
 

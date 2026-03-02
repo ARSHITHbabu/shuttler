@@ -15,6 +15,8 @@ class Student {
   final String? bloodGroup;
   final String? profilePhoto;
   final String? fcmToken;
+  final bool rejoinRequestPending;
+  final String? inactiveAt;
 
   Student({
     required this.id,
@@ -32,6 +34,8 @@ class Student {
     this.bloodGroup,
     this.profilePhoto,
     this.fcmToken,
+    this.rejoinRequestPending = false,
+    this.inactiveAt,
   });
 
   /// Create Student instance from JSON
@@ -52,6 +56,8 @@ class Student {
       bloodGroup: json['blood_group'] as String?,
       profilePhoto: json['profile_photo'] as String?,
       fcmToken: json['fcm_token'] as String?,
+      rejoinRequestPending: json['rejoin_request_pending'] as bool? ?? false,
+      inactiveAt: json['inactive_at'] as String?,
     );
   }
 
@@ -73,6 +79,8 @@ class Student {
       'blood_group': bloodGroup,
       'profile_photo': profilePhoto,
       'fcm_token': fcmToken,
+      'rejoin_request_pending': rejoinRequestPending,
+      'inactive_at': inactiveAt,
     };
   }
 
@@ -93,6 +101,8 @@ class Student {
     String? bloodGroup,
     String? profilePhoto,
     String? fcmToken,
+    bool? rejoinRequestPending,
+    String? inactiveAt,
   }) {
     return Student(
       id: id ?? this.id,
@@ -110,6 +120,8 @@ class Student {
       bloodGroup: bloodGroup ?? this.bloodGroup,
       profilePhoto: profilePhoto ?? this.profilePhoto,
       fcmToken: fcmToken ?? this.fcmToken,
+      rejoinRequestPending: rejoinRequestPending ?? this.rejoinRequestPending,
+      inactiveAt: inactiveAt ?? this.inactiveAt,
     );
   }
 

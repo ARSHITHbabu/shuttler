@@ -1,0 +1,195 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.10.19, pytest-9.0.2, pluggy-1.6.0
+rootdir: D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend
+plugins: anyio-3.7.1, asyncio-1.3.0, cov-7.0.0, mock-3.15.1, typeguard-2.13.3
+asyncio: mode=strict, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 14 items
+
+tests\integration\test_auth.py .....                                     [ 35%]
+tests\integration\test_idor.py ....                                      [ 64%]
+tests\integration\test_rbac.py F.E.F                                     [100%]
+
+=================================== ERRORS ====================================
+____________ ERROR at setup of test_owner_only_endpoint_as_student ____________
+
+client = <starlette.testclient.TestClient object at 0x000001BE85B7E590>
+
+    @pytest.fixture
+    def student_token(client):
+        response = client.post(
+            "/auth/login",
+            json={"email": "student@test.com", "password": "password123"}
+        )
+>       return response.json()["access_token"]
+E       KeyError: 'access_token'
+
+tests\integration\test_rbac.py:25: KeyError
+================================== FAILURES ===================================
+______________________ test_owner_only_endpoint_as_owner ______________________
+
+client = <starlette.testclient.TestClient object at 0x000001BE85B7E590>
+owner_token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwidXNlcl90eXBlIjoib3duZXIiLCJlbWFpbCI6Im93bmVyQHRlc3QuY29tIiwicm9s...joiYWNjZXNzIiwianRpIjoiZWJkNTcyOTctMmUzMC00NjRkLTkyZTAtY2I0MjI2MTFhMzdkIn0.btKcP4-pZDcI3nY8o8Ux9nDslfr8yh0Q1WDCjfTXsTE'
+
+    def test_owner_only_endpoint_as_owner(client, owner_token):
+        # Only owners can create coaches
+        response = client.post(
+            "/coaches/",
+            json={
+                "name": "New Coach",
+                "email": "newcoach@test.com",
+                "phone": "9998887776",
+                "password": "password123"
+            },
+            headers={"Authorization": f"Bearer {owner_token}"}
+        )
+>       assert response.status_code == 200
+E       assert 422 == 200
+E        +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+
+tests\integration\test_rbac.py:39: AssertionError
+---------------------------- Captured stdout setup ----------------------------
+Connected to Redis for caching at redis://localhost:6379
+____________________ test_protected_endpoint_without_token ____________________
+
+client = <starlette.testclient.TestClient object at 0x000001BE85B7E590>
+
+    def test_protected_endpoint_without_token(client):
+        response = client.get("/students/")
+>       assert response.status_code == 403 # HTTPBearer returns 403 if missing credentials by default
+E       assert 401 == 403
+E        +  where 401 = <Response [401 Unauthorized]>.status_code
+
+tests\integration\test_rbac.py:78: AssertionError
+============================== warnings summary ===============================
+main.py:2030
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2030: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Coach(BaseModel):
+
+main.py:2157
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2157: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Owner(BaseModel):
+
+main.py:2277
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2277: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Session(BaseModel):
+
+main.py:2305
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2305: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class CoachInfo(BaseModel):
+
+main.py:2312
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2312: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Batch(BaseModel):
+
+main.py:2402
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2402: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Student(BaseModel):
+
+main.py:2495
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2495: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Attendance(BaseModel):
+
+main.py:2514
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2514: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class CoachAttendance(BaseModel):
+
+main.py:2539
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2539: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class CoachSalary(BaseModel):
+
+main.py:2579
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2579: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class FeePayment(BaseModel):
+
+main.py:2594
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2594: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Fee(BaseModel):
+
+main.py:2627
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2627: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Performance(BaseModel):
+
+main.py:2685
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2685: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class BMI(BaseModel):
+
+main.py:2714
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2714: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Enquiry(BaseModel):
+
+main.py:2730
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2730: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Notification(BaseModel):
+
+main.py:2845
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2845: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Schedule(BaseModel):
+
+main.py:2865
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2865: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Tournament(BaseModel):
+
+main.py:2882
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2882: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class VideoResource(BaseModel):
+
+main.py:2903
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2903: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Invitation(BaseModel):
+
+main.py:2930
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2930: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class CoachInvitation(BaseModel):
+
+main.py:2958
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:2958: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class LeaveRequest(BaseModel):
+
+main.py:3020
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:3020: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class StudentRegistrationRequest(BaseModel):
+
+main.py:3058
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:3058: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class CoachRegistrationRequest(BaseModel):
+
+main.py:3136
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:3136: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Announcement(BaseModel):
+
+main.py:3211
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:3211: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class Notification(BaseModel):
+
+main.py:3229
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:3229: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class NotificationPreferences(BaseModel):
+
+main.py:3266
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:3266: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.12/migration/
+    class CalendarEvent(BaseModel):
+
+main.py:3339
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:3339: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\applications.py:4599
+  E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\applications.py:4599: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/integration/test_rbac.py::test_owner_only_endpoint_as_owner - as...
+FAILED tests/integration/test_rbac.py::test_protected_endpoint_without_token
+ERROR tests/integration/test_rbac.py::test_owner_only_endpoint_as_student - K...
+============= 2 failed, 11 passed, 29 warnings, 1 error in 10.05s =============

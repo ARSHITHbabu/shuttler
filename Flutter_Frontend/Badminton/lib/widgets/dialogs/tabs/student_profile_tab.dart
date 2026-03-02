@@ -5,15 +5,17 @@ import '../../../core/constants/dimensions.dart';
 import '../../../widgets/common/neumorphic_container.dart';
 import '../../../widgets/common/success_snackbar.dart';
 import '../../../widgets/common/confirmation_dialog.dart';
-import '../../../widgets/forms/edit_student_dialog.dart';
 import '../../../providers/service_providers.dart';
 import '../../../providers/student_provider.dart';
 import '../../../providers/batch_provider.dart';
+import '../../../providers/fee_provider.dart';
 import '../../../models/student.dart';
-import '../../../core/services/fee_service.dart';
 import '../../../core/services/batch_enrollment_service.dart';
 import '../../common/error_widget.dart';
 import '../../common/skeleton_screen.dart';
+import '../../../core/utils/contact_utils.dart';
+
+import '../../../providers/auth_provider.dart';
 
 /// Profile Tab - Shows student information and management actions
 class StudentProfileTab extends ConsumerStatefulWidget {
@@ -58,8 +60,8 @@ class _StudentProfileTabState extends ConsumerState<StudentProfileTab> {
           
           const SizedBox(height: AppDimensions.spacingL),
           
-          // Action Buttons
-          _buildActionButtons(),
+          // Action Buttons - Only for Owners
+          _buildActionButtons(ref),
         ],
       ),
     );
@@ -148,11 +150,21 @@ class _StudentProfileTabState extends ConsumerState<StudentProfileTab> {
           child: Column(
             children: [
               if (widget.student.email.isNotEmpty)
-                _buildInfoRow(Icons.email_outlined, 'Email', widget.student.email),
+                _buildInfoRow(
+                  Icons.email_outlined, 
+                  'Email', 
+                  widget.student.email,
+                  onTap: () => ContactUtils.launchEmail(widget.student.email),
+                ),
               if (widget.student.email.isNotEmpty && widget.student.phone.isNotEmpty)
                 const Divider(color: AppColors.textSecondary, height: 24),
               if (widget.student.phone.isNotEmpty)
-                _buildInfoRow(Icons.phone_outlined, 'Phone', widget.student.phone),
+                _buildInfoRow(
+                  Icons.phone_outlined, 
+                  'Phone', 
+                  widget.student.phone,
+                  onTap: () => ContactUtils.showContactOptions(context, widget.student.phone, name: widget.student.name),
+                ),
             ],
           ),
         ),
@@ -184,6 +196,11 @@ class _StudentProfileTabState extends ConsumerState<StudentProfileTab> {
                     Icons.phone_outlined,
                     'Guardian Phone',
                     widget.student.guardianPhone!,
+                    onTap: () => ContactUtils.showContactOptions(
+                      context, 
+                      widget.student.guardianPhone!, 
+                      name: 'Guardian: ${widget.student.guardianName ?? widget.student.name}',
+                    ),
                   ),
               ],
             ),
@@ -264,21 +281,26 @@ class _StudentProfileTabState extends ConsumerState<StudentProfileTab> {
   }
 
   Widget _buildFeeStatusSummary() {
-    return FutureBuilder<String?>(
-      future: _getFeeStatus(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SizedBox(
-            height: 60,
-            child: Center(child: CircularProgressIndicator()),
-          );
-        }
-        
-        final feeStatus = snapshot.data;
-        if (feeStatus == null) {
+    final feesAsync = ref.watch(feeByStudentProvider(widget.student.id));
+
+    return feesAsync.when(
+      loading: () => const SizedBox(
+        height: 60,
+        child: Center(child: CircularProgressIndicator()),
+      ),
+      error: (error, _) => const SizedBox.shrink(),
+      data: (fees) {
+        if (fees.isEmpty) {
           return const SizedBox.shrink();
         }
-        
+
+        String feeStatus = 'paid';
+        final pendingFees = fees.where((f) => f.status != 'paid').toList();
+        if (pendingFees.isNotEmpty) {
+          final overdueFees = pendingFees.where((f) => f.isOverdue).toList();
+          feeStatus = overdueFees.isNotEmpty ? 'overdue' : 'pending';
+        }
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -331,120 +353,129 @@ class _StudentProfileTabState extends ConsumerState<StudentProfileTab> {
     );
   }
 
-  Widget _buildActionButtons() {
+  Widget _buildActionButtons(WidgetRef ref) {
+    // Check if user is owner
+    final authState = ref.watch(authProvider);
+    final isOwner = authState.maybeWhen(
+      data: (state) => state is Authenticated && state.userType == 'owner',
+      orElse: () => false,
+    );
+
+    if (!isOwner) {
+      return const SizedBox.shrink();
+    }
+
     return Column(
       children: [
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: () => _editStudent(),
-            icon: const Icon(Icons.edit, size: 18),
-            label: const Text('Edit Student'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.accent,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingM),
-            ),
-          ),
+        _buildActionButton(
+          onPressed: () => _manageBatches(),
+          icon: Icons.group_add,
+          label: 'Manage Batches',
+          color: AppColors.accent,
         ),
         const SizedBox(height: AppDimensions.spacingS),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: () => _manageBatches(),
-            icon: const Icon(Icons.group_add, size: 18),
-            label: const Text('Manage Batches'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.accent,
-              padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingM),
-            ),
-          ),
+        _buildActionButton(
+          onPressed: () => _toggleStatus(),
+          icon: widget.student.status == 'active' ? Icons.person_off : Icons.person,
+          label: widget.student.status == 'active' ? 'Mark Inactive' : 'Mark Active',
+          color: widget.student.status == 'active' ? AppColors.error : AppColors.success,
         ),
         const SizedBox(height: AppDimensions.spacingS),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: () => _toggleStatus(),
-            icon: Icon(
-              widget.student.status == 'active' ? Icons.person_off : Icons.person,
-              size: 18,
-            ),
-            label: Text(widget.student.status == 'active' ? 'Mark Inactive' : 'Mark Active'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: widget.student.status == 'active' 
-                  ? AppColors.error 
-                  : AppColors.success,
-              padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingM),
-            ),
-          ),
-        ),
-        const SizedBox(height: AppDimensions.spacingS),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: () => _deleteStudent(),
-            icon: const Icon(Icons.delete, size: 18),
-            label: const Text('Delete Student'),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.error,
-              padding: const EdgeInsets.symmetric(vertical: AppDimensions.spacingM),
-            ),
-          ),
+        _buildActionButton(
+          onPressed: () => _deleteStudent(),
+          icon: Icons.delete,
+          label: 'Delete Student',
+          color: AppColors.error,
         ),
       ],
     );
   }
 
-  Widget _buildInfoRow(IconData icon, String label, String value) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: AppColors.textSecondary),
-        const SizedBox(width: AppDimensions.spacingM),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
+  Widget _buildActionButton({
+    required VoidCallback onPressed,
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 20),
+        label: Text(label),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color.withOpacity(0.1),
+          foregroundColor: color,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+            side: BorderSide(
+              color: color.withOpacity(0.25),
+              width: 1.5,
+            ),
           ),
         ),
-      ],
+      ),
     );
   }
 
-  Future<String?> _getFeeStatus() async {
-    try {
-      final feeService = ref.read(feeServiceProvider);
-      final fees = await feeService.getFees(studentId: widget.student.id);
-      if (fees.isNotEmpty) {
-        final pendingFees = fees.where((f) => f.status != 'paid').toList();
-        if (pendingFees.isNotEmpty) {
-          final overdueFees = pendingFees.where((f) => f.isOverdue).toList();
-          return overdueFees.isNotEmpty ? 'overdue' : 'pending';
-        } else {
-          return 'paid';
-        }
-      }
-    } catch (e) {
-      // Skip if fees fetch fails
-    }
-    return null;
+  Widget _buildInfoRow(IconData icon, String label, String value, {VoidCallback? onTap}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: AppColors.textSecondary),
+          const SizedBox(width: AppDimensions.spacingM),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                onTap != null 
+                  ? InkWell(
+                      onTap: onTap,
+                      borderRadius: BorderRadius.circular(4),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+                        child: Text(
+                          value,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: AppColors.accent,
+                            fontWeight: FontWeight.w500,
+                            decoration: TextDecoration.underline,
+                            decorationColor: AppColors.accent.withOpacity(0.5),
+                          ),
+                        ),
+                      ),
+                    )
+                  : Text(
+                      value,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+              ],
+            ),
+          ),
+          if (onTap != null)
+            const Icon(Icons.open_in_new, size: 14, color: AppColors.textTertiary),
+        ],
+      ),
+    );
   }
+
+
 
   Color _getFeeStatusColor(String status) {
     switch (status.toLowerCase()) {
@@ -457,29 +488,6 @@ class _StudentProfileTabState extends ConsumerState<StudentProfileTab> {
       default:
         return AppColors.textSecondary;
     }
-  }
-
-  void _editStudent() {
-    showDialog(
-      context: context,
-      builder: (context) => EditStudentDialog(
-        student: widget.student,
-        onSubmit: (studentData) async {
-          try {
-            await ref.read(studentListProvider.notifier).updateStudent(widget.student.id, studentData);
-            if (mounted) {
-              Navigator.of(context).pop();
-              SuccessSnackbar.show(context, 'Student updated successfully');
-              widget.onStudentUpdated?.call();
-            }
-          } catch (e) {
-            if (mounted) {
-              SuccessSnackbar.showError(context, 'Failed to update student: ${e.toString()}');
-            }
-          }
-        },
-      ),
-    );
   }
 
   void _manageBatches() async {
@@ -675,10 +683,17 @@ class _StudentProfileTabState extends ConsumerState<StudentProfileTab> {
 
   void _toggleStatus() async {
     try {
-      final newStatus = widget.student.status == 'active' ? 'inactive' : 'active';
-      await ref.read(studentListProvider.notifier).updateStudent(widget.student.id, {'status': newStatus});
+      final isCurrentlyActive = widget.student.status == 'active';
+      final actionName = isCurrentlyActive ? 'deactivate' : 'activate';
+      
+      if (isCurrentlyActive) {
+        await ref.read(studentListProvider.notifier).deactivateStudent(widget.student.id);
+      } else {
+        await ref.read(studentListProvider.notifier).approveRejoin(widget.student.id);
+      }
+      
       if (mounted) {
-        SuccessSnackbar.show(context, 'Student ${newStatus == 'active' ? 'activated' : 'deactivated'} successfully');
+        SuccessSnackbar.show(context, 'Student ${actionName}d successfully');
         widget.onStudentUpdated?.call();
       }
     } catch (e) {

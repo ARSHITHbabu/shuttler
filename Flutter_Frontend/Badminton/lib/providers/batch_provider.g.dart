@@ -159,26 +159,18 @@ class _BatchStudentsProviderElement
   int get batchId => (origin as BatchStudentsProvider).batchId;
 }
 
-String _$studentBatchesHash() => r'a5fb54b6a9c8a89d7d39b33eada65fc9fd9656b5';
+String _$studentBatchesHash() => r'1156258326d2cf69108216bf79c5fb77a55db8b0';
 
-/// Provider for student batches (batches a student is enrolled in)
-///
-/// Copied from [studentBatches].
+/// See also [studentBatches].
 @ProviderFor(studentBatches)
 const studentBatchesProvider = StudentBatchesFamily();
 
-/// Provider for student batches (batches a student is enrolled in)
-///
-/// Copied from [studentBatches].
+/// See also [studentBatches].
 class StudentBatchesFamily extends Family<AsyncValue<List<Batch>>> {
-  /// Provider for student batches (batches a student is enrolled in)
-  ///
-  /// Copied from [studentBatches].
+  /// See also [studentBatches].
   const StudentBatchesFamily();
 
-  /// Provider for student batches (batches a student is enrolled in)
-  ///
-  /// Copied from [studentBatches].
+  /// See also [studentBatches].
   StudentBatchesProvider call(int studentId) {
     return StudentBatchesProvider(studentId);
   }
@@ -205,13 +197,9 @@ class StudentBatchesFamily extends Family<AsyncValue<List<Batch>>> {
   String? get name => r'studentBatchesProvider';
 }
 
-/// Provider for student batches (batches a student is enrolled in)
-///
-/// Copied from [studentBatches].
+/// See also [studentBatches].
 class StudentBatchesProvider extends AutoDisposeFutureProvider<List<Batch>> {
-  /// Provider for student batches (batches a student is enrolled in)
-  ///
-  /// Copied from [studentBatches].
+  /// See also [studentBatches].
   StudentBatchesProvider(int studentId)
     : this._internal(
         (ref) => studentBatches(ref as StudentBatchesRef, studentId),
@@ -291,7 +279,7 @@ class _StudentBatchesProviderElement
   int get studentId => (origin as StudentBatchesProvider).studentId;
 }
 
-String _$batchListHash() => r'd1bec86eac0b39ed6a2efb7f5b371595aff62d48';
+String _$batchListHash() => r'56a0adeb55731abeef0770ac38d4cece0d1e1abd';
 
 /// Provider for batch list state
 ///

@@ -199,6 +199,42 @@ class LeaveRequestService {
     }
   }
 
+  /// Patch a pending leave request (coaches only)
+  Future<LeaveRequest> patchLeaveRequest({
+    required int requestId,
+    required int coachId,
+    DateTime? startDate,
+    DateTime? endDate,
+    String? leaveType,
+    String? reason,
+  }) async {
+    try {
+      final data = <String, dynamic>{};
+      if (startDate != null) {
+        data['start_date'] = startDate.toIso8601String().split('T')[0];
+      }
+      if (endDate != null) {
+        data['end_date'] = endDate.toIso8601String().split('T')[0];
+      }
+      if (leaveType != null) {
+        data['leave_type'] = leaveType;
+      }
+      if (reason != null) {
+        data['reason'] = reason;
+      }
+
+      final response = await _apiService.patch(
+        ApiEndpoints.leaveRequestById(requestId),
+        queryParameters: {'coach_id': coachId.toString()},
+        data: data,
+      );
+      return LeaveRequest.fromJson(response.data as Map<String, dynamic>);
+    } catch (e) {
+      throw Exception(
+          'Failed to edit leave request: ${_apiService.getErrorMessage(e)}');
+    }
+  }
+
   /// Delete a leave request (coaches only - if pending)
   Future<void> deleteLeaveRequest({
     required int requestId,
@@ -212,6 +248,52 @@ class LeaveRequestService {
     } catch (e) {
       throw Exception(
           'Failed to delete leave request: ${_apiService.getErrorMessage(e)}');
+    }
+  }
+
+  /// Submit a modification to an approved leave request
+  Future<LeaveRequest> submitLeaveModification({
+    required int requestId,
+    required DateTime startDate,
+    required DateTime endDate,
+    required String reason,
+  }) async {
+    try {
+      final response = await _apiService.post(
+        '${ApiEndpoints.leaveRequests}/$requestId/modify',
+        data: {
+          'start_date': startDate.toIso8601String().split('T')[0],
+          'end_date': endDate.toIso8601String().split('T')[0],
+          'reason': reason,
+        },
+      );
+      return LeaveRequest.fromJson(response.data as Map<String, dynamic>);
+    } catch (e) {
+      throw Exception(
+          'Failed to submit leave modification: ${_apiService.getErrorMessage(e)}');
+    }
+  }
+
+  /// Review a leave modification request
+  Future<LeaveRequest> reviewModificationRequest({
+    required int requestId,
+    required int ownerId,
+    required String action, // "approve", "reject_modification", "reject_all"
+    String? reviewNotes,
+  }) async {
+    try {
+      final response = await _apiService.put(
+        '${ApiEndpoints.leaveRequests}/$requestId/review-modification',
+        data: {
+          'action': action,
+          'owner_id': ownerId,
+          'review_notes': reviewNotes,
+        },
+      );
+      return LeaveRequest.fromJson(response.data as Map<String, dynamic>);
+    } catch (e) {
+      throw Exception(
+          'Failed to review modification: ${_apiService.getErrorMessage(e)}');
     }
   }
 }

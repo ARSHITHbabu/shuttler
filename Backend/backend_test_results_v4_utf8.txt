@@ -1,0 +1,996 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.10.19, pytest-9.0.2, pluggy-1.6.0
+rootdir: D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend
+plugins: anyio-3.7.1, asyncio-1.3.0, cov-7.0.0, mock-3.15.1, typeguard-2.13.3
+asyncio: mode=strict, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 14 items
+
+tests\integration\test_auth.py EEEEE                                     [ 35%]
+tests\integration\test_idor.py EEEE                                      [ 64%]
+tests\integration\test_rbac.py EEEEE                                     [100%]
+
+=================================== ERRORS ====================================
+_____________________ ERROR at setup of test_owner_login ______________________
+
+fixturedef = <FixtureDef argname='client' scope='module' baseid='tests'>
+request = <SubRequest 'client' for <Function test_owner_login>>
+
+    @pytest.hookimpl(wrapper=True)
+    def pytest_fixture_setup(fixturedef: FixtureDef, request) -> object | None:
+        asyncio_mode = _get_asyncio_mode(request.config)
+        if not _is_asyncio_fixture_function(fixturedef.func):
+            if asyncio_mode == Mode.STRICT:
+                # Ignore async fixtures without explicit asyncio mark in strict mode
+                # This applies to pytest_trio fixtures, for example
+>               return (yield)
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\pytest_asyncio\plugin.py:728: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\conftest.py:120: in client
+    with TestClient(app) as c:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <starlette.testclient.TestClient object at 0x000001F57A82FB80>
+app = <fastapi.applications.FastAPI object at 0x000001F578DB3BE0>
+base_url = 'http://testserver', raise_server_exceptions = True, root_path = ''
+backend = 'asyncio', backend_options = None, cookies = None
+headers = {'user-agent': 'testclient'}
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        base_url: str = "http://testserver",
+        raise_server_exceptions: bool = True,
+        root_path: str = "",
+        backend: str = "asyncio",
+        backend_options: typing.Optional[typing.Dict[str, typing.Any]] = None,
+        cookies: httpx._client.CookieTypes = None,
+        headers: typing.Dict[str, str] = None,
+    ) -> None:
+        self.async_backend = _AsyncBackend(
+            backend=backend, backend_options=backend_options or {}
+        )
+        if _is_asgi3(app):
+            app = typing.cast(ASGI3App, app)
+            asgi_app = app
+        else:
+            app = typing.cast(ASGI2App, app)  # type: ignore[assignment]
+            asgi_app = _WrapASGI2(app)  # type: ignore[arg-type]
+        self.app = asgi_app
+        self.app_state: typing.Dict[str, typing.Any] = {}
+        transport = _TestClientTransport(
+            self.app,
+            portal_factory=self._portal_factory,
+            raise_server_exceptions=raise_server_exceptions,
+            root_path=root_path,
+            app_state=self.app_state,
+        )
+        if headers is None:
+            headers = {}
+        headers.setdefault("user-agent", "testclient")
+>       super().__init__(
+            app=self.app,
+            base_url=base_url,
+            headers=headers,
+            transport=transport,
+            follow_redirects=True,
+            cookies=cookies,
+        )
+E       TypeError: Client.__init__() got an unexpected keyword argument 'app'
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:399: TypeError
+_____________________ ERROR at setup of test_coach_login ______________________
+
+seeded_db = <sqlalchemy.orm.session.Session object at 0x000001F57A797FA0>
+
+    @pytest.fixture(scope="module")
+    def client(seeded_db):
+        def override_get_db():
+            try:
+                yield seeded_db
+            finally:
+                pass
+        from main import get_db
+        app.dependency_overrides[get_db] = override_get_db
+>       with TestClient(app) as c:
+
+tests\conftest.py:120: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <starlette.testclient.TestClient object at 0x000001F57A82FB80>
+app = <fastapi.applications.FastAPI object at 0x000001F578DB3BE0>
+base_url = 'http://testserver', raise_server_exceptions = True, root_path = ''
+backend = 'asyncio', backend_options = None, cookies = None
+headers = {'user-agent': 'testclient'}
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        base_url: str = "http://testserver",
+        raise_server_exceptions: bool = True,
+        root_path: str = "",
+        backend: str = "asyncio",
+        backend_options: typing.Optional[typing.Dict[str, typing.Any]] = None,
+        cookies: httpx._client.CookieTypes = None,
+        headers: typing.Dict[str, str] = None,
+    ) -> None:
+        self.async_backend = _AsyncBackend(
+            backend=backend, backend_options=backend_options or {}
+        )
+        if _is_asgi3(app):
+            app = typing.cast(ASGI3App, app)
+            asgi_app = app
+        else:
+            app = typing.cast(ASGI2App, app)  # type: ignore[assignment]
+            asgi_app = _WrapASGI2(app)  # type: ignore[arg-type]
+        self.app = asgi_app
+        self.app_state: typing.Dict[str, typing.Any] = {}
+        transport = _TestClientTransport(
+            self.app,
+            portal_factory=self._portal_factory,
+            raise_server_exceptions=raise_server_exceptions,
+            root_path=root_path,
+            app_state=self.app_state,
+        )
+        if headers is None:
+            headers = {}
+        headers.setdefault("user-agent", "testclient")
+>       super().__init__(
+            app=self.app,
+            base_url=base_url,
+            headers=headers,
+            transport=transport,
+            follow_redirects=True,
+            cookies=cookies,
+        )
+E       TypeError: Client.__init__() got an unexpected keyword argument 'app'
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:399: TypeError
+____________________ ERROR at setup of test_student_login _____________________
+
+seeded_db = <sqlalchemy.orm.session.Session object at 0x000001F57A797FA0>
+
+    @pytest.fixture(scope="module")
+    def client(seeded_db):
+        def override_get_db():
+            try:
+                yield seeded_db
+            finally:
+                pass
+        from main import get_db
+        app.dependency_overrides[get_db] = override_get_db
+>       with TestClient(app) as c:
+
+tests\conftest.py:120: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <starlette.testclient.TestClient object at 0x000001F57A82FB80>
+app = <fastapi.applications.FastAPI object at 0x000001F578DB3BE0>
+base_url = 'http://testserver', raise_server_exceptions = True, root_path = ''
+backend = 'asyncio', backend_options = None, cookies = None
+headers = {'user-agent': 'testclient'}
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        base_url: str = "http://testserver",
+        raise_server_exceptions: bool = True,
+        root_path: str = "",
+        backend: str = "asyncio",
+        backend_options: typing.Optional[typing.Dict[str, typing.Any]] = None,
+        cookies: httpx._client.CookieTypes = None,
+        headers: typing.Dict[str, str] = None,
+    ) -> None:
+        self.async_backend = _AsyncBackend(
+            backend=backend, backend_options=backend_options or {}
+        )
+        if _is_asgi3(app):
+            app = typing.cast(ASGI3App, app)
+            asgi_app = app
+        else:
+            app = typing.cast(ASGI2App, app)  # type: ignore[assignment]
+            asgi_app = _WrapASGI2(app)  # type: ignore[arg-type]
+        self.app = asgi_app
+        self.app_state: typing.Dict[str, typing.Any] = {}
+        transport = _TestClientTransport(
+            self.app,
+            portal_factory=self._portal_factory,
+            raise_server_exceptions=raise_server_exceptions,
+            root_path=root_path,
+            app_state=self.app_state,
+        )
+        if headers is None:
+            headers = {}
+        headers.setdefault("user-agent", "testclient")
+>       super().__init__(
+            app=self.app,
+            base_url=base_url,
+            headers=headers,
+            transport=transport,
+            follow_redirects=True,
+            cookies=cookies,
+        )
+E       TypeError: Client.__init__() got an unexpected keyword argument 'app'
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:399: TypeError
+____________________ ERROR at setup of test_invalid_login _____________________
+
+seeded_db = <sqlalchemy.orm.session.Session object at 0x000001F57A797FA0>
+
+    @pytest.fixture(scope="module")
+    def client(seeded_db):
+        def override_get_db():
+            try:
+                yield seeded_db
+            finally:
+                pass
+        from main import get_db
+        app.dependency_overrides[get_db] = override_get_db
+>       with TestClient(app) as c:
+
+tests\conftest.py:120: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <starlette.testclient.TestClient object at 0x000001F57A82FB80>
+app = <fastapi.applications.FastAPI object at 0x000001F578DB3BE0>
+base_url = 'http://testserver', raise_server_exceptions = True, root_path = ''
+backend = 'asyncio', backend_options = None, cookies = None
+headers = {'user-agent': 'testclient'}
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        base_url: str = "http://testserver",
+        raise_server_exceptions: bool = True,
+        root_path: str = "",
+        backend: str = "asyncio",
+        backend_options: typing.Optional[typing.Dict[str, typing.Any]] = None,
+        cookies: httpx._client.CookieTypes = None,
+        headers: typing.Dict[str, str] = None,
+    ) -> None:
+        self.async_backend = _AsyncBackend(
+            backend=backend, backend_options=backend_options or {}
+        )
+        if _is_asgi3(app):
+            app = typing.cast(ASGI3App, app)
+            asgi_app = app
+        else:
+            app = typing.cast(ASGI2App, app)  # type: ignore[assignment]
+            asgi_app = _WrapASGI2(app)  # type: ignore[arg-type]
+        self.app = asgi_app
+        self.app_state: typing.Dict[str, typing.Any] = {}
+        transport = _TestClientTransport(
+            self.app,
+            portal_factory=self._portal_factory,
+            raise_server_exceptions=raise_server_exceptions,
+            root_path=root_path,
+            app_state=self.app_state,
+        )
+        if headers is None:
+            headers = {}
+        headers.setdefault("user-agent", "testclient")
+>       super().__init__(
+            app=self.app,
+            base_url=base_url,
+            headers=headers,
+            transport=transport,
+            follow_redirects=True,
+            cookies=cookies,
+        )
+E       TypeError: Client.__init__() got an unexpected keyword argument 'app'
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:399: TypeError
+________________________ ERROR at setup of test_logout ________________________
+
+seeded_db = <sqlalchemy.orm.session.Session object at 0x000001F57A797FA0>
+
+    @pytest.fixture(scope="module")
+    def client(seeded_db):
+        def override_get_db():
+            try:
+                yield seeded_db
+            finally:
+                pass
+        from main import get_db
+        app.dependency_overrides[get_db] = override_get_db
+>       with TestClient(app) as c:
+
+tests\conftest.py:120: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <starlette.testclient.TestClient object at 0x000001F57A82FB80>
+app = <fastapi.applications.FastAPI object at 0x000001F578DB3BE0>
+base_url = 'http://testserver', raise_server_exceptions = True, root_path = ''
+backend = 'asyncio', backend_options = None, cookies = None
+headers = {'user-agent': 'testclient'}
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        base_url: str = "http://testserver",
+        raise_server_exceptions: bool = True,
+        root_path: str = "",
+        backend: str = "asyncio",
+        backend_options: typing.Optional[typing.Dict[str, typing.Any]] = None,
+        cookies: httpx._client.CookieTypes = None,
+        headers: typing.Dict[str, str] = None,
+    ) -> None:
+        self.async_backend = _AsyncBackend(
+            backend=backend, backend_options=backend_options or {}
+        )
+        if _is_asgi3(app):
+            app = typing.cast(ASGI3App, app)
+            asgi_app = app
+        else:
+            app = typing.cast(ASGI2App, app)  # type: ignore[assignment]
+            asgi_app = _WrapASGI2(app)  # type: ignore[arg-type]
+        self.app = asgi_app
+        self.app_state: typing.Dict[str, typing.Any] = {}
+        transport = _TestClientTransport(
+            self.app,
+            portal_factory=self._portal_factory,
+            raise_server_exceptions=raise_server_exceptions,
+            root_path=root_path,
+            app_state=self.app_state,
+        )
+        if headers is None:
+            headers = {}
+        headers.setdefault("user-agent", "testclient")
+>       super().__init__(
+            app=self.app,
+            base_url=base_url,
+            headers=headers,
+            transport=transport,
+            follow_redirects=True,
+            cookies=cookies,
+        )
+E       TypeError: Client.__init__() got an unexpected keyword argument 'app'
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:399: TypeError
+____________ ERROR at setup of test_coach_access_enrolled_student _____________
+
+fixturedef = <FixtureDef argname='client' scope='module' baseid='tests'>
+request = <SubRequest 'client' for <Function test_coach_access_enrolled_student>>
+
+    @pytest.hookimpl(wrapper=True)
+    def pytest_fixture_setup(fixturedef: FixtureDef, request) -> object | None:
+        asyncio_mode = _get_asyncio_mode(request.config)
+        if not _is_asyncio_fixture_function(fixturedef.func):
+            if asyncio_mode == Mode.STRICT:
+                # Ignore async fixtures without explicit asyncio mark in strict mode
+                # This applies to pytest_trio fixtures, for example
+>               return (yield)
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\pytest_asyncio\plugin.py:728: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\conftest.py:120: in client
+    with TestClient(app) as c:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <starlette.testclient.TestClient object at 0x000001F57A8D6B00>
+app = <fastapi.applications.FastAPI object at 0x000001F578DB3BE0>
+base_url = 'http://testserver', raise_server_exceptions = True, root_path = ''
+backend = 'asyncio', backend_options = None, cookies = None
+headers = {'user-agent': 'testclient'}
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        base_url: str = "http://testserver",
+        raise_server_exceptions: bool = True,
+        root_path: str = "",
+        backend: str = "asyncio",
+        backend_options: typing.Optional[typing.Dict[str, typing.Any]] = None,
+        cookies: httpx._client.CookieTypes = None,
+        headers: typing.Dict[str, str] = None,
+    ) -> None:
+        self.async_backend = _AsyncBackend(
+            backend=backend, backend_options=backend_options or {}
+        )
+        if _is_asgi3(app):
+            app = typing.cast(ASGI3App, app)
+            asgi_app = app
+        else:
+            app = typing.cast(ASGI2App, app)  # type: ignore[assignment]
+            asgi_app = _WrapASGI2(app)  # type: ignore[arg-type]
+        self.app = asgi_app
+        self.app_state: typing.Dict[str, typing.Any] = {}
+        transport = _TestClientTransport(
+            self.app,
+            portal_factory=self._portal_factory,
+            raise_server_exceptions=raise_server_exceptions,
+            root_path=root_path,
+            app_state=self.app_state,
+        )
+        if headers is None:
+            headers = {}
+        headers.setdefault("user-agent", "testclient")
+>       super().__init__(
+            app=self.app,
+            base_url=base_url,
+            headers=headers,
+            transport=transport,
+            follow_redirects=True,
+            cookies=cookies,
+        )
+E       TypeError: Client.__init__() got an unexpected keyword argument 'app'
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:399: TypeError
+__________ ERROR at setup of test_coach_access_private_student_idor ___________
+
+seeded_db = <sqlalchemy.orm.session.Session object at 0x000001F57A91CB80>
+
+    @pytest.fixture(scope="module")
+    def client(seeded_db):
+        def override_get_db():
+            try:
+                yield seeded_db
+            finally:
+                pass
+        from main import get_db
+        app.dependency_overrides[get_db] = override_get_db
+>       with TestClient(app) as c:
+
+tests\conftest.py:120: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <starlette.testclient.TestClient object at 0x000001F57A8D6B00>
+app = <fastapi.applications.FastAPI object at 0x000001F578DB3BE0>
+base_url = 'http://testserver', raise_server_exceptions = True, root_path = ''
+backend = 'asyncio', backend_options = None, cookies = None
+headers = {'user-agent': 'testclient'}
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        base_url: str = "http://testserver",
+        raise_server_exceptions: bool = True,
+        root_path: str = "",
+        backend: str = "asyncio",
+        backend_options: typing.Optional[typing.Dict[str, typing.Any]] = None,
+        cookies: httpx._client.CookieTypes = None,
+        headers: typing.Dict[str, str] = None,
+    ) -> None:
+        self.async_backend = _AsyncBackend(
+            backend=backend, backend_options=backend_options or {}
+        )
+        if _is_asgi3(app):
+            app = typing.cast(ASGI3App, app)
+            asgi_app = app
+        else:
+            app = typing.cast(ASGI2App, app)  # type: ignore[assignment]
+            asgi_app = _WrapASGI2(app)  # type: ignore[arg-type]
+        self.app = asgi_app
+        self.app_state: typing.Dict[str, typing.Any] = {}
+        transport = _TestClientTransport(
+            self.app,
+            portal_factory=self._portal_factory,
+            raise_server_exceptions=raise_server_exceptions,
+            root_path=root_path,
+            app_state=self.app_state,
+        )
+        if headers is None:
+            headers = {}
+        headers.setdefault("user-agent", "testclient")
+>       super().__init__(
+            app=self.app,
+            base_url=base_url,
+            headers=headers,
+            transport=transport,
+            follow_redirects=True,
+            cookies=cookies,
+        )
+E       TypeError: Client.__init__() got an unexpected keyword argument 'app'
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:399: TypeError
+_________________ ERROR at setup of test_student_access_self __________________
+
+seeded_db = <sqlalchemy.orm.session.Session object at 0x000001F57A91CB80>
+
+    @pytest.fixture(scope="module")
+    def client(seeded_db):
+        def override_get_db():
+            try:
+                yield seeded_db
+            finally:
+                pass
+        from main import get_db
+        app.dependency_overrides[get_db] = override_get_db
+>       with TestClient(app) as c:
+
+tests\conftest.py:120: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <starlette.testclient.TestClient object at 0x000001F57A8D6B00>
+app = <fastapi.applications.FastAPI object at 0x000001F578DB3BE0>
+base_url = 'http://testserver', raise_server_exceptions = True, root_path = ''
+backend = 'asyncio', backend_options = None, cookies = None
+headers = {'user-agent': 'testclient'}
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        base_url: str = "http://testserver",
+        raise_server_exceptions: bool = True,
+        root_path: str = "",
+        backend: str = "asyncio",
+        backend_options: typing.Optional[typing.Dict[str, typing.Any]] = None,
+        cookies: httpx._client.CookieTypes = None,
+        headers: typing.Dict[str, str] = None,
+    ) -> None:
+        self.async_backend = _AsyncBackend(
+            backend=backend, backend_options=backend_options or {}
+        )
+        if _is_asgi3(app):
+            app = typing.cast(ASGI3App, app)
+            asgi_app = app
+        else:
+            app = typing.cast(ASGI2App, app)  # type: ignore[assignment]
+            asgi_app = _WrapASGI2(app)  # type: ignore[arg-type]
+        self.app = asgi_app
+        self.app_state: typing.Dict[str, typing.Any] = {}
+        transport = _TestClientTransport(
+            self.app,
+            portal_factory=self._portal_factory,
+            raise_server_exceptions=raise_server_exceptions,
+            root_path=root_path,
+            app_state=self.app_state,
+        )
+        if headers is None:
+            headers = {}
+        headers.setdefault("user-agent", "testclient")
+>       super().__init__(
+            app=self.app,
+            base_url=base_url,
+            headers=headers,
+            transport=transport,
+            follow_redirects=True,
+            cookies=cookies,
+        )
+E       TypeError: Client.__init__() got an unexpected keyword argument 'app'
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:399: TypeError
+__________ ERROR at setup of test_student_access_other_student_idor ___________
+
+seeded_db = <sqlalchemy.orm.session.Session object at 0x000001F57A91CB80>
+
+    @pytest.fixture(scope="module")
+    def client(seeded_db):
+        def override_get_db():
+            try:
+                yield seeded_db
+            finally:
+                pass
+        from main import get_db
+        app.dependency_overrides[get_db] = override_get_db
+>       with TestClient(app) as c:
+
+tests\conftest.py:120: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <starlette.testclient.TestClient object at 0x000001F57A8D6B00>
+app = <fastapi.applications.FastAPI object at 0x000001F578DB3BE0>
+base_url = 'http://testserver', raise_server_exceptions = True, root_path = ''
+backend = 'asyncio', backend_options = None, cookies = None
+headers = {'user-agent': 'testclient'}
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        base_url: str = "http://testserver",
+        raise_server_exceptions: bool = True,
+        root_path: str = "",
+        backend: str = "asyncio",
+        backend_options: typing.Optional[typing.Dict[str, typing.Any]] = None,
+        cookies: httpx._client.CookieTypes = None,
+        headers: typing.Dict[str, str] = None,
+    ) -> None:
+        self.async_backend = _AsyncBackend(
+            backend=backend, backend_options=backend_options or {}
+        )
+        if _is_asgi3(app):
+            app = typing.cast(ASGI3App, app)
+            asgi_app = app
+        else:
+            app = typing.cast(ASGI2App, app)  # type: ignore[assignment]
+            asgi_app = _WrapASGI2(app)  # type: ignore[arg-type]
+        self.app = asgi_app
+        self.app_state: typing.Dict[str, typing.Any] = {}
+        transport = _TestClientTransport(
+            self.app,
+            portal_factory=self._portal_factory,
+            raise_server_exceptions=raise_server_exceptions,
+            root_path=root_path,
+            app_state=self.app_state,
+        )
+        if headers is None:
+            headers = {}
+        headers.setdefault("user-agent", "testclient")
+>       super().__init__(
+            app=self.app,
+            base_url=base_url,
+            headers=headers,
+            transport=transport,
+            follow_redirects=True,
+            cookies=cookies,
+        )
+E       TypeError: Client.__init__() got an unexpected keyword argument 'app'
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:399: TypeError
+_____________ ERROR at setup of test_owner_only_endpoint_as_owner _____________
+
+fixturedef = <FixtureDef argname='client' scope='module' baseid='tests'>
+request = <SubRequest 'client' for <Function test_owner_only_endpoint_as_owner>>
+
+    @pytest.hookimpl(wrapper=True)
+    def pytest_fixture_setup(fixturedef: FixtureDef, request) -> object | None:
+        asyncio_mode = _get_asyncio_mode(request.config)
+        if not _is_asyncio_fixture_function(fixturedef.func):
+            if asyncio_mode == Mode.STRICT:
+                # Ignore async fixtures without explicit asyncio mark in strict mode
+                # This applies to pytest_trio fixtures, for example
+>               return (yield)
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\pytest_asyncio\plugin.py:728: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\conftest.py:120: in client
+    with TestClient(app) as c:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <starlette.testclient.TestClient object at 0x000001F57AA57070>
+app = <fastapi.applications.FastAPI object at 0x000001F578DB3BE0>
+base_url = 'http://testserver', raise_server_exceptions = True, root_path = ''
+backend = 'asyncio', backend_options = None, cookies = None
+headers = {'user-agent': 'testclient'}
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        base_url: str = "http://testserver",
+        raise_server_exceptions: bool = True,
+        root_path: str = "",
+        backend: str = "asyncio",
+        backend_options: typing.Optional[typing.Dict[str, typing.Any]] = None,
+        cookies: httpx._client.CookieTypes = None,
+        headers: typing.Dict[str, str] = None,
+    ) -> None:
+        self.async_backend = _AsyncBackend(
+            backend=backend, backend_options=backend_options or {}
+        )
+        if _is_asgi3(app):
+            app = typing.cast(ASGI3App, app)
+            asgi_app = app
+        else:
+            app = typing.cast(ASGI2App, app)  # type: ignore[assignment]
+            asgi_app = _WrapASGI2(app)  # type: ignore[arg-type]
+        self.app = asgi_app
+        self.app_state: typing.Dict[str, typing.Any] = {}
+        transport = _TestClientTransport(
+            self.app,
+            portal_factory=self._portal_factory,
+            raise_server_exceptions=raise_server_exceptions,
+            root_path=root_path,
+            app_state=self.app_state,
+        )
+        if headers is None:
+            headers = {}
+        headers.setdefault("user-agent", "testclient")
+>       super().__init__(
+            app=self.app,
+            base_url=base_url,
+            headers=headers,
+            transport=transport,
+            follow_redirects=True,
+            cookies=cookies,
+        )
+E       TypeError: Client.__init__() got an unexpected keyword argument 'app'
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:399: TypeError
+_____________ ERROR at setup of test_owner_only_endpoint_as_coach _____________
+
+seeded_db = <sqlalchemy.orm.session.Session object at 0x000001F57AA55570>
+
+    @pytest.fixture(scope="module")
+    def client(seeded_db):
+        def override_get_db():
+            try:
+                yield seeded_db
+            finally:
+                pass
+        from main import get_db
+        app.dependency_overrides[get_db] = override_get_db
+>       with TestClient(app) as c:
+
+tests\conftest.py:120: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <starlette.testclient.TestClient object at 0x000001F57AA57070>
+app = <fastapi.applications.FastAPI object at 0x000001F578DB3BE0>
+base_url = 'http://testserver', raise_server_exceptions = True, root_path = ''
+backend = 'asyncio', backend_options = None, cookies = None
+headers = {'user-agent': 'testclient'}
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        base_url: str = "http://testserver",
+        raise_server_exceptions: bool = True,
+        root_path: str = "",
+        backend: str = "asyncio",
+        backend_options: typing.Optional[typing.Dict[str, typing.Any]] = None,
+        cookies: httpx._client.CookieTypes = None,
+        headers: typing.Dict[str, str] = None,
+    ) -> None:
+        self.async_backend = _AsyncBackend(
+            backend=backend, backend_options=backend_options or {}
+        )
+        if _is_asgi3(app):
+            app = typing.cast(ASGI3App, app)
+            asgi_app = app
+        else:
+            app = typing.cast(ASGI2App, app)  # type: ignore[assignment]
+            asgi_app = _WrapASGI2(app)  # type: ignore[arg-type]
+        self.app = asgi_app
+        self.app_state: typing.Dict[str, typing.Any] = {}
+        transport = _TestClientTransport(
+            self.app,
+            portal_factory=self._portal_factory,
+            raise_server_exceptions=raise_server_exceptions,
+            root_path=root_path,
+            app_state=self.app_state,
+        )
+        if headers is None:
+            headers = {}
+        headers.setdefault("user-agent", "testclient")
+>       super().__init__(
+            app=self.app,
+            base_url=base_url,
+            headers=headers,
+            transport=transport,
+            follow_redirects=True,
+            cookies=cookies,
+        )
+E       TypeError: Client.__init__() got an unexpected keyword argument 'app'
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:399: TypeError
+____________ ERROR at setup of test_owner_only_endpoint_as_student ____________
+
+seeded_db = <sqlalchemy.orm.session.Session object at 0x000001F57AA55570>
+
+    @pytest.fixture(scope="module")
+    def client(seeded_db):
+        def override_get_db():
+            try:
+                yield seeded_db
+            finally:
+                pass
+        from main import get_db
+        app.dependency_overrides[get_db] = override_get_db
+>       with TestClient(app) as c:
+
+tests\conftest.py:120: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <starlette.testclient.TestClient object at 0x000001F57AA57070>
+app = <fastapi.applications.FastAPI object at 0x000001F578DB3BE0>
+base_url = 'http://testserver', raise_server_exceptions = True, root_path = ''
+backend = 'asyncio', backend_options = None, cookies = None
+headers = {'user-agent': 'testclient'}
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        base_url: str = "http://testserver",
+        raise_server_exceptions: bool = True,
+        root_path: str = "",
+        backend: str = "asyncio",
+        backend_options: typing.Optional[typing.Dict[str, typing.Any]] = None,
+        cookies: httpx._client.CookieTypes = None,
+        headers: typing.Dict[str, str] = None,
+    ) -> None:
+        self.async_backend = _AsyncBackend(
+            backend=backend, backend_options=backend_options or {}
+        )
+        if _is_asgi3(app):
+            app = typing.cast(ASGI3App, app)
+            asgi_app = app
+        else:
+            app = typing.cast(ASGI2App, app)  # type: ignore[assignment]
+            asgi_app = _WrapASGI2(app)  # type: ignore[arg-type]
+        self.app = asgi_app
+        self.app_state: typing.Dict[str, typing.Any] = {}
+        transport = _TestClientTransport(
+            self.app,
+            portal_factory=self._portal_factory,
+            raise_server_exceptions=raise_server_exceptions,
+            root_path=root_path,
+            app_state=self.app_state,
+        )
+        if headers is None:
+            headers = {}
+        headers.setdefault("user-agent", "testclient")
+>       super().__init__(
+            app=self.app,
+            base_url=base_url,
+            headers=headers,
+            transport=transport,
+            follow_redirects=True,
+            cookies=cookies,
+        )
+E       TypeError: Client.__init__() got an unexpected keyword argument 'app'
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:399: TypeError
+___________ ERROR at setup of test_coach_allowed_endpoint_as_coach ____________
+
+seeded_db = <sqlalchemy.orm.session.Session object at 0x000001F57AA55570>
+
+    @pytest.fixture(scope="module")
+    def client(seeded_db):
+        def override_get_db():
+            try:
+                yield seeded_db
+            finally:
+                pass
+        from main import get_db
+        app.dependency_overrides[get_db] = override_get_db
+>       with TestClient(app) as c:
+
+tests\conftest.py:120: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <starlette.testclient.TestClient object at 0x000001F57AA57070>
+app = <fastapi.applications.FastAPI object at 0x000001F578DB3BE0>
+base_url = 'http://testserver', raise_server_exceptions = True, root_path = ''
+backend = 'asyncio', backend_options = None, cookies = None
+headers = {'user-agent': 'testclient'}
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        base_url: str = "http://testserver",
+        raise_server_exceptions: bool = True,
+        root_path: str = "",
+        backend: str = "asyncio",
+        backend_options: typing.Optional[typing.Dict[str, typing.Any]] = None,
+        cookies: httpx._client.CookieTypes = None,
+        headers: typing.Dict[str, str] = None,
+    ) -> None:
+        self.async_backend = _AsyncBackend(
+            backend=backend, backend_options=backend_options or {}
+        )
+        if _is_asgi3(app):
+            app = typing.cast(ASGI3App, app)
+            asgi_app = app
+        else:
+            app = typing.cast(ASGI2App, app)  # type: ignore[assignment]
+            asgi_app = _WrapASGI2(app)  # type: ignore[arg-type]
+        self.app = asgi_app
+        self.app_state: typing.Dict[str, typing.Any] = {}
+        transport = _TestClientTransport(
+            self.app,
+            portal_factory=self._portal_factory,
+            raise_server_exceptions=raise_server_exceptions,
+            root_path=root_path,
+            app_state=self.app_state,
+        )
+        if headers is None:
+            headers = {}
+        headers.setdefault("user-agent", "testclient")
+>       super().__init__(
+            app=self.app,
+            base_url=base_url,
+            headers=headers,
+            transport=transport,
+            follow_redirects=True,
+            cookies=cookies,
+        )
+E       TypeError: Client.__init__() got an unexpected keyword argument 'app'
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:399: TypeError
+___________ ERROR at setup of test_protected_endpoint_without_token ___________
+
+seeded_db = <sqlalchemy.orm.session.Session object at 0x000001F57AA55570>
+
+    @pytest.fixture(scope="module")
+    def client(seeded_db):
+        def override_get_db():
+            try:
+                yield seeded_db
+            finally:
+                pass
+        from main import get_db
+        app.dependency_overrides[get_db] = override_get_db
+>       with TestClient(app) as c:
+
+tests\conftest.py:120: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <starlette.testclient.TestClient object at 0x000001F57AA57070>
+app = <fastapi.applications.FastAPI object at 0x000001F578DB3BE0>
+base_url = 'http://testserver', raise_server_exceptions = True, root_path = ''
+backend = 'asyncio', backend_options = None, cookies = None
+headers = {'user-agent': 'testclient'}
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        base_url: str = "http://testserver",
+        raise_server_exceptions: bool = True,
+        root_path: str = "",
+        backend: str = "asyncio",
+        backend_options: typing.Optional[typing.Dict[str, typing.Any]] = None,
+        cookies: httpx._client.CookieTypes = None,
+        headers: typing.Dict[str, str] = None,
+    ) -> None:
+        self.async_backend = _AsyncBackend(
+            backend=backend, backend_options=backend_options or {}
+        )
+        if _is_asgi3(app):
+            app = typing.cast(ASGI3App, app)
+            asgi_app = app
+        else:
+            app = typing.cast(ASGI2App, app)  # type: ignore[assignment]
+            asgi_app = _WrapASGI2(app)  # type: ignore[arg-type]
+        self.app = asgi_app
+        self.app_state: typing.Dict[str, typing.Any] = {}
+        transport = _TestClientTransport(
+            self.app,
+            portal_factory=self._portal_factory,
+            raise_server_exceptions=raise_server_exceptions,
+            root_path=root_path,
+            app_state=self.app_state,
+        )
+        if headers is None:
+            headers = {}
+        headers.setdefault("user-agent", "testclient")
+>       super().__init__(
+            app=self.app,
+            base_url=base_url,
+            headers=headers,
+            transport=transport,
+            follow_redirects=True,
+            cookies=cookies,
+        )
+E       TypeError: Client.__init__() got an unexpected keyword argument 'app'
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\starlette\testclient.py:399: TypeError
+============================== warnings summary ===============================
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\pydantic\_internal\_config.py:268: 27 warnings
+  E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\pydantic\_internal\_config.py:268: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.5/migration/
+    warnings.warn(DEPRECATION_MESSAGE, DeprecationWarning)
+
+main.py:3339
+  D:\laptop new\f\Personal Projects\badminton\abhi_colab\Cursor1\shuttler\Backend\main.py:3339: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\applications.py:4547
+  E:\Anaconda_Navigator\envs\tf_onnx_env\lib\site-packages\fastapi\applications.py:4547: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+ERROR tests/integration/test_auth.py::test_owner_login - TypeError: Client.__...
+ERROR tests/integration/test_auth.py::test_coach_login - TypeError: Client.__...
+ERROR tests/integration/test_auth.py::test_student_login - TypeError: Client....
+ERROR tests/integration/test_auth.py::test_invalid_login - TypeError: Client....
+ERROR tests/integration/test_auth.py::test_logout - TypeError: Client.__init_...
+ERROR tests/integration/test_idor.py::test_coach_access_enrolled_student - Ty...
+ERROR tests/integration/test_idor.py::test_coach_access_private_student_idor
+ERROR tests/integration/test_idor.py::test_student_access_self - TypeError: C...
+ERROR tests/integration/test_idor.py::test_student_access_other_student_idor
+ERROR tests/integration/test_rbac.py::test_owner_only_endpoint_as_owner - Typ...
+ERROR tests/integration/test_rbac.py::test_owner_only_endpoint_as_coach - Typ...
+ERROR tests/integration/test_rbac.py::test_owner_only_endpoint_as_student - T...
+ERROR tests/integration/test_rbac.py::test_coach_allowed_endpoint_as_coach - ...
+ERROR tests/integration/test_rbac.py::test_protected_endpoint_without_token
+======================= 29 warnings, 14 errors in 6.10s =======================

@@ -11,6 +11,7 @@ import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/leave_request_provider.dart';
+import '../../providers/service_providers.dart';
 import '../../models/leave_request.dart';
 
 /// Leave Request Screen - Submit and view leave requests
@@ -28,6 +29,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
   DateTime _selectedEndDate = DateTime.now();
   String _selectedLeaveType = 'sick'; // 'sick', 'personal', 'emergency', 'other'
   bool _isLoading = false;
+  LeaveRequest? _editingRequest;
 
   @override
   void dispose() {
@@ -62,17 +64,29 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
         ).notifier,
       );
 
-      await manager.createLeaveRequest(
-        coachId: authState.userId,
-        coachName: authState.userName,
-        startDate: _selectedStartDate,
-        endDate: _selectedEndDate,
-        leaveType: _selectedLeaveType,
-        reason: _reasonController.text.trim(),
-      );
+      if (_editingRequest != null) {
+        await manager.patchLeaveRequest(
+          requestId: _editingRequest!.id,
+          coachId: authState.userId,
+          startDate: _selectedStartDate,
+          endDate: _selectedEndDate,
+          leaveType: _selectedLeaveType,
+          reason: _reasonController.text.trim(),
+        );
+      } else {
+        await manager.createLeaveRequest(
+          coachId: authState.userId,
+          coachName: authState.userName,
+          startDate: _selectedStartDate,
+          endDate: _selectedEndDate,
+          leaveType: _selectedLeaveType,
+          reason: _reasonController.text.trim(),
+        );
+      }
 
       setState(() {
         _showAddForm = false;
+        _editingRequest = null;
         _reasonController.clear();
         _selectedStartDate = DateTime.now();
         _selectedEndDate = DateTime.now();
@@ -86,9 +100,20 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        SuccessSnackbar.showError(context, 'Failed to submit leave request: ${e.toString()}');
+        SuccessSnackbar.showError(context, 'Failed to save leave request: ${e.toString()}');
       }
     }
+  }
+
+  void _startEditing(LeaveRequest request) {
+    setState(() {
+      _editingRequest = request;
+      _showAddForm = true;
+      _reasonController.text = request.reason;
+      _selectedStartDate = request.startDate;
+      _selectedEndDate = request.endDate;
+      _selectedLeaveType = request.leaveType;
+    });
   }
 
   Future<void> _cancelLeaveRequest(int requestId) async {
@@ -176,6 +201,8 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final authStateAsync = ref.watch(authProvider);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
 
     return authStateAsync.when(
       data: (authState) {
@@ -189,10 +216,10 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
         }
 
         if (_showAddForm) {
-          return _buildAddForm(isDark);
+          return _buildAddForm(isDark, isSmallScreen);
         }
 
-        return _buildLeaveRequestsList(authState, isDark);
+        return _buildLeaveRequestsList(authState, isDark, isSmallScreen);
       },
       loading: () => Scaffold(
         backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
@@ -246,7 +273,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
     );
   }
 
-  Widget _buildLeaveRequestsList(Authenticated authState, bool isDark) {
+  Widget _buildLeaveRequestsList(Authenticated authState, bool isDark, bool isSmallScreen) {
     final leaveRequestsAsync = ref.watch(
       coachLeaveRequestsProvider(authState.userId),
     );
@@ -305,11 +332,11 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
               });
 
             return ListView.builder(
-              padding: const EdgeInsets.all(AppDimensions.paddingL),
+              padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
               itemCount: sortedRequests.length,
               itemBuilder: (context, index) {
                 final request = sortedRequests[index];
-                return _buildLeaveRequestCard(request, isDark);
+                return _buildLeaveRequestCard(request, isDark, isSmallScreen);
               },
             );
           },
@@ -367,7 +394,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
     );
   }
 
-  Widget _buildLeaveRequestCard(LeaveRequest request, bool isDark) {
+  Widget _buildLeaveRequestCard(LeaveRequest request, bool isDark, bool isSmallScreen) {
     final startDate = request.startDate;
     final endDate = request.endDate;
     final status = request.status;
@@ -375,8 +402,8 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
     final reason = request.reason;
 
     return NeumorphicContainer(
-      padding: const EdgeInsets.all(AppDimensions.paddingM),
-      margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
+      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingM),
+      margin: EdgeInsets.only(bottom: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -390,7 +417,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
                     Text(
                       _getLeaveTypeLabel(type),
                       style: TextStyle(
-                        fontSize: 18,
+                        fontSize: isSmallScreen ? 16 : 18,
                         fontWeight: FontWeight.w600,
                         color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                       ),
@@ -419,7 +446,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
                   status.toUpperCase(),
                   style: TextStyle(
                     color: _getStatusColorObj(status),
-                    fontSize: 12,
+                    fontSize: isSmallScreen ? 11 : 12,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -434,28 +461,168 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
               color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
             ),
           ),
-          if (request.isPending) ...[
+            if (request.isPending) ...[
             const SizedBox(height: AppDimensions.spacingM),
             Align(
               alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () => _cancelLeaveRequest(request.id),
-                child: Text(
-                  'Cancel Request',
-                  style: TextStyle(
-                    color: AppColors.error,
-                    fontSize: 12,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextButton(
+                    onPressed: () => _startEditing(request),
+                    child: Text(
+                      'Edit',
+                      style: TextStyle(
+                        color: AppColors.accent,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => _cancelLeaveRequest(request.id),
+                    child: Text(
+                      'Cancel Request',
+                      style: TextStyle(
+                        color: AppColors.error,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (request.isApproved) ...[
+            const SizedBox(height: AppDimensions.spacingM),
+            if (request.hasPendingModification)
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.warning.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.access_time, size: 14, color: AppColors.warning),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Modification Pending',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.warning,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Modified: ${DateFormat('dd MMM').format(request.modificationStartDate!)} - ${DateFormat('dd MMM').format(request.modificationEndDate!)}',
+                      style: TextStyle(fontSize: 12, color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
+                    ),
+                    if (request.modificationReason != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Reason: ${request.modificationReason}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              )
+            else ...[
+              if (request.originalStartDate != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: Text(
+                    'History: ${DateFormat('dd MMM').format(request.originalStartDate!)} - ${DateFormat('dd MMM').format(request.originalEndDate!)}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? AppColors.textTertiary : AppColorsLight.textTertiary,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () => _showModificationDialog(request),
+                  icon: Icon(Icons.edit, size: 16),
+                  label: Text(
+                    'Modify',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.accent,
                   ),
                 ),
               ),
-            ),
+            ],
           ],
         ],
       ),
     );
   }
 
-  Widget _buildAddForm(bool isDark) {
+  void _showModificationDialog(LeaveRequest request) {
+    showDialog(
+      context: context,
+      builder: (context) => _ModificationDialog(
+        currentStartDate: request.startDate,
+        currentEndDate: request.endDate,
+        onSubmit: (start, end, reason) => _submitModification(request.id, start, end, reason),
+      ),
+    );
+  }
+
+  Future<void> _submitModification(int requestId, DateTime start, DateTime end, String reason) async {
+    try {
+      final authState = await ref.read(authProvider.future);
+        if (authState is! Authenticated || authState.userType != 'coach') {
+          return;
+        }
+
+      final manager = ref.read(
+        leaveRequestManagerProvider(
+          coachId: authState.userId,
+          status: null,
+        ).notifier,
+      );
+
+      // We need to access the service directly or add a method to the provider
+      // For now, I'll assume we can use the service from the provider or just use the service provider directly
+      // Since leaveRequestManagerProvider might not expose submitModification easily without updating it
+      // Let's use the service provider directly for this specific action
+      
+      final service = ref.read(leaveRequestServiceProvider);
+      await service.submitLeaveModification(
+        requestId: requestId,
+        startDate: start,
+        endDate: end,
+        reason: reason,
+      );
+      
+      // Refresh list
+      ref.invalidate(coachLeaveRequestsProvider(authState.userId));
+
+      if (mounted) {
+        SuccessSnackbar.show(context, 'Modification request submitted');
+      }
+    } catch (e) {
+      if (mounted) {
+        SuccessSnackbar.showError(context, 'Failed to submit modification: ${e.toString()}');
+      }
+    }
+  }
+
+  Widget _buildAddForm(bool isDark, bool isSmallScreen) {
     return Scaffold(
       backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
       appBar: AppBar(
@@ -469,7 +636,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
           onPressed: () => setState(() => _showAddForm = false),
         ),
         title: Text(
-          'Submit Leave Request',
+          _editingRequest != null ? 'Edit Leave Request' : 'Submit Leave Request',
           style: TextStyle(
             color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
             fontSize: 20,
@@ -479,7 +646,7 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
       ),
       body: SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.all(AppDimensions.paddingL),
+          padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -557,11 +724,14 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
                     children: [
                       const Icon(Icons.calendar_today, color: AppColors.textSecondary),
                       const SizedBox(width: AppDimensions.spacingM),
-                      Text(
-                        'Start Date: ${DateFormat('dd MMM, yyyy').format(_selectedStartDate)}',
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 16,
+                      Expanded(
+                        child: Text(
+                          'Start Date: ${DateFormat('dd MMM, yyyy').format(_selectedStartDate)}',
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 16,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
@@ -590,11 +760,14 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
                     children: [
                       const Icon(Icons.calendar_today, color: AppColors.textSecondary),
                       const SizedBox(width: AppDimensions.spacingM),
-                      Text(
-                        'End Date: ${DateFormat('dd MMM, yyyy').format(_selectedEndDate)}',
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 16,
+                      Expanded(
+                        child: Text(
+                          'End Date: ${DateFormat('dd MMM, yyyy').format(_selectedEndDate)}',
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontSize: 16,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
@@ -630,9 +803,9 @@ class _LeaveRequestScreenState extends ConsumerState<LeaveRequestScreen> {
                           height: 20,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text(
-                          'Submit Request',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      : Text(
+                          _editingRequest != null ? 'Update Request' : 'Submit Request',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                         ),
                 ),
               ),
@@ -674,6 +847,130 @@ class _LeaveTypeButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ModificationDialog extends StatefulWidget {
+  final DateTime currentStartDate;
+  final DateTime currentEndDate;
+  final Function(DateTime, DateTime, String) onSubmit;
+
+  const _ModificationDialog({
+    required this.currentStartDate,
+    required this.currentEndDate,
+    required this.onSubmit,
+  });
+
+  @override
+  State<_ModificationDialog> createState() => _ModificationDialogState();
+}
+
+class _ModificationDialogState extends State<_ModificationDialog> {
+  late DateTime _startDate;
+  late DateTime _endDate;
+  final _reasonController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _startDate = widget.currentStartDate;
+    _endDate = widget.currentEndDate;
+  }
+
+  @override
+  void dispose() {
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Modify Leave Request'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Select new dates (max 7 days)',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              title: const Text('Start Date'),
+              subtitle: Text(DateFormat('dd MMM, yyyy').format(_startDate)),
+              onTap: () async {
+                final date = await showDatePicker(
+                  context: context,
+                  initialDate: _startDate,
+                  firstDate: DateTime.now(),
+                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                );
+                if (date != null) {
+                  setState(() {
+                    _startDate = date;
+                    if (_endDate.isBefore(_startDate)) {
+                      _endDate = _startDate;
+                    }
+                  });
+                }
+              },
+            ),
+            ListTile(
+              title: const Text('End Date'),
+              subtitle: Text(DateFormat('dd MMM, yyyy').format(_endDate)),
+              onTap: () async {
+                final date = await showDatePicker(
+                  context: context,
+                  initialDate: _endDate,
+                  firstDate: _startDate,
+                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                );
+                if (date != null) {
+                  setState(() => _endDate = date);
+                }
+              },
+            ),
+            const SizedBox(height: 16),
+            CustomTextField(
+              controller: _reasonController,
+              label: 'Reason for Modification',
+              hint: 'Why are you changing the dates?',
+              maxLines: 3,
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            if (_reasonController.text.trim().isEmpty) {
+              SuccessSnackbar.showError(context, 'Please enter a reason');
+              return;
+            }
+             if (_startDate.isAfter(_endDate)) {
+              SuccessSnackbar.showError(context, 'End date must be after start date');
+              return;
+            }
+            final days = _endDate.difference(_startDate).inDays + 1;
+            if (days > 7) {
+              SuccessSnackbar.showError(context, 'Leave duration cannot exceed 7 days');
+              return;
+            }
+
+            widget.onSubmit(_startDate, _endDate, _reasonController.text.trim());
+            Navigator.pop(context);
+          },
+          style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent),
+          child: const Text('Submit', style: TextStyle(color: Colors.white)),
+        ),
+      ],
     );
   }
 }

@@ -6,7 +6,6 @@ import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/neumorphic_button.dart';
 import '../../providers/service_providers.dart';
-import '../../core/services/student_registration_request_service.dart';
 
 class RegistrationPendingScreen extends ConsumerStatefulWidget {
   final String email;
@@ -121,6 +120,8 @@ class _RegistrationPendingScreenState extends ConsumerState<RegistrationPendingS
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.background : AppColorsLight.background,
@@ -143,8 +144,8 @@ class _RegistrationPendingScreenState extends ConsumerState<RegistrationPendingS
         ),
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppDimensions.paddingL),
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -165,27 +166,27 @@ class _RegistrationPendingScreenState extends ConsumerState<RegistrationPendingS
               Text(
                 'Registration Pending',
                 style: TextStyle(
-                  fontSize: 24,
+                  fontSize: isSmallScreen ? 18 : 24,
                   fontWeight: FontWeight.bold,
                   color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                 ),
               ),
-              const SizedBox(height: AppDimensions.spacingM),
+              SizedBox(height: isSmallScreen ? AppDimensions.spacingS : AppDimensions.spacingM),
 
               // Description
               Text(
                 'Your registration request has been submitted successfully!',
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: isSmallScreen ? 14 : 16,
                   color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
                 ),
               ),
-              const SizedBox(height: AppDimensions.spacingL),
+              SizedBox(height: isSmallScreen ? AppDimensions.spacingM : AppDimensions.spacingL),
 
               // Info Card
               NeumorphicContainer(
-                padding: const EdgeInsets.all(AppDimensions.paddingL),
+                padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
                 child: Column(
                   children: [
                     Row(
@@ -200,7 +201,7 @@ class _RegistrationPendingScreenState extends ConsumerState<RegistrationPendingS
                           child: Text(
                             'What happens next?',
                             style: TextStyle(
-                              fontSize: 16,
+                              fontSize: isSmallScreen ? 14 : 16,
                               fontWeight: FontWeight.w600,
                               color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
                             ),

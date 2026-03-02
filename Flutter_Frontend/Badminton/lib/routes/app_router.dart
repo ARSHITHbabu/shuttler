@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../screens/auth/role_selection_screen.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/signup_screen.dart';
 import '../screens/auth/forgot_password_screen.dart';
@@ -11,49 +10,40 @@ import '../screens/owner/academy_setup_screen.dart';
 import '../screens/owner/owner_dashboard.dart';
 import '../screens/owner/notifications_screen.dart';
 import '../screens/coach/coach_dashboard.dart';
+import '../screens/coach/coach_registration_pending_screen.dart';
 
 /// App routing configuration with go_router
 class AppRouter {
   static GoRouter createRouter() {
     return GoRouter(
-      initialLocation: '/',
+      initialLocation: '/login',
       debugLogDiagnostics: true,
       routes: [
-        // Root route - Role Selection
+        // Root route - Redirect to login
         GoRoute(
           path: '/',
-          name: 'role-selection',
-          builder: (context, state) => const RoleSelectionScreen(),
+          redirect: (context, state) => '/login',
         ),
 
         // Login route
         GoRoute(
           path: '/login',
           name: 'login',
-          builder: (context, state) {
-            final userType = state.extra as String? ?? 'student';
-            return LoginScreen(userType: userType);
-          },
+          builder: (context, state) => const LoginScreen(),
         ),
 
         // Signup route
         GoRoute(
           path: '/signup',
           name: 'signup',
-          builder: (context, state) {
-            final userType = state.extra as String? ?? 'student';
-            return SignupScreen(userType: userType);
-          },
+          builder: (context, state) => const SignupScreen(),
         ),
 
         // Forgot Password route
         GoRoute(
           path: '/forgot-password',
           name: 'forgot-password',
-          builder: (context, state) {
-            final userType = state.extra as String? ?? 'student';
-            return ForgotPasswordScreen(userType: userType);
-          },
+          builder: (context, state) => const ForgotPasswordScreen(),
         ),
 
         // Owner Dashboard route
@@ -68,6 +58,16 @@ class AppRouter {
           path: '/coach-dashboard',
           name: 'coach-dashboard',
           builder: (context, state) => const CoachDashboard(),
+        ),
+
+        // Coach Registration Pending route
+        GoRoute(
+          path: '/coach-registration-pending',
+          name: 'coach-registration-pending',
+          builder: (context, state) {
+            final email = state.extra as String? ?? '';
+            return CoachRegistrationPendingScreen(email: email);
+          },
         ),
 
         // Student Profile Completion route

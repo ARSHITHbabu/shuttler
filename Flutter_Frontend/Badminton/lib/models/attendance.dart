@@ -8,6 +8,7 @@ class Attendance {
   final DateTime date;
   final String status; // 'present', 'absent'
   final String? remarks;
+  final String? markedBy;
   final DateTime? createdAt;
 
   Attendance({
@@ -19,6 +20,7 @@ class Attendance {
     required this.date,
     required this.status,
     this.remarks,
+    this.markedBy,
     this.createdAt,
   });
 
@@ -33,6 +35,7 @@ class Attendance {
       date: DateTime.parse(json['date'] as String),
       status: json['status'] as String,
       remarks: json['remarks'] as String?,
+      markedBy: json['marked_by'] as String?,
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String)
           : null,
@@ -47,6 +50,7 @@ class Attendance {
       'date': date.toIso8601String().split('T')[0], // YYYY-MM-DD format
       'status': status,
       'remarks': remarks,
+      'marked_by': markedBy,
     };
   }
 
@@ -60,6 +64,7 @@ class Attendance {
     DateTime? date,
     String? status,
     String? remarks,
+    String? markedBy,
     DateTime? createdAt,
   }) {
     return Attendance(
@@ -71,6 +76,7 @@ class Attendance {
       date: date ?? this.date,
       status: status ?? this.status,
       remarks: remarks ?? this.remarks,
+      markedBy: markedBy ?? this.markedBy,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -98,6 +104,7 @@ class CoachAttendance {
   final DateTime date;
   final String status; // 'present', 'absent'
   final String? remarks;
+  final String? markedBy;
   final DateTime? createdAt;
 
   CoachAttendance({
@@ -107,6 +114,7 @@ class CoachAttendance {
     required this.date,
     required this.status,
     this.remarks,
+    this.markedBy,
     this.createdAt,
   });
 
@@ -119,6 +127,7 @@ class CoachAttendance {
       date: DateTime.parse(json['date'] as String),
       status: json['status'] as String,
       remarks: json['remarks'] as String?,
+      markedBy: json['marked_by'] as String?,
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String)
           : null,
@@ -132,6 +141,7 @@ class CoachAttendance {
       'date': date.toIso8601String().split('T')[0], // YYYY-MM-DD format
       'status': status,
       'remarks': remarks,
+      'marked_by': markedBy,
     };
   }
 
@@ -143,6 +153,7 @@ class CoachAttendance {
     DateTime? date,
     String? status,
     String? remarks,
+    String? markedBy,
     DateTime? createdAt,
   }) {
     return CoachAttendance(
@@ -152,6 +163,7 @@ class CoachAttendance {
       date: date ?? this.date,
       status: status ?? this.status,
       remarks: remarks ?? this.remarks,
+      markedBy: markedBy ?? this.markedBy,
       createdAt: createdAt ?? this.createdAt,
     );
   }

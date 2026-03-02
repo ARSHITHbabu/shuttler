@@ -52,7 +52,8 @@ class VideoManager extends _$VideoManager {
     try {
       final videoService = ref.read(videoServiceProvider);
       final video = await videoService.uploadVideo(
-        studentId: studentId,
+        audienceType: 'student',
+        targetIds: [studentId],
         videoFilePath: videoFilePath,
         title: title,
         remarks: remarks,
@@ -82,7 +83,8 @@ class VideoManager extends _$VideoManager {
     try {
       final videoService = ref.read(videoServiceProvider);
       final videos = await videoService.uploadMultipleVideos(
-        studentId: studentId,
+        audienceType: 'student',
+        targetIds: [studentId],
         videoPaths: videoPaths,
         remarks: remarks,
         uploadedBy: uploadedBy,

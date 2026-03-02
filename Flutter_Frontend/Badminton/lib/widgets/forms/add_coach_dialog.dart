@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:intl/intl.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
@@ -27,6 +28,8 @@ class _AddCoachDialogState extends ConsumerState<AddCoachDialog> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
+  final _salaryController = TextEditingController();
+  DateTime? _joiningDate;
   bool _isLoading = false;
 
   @override
@@ -34,6 +37,7 @@ class _AddCoachDialogState extends ConsumerState<AddCoachDialog> {
     _nameController.dispose();
     _phoneController.dispose();
     _emailController.dispose();
+    _salaryController.dispose();
     super.dispose();
   }
 
@@ -161,14 +165,8 @@ class _AddCoachDialogState extends ConsumerState<AddCoachDialog> {
             children: [
             if (hasPhone && hasEmail) ...[
               _InviteOption(
-                icon: Icons.chat,
-                label: 'Send via WhatsApp',
-                onTap: () => _sendViaWhatsApp(phone, inviteLink),
-              ),
-              const SizedBox(height: AppDimensions.spacingS),
-              _InviteOption(
                 icon: Icons.message,
-                label: 'Send via Messages',
+                label: 'Send via Message',
                 onTap: () => _sendViaSMS(phone, inviteLink),
               ),
               const SizedBox(height: AppDimensions.spacingS),
@@ -185,14 +183,8 @@ class _AddCoachDialogState extends ConsumerState<AddCoachDialog> {
               ),
             ] else if (hasPhone) ...[
               _InviteOption(
-                icon: Icons.chat,
-                label: 'Send via WhatsApp',
-                onTap: () => _sendViaWhatsApp(phone, inviteLink),
-              ),
-              const SizedBox(height: AppDimensions.spacingS),
-              _InviteOption(
                 icon: Icons.message,
-                label: 'Send via Messages',
+                label: 'Send via Message',
                 onTap: () => _sendViaSMS(phone, inviteLink),
               ),
               const SizedBox(height: AppDimensions.spacingS),
@@ -227,22 +219,7 @@ class _AddCoachDialogState extends ConsumerState<AddCoachDialog> {
     );
   }
 
-  Future<void> _sendViaWhatsApp(String phone, String link) async {
-    final url =
-        'https://wa.me/$phone?text=${Uri.encodeComponent('Join our academy as a coach! $link')}';
-    if (await canLaunchUrl(Uri.parse(url))) {
-      await launchUrl(Uri.parse(url));
-      Navigator.of(context).pop(); // Close invite options
-      Navigator.of(context).pop(); // Close main dialog
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Could not open WhatsApp'),
-          backgroundColor: AppColors.error,
-        ),
-      );
-    }
-  }
+
 
   Future<void> _sendViaSMS(String phone, String link) async {
     final url =
@@ -373,6 +350,45 @@ class _AddCoachDialogState extends ConsumerState<AddCoachDialog> {
                     }
                     return null;
                   },
+                ),
+                const SizedBox(height: AppDimensions.spacingM),
+                _buildTextField(
+                  controller: _salaryController,
+                  label: 'Monthly Salary (\$)',
+                  icon: Icons.attach_money,
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: AppDimensions.spacingM),
+                // Joining Date Picker
+                GestureDetector(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _joiningDate ?? DateTime.now(),
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                    );
+                    if (picked != null) {
+                      setState(() => _joiningDate = picked);
+                    }
+                  },
+                  child: NeumorphicInsetContainer(
+                    padding: const EdgeInsets.all(AppDimensions.paddingM),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _joiningDate == null
+                              ? 'Select Joining Date'
+                              : 'Joins: ${DateFormat('dd MMM, yyyy').format(_joiningDate!)}',
+                          style: TextStyle(
+                            color: _joiningDate == null ? AppColors.textSecondary : AppColors.textPrimary,
+                          ),
+                        ),
+                        const Icon(Icons.calendar_today, size: 18, color: AppColors.iconPrimary),
+                      ],
+                    ),
+                  ),
                 ),
                 const SizedBox(height: AppDimensions.spacingL),
                 SizedBox(

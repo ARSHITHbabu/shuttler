@@ -1128,13 +1128,26 @@ class _PerformanceRecordCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  _formatDate(date.toIso8601String()),
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
-                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _formatDate(date.toIso8601String()),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
+                      ),
+                    ),
+                    if (record.batchName != null)
+                      Text(
+                        record.batchName!,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
+                        ),
+                      ),
+                  ],
                 ),
                 Container(
                   padding: const EdgeInsets.symmetric(

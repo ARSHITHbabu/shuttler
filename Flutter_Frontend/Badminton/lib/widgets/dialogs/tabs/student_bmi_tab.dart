@@ -81,8 +81,11 @@ class _StudentBMITabState extends ConsumerState<StudentBMITab> {
       return _buildAddForm();
     }
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 600;
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppDimensions.paddingL),
+      padding: EdgeInsets.all(isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -90,26 +93,37 @@ class _StudentBMITabState extends ConsumerState<StudentBMITab> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'BMI Records',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textPrimary,
+              Flexible(
+                child: Text(
+                  'BMI Records',
+                  style: TextStyle(
+                    fontSize: isSmallScreen ? 16 : 18,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
               ),
+              const SizedBox(width: 8),
               ElevatedButton.icon(
                 onPressed: () => setState(() => _showAddForm = true),
                 icon: const Icon(Icons.add, size: 18),
-                label: const Text('Add Record'),
+                label: const Text('Add'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.accent,
                   foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppDimensions.spacingM,
+                    vertical: AppDimensions.spacingS,
+                  ),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: AppDimensions.spacingL),
+          SizedBox(height: isSmallScreen ? AppDimensions.spacingM : AppDimensions.spacingL),
           
           // BMI History
           _buildBMIHistory(),

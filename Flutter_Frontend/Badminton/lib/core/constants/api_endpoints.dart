@@ -5,21 +5,30 @@ class ApiEndpoints {
   // Base URL - Use localhost for web, computer's local IP for mobile/desktop
   // IMPORTANT: Change this IP to your computer's local IP address (run ipconfig on Windows)
   static String get baseUrl {
+    const envUrl = String.fromEnvironment('API_URL');
+    if (envUrl.isNotEmpty) {
+      return envUrl;
+    }
+
     if (kIsWeb) {
-      return 'http://localhost:8000';
+      return 'http://localhost:8001';
     }
     // Use your computer's local network IP address
     // Run get_local_ip.ps1 to find your current IP address
-    // Current IP: 192.168.1.6 (detected automatically)
-    return 'http://192.168.1.6:8000';
+    // Current IP: 192.168.1.11 (updated automatically)
+    return 'http://192.168.1.11:8001';
   }
 
   // Authentication
-  static const String login = '/api/auth/login';
-  static const String register = '/api/auth/register';
+  static const String login = '/auth/login';
+  static const String logout = '/auth/logout';
+  static const String register = '/auth/register';
   static const String changePassword = '/auth/change-password';
   static const String forgotPassword = '/auth/forgot-password';
   static const String resetPassword = '/auth/reset-password';
+  static const String authSessions = '/auth/sessions';
+  static String sessionRevoke(int id) => '/auth/sessions/$id';
+  static const String logoutAll = '/auth/logout_all';
 
   // Owners
   static const String owners = '/owners/';
@@ -33,8 +42,11 @@ class ApiEndpoints {
   // Students
   static const String students = '/students/';
   static String studentById(int id) => '/students/$id';
-  static String studentAttendance(int id) => '/students/$id/attendance';
   static String studentPerformance(int id) => '/students/$id/performance';
+  static String deactivateStudent(int id) => '/students/$id/deactivate';
+  static String removeStudent(int id) => '/students/$id/remove';
+  static String requestRejoin(int id) => '/students/$id/request-rejoin';
+  static String approveRejoin(int id) => '/students/$id/approve-rejoin';
 
   // Sessions (Seasons)
   static const String sessions = '/sessions/';
@@ -45,6 +57,9 @@ class ApiEndpoints {
   static const String batches = '/batches/';
   static String batchById(int id) => '/batches/$id';
   static String batchStudentsList(int id) => '/batches/$id/students';
+  static String deactivateBatch(int id) => '/batches/$id/deactivate';
+  static String activateBatch(int id) => '/batches/$id/activate';
+  static String removeBatch(int id) => '/batches/$id/remove';
 
   // Batch Students (enrollment)
   static const String batchStudents = '/batch-students/';
@@ -65,6 +80,7 @@ class ApiEndpoints {
   // Performance
   static const String performance = '/performance/';
   static String performanceById(int id) => '/performance/$id';
+  static const String performanceCompletionStatus = '/performance/completion-status';
 
   // BMI Records
   static const String bmiRecords = '/bmi-records/';
@@ -105,9 +121,27 @@ class ApiEndpoints {
   static const String calendarEvents = '/api/calendar-events/';
   static String calendarEventById(int id) => '/api/calendar-events/$id';
 
+  // Video streaming and handling (Modified to support Range requests)
+  static String videoStreamUrl(String videoPath) {
+    if (videoPath.startsWith('/uploads/')) {
+      final filename = videoPath.replaceFirst('/uploads/', '');
+      return '/video-stream/$filename';
+    }
+    return videoPath;
+  }
+
   // Image Upload (NEW)
   static const String uploadImage = '/api/upload/image';
-  static String imageUrl(String filename) => '/uploads/$filename';
+  static String imageUrl(String filename) {
+    if (filename.startsWith('http://') || filename.startsWith('https://')) {
+      return filename;
+    }
+    // If it already starts with /uploads as returned by backend
+    if (filename.startsWith('/uploads/')) {
+        return filename;
+    }
+    return '/uploads/$filename';
+  }
 
   // Leave Requests
   static const String leaveRequests = '/leave-requests/';

@@ -107,9 +107,13 @@ class _StudentBMIScreenState extends ConsumerState<StudentBMIScreen> {
                         return EmptyState.noBmiRecords();
                       }
 
-                      // Sort by date descending (latest first)
+                      // Sort by date descending (latest first). If dates are same, sort by ID desc
                       final sortedRecords = List<BMIRecord>.from(bmiRecords)
-                        ..sort((a, b) => b.date.compareTo(a.date));
+                        ..sort((a, b) {
+                          final dateCompare = b.date.compareTo(a.date);
+                          if (dateCompare != 0) return dateCompare;
+                          return b.id.compareTo(a.id);
+                        });
                       final latestBMI = sortedRecords.first;
 
                       return Column(
@@ -172,9 +176,13 @@ class _StudentBMIScreenState extends ConsumerState<StudentBMIScreen> {
                       return const SliverToBoxAdapter(child: SizedBox());
                     }
 
-                    // Sort by date descending (latest first)
+                    // Sort by date descending (latest first). If dates are same, sort by ID desc
                     final sortedRecords = List<BMIRecord>.from(bmiRecords)
-                      ..sort((a, b) => b.date.compareTo(a.date));
+                      ..sort((a, b) {
+                        final dateCompare = b.date.compareTo(a.date);
+                        if (dateCompare != 0) return dateCompare;
+                        return b.id.compareTo(a.id);
+                      });
 
                     return SliverList(
                       delegate: SliverChildBuilderDelegate(
@@ -231,8 +239,8 @@ class _StudentBMIScreenState extends ConsumerState<StudentBMIScreen> {
               alignment: Alignment.center,
               children: [
                 SizedBox(
-                  width: 140,
-                  height: 140,
+                  width: 180, // Increased size
+                  height: 180, // Increased size
                   child: CustomPaint(
                     painter: _BMIGaugePainter(
                       bmi: bmi,
@@ -240,36 +248,39 @@ class _StudentBMIScreenState extends ConsumerState<StudentBMIScreen> {
                     ),
                   ),
                 ),
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      bmi.toStringAsFixed(1),
-                      style: TextStyle(
-                        fontSize: 36,
-                        fontWeight: FontWeight.bold,
-                        color: category.color,
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppDimensions.spacingM,
-                        vertical: AppDimensions.spacingXs,
-                      ),
-                      decoration: BoxDecoration(
-                        color: category.color.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(AppDimensions.radiusS),
-                      ),
-                      child: Text(
-                        category.label,
+                Positioned(
+                  top: 55, // Center the text within the larger circle
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        bmi.toStringAsFixed(1),
                         style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
+                          fontSize: 48, // Increased font size
+                          fontWeight: FontWeight.bold,
                           color: category.color,
                         ),
                       ),
-                    ),
-                  ],
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppDimensions.spacingM,
+                          vertical: AppDimensions.spacingXs,
+                        ),
+                        decoration: BoxDecoration(
+                          color: category.color.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                        ),
+                        child: Text(
+                          category.label,
+                          style: TextStyle(
+                            fontSize: 14, // Slightly larger
+                            fontWeight: FontWeight.w600,
+                            color: category.color,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -987,7 +998,7 @@ class _BMIGaugePainter extends CustomPainter {
     final bgPaint = Paint()
       ..color = (isDark ? AppColors.surfaceLight : AppColorsLight.surfaceLight)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 12
+      ..strokeWidth = 14 // Increased width
       ..strokeCap = StrokeCap.round;
 
     canvas.drawArc(
@@ -1001,7 +1012,7 @@ class _BMIGaugePainter extends CustomPainter {
     // Progress arc
     final progressPaint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 12
+      ..strokeWidth = 14 // Increased width
       ..strokeCap = StrokeCap.round;
 
     // Calculate progress (BMI range 15-40 mapped to arc)

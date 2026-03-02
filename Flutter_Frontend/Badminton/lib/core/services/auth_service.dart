@@ -78,23 +78,11 @@ class AuthService {
   Future<Map<String, dynamic>> login({
     required String email,
     required String password,
-    required String userType,
     bool rememberMe = false,
   }) async {
     try {
-      // Determine endpoint based on user type
-      // Each user type has its own login endpoint
-      String endpoint;
-      if (userType == 'owner') {
-        endpoint = ApiEndpoints.ownerLogin;  // /owners/login
-      } else if (userType == 'coach') {
-        endpoint = '/coaches/login';
-      } else {
-        endpoint = '/students/login';
-      }
-
       final response = await _apiService.post(
-        endpoint,
+        ApiEndpoints.login,
         data: {
           'email': email,
           'password': password,
@@ -103,116 +91,43 @@ class AuthService {
 
       if (response.statusCode == 200) {
         final data = response.data;
+        if (data['success'] == true) {
+          final userType = data['userType'] as String;
+          final userData = data['user'] as Map<String, dynamic>;
 
-        // Check if login was successful
-        if (data['success'] == false) {
+          // Save common data
+          final accessToken = data['access_token'] ?? 'dummy_token';
+          final refreshToken = data['refresh_token'];
+          
+          await _storageService.saveAuthToken(accessToken);
+          if (refreshToken != null) {
+            await _storageService.saveRefreshToken(refreshToken);
+          }
+          
+          await _storageService.saveUserId(userData['id']);
+          await _storageService.saveUserType(userType);
+          await _storageService.saveUserEmail(userData['email']);
+          await _storageService.saveUserName(userData['name']);
+
+          // Save role-specific data for owners
+          if (userType == 'owner') {
+            await _storageService.saveUserRole(userData['role'] ?? 'owner');
+            await _storageService.saveMustChangePassword(userData['must_change_password'] ?? false);
+          }
+
+          return data;
+        } else {
           throw Exception(data['message'] ?? 'Login failed');
         }
-
-        // Extract user data from nested object based on user type
-        Map<String, dynamic>? userData;
-        if (userType == 'student') {
-          userData = data['student'];
-        } else if (userType == 'owner') {
-          userData = data['owner'];
-        } else {
-          userData = data['coach'];
-        }
-
-        if (userData == null) {
-          throw Exception('Invalid response format');
-        }
-
-        // Create session token
-        final sessionToken = 'session-${userData['id']}';
-
-        // Save auth data
-        await _storageService.saveAuthToken(sessionToken);
-        await _storageService.saveUserId(userData['id']);
-        await _storageService.saveUserType(userType);
-        await _storageService.saveUserEmail(email);
-        await _storageService.saveUserName(userData['name']);
-        await _storageService.saveRememberMe(rememberMe);
-
-        // Return user data with profile completeness for students
-        final Map<String, dynamic> result = {'user': userData};
-        if (userType == 'student') {
-          // Check profile completeness from backend response or student data
-          bool profileComplete = false;
-          
-          // First check if backend explicitly returns profile_complete (at top level)
-          if (data.containsKey('profile_complete')) {
-            final profileCompleteValue = data['profile_complete'];
-            // Handle both boolean and string representations
-            profileComplete = profileCompleteValue == true || 
-                            profileCompleteValue == 'true' ||
-                            profileCompleteValue == 1;
-          }
-          
-          // If not found in response, check required profile fields from student data
-          if (!profileComplete) {
-            // Required fields: guardian_name, guardian_phone, date_of_birth, address, t_shirt_size
-            final guardianName = userData['guardian_name'];
-            final guardianPhone = userData['guardian_phone'];
-            final dateOfBirth = userData['date_of_birth'];
-            final address = userData['address'];
-            final tShirtSize = userData['t_shirt_size'];
-            
-            profileComplete = guardianName != null &&
-                guardianName.toString().trim().isNotEmpty &&
-                guardianPhone != null &&
-                guardianPhone.toString().trim().isNotEmpty &&
-                dateOfBirth != null &&
-                dateOfBirth.toString().trim().isNotEmpty &&
-                address != null &&
-                address.toString().trim().isNotEmpty &&
-                tShirtSize != null &&
-                tShirtSize.toString().trim().isNotEmpty;
-          }
-          
-          // If still not complete, try fetching student profile directly as fallback
-          if (!profileComplete && userData['id'] != null) {
-            try {
-              final studentId = userData['id'] as int;
-              final studentResponse = await _apiService.get(
-                ApiEndpoints.studentById(studentId),
-              );
-              
-              if (studentResponse.statusCode == 200) {
-                final studentProfile = studentResponse.data;
-                final guardianName = studentProfile['guardian_name'];
-                final guardianPhone = studentProfile['guardian_phone'];
-                final dateOfBirth = studentProfile['date_of_birth'];
-                final address = studentProfile['address'];
-                final tShirtSize = studentProfile['t_shirt_size'];
-                
-                profileComplete = guardianName != null &&
-                    guardianName.toString().trim().isNotEmpty &&
-                    guardianPhone != null &&
-                    guardianPhone.toString().trim().isNotEmpty &&
-                    dateOfBirth != null &&
-                    dateOfBirth.toString().trim().isNotEmpty &&
-                    address != null &&
-                    address.toString().trim().isNotEmpty &&
-                    tShirtSize != null &&
-                    tShirtSize.toString().trim().isNotEmpty;
-              }
-            } catch (e) {
-              // If fetch fails, use the value we already determined
-              // This prevents blocking login if profile endpoint is unavailable
-            }
-          }
-          
-          result['profile_complete'] = profileComplete;
-        }
-        return result;
       } else {
-        throw Exception('Login failed with status: ${response.statusCode}');
+        throw Exception('Server error: ${response.statusCode}');
       }
-    } on DioException catch (e) {
-      throw Exception(getUserFriendlyErrorMessage(e));
     } catch (e) {
-      throw Exception(getUserFriendlyErrorMessage(e));
+      if (e is DioException) {
+        final message = e.response?.data['detail'] ?? e.message;
+        throw Exception(message);
+      }
+      rethrow;
     }
   }
 
@@ -288,8 +203,22 @@ class AuthService {
 
   /// Logout and clear session
   Future<void> logout() async {
+    // Grab tokens before clearing storage
+    final refreshToken = _storageService.getRefreshToken();
+
+    // Revoke tokens on the backend (best-effort — always clear local storage)
     try {
-      // Clear all stored auth data
+      await _apiService.post(
+        ApiEndpoints.logout,
+        data: {
+          if (refreshToken != null) 'refresh_token': refreshToken,
+        },
+      );
+    } catch (_) {
+      // Ignore API errors — proceed to clear local storage regardless
+    }
+
+    try {
       await _storageService.clearAuthData();
     } catch (e) {
       throw Exception('Logout failed: ${e.toString()}');
@@ -319,6 +248,16 @@ class AuthService {
   /// Get current user name
   String? getCurrentUserName() {
     return _storageService.getUserName();
+  }
+
+  /// Get current user role (for owners)
+  String? getUserRole() {
+    return _storageService.getUserRole();
+  }
+
+  /// Get must change password flag
+  bool getMustChangePassword() {
+    return _storageService.getMustChangePassword();
   }
 
   /// Get auth token
@@ -386,6 +325,16 @@ class AuthService {
         // Update stored user data
         await _storageService.saveUserName(data['name']);
         await _storageService.saveUserEmail(data['email']);
+        
+        // Update owner-specific fields
+        if (userType == 'owner') {
+          if (data.containsKey('role')) {
+            await _storageService.saveUserRole(data['role']);
+          }
+          if (data.containsKey('must_change_password')) {
+            await _storageService.saveMustChangePassword(data['must_change_password'] == true);
+          }
+        }
 
         return data;
       } else {
@@ -431,5 +380,40 @@ class AuthService {
   /// Get user data as map
   Map<String, dynamic> getUserData() {
     return _storageService.getUserData();
+  }
+
+  /// Get active sessions
+  Future<List<dynamic>> getActiveSessions() async {
+    try {
+      final response = await _apiService.get(ApiEndpoints.authSessions);
+      if (response.statusCode == 200 && response.data['success'] == true) {
+        return response.data['sessions'];
+      }
+      return [];
+    } catch (e) {
+      throw Exception('Failed to get sessions');
+    }
+  }
+
+  /// Revoke an active session
+  Future<void> revokeSession(int sessionId) async {
+    try {
+      final response = await _apiService.delete(ApiEndpoints.sessionRevoke(sessionId));
+      if (response.statusCode != 200 || response.data['success'] != true) {
+        throw Exception('Failed to revoke session');
+      }
+    } catch (e) {
+      throw Exception('Failed to revoke session: $e');
+    }
+  }
+
+  /// Logout from all devices
+  Future<void> logoutAll() async {
+    try {
+      await _apiService.post(ApiEndpoints.logoutAll);
+      await _storageService.clearAuthData();
+    } catch (e) {
+      throw Exception('Failed to log out all devices: $e');
+    }
   }
 }

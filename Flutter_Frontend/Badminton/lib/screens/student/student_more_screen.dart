@@ -9,10 +9,13 @@ import 'student_fees_screen.dart';
 import 'student_bmi_screen.dart';
 import 'student_announcements_screen.dart';
 import 'student_schedule_screen.dart';
-import 'student_calendar_screen.dart';
 import 'student_profile_screen.dart';
 import 'student_settings_screen.dart';
+import 'student_batches_screen.dart';
 import 'student_videos_screen.dart';
+import '../common/academy_info_screen.dart';
+import '../owner/notifications_screen.dart';
+import '../../providers/owner_provider.dart';
 
 /// Student More Screen - Navigation hub for additional features
 /// All features are READ-ONLY for students
@@ -50,6 +53,23 @@ class _StudentMoreScreenState extends ConsumerState<StudentMoreScreen> {
                 color: isDark ? AppColors.textPrimary : AppColorsLight.textPrimary,
               ),
             ),
+            ref.watch(activeOwnerProvider).when(
+                  data: (owner) => owner?.academyName != null
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            owner!.academyName!,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: isDark ? AppColors.accent : AppColorsLight.accent,
+                            ),
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                  loading: () => const SizedBox.shrink(),
+                  error: (_, __) => const SizedBox.shrink(),
+                ),
             const SizedBox(height: AppDimensions.spacingL),
 
             // Information Section (READ-ONLY)
@@ -64,19 +84,27 @@ class _StudentMoreScreenState extends ConsumerState<StudentMoreScreen> {
             ),
             const SizedBox(height: AppDimensions.spacingS),
             _MenuItem(
+              icon: Icons.notifications_none_outlined,
+              title: 'Notifications',
+              subtitle: 'View your alerts and updates',
+              isDark: isDark,
+              onTap: () => setState(() => _currentView = 'notifications'),
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
+              icon: Icons.business_outlined,
+              title: 'Academy Details',
+              subtitle: 'View academy and owner information',
+              isDark: isDark,
+              onTap: () => setState(() => _currentView = 'academy'),
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
               icon: Icons.monitor_weight_outlined,
               title: 'BMI Tracker',
               subtitle: 'View your BMI history and health tips',
               isDark: isDark,
               onTap: () => setState(() => _currentView = 'bmi'),
-            ),
-            const SizedBox(height: AppDimensions.spacingS),
-            _MenuItem(
-              icon: Icons.calendar_month_outlined,
-              title: 'Calendar',
-              subtitle: 'View academy calendar events',
-              isDark: isDark,
-              onTap: () => setState(() => _currentView = 'calendar'),
             ),
             const SizedBox(height: AppDimensions.spacingS),
             _MenuItem(
@@ -96,8 +124,16 @@ class _StudentMoreScreenState extends ConsumerState<StudentMoreScreen> {
             ),
             const SizedBox(height: AppDimensions.spacingS),
             _MenuItem(
+              icon: Icons.group_outlined,
+              title: 'Batches',
+              subtitle: 'View your enrolled batches',
+              isDark: isDark,
+              onTap: () => setState(() => _currentView = 'batches'),
+            ),
+            const SizedBox(height: AppDimensions.spacingS),
+            _MenuItem(
               icon: Icons.video_library_outlined,
-              title: 'Training Videos',
+              title: 'View Training Videos',
               subtitle: 'View videos uploaded by your coach',
               isDark: isDark,
               onTap: () => setState(() => _currentView = 'videos'),
@@ -150,12 +186,17 @@ class _StudentMoreScreenState extends ConsumerState<StudentMoreScreen> {
         return StudentAnnouncementsScreen(
           onBack: () => setState(() => _currentView = null),
         );
-      case 'schedule':
-        return StudentScheduleScreen(
+      case 'notifications':
+        return NotificationsScreen(
           onBack: () => setState(() => _currentView = null),
         );
+      case 'academy':
+        return AcademyInfoScreen(
+          onBack: () => setState(() => _currentView = null),
+        );
+      case 'schedule':
       case 'calendar':
-        return StudentCalendarScreen(
+        return StudentScheduleScreen(
           onBack: () => setState(() => _currentView = null),
         );
       case 'videos':
@@ -164,6 +205,10 @@ class _StudentMoreScreenState extends ConsumerState<StudentMoreScreen> {
         );
       case 'settings':
         return StudentSettingsScreen(
+          onBack: () => setState(() => _currentView = null),
+        );
+      case 'batches':
+        return StudentBatchesScreen(
           onBack: () => setState(() => _currentView = null),
         );
       default:

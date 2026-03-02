@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
+import 'package:url_launcher/url_launcher.dart';
 // Conditional import for File/Directory (only on non-web platforms)
 import 'dart:io' if (dart.library.html) '../../utils/dart_io_stub.dart';
 import '../../core/constants/colors.dart';
@@ -10,7 +11,7 @@ import '../../core/constants/dimensions.dart';
 import '../../core/constants/api_endpoints.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/success_snackbar.dart';
-import '../../widgets/video/video_player_dialog.dart';
+import '../../widgets/video/video_player_page.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/video_resource.dart';
@@ -63,17 +64,36 @@ class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
       final videoService = ref.read(videoServiceProvider);
       final videos = await videoService.getVideosForStudent(authState.userId);
 
-      // Fetch uploader names for videos that have uploadedBy
-      final Map<int, String> uploaderNames = {};
+      // Map to store uploader names (fallback if not provided by backend)
+      final Map<int, String> uploaderNamesMap = {};
       final ownerService = ref.read(ownerServiceProvider);
+      final coachService = ref.read(coachServiceProvider);
       
       for (final video in videos) {
-        if (video.uploadedBy != null && !uploaderNames.containsKey(video.uploadedBy)) {
+        // If backend already provided uploaderName, use it
+        if (video.uploaderName != null && video.uploadedBy != null) {
+          uploaderNamesMap[video.uploadedBy!] = video.uploaderName!;
+          continue;
+        }
+
+        // Fallback: Fetch uploader names for videos that have uploadedBy but no name
+        if (video.uploadedBy != null && !uploaderNamesMap.containsKey(video.uploadedBy)) {
           try {
-            final owner = await ownerService.getOwnerById(video.uploadedBy!);
-            uploaderNames[video.uploadedBy!] = owner.name;
+            // Try to fetch as owner first
+            try {
+              final owner = await ownerService.getOwnerById(video.uploadedBy!);
+              uploaderNamesMap[video.uploadedBy!] = owner.name;
+            } catch (_) {
+              // If not found as owner, try coach
+              try {
+                final coach = await coachService.getCoachById(video.uploadedBy!);
+                uploaderNamesMap[video.uploadedBy!] = coach.name;
+              } catch (_) {
+                uploaderNamesMap[video.uploadedBy!] = 'Unknown';
+              }
+            }
           } catch (e) {
-            uploaderNames[video.uploadedBy!] = 'Unknown';
+            uploaderNamesMap[video.uploadedBy!] = 'Unknown';
           }
         }
       }
@@ -81,7 +101,7 @@ class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
       if (mounted) {
         setState(() {
           _videos = videos;
-          _uploaderNames = uploaderNames;
+          _uploaderNames = uploaderNamesMap;
           _isLoading = false;
         });
         _applyFilters();
@@ -125,14 +145,17 @@ class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
   }
 
   void _playVideo(VideoResource video) {
-    final fullUrl = '${ApiEndpoints.baseUrl}${video.url}';
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => VideoPlayerDialog(
-        videoUrl: fullUrl,
-        title: video.displayTitle,
-        remarks: video.remarks,
+    debugPrint('PLAY VIDEO BUTTON PRESSED for video: ${video.id}');
+    final streamPath = ApiEndpoints.videoStreamUrl(video.url);
+    final fullUrl = '${ApiEndpoints.baseUrl}$streamPath';
+    debugPrint('Full Video URL passed to page: $fullUrl');
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => VideoPlayerPage(
+          videoUrl: fullUrl,
+          title: video.displayTitle,
+          remarks: video.remarks,
+        ),
       ),
     );
   }
@@ -188,59 +211,58 @@ class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
           SuccessSnackbar.show(context, 'Video download started');
         }
       } else {
-        // Mobile/Desktop download: save to file system
-        final directoryPath = await getApplicationDocumentsPath();
-        if (directoryPath == null) {
-          // Fallback: shouldn't happen on mobile/desktop, but handle gracefully
+        // Mobile/Desktop download: Use url_launcher to hand off to system browser
+        // This is the most reliable way to get the file into the public Downloads folder
+        final Uri videoUri = Uri.parse(fullUrl);
+        
+        if (await canLaunchUrl(videoUri)) {
+          await launchUrl(videoUri, mode: LaunchMode.externalApplication);
           if (mounted) {
             setState(() {
               _isDownloading = false;
               _downloadingVideoId = null;
             });
-            SuccessSnackbar.showError(context, 'Download directory not available');
+            SuccessSnackbar.show(context, 'Opening download in browser...');
           }
-          return;
-        }
-
-        // Sanitize filename to remove invalid characters
-        final sanitizedFileName = _sanitizeFileName(fileName);
-        final directory = Directory(directoryPath);
-        
-        // Ensure directory exists
-        if (!await directory.exists()) {
-          await directory.create(recursive: true);
-        }
-
-        final filePath = '${directory.path}/$sanitizedFileName';
-
-        await dio.download(
-          fullUrl,
-          filePath,
-          onReceiveProgress: (received, total) {
-            if (total != -1 && mounted) {
+        } else {
+          // Fallback to private storage download if browser fails
+          final directoryPath = await getApplicationDocumentsPath();
+          if (directoryPath == null) {
+            if (mounted) {
               setState(() {
-                _downloadProgress = received / total;
+                _isDownloading = false;
+                _downloadingVideoId = null;
               });
+              SuccessSnackbar.showError(context, 'Download directory not available');
             }
-          },
-        );
+            return;
+          }
 
-        if (mounted) {
-          setState(() {
-            _isDownloading = false;
-            _downloadingVideoId = null;
-          });
-          
-          // Show user-friendly success message
-          final displayPath = directoryPath.contains('Download') 
-              ? 'Downloads folder' 
-              : directoryPath.contains('Documents')
-                  ? 'Documents folder'
-                  : 'device storage';
-          SuccessSnackbar.show(
-            context, 
-            'Video downloaded successfully!\nSaved to: $displayPath',
+          final sanitizedFileName = _sanitizeFileName(fileName);
+          final directory = Directory(directoryPath);
+          if (!await directory.exists()) await directory.create(recursive: true);
+          final filePath = '${directory.path}/$sanitizedFileName';
+
+          await dio.download(
+            fullUrl,
+            filePath,
+            onReceiveProgress: (received, total) {
+              if (total != -1 && mounted) {
+                setState(() => _downloadProgress = received / total);
+              }
+            },
           );
+
+          if (mounted) {
+            setState(() {
+              _isDownloading = false;
+              _downloadingVideoId = null;
+            });
+            SuccessSnackbar.show(
+              context, 
+              'Video saved to app storage. Tap PLAY to view.',
+            );
+          }
         }
       }
     } catch (e) {
@@ -367,7 +389,7 @@ class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
           child: NeumorphicContainer(
             padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
             child: DropdownButtonFormField<int?>(
-              value: _selectedYear,
+              initialValue: _selectedYear,
               decoration: InputDecoration(
                 border: InputBorder.none,
                 hintText: 'All Years',
@@ -397,7 +419,7 @@ class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
           child: NeumorphicContainer(
             padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingM),
             child: DropdownButtonFormField<int?>(
-              value: _selectedMonth,
+              initialValue: _selectedMonth,
               decoration: InputDecoration(
                 border: InputBorder.none,
                 hintText: 'All Months',

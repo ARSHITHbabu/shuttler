@@ -7,6 +7,7 @@ import '../../widgets/common/custom_text_field.dart';
 import '../../models/coach.dart';
 import '../../providers/service_providers.dart';
 import '../../models/batch.dart';
+import 'package:intl/intl.dart';
 
 /// Dialog for editing coach details
 class EditCoachDialog extends ConsumerStatefulWidget {
@@ -30,6 +31,8 @@ class _EditCoachDialogState extends ConsumerState<EditCoachDialog> {
   late final TextEditingController _emailController;
   late final TextEditingController _specializationController;
   late final TextEditingController _experienceController;
+  late final TextEditingController _salaryController;
+  DateTime? _selectedJoiningDate;
   final List<int> _selectedBatchIds = [];
   final List<Batch> _batches = [];
   bool _isLoading = false;
@@ -44,6 +47,10 @@ class _EditCoachDialogState extends ConsumerState<EditCoachDialog> {
     _experienceController = TextEditingController(
       text: widget.coach.experienceYears?.toString() ?? '',
     );
+    _salaryController = TextEditingController(
+      text: widget.coach.monthlySalary?.toString() ?? '',
+    );
+    _selectedJoiningDate = widget.coach.joiningDate;
   }
 
   @override
@@ -53,7 +60,20 @@ class _EditCoachDialogState extends ConsumerState<EditCoachDialog> {
     _emailController.dispose();
     _specializationController.dispose();
     _experienceController.dispose();
+    _salaryController.dispose();
     super.dispose();
+  }
+
+  Future<void> _selectJoiningDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedJoiningDate ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked != null) {
+      setState(() => _selectedJoiningDate = picked);
+    }
   }
 
   Future<void> _handleSubmit() async {
@@ -72,6 +92,10 @@ class _EditCoachDialogState extends ConsumerState<EditCoachDialog> {
         'experience_years': _experienceController.text.trim().isEmpty
             ? null
             : int.tryParse(_experienceController.text.trim()),
+        'monthly_salary': _salaryController.text.trim().isEmpty
+            ? null
+            : double.tryParse(_salaryController.text.trim()),
+        'joining_date': _selectedJoiningDate?.toIso8601String().split('T')[0],
       };
 
       if (widget.onSubmit != null) {
@@ -197,6 +221,41 @@ class _EditCoachDialogState extends ConsumerState<EditCoachDialog> {
                   label: 'Experience Years (Optional)',
                   hint: 'Enter years of experience',
                   keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: AppDimensions.spacingM),
+                CustomTextField(
+                  controller: _salaryController,
+                  label: 'Monthly Salary (\$)',
+                  hint: 'Enter monthly salary in USD',
+                  keyboardType: TextInputType.number,
+                  prefixIcon: Icons.attach_money,
+                ),
+                const SizedBox(height: AppDimensions.spacingM),
+                // Joining Date
+                InkWell(
+                  onTap: _selectJoiningDate,
+                  child: Container(
+                    padding: const EdgeInsets.all(AppDimensions.paddingM),
+                    decoration: BoxDecoration(
+                      color: AppColors.background,
+                      borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _selectedJoiningDate == null
+                              ? 'Select Joining Date'
+                              : 'Joining Date: ${DateFormat('dd MMM, yyyy').format(_selectedJoiningDate!)}',
+                          style: TextStyle(
+                            color: _selectedJoiningDate == null ? AppColors.textHint : AppColors.textPrimary,
+                          ),
+                        ),
+                        const Icon(Icons.calendar_today, size: 16, color: AppColors.textSecondary),
+                      ],
+                    ),
+                  ),
                 ),
                 const SizedBox(height: AppDimensions.spacingM),
                 // Batch Assignment

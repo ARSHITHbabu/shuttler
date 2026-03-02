@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: shuttler-api
+    runtime: python
+    buildCommand: "pip install -r Backend/requirements.txt"
+    startCommand: "cd Backend && alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: shuttler-db
+          property: connectionString
+      - key: IS_PRODUCTION
+        value: "true"
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "30"
+      - key: REFRESH_TOKEN_EXPIRE_DAYS
+        value: "30"
+      - key: SECRET_KEY
+        sync: false # Requires manual entry in dashboard
+      - key: FIELD_ENCRYPTION_KEY
+        sync: false # Requires manual entry in dashboard
+      - key: FIREBASE_SERVICE_ACCOUNT_PATH
+        sync: false
+      - key: SENDGRID_API_KEY
+        sync: false
+
+databases:
+  - name: shuttler-db
+    plan: starter
+    databaseName: shuttler
+    user: shuttler_admin

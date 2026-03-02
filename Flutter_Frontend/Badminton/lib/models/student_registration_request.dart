@@ -15,6 +15,9 @@ class StudentRegistrationRequest {
   final String? address;
   final String? tShirtSize;
   final String? bloodGroup;
+  final int? invitationId;
+  final int? invitedByCoachId;
+  final String? invitedByCoachName;
 
   StudentRegistrationRequest({
     required this.id,
@@ -32,6 +35,9 @@ class StudentRegistrationRequest {
     this.address,
     this.tShirtSize,
     this.bloodGroup,
+    this.invitationId,
+    this.invitedByCoachId,
+    this.invitedByCoachName,
   });
 
   bool get isPending => status == 'pending';
@@ -58,6 +64,9 @@ class StudentRegistrationRequest {
       address: json['address'] as String?,
       tShirtSize: json['t_shirt_size'] as String?,
       bloodGroup: json['blood_group'] as String?,
+      invitationId: json['invitation_id'] as int?,
+      invitedByCoachId: json['invited_by_coach_id'] as int?,
+      invitedByCoachName: json['invited_by_coach_name'] as String?,
     );
   }
 
@@ -79,6 +88,9 @@ class StudentRegistrationRequest {
       'address': address,
       't_shirt_size': tShirtSize,
       'blood_group': bloodGroup,
+      'invitation_id': invitationId,
+      'invited_by_coach_id': invitedByCoachId,
+      'invited_by_coach_name': invitedByCoachName,
     };
   }
 }

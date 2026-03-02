@@ -1,14 +1,21 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 /// Local storage service for persisting user data
 class StorageService {
   static const String _keyAuthToken = 'auth_token';
+  static const String _keyRefreshToken = 'refresh_token';
   static const String _keyUserId = 'user_id';
   static const String _keyUserType = 'user_type';
   static const String _keyUserEmail = 'user_email';
   static const String _keyUserName = 'user_name';
+  static const String _keyUserRole = 'user_role';
+  static const String _keyMustChangePassword = 'must_change_password';
   static const String _keyRememberMe = 'remember_me';
   static const String _keyFcmToken = 'fcm_token';
+  static const String _keyBiometricEnabled = 'biometric_enabled';
+  static const String _keySavedEmail = 'saved_email';
+  static const String _keySavedPassword = 'saved_password';
   
   // Academy Details
   static const String _keyAcademyName = 'academy_name';
@@ -17,6 +24,12 @@ class StorageService {
   static const String _keyAcademyEmail = 'academy_email';
 
   SharedPreferences? _prefs;
+  final _secureStorage = const FlutterSecureStorage();
+  
+  String? _cachedAuthToken;
+  String? _cachedRefreshToken;
+  String? _cachedFcmToken;
+
   bool _isInitialized = false;
   Future<void>? _initFuture;
   
@@ -34,6 +47,24 @@ class StorageService {
 
   Future<void> _doInit() async {
     _prefs = await SharedPreferences.getInstance();
+    
+    // Migrate credentials from SharedPreferences if they exist
+    final oldAuth = _prefs!.getString(_keyAuthToken);
+    final oldFcm = _prefs!.getString(_keyFcmToken);
+    
+    if (oldAuth != null) {
+      await _secureStorage.write(key: _keyAuthToken, value: oldAuth);
+      await _prefs!.remove(_keyAuthToken);
+    }
+    if (oldFcm != null) {
+      await _secureStorage.write(key: _keyFcmToken, value: oldFcm);
+      await _prefs!.remove(_keyFcmToken);
+    }
+    
+    _cachedAuthToken = await _secureStorage.read(key: _keyAuthToken);
+    _cachedRefreshToken = await _secureStorage.read(key: _keyRefreshToken);
+    _cachedFcmToken = await _secureStorage.read(key: _keyFcmToken);
+
     _isInitialized = true;
   }
 
@@ -65,7 +96,9 @@ class StorageService {
   // Auth Token
   Future<bool> saveAuthToken(String token) async {
     await _ensureInitialized();
-    return await _prefs!.setString(_keyAuthToken, token);
+    await _secureStorage.write(key: _keyAuthToken, value: token);
+    _cachedAuthToken = token;
+    return true;
   }
 
   String? getAuthToken() {
@@ -73,18 +106,80 @@ class StorageService {
       // Return null if not initialized (safe for read operations)
       return null;
     }
-    return _prefs!.getString(_keyAuthToken);
+    return _cachedAuthToken;
   }
 
   Future<bool> removeAuthToken() async {
     await _ensureInitialized();
-    return await _prefs!.remove(_keyAuthToken);
+    await _secureStorage.delete(key: _keyAuthToken);
+    _cachedAuthToken = null;
+    return true;
+  }
+
+  // Refresh Token
+  Future<bool> saveRefreshToken(String token) async {
+    await _ensureInitialized();
+    await _secureStorage.write(key: _keyRefreshToken, value: token);
+    _cachedRefreshToken = token;
+    return true;
+  }
+
+  String? getRefreshToken() {
+    if (!_isInitialized) {
+      return null;
+    }
+    return _cachedRefreshToken;
+  }
+
+  Future<bool> removeRefreshToken() async {
+    await _ensureInitialized();
+    await _secureStorage.delete(key: _keyRefreshToken);
+    _cachedRefreshToken = null;
+    return true;
   }
 
   // User ID
   Future<bool> saveUserId(int userId) async {
     await _ensureInitialized();
     return await _prefs!.setInt(_keyUserId, userId);
+  }
+
+  // Biometrics
+  Future<bool> setBiometricEnabled(bool enabled) async {
+    await _ensureInitialized();
+    return await _prefs!.setBool(_keyBiometricEnabled, enabled);
+  }
+
+  bool getBiometricEnabled() {
+    if (!_isInitialized) {
+      _tryInitSync();
+    }
+    if (!_isInitialized) return false;
+    return _prefs!.getBool(_keyBiometricEnabled) ?? false;
+  }
+
+  Future<void> saveBiometricCredentials(String email, String password) async {
+    await _ensureInitialized();
+    await _secureStorage.write(key: _keySavedEmail, value: email);
+    await _secureStorage.write(key: _keySavedPassword, value: password);
+    await setBiometricEnabled(true);
+  }
+
+  Future<Map<String, String>?> getBiometricCredentials() async {
+    await _ensureInitialized();
+    final email = await _secureStorage.read(key: _keySavedEmail);
+    final password = await _secureStorage.read(key: _keySavedPassword);
+    if (email != null && password != null) {
+      return {'email': email, 'password': password};
+    }
+    return null;
+  }
+
+  Future<void> clearBiometricCredentials() async {
+    await _ensureInitialized();
+    await _secureStorage.delete(key: _keySavedEmail);
+    await _secureStorage.delete(key: _keySavedPassword);
+    await setBiometricEnabled(false);
   }
 
   int? getUserId() {
@@ -151,6 +246,38 @@ class StorageService {
     await _ensureInitialized();
     return await _prefs!.remove(_keyUserName);
   }
+  
+  // User Role (owner/co_owner)
+  Future<bool> saveUserRole(String role) async {
+    await _ensureInitialized();
+    return await _prefs!.setString(_keyUserRole, role);
+  }
+
+  String? getUserRole() {
+    if (!_isInitialized) return null;
+    return _prefs!.getString(_keyUserRole);
+  }
+
+  Future<bool> removeUserRole() async {
+    await _ensureInitialized();
+    return await _prefs!.remove(_keyUserRole);
+  }
+
+  // Must Change Password
+  Future<bool> saveMustChangePassword(bool value) async {
+    await _ensureInitialized();
+    return await _prefs!.setBool(_keyMustChangePassword, value);
+  }
+
+  bool getMustChangePassword() {
+    if (!_isInitialized) return false;
+    return _prefs!.getBool(_keyMustChangePassword) ?? false;
+  }
+
+  Future<bool> removeMustChangePassword() async {
+    await _ensureInitialized();
+    return await _prefs!.remove(_keyMustChangePassword);
+  }
 
   // Remember Me
   Future<bool> saveRememberMe(bool value) async {
@@ -166,17 +293,21 @@ class StorageService {
   // FCM Token (for push notifications)
   Future<bool> saveFcmToken(String token) async {
     await _ensureInitialized();
-    return await _prefs!.setString(_keyFcmToken, token);
+    await _secureStorage.write(key: _keyFcmToken, value: token);
+    _cachedFcmToken = token;
+    return true;
   }
 
   String? getFcmToken() {
     if (!_isInitialized) return null;
-    return _prefs!.getString(_keyFcmToken);
+    return _cachedFcmToken;
   }
 
   Future<bool> removeFcmToken() async {
     await _ensureInitialized();
-    return await _prefs!.remove(_keyFcmToken);
+    await _secureStorage.delete(key: _keyFcmToken);
+    _cachedFcmToken = null;
+    return true;
   }
 
   // Clear all user data (logout)
@@ -188,10 +319,13 @@ class StorageService {
   // Clear only auth data (keep app preferences)
   Future<void> clearAuthData() async {
     await removeAuthToken();
+    await removeRefreshToken();
     await removeUserId();
     await removeUserType();
     await removeUserEmail();
     await removeUserName();
+    await removeUserRole();
+    await removeMustChangePassword();
   }
 
   // Check if user is logged in
@@ -213,6 +347,8 @@ class StorageService {
       'userType': getUserType(),
       'email': getUserEmail(),
       'name': getUserName(),
+      'role': getUserRole(),
+      'mustChangePassword': getMustChangePassword(),
       'fcmToken': getFcmToken(),
     };
   }

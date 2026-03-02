@@ -30,29 +30,45 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
   final Map<int, String> _remarks = {}; // studentId/coachId -> remarks
   bool _hasUnsavedChanges = false; // Track if there are unsaved changes
 
+  bool get isSmallScreen => MediaQuery.of(context).size.width < 600;
+
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return SingleChildScrollView(
-          physics: const ClampingScrollPhysics(),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight),
-            child: Padding(
-              padding: const EdgeInsets.all(AppDimensions.paddingL),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-            // Header
-            const Text(
-              'Attendance',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: AppDimensions.spacingL),
+    final canPop = Navigator.canPop(context);
+    
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: canPop
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
+                onPressed: () => Navigator.of(context).pop(),
+              )
+            : null,
+        title: const Text(
+          'Attendance Management',
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        titleSpacing: canPop ? 0 : AppDimensions.paddingL,
+      ),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            physics: const ClampingScrollPhysics(),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+              child: Padding(
+                padding: EdgeInsets.symmetric(horizontal: isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: AppDimensions.paddingL),
 
             // Type Selector
             NeumorphicContainer(
@@ -61,7 +77,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                 children: [
                   Expanded(
                     child: _TypeSelectorButton(
-                      label: 'Student Attendance',
+                      label: isSmallScreen ? 'Students' : 'Student Attendance',
                       icon: Icons.people_outline,
                       isActive: _attendanceType == 'students',
                       onTap: () {
@@ -80,7 +96,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                   const SizedBox(width: 4),
                   Expanded(
                     child: _TypeSelectorButton(
-                      label: 'Coach Attendance',
+                      label: isSmallScreen ? 'Coaches' : 'Coach Attendance',
                       icon: Icons.person_outline,
                       isActive: _attendanceType == 'coaches',
                       onTap: () {
@@ -148,9 +164,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                       },
                       child: Text(
                         '${_selectedDate.day}/${_selectedDate.month}/${_selectedDate.year}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: AppColors.textPrimary,
-                          fontSize: 16,
+                          fontSize: isSmallScreen ? 14 : 16,
                         ),
                       ),
                     ),
@@ -188,9 +204,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.accent,
                           foregroundColor: Colors.white,
-                          minimumSize: const Size(double.infinity, 48),
+                          minimumSize: Size(double.infinity, isSmallScreen ? 40 : 48),
                         ),
-                        child: const Text('Save Attendance'),
+                        child: Text(isSmallScreen ? 'Save' : 'Save Attendance'),
                       ),
                     ),
                     const SizedBox(width: AppDimensions.spacingM),
@@ -202,9 +218,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.textPrimary,
                           side: const BorderSide(color: AppColors.textSecondary),
-                          minimumSize: const Size(double.infinity, 48),
+                          minimumSize: Size(double.infinity, isSmallScreen ? 40 : 48),
                         ),
-                        child: const Text('Cancel'),
+                        child: Text(isSmallScreen ? 'Cancel' : 'Cancel'),
                       ),
                     ),
                   ],
@@ -219,8 +235,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
           ),
         );
       },
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildBatchSelector() {
     final batchesAsync = ref.watch(batchListProvider);
@@ -356,8 +373,8 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                       children: [
                         Text(
                           batch?.name ?? 'Unknown Batch',
-                          style: const TextStyle(
-                            fontSize: 18,
+                          style: TextStyle(
+                            fontSize: isSmallScreen ? 16 : 18,
                             fontWeight: FontWeight.w600,
                             color: AppColors.textPrimary,
                           ),
@@ -442,9 +459,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.accent,
                         foregroundColor: Colors.white,
-                        minimumSize: const Size(double.infinity, 48),
+                        minimumSize: Size(double.infinity, isSmallScreen ? 40 : 48),
                       ),
-                      child: const Text('Save Attendance'),
+                      child: Text(isSmallScreen ? 'Save' : 'Save Attendance'),
                     ),
                   ),
                   const SizedBox(width: AppDimensions.spacingM),
@@ -456,9 +473,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.textPrimary,
                         side: const BorderSide(color: AppColors.textSecondary),
-                        minimumSize: const Size(double.infinity, 48),
+                        minimumSize: Size(double.infinity, isSmallScreen ? 40 : 48),
                       ),
-                      child: const Text('Cancel'),
+                      child: Text(isSmallScreen ? 'Cancel' : 'Cancel'),
                     ),
                   ),
                 ],
@@ -610,7 +627,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                   });
                 },
               );
-            }).toList(),
+            }),
           ],
         );
       },
@@ -635,16 +652,18 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       final attendanceService = ref.read(attendanceServiceProvider);
 
       if (_attendanceType == 'students' && _selectedBatchId != null) {
-        // Save student attendance
-        for (final entry in _attendance.entries) {
-          await attendanceService.markStudentAttendance(
-            studentId: entry.key,
-            batchId: _selectedBatchId!,
-            date: _selectedDate,
-            status: entry.value,
-            remarks: _remarks[entry.key],
-          );
-        }
+        // Save student attendance using bulk endpoint
+        final attendanceList = _attendance.entries.map((entry) {
+          return {
+            'student_id': entry.key,
+            'batch_id': _selectedBatchId!,
+            'date': _selectedDate,
+            'status': entry.value,
+            'remarks': _remarks[entry.key],
+          };
+        }).toList();
+
+        await attendanceService.markMultipleAttendance(attendanceList);
       } else if (_attendanceType == 'coaches') {
         // Save coach attendance
         for (final entry in _attendance.entries) {

@@ -86,6 +86,15 @@ class EmptyState extends StatelessWidget {
     );
   }
 
+  /// Empty state for inactive students
+  factory EmptyState.noInactiveStudents() {
+    return const EmptyState(
+      title: 'No Inactive Students',
+      message: '',
+      icon: Icons.person_outline,
+    );
+  }
+
   /// Empty state for batches list
   factory EmptyState.noBatches({VoidCallback? onCreate}) {
     return EmptyState(
@@ -94,6 +103,15 @@ class EmptyState extends StatelessWidget {
       icon: Icons.group_outlined,
       actionText: 'Create Batch',
       onAction: onCreate,
+    );
+  }
+
+  /// Empty state for inactive batches
+  factory EmptyState.noInactiveBatches() {
+    return const EmptyState(
+      title: 'No Inactive Batches',
+      message: 'All your batches are currently active.',
+      icon: Icons.archive_outlined,
     );
   }
 

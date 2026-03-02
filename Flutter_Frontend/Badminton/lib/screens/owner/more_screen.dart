@@ -131,7 +131,7 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
             _MenuItem(
               icon: Icons.video_library_outlined,
               title: 'Videos',
-              subtitle: 'Manage training videos',
+              subtitle: 'Upload & Manage training videos',
               isDark: isDark,
               onTap: () {
                 Navigator.of(context).push(
@@ -145,7 +145,7 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
             _MenuItem(
               icon: Icons.access_time_outlined,
               title: 'Practice Sessions',
-              subtitle: 'Manage practice sessions',
+              subtitle: 'Manage practice, tournaments, and camps',
               isDark: isDark,
               onTap: () {
                 Navigator.of(context).push(
@@ -173,7 +173,7 @@ class _MoreScreenState extends ConsumerState<MoreScreen> {
             _MenuItem(
               icon: Icons.event_note_outlined,
               title: 'Season Management',
-              subtitle: 'Manage seasons and sessions',
+              subtitle: 'Manage academy seasons',
               isDark: isDark,
               onTap: () {
                 Navigator.of(context).push(

@@ -1,4 +1,3 @@
-/// Owner data model matching backend schema
 class Owner {
   final int id;
   final String name;
@@ -9,6 +8,10 @@ class Owner {
   final String status;
   final String? profilePhoto;
   final String? fcmToken;
+  final String? academyName;
+  final String? academyAddress;
+  final String? academyContact;
+  final String? academyEmail;
 
   Owner({
     required this.id,
@@ -20,6 +23,10 @@ class Owner {
     required this.status,
     this.profilePhoto,
     this.fcmToken,
+    this.academyName,
+    this.academyAddress,
+    this.academyContact,
+    this.academyEmail,
   });
 
   /// Create Owner instance from JSON
@@ -34,6 +41,10 @@ class Owner {
       status: json['status'] as String? ?? 'active',
       profilePhoto: json['profile_photo'] as String?,
       fcmToken: json['fcm_token'] as String?,
+      academyName: json['academy_name'] as String?,
+      academyAddress: json['academy_address'] as String?,
+      academyContact: json['academy_contact'] as String?,
+      academyEmail: json['academy_email'] as String?,
     );
   }
 
@@ -49,6 +60,10 @@ class Owner {
       'status': status,
       'profile_photo': profilePhoto,
       'fcm_token': fcmToken,
+      'academy_name': academyName,
+      'academy_address': academyAddress,
+      'academy_contact': academyContact,
+      'academy_email': academyEmail,
     };
   }
 
@@ -63,6 +78,10 @@ class Owner {
     String? status,
     String? profilePhoto,
     String? fcmToken,
+    String? academyName,
+    String? academyAddress,
+    String? academyContact,
+    String? academyEmail,
   }) {
     return Owner(
       id: id ?? this.id,
@@ -74,6 +93,10 @@ class Owner {
       status: status ?? this.status,
       profilePhoto: profilePhoto ?? this.profilePhoto,
       fcmToken: fcmToken ?? this.fcmToken,
+      academyName: academyName ?? this.academyName,
+      academyAddress: academyAddress ?? this.academyAddress,
+      academyContact: academyContact ?? this.academyContact,
+      academyEmail: academyEmail ?? this.academyEmail,
     );
   }
 
@@ -81,7 +104,9 @@ class Owner {
   String toString() {
     return 'Owner(id: $id, name: $name, email: $email, phone: $phone, '
         'specialization: $specialization, experienceYears: $experienceYears, '
-        'status: $status, profilePhoto: $profilePhoto, fcmToken: $fcmToken)';
+        'status: $status, profilePhoto: $profilePhoto, fcmToken: $fcmToken, '
+        'academyName: $academyName, academyAddress: $academyAddress, '
+        'academyContact: $academyContact, academyEmail: $academyEmail)';
   }
 
   @override
@@ -97,7 +122,11 @@ class Owner {
         other.experienceYears == experienceYears &&
         other.status == status &&
         other.profilePhoto == profilePhoto &&
-        other.fcmToken == fcmToken;
+        other.fcmToken == fcmToken &&
+        other.academyName == academyName &&
+        other.academyAddress == academyAddress &&
+        other.academyContact == academyContact &&
+        other.academyEmail == academyEmail;
   }
 
   @override
@@ -112,6 +141,10 @@ class Owner {
       status,
       profilePhoto,
       fcmToken,
+      academyName,
+      academyAddress,
+      academyContact,
+      academyEmail,
     );
   }
 }

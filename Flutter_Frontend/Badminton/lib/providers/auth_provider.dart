@@ -19,17 +19,21 @@ class Authenticated extends AuthState {
   final int userId;
   final String userName;
   final String userEmail;
+  final String? userRole;
+  final bool mustChangePassword;
 
   const Authenticated({
     required this.userType,
     required this.userId,
     required this.userName,
     required this.userEmail,
+    this.userRole,
+    this.mustChangePassword = false,
   });
 
   @override
   String toString() {
-    return 'Authenticated(userType: $userType, userId: $userId, userName: $userName, userEmail: $userEmail)';
+    return 'Authenticated(userType: $userType, userId: $userId, userName: $userName, userEmail: $userEmail, userRole: $userRole, mustChangePassword: $mustChangePassword)';
   }
 
   @override
@@ -40,12 +44,14 @@ class Authenticated extends AuthState {
         other.userType == userType &&
         other.userId == userId &&
         other.userName == userName &&
-        other.userEmail == userEmail;
+        other.userEmail == userEmail &&
+        other.userRole == userRole &&
+        other.mustChangePassword == mustChangePassword;
   }
 
   @override
   int get hashCode {
-    return Object.hash(userType, userId, userName, userEmail);
+    return Object.hash(userType, userId, userName, userEmail, userRole, mustChangePassword);
   }
 }
 
@@ -83,6 +89,8 @@ class Auth extends _$Auth {
           userId: userId,
           userName: userName,
           userEmail: userEmail,
+          userRole: authService.getUserRole(),
+          mustChangePassword: authService.getMustChangePassword(),
         );
       }
     }
@@ -95,7 +103,6 @@ class Auth extends _$Auth {
   Future<Map<String, dynamic>> login({
     required String email,
     required String password,
-    required String userType,
     bool rememberMe = false,
   }) async {
     state = const AsyncValue.loading();
@@ -106,10 +113,10 @@ class Auth extends _$Auth {
       final result = await authService.login(
         email: email,
         password: password,
-        userType: userType,
         rememberMe: rememberMe,
       );
 
+      final userType = result['userType'] as String;
       final user = result['user'];
 
       state = AsyncValue.data(
@@ -118,6 +125,8 @@ class Auth extends _$Auth {
           userId: user['id'] as int,
           userName: user['name'] as String,
           userEmail: user['email'] as String,
+          userRole: user['role'] as String?,
+          mustChangePassword: user['must_change_password'] == true,
         ),
       );
       
@@ -163,6 +172,8 @@ class Auth extends _$Auth {
           userId: user['id'] as int,
           userName: user['name'] as String,
           userEmail: user['email'] as String,
+          userRole: user['role'] as String?,
+          mustChangePassword: user['must_change_password'] == true,
         ),
       );
       
@@ -201,6 +212,8 @@ class Auth extends _$Auth {
             userId: userData['id'] as int,
             userName: userData['name'] as String,
             userEmail: userData['email'] as String,
+            userRole: userData['role'] as String?,
+            mustChangePassword: userData['must_change_password'] == true,
           ),
         );
       }

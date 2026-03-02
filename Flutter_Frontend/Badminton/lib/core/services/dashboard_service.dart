@@ -91,9 +91,8 @@ class DashboardService {
   /// Get number of active batches
   Future<int> _getActiveBatches() async {
     try {
-      // Backend doesn't have status field, so return all batches
       final batches = await _batchService.getBatches();
-      return batches.length;
+      return batches.where((b) => b.status.toLowerCase() == 'active').length;
     } catch (e) {
       return 0; // Return 0 on error to not break dashboard
     }

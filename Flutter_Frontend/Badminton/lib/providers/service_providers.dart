@@ -1,4 +1,5 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import '../core/constants/api_endpoints.dart';
 import '../core/services/api_service.dart';
 import '../core/services/auth_service.dart';
 import '../core/services/storage_service.dart';
@@ -21,6 +22,9 @@ import '../core/services/session_service.dart';
 import '../core/services/video_service.dart';
 import '../core/services/leave_request_service.dart';
 import '../core/services/student_registration_request_service.dart';
+import '../core/services/coach_registration_request_service.dart';
+import '../core/services/coach_salary_service.dart';
+import '../core/services/report_service.dart';
 import '../core/network/connectivity_service.dart';
 import '../core/network/request_queue.dart';
 import 'package:dio/dio.dart';
@@ -193,6 +197,13 @@ StudentRegistrationRequestService studentRegistrationRequestService(StudentRegis
   return StudentRegistrationRequestService(apiService);
 }
 
+/// Provider for CoachRegistrationRequestService singleton
+@riverpod
+CoachRegistrationRequestService coachRegistrationRequestService(CoachRegistrationRequestServiceRef ref) {
+  final apiService = ref.watch(apiServiceProvider);
+  return CoachRegistrationRequestService(apiService);
+}
+
 /// Provider for ConnectivityService singleton
 @riverpod
 ConnectivityService connectivityService(ConnectivityServiceRef ref) {
@@ -206,11 +217,25 @@ RequestQueue requestQueue(RequestQueueRef ref) {
   final connectivityService = ref.watch(connectivityServiceProvider);
   // Create a new Dio instance for the queue
   // Note: This will need to be configured with the actual base URL when integrated
-  final dio = Dio(BaseOptions(baseUrl: 'http://localhost')); // Will be overridden by actual requests
+  final dio = Dio(BaseOptions(baseUrl: ApiEndpoints.baseUrl)); 
   return RequestQueue(
     connectivityService: connectivityService,
     dio: dio,
   );
+}
+
+/// Provider for CoachSalaryService singleton
+@riverpod
+CoachSalaryService coachSalaryService(CoachSalaryServiceRef ref) {
+  final apiService = ref.watch(apiServiceProvider);
+  return CoachSalaryService(apiService);
+}
+
+/// Provider for ReportService singleton
+@riverpod
+ReportService reportService(ReportServiceRef ref) {
+  final apiService = ref.watch(apiServiceProvider);
+  return ReportService(apiService);
 }
 
 /// Provider for BatchEnrollmentService

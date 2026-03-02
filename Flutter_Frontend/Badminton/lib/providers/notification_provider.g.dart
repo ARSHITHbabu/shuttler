@@ -658,7 +658,7 @@ class _NotificationByIdProviderElement
 }
 
 String _$notificationManagerHash() =>
-    r'64d497425896beb41547ce6436cd574d1b271a37';
+    r'eaaf278728cffb7afe2e8631225d95375cefc2f2';
 
 abstract class _$NotificationManager
     extends BuildlessAutoDisposeAsyncNotifier<List<Notification>> {

@@ -196,7 +196,7 @@ class _EditFeeDialogState extends ConsumerState<EditFeeDialog> {
                   NeumorphicContainer(
                     padding: const EdgeInsets.all(AppDimensions.paddingM),
                     child: DropdownButtonFormField<int>(
-                      value: _selectedPayeeId,
+                      initialValue: _selectedPayeeId,
                       decoration: const InputDecoration(
                         labelText: 'Payee (Student from Batch)',
                         labelStyle: TextStyle(color: AppColors.textSecondary),

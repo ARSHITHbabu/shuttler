@@ -5,6 +5,7 @@ class AppColors {
   // Background colors
   static const Color background = Color(0xFF1a1a1a); // #1a1a1a
   static const Color cardBackground = Color(0xFF242424); // #242424
+  static const Color surface = Color(0xFF242424); // Alias for cardBackground for consistency
   static const Color surfaceLight = Color(0xFF2a2a2a); // #2a2a2a
 
   // Text colors
@@ -19,6 +20,7 @@ class AppColors {
 
   // Accent colors
   static const Color accent = Color(0xFF4a9eff); // Blue accent
+  static const Color primary = accent; // Alias for primary color
   static const Color accentDark = Color(0xFF3a7ecf); // Darker blue
 
   // Status colors

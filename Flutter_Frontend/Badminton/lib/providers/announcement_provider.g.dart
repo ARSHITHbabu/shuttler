@@ -615,7 +615,7 @@ class _AnnouncementByPriorityProviderElement
 }
 
 String _$announcementManagerHash() =>
-    r'c8d7ddd31d1e9add65a2926acd2029c175009df6';
+    r'83dd4571ee9fb82acc3c28d59ad54723e809f607';
 
 abstract class _$AnnouncementManager
     extends BuildlessAutoDisposeAsyncNotifier<List<Announcement>> {

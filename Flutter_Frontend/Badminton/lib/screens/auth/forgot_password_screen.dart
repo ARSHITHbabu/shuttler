@@ -12,12 +12,7 @@ import '../../core/services/storage_service.dart';
 
 /// Forgot Password Screen - Request password reset
 class ForgotPasswordScreen extends ConsumerStatefulWidget {
-  final String userType;
-
-  const ForgotPasswordScreen({
-    super.key,
-    required this.userType,
-  });
+  const ForgotPasswordScreen({super.key});
 
   @override
   ConsumerState<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
@@ -57,7 +52,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
         '/auth/forgot-password',
         data: {
           'email': _emailController.text.trim(),
-          'user_type': widget.userType,
+          'user_type': 'student', // Sent as dummy, backend handles auto-detection
         },
       );
 
@@ -129,7 +124,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
           'email': _emailController.text.trim(),
           'reset_token': _resetTokenController.text.trim(),
           'new_password': _newPasswordController.text,
-          'user_type': widget.userType,
+          'user_type': 'student', // Backend uses token data
         },
       );
 

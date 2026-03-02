@@ -47,6 +47,29 @@ final upcomingBatchesProvider = AutoDisposeFutureProvider<List<Batch>>.internal(
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef UpcomingBatchesRef = AutoDisposeFutureProviderRef<List<Batch>>;
+String _$ownerUpcomingSessionsHash() =>
+    r'a39d0545433283af44712ab4ef0be05ab684e080';
+
+/// Provider for upcoming sessions for all active batches (Owner view)
+/// Shows next occurrence for each active batch
+///
+/// Copied from [ownerUpcomingSessions].
+@ProviderFor(ownerUpcomingSessions)
+final ownerUpcomingSessionsProvider =
+    AutoDisposeFutureProvider<List<Map<String, dynamic>>>.internal(
+      ownerUpcomingSessions,
+      name: r'ownerUpcomingSessionsProvider',
+      debugGetCreateSourceHash: const bool.fromEnvironment('dart.vm.product')
+          ? null
+          : _$ownerUpcomingSessionsHash,
+      dependencies: null,
+      allTransitiveDependencies: null,
+    );
+
+@Deprecated('Will be removed in 3.0. Use Ref instead')
+// ignore: unused_element
+typedef OwnerUpcomingSessionsRef =
+    AutoDisposeFutureProviderRef<List<Map<String, dynamic>>>;
 String _$dashboardStatsHash() => r'd0d6277fe282787d1e6255b9c450f3d697bc2064';
 
 /// Provider for dashboard statistics

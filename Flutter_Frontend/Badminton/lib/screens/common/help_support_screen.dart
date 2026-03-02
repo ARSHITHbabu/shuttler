@@ -37,52 +37,94 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
-        backgroundColor: backgroundColor,
+        backgroundColor: Colors.transparent,
         elevation: 0,
+        centerTitle: true,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: textPrimaryColor),
+          icon: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: accentColor.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.arrow_back, color: textPrimaryColor, size: 20),
+          ),
           onPressed: widget.onBack ?? () => Navigator.of(context).pop(),
         ),
         title: Text(
           LegalContent.helpTitle,
           style: TextStyle(
             color: textPrimaryColor,
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.5,
           ),
         ),
       ),
       body: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
         child: Padding(
-          padding: const EdgeInsets.all(AppDimensions.paddingL),
+          padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header Card
-              NeumorphicContainer(
-                padding: const EdgeInsets.all(AppDimensions.paddingL),
+              const SizedBox(height: AppDimensions.spacingM),
+              
+              // Header Card - Premium Look
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppDimensions.paddingXl),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: isDark 
+                      ? [AppColors.surface, AppColors.background] 
+                      : [AppColorsLight.cardBackground, AppColorsLight.background],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(AppDimensions.radiusXl),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.05),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
                 child: Column(
                   children: [
                     Container(
-                      width: 60,
-                      height: 60,
+                      padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: accentColor.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+                        gradient: LinearGradient(
+                          colors: [accentColor, accentColor.withValues(alpha: 0.7)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: accentColor.withValues(alpha: 0.3),
+                            blurRadius: 15,
+                            offset: const Offset(0, 5),
+                          ),
+                        ],
                       ),
-                      child: Icon(
+                      child: const Icon(
                         Icons.help_outline,
-                        size: 32,
-                        color: accentColor,
+                        size: 40,
+                        color: Colors.white,
                       ),
                     ),
-                    const SizedBox(height: AppDimensions.spacingM),
+                    const SizedBox(height: AppDimensions.spacingL),
                     Text(
                       'How can we help you?',
+                      textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
                         color: textPrimaryColor,
+                        letterSpacing: 0.5,
                       ),
                     ),
                     const SizedBox(height: AppDimensions.spacingS),
@@ -92,22 +134,37 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                       style: TextStyle(
                         fontSize: 14,
                         color: textSecondaryColor,
+                        height: 1.5,
                       ),
                     ),
                   ],
                 ),
               ),
 
-              const SizedBox(height: AppDimensions.spacingL),
+              const SizedBox(height: AppDimensions.spacingXl),
 
-              // Contact Options
-              Text(
-                'Contact Us',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: textPrimaryColor,
-                ),
+              // Contact Options Header
+              Row(
+                children: [
+                  Container(
+                    width: 4,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      color: accentColor,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Contact Us',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                      color: textPrimaryColor,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: AppDimensions.spacingM),
 
@@ -116,7 +173,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                   Expanded(
                     child: _buildContactCard(
                       icon: Icons.email_outlined,
-                      title: 'Email',
+                      title: 'Email Us',
                       value: LegalContent.supportEmail,
                       isDark: isDark,
                       accentColor: accentColor,
@@ -129,7 +186,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
                   Expanded(
                     child: _buildContactCard(
                       icon: Icons.phone_outlined,
-                      title: 'Phone',
+                      title: 'Call Us',
                       value: LegalContent.supportPhone,
                       isDark: isDark,
                       accentColor: accentColor,
@@ -143,14 +200,28 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
 
               const SizedBox(height: AppDimensions.spacingXl),
 
-              // FAQ Section
-              Text(
-                'Frequently Asked Questions',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: textPrimaryColor,
-                ),
+              // FAQ Section Header
+              Row(
+                children: [
+                  Container(
+                    width: 4,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      color: accentColor,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Frequently Asked Questions',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                      color: textPrimaryColor,
+                      letterSpacing: 0.3,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: AppDimensions.spacingM),
 

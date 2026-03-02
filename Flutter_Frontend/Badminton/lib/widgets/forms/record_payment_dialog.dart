@@ -26,7 +26,7 @@ class _RecordPaymentDialogState extends State<RecordPaymentDialog> {
   final _amountController = TextEditingController();
   final _paymentMethodController = TextEditingController();
   DateTime _paymentDate = DateTime.now();
-  String _selectedPaymentMethod = 'cash'; // 'cash', 'card', 'upi', 'bank_transfer', 'other'
+  String _selectedPaymentMethod = 'cash'; // 'cash', 'card'
   bool _isLoading = false;
 
   @override
@@ -149,24 +149,6 @@ class _RecordPaymentDialogState extends State<RecordPaymentDialog> {
                       value: 'card',
                       selected: _selectedPaymentMethod,
                       onTap: () => setState(() => _selectedPaymentMethod = 'card'),
-                    ),
-                    _PaymentMethodChip(
-                      label: 'UPI',
-                      value: 'upi',
-                      selected: _selectedPaymentMethod,
-                      onTap: () => setState(() => _selectedPaymentMethod = 'upi'),
-                    ),
-                    _PaymentMethodChip(
-                      label: 'Bank Transfer',
-                      value: 'bank_transfer',
-                      selected: _selectedPaymentMethod,
-                      onTap: () => setState(() => _selectedPaymentMethod = 'bank_transfer'),
-                    ),
-                    _PaymentMethodChip(
-                      label: 'Other',
-                      value: 'other',
-                      selected: _selectedPaymentMethod,
-                      onTap: () => setState(() => _selectedPaymentMethod = 'other'),
                     ),
                   ],
                 ),

@@ -8,6 +8,7 @@ import '../../widgets/common/skeleton_screen.dart';
 import '../../models/fee.dart';
 import '../../models/student_with_batch_fee.dart';
 import '../../providers/fee_provider.dart';
+import 'package:flutter_windowmanager/flutter_windowmanager.dart';
 
 /// Coach Fees Screen - Read-only view of fees with statistics and details
 /// Coaches can view all fee information but cannot add, edit, or delete fees
@@ -33,6 +34,17 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
   @override
   void initState() {
     super.initState();
+    _secureScreen();
+  }
+
+  Future<void> _secureScreen() async {
+    await FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_SECURE);
+  }
+
+  @override
+  void dispose() {
+    FlutterWindowManager.clearFlags(FlutterWindowManager.FLAG_SECURE);
+    super.dispose();
   }
 
   @override
@@ -130,7 +142,7 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
             _selectedFee == null && _selectedBatchId == null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             for (final batchEntry in batchGroups.entries) {
-              for (final studentFee in batchEntry.value) {
+              for (final studentFee in batchEntry.value.students) {
                 if ((widget.selectedStudentId != null && 
                      studentFee.student.id == widget.selectedStudentId) ||
                     (widget.selectedStudentName != null && 
@@ -155,8 +167,8 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
         // Sort batches by name
         final sortedBatches = batchGroups.entries.toList()
           ..sort((a, b) {
-            final nameA = a.value.first.batch.batchName;
-            final nameB = b.value.first.batch.batchName;
+            final nameA = a.value.batch.batchName;
+            final nameB = b.value.batch.batchName;
             return nameA.compareTo(nameB);
           });
 
@@ -164,10 +176,19 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: sortedBatches.map((batchEntry) {
             final batchId = batchEntry.key;
-            final studentFees = batchEntry.value;
-            final batch = studentFees.first.batch;
+            final group = batchEntry.value;
+            final studentFees = group.students;
+            final batch = group.batch;
             final batchName = batch.batchName;
-            final batchFeeAmount = studentFees.first.batchFeeAmount;
+            
+            // Parse batch fee amount
+            double batchFeeAmount = 0;
+            try {
+              final feeString = batch.fees.replaceAll(RegExp(r'[\$,\s]'), '');
+              batchFeeAmount = double.parse(feeString);
+            } catch (e) {
+              batchFeeAmount = 0;
+            }
             
             // Calculate batch stats for preview
             double batchPending = 0;
@@ -326,30 +347,52 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
         },
       ),
       data: (batchGroups) {
-        final studentFees = batchGroups[_selectedBatchId];
-        if (studentFees == null || studentFees.isEmpty) {
-          return const Padding(
-            padding: EdgeInsets.all(AppDimensions.paddingM),
-            child: Text(
-              'No students found in this batch',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
-          );
+        final group = batchGroups[_selectedBatchId];
+        if (group == null) {
+          return const Center(child: Text('Batch not found'));
         }
-
-        final batch = studentFees.first.batch;
+        
+        final studentFees = group.students;
+        final batch = group.batch;
         final batchName = batch.batchName;
         final batchTimeRange = batch.timeRange;
+
+        if (studentFees.isEmpty) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildBatchDetailHeader(batchName, batchTimeRange),
+              const SizedBox(height: AppDimensions.spacingL),
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(AppDimensions.paddingL),
+                  child: Column(
+                    children: [
+                      Icon(Icons.people_outline, size: 48, color: AppColors.textTertiary),
+                      SizedBox(height: AppDimensions.spacingM),
+                      Text(
+                        'No students assigned to this batch.',
+                        style: TextStyle(color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        }
 
         // Filter students based on selected filter
         List<StudentWithBatchFee> filteredStudents = studentFees;
         if (_selectedFilter == 'paid') {
           filteredStudents = studentFees.where((s) => s.feeStatus == 'paid').toList();
+        } else if (_selectedFilter == 'partial') {
+          filteredStudents = studentFees.where((s) => s.feeStatus == 'partial').toList();
         } else if (_selectedFilter == 'pending') {
           filteredStudents = studentFees.where((s) => s.feeStatus == 'pending').toList();
         } else if (_selectedFilter == 'overdue') {
-          filteredStudents = studentFees.where((s) => 
-            s.feeStatus == 'overdue' || 
+          filteredStudents = studentFees.where((s) =>
+            s.feeStatus == 'overdue' ||
             (s.existingFee != null && s.existingFee!.isOverdue)
           ).toList();
         }
@@ -387,51 +430,7 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Batch Header with Back Button
-            NeumorphicContainer(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppDimensions.paddingM,
-                vertical: AppDimensions.spacingS,
-              ),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(
-                      Icons.arrow_back,
-                      color: AppColors.textSecondary,
-                    ),
-                    onPressed: () {
-                      setState(() {
-                        _selectedBatchId = null;
-                        _selectedFilter = 'all'; // Reset filter when going back
-                      });
-                    },
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          batchName,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        if (batchTimeRange.isNotEmpty)
-                          Text(
-                            batchTimeRange,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            _buildBatchDetailHeader(batchName, batchTimeRange),
             const SizedBox(height: AppDimensions.spacingL),
             
             // Filter Chips
@@ -450,6 +449,13 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
                     isSelected: _selectedFilter == 'paid',
                     onTap: () => setState(() => _selectedFilter = 'paid'),
                     color: AppColors.success,
+                  ),
+                  const SizedBox(width: AppDimensions.spacingS),
+                  _FilterChip(
+                    label: 'Partial',
+                    isSelected: _selectedFilter == 'partial',
+                    onTap: () => setState(() => _selectedFilter = 'partial'),
+                    color: Colors.teal,
                   ),
                   const SizedBox(width: AppDimensions.spacingS),
                   _FilterChip(
@@ -511,6 +517,54 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
           ],
         );
       },
+    );
+  }
+
+  Widget _buildBatchDetailHeader(String batchName, String batchTimeRange) {
+    return NeumorphicContainer(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppDimensions.paddingM,
+        vertical: AppDimensions.spacingS,
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(
+              Icons.arrow_back,
+              color: AppColors.textSecondary,
+            ),
+            onPressed: () {
+              setState(() {
+                _selectedBatchId = null;
+                _selectedFilter = 'all'; // Reset filter when going back
+              });
+            },
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  batchName,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                if (batchTimeRange.isNotEmpty)
+                  Text(
+                    batchTimeRange,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -994,6 +1048,8 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
     switch (status.toLowerCase()) {
       case 'paid':
         return AppColors.success;
+      case 'partial':
+        return Colors.teal;
       case 'pending':
         return AppColors.warning;
       case 'overdue':

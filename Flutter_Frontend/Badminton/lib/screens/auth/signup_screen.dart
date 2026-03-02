@@ -8,18 +8,14 @@ import '../../widgets/common/neumorphic_button.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../widgets/common/loading_spinner.dart';
 import '../../widgets/common/success_snackbar.dart';
-import '../../providers/auth_provider.dart';
 import '../../providers/service_providers.dart';
-import '../../core/services/student_registration_request_service.dart';
+import '../../core/theme/neumorphic_styles.dart';
+import '../../widgets/common/app_logo.dart';
+import '../../widgets/common/password_strength_indicator.dart';
 
 /// Signup screen for user registration
 class SignupScreen extends ConsumerStatefulWidget {
-  final String userType;
-
-  const SignupScreen({
-    super.key,
-    required this.userType,
-  });
+  const SignupScreen({super.key});
 
   @override
   ConsumerState<SignupScreen> createState() => _SignupScreenState();
@@ -32,6 +28,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _specializationController = TextEditingController();
+  final _experienceController = TextEditingController();
+  
+  String _selectedRole = 'student'; // 'student' or 'coach'
   bool _acceptTerms = false;
   bool _isLoading = false;
 
@@ -42,6 +42,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     _phoneController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _specializationController.dispose();
+    _experienceController.dispose();
     super.dispose();
   }
 
@@ -63,7 +65,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     setState(() => _isLoading = true);
 
     try {
-      if (widget.userType == 'student') {
+      if (_selectedRole == 'student') {
         // For students, create registration request instead of direct account
         final requestService = ref.read(studentRegistrationRequestServiceProvider);
         
@@ -75,33 +77,23 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         );
 
         if (mounted) {
-          // Navigate to pending request screen
           context.go('/student-registration-pending', extra: _emailController.text.trim());
         }
       } else {
-        // For owner/coach, use existing registration flow
-        await ref.read(authProvider.notifier).register(
+        // For coaches, create registration request
+        final coachRequestService = ref.read(coachRegistrationRequestServiceProvider);
+        
+        await coachRequestService.createRequest(
           name: _nameController.text.trim(),
           email: _emailController.text.trim(),
           phone: _phoneController.text.trim(),
           password: _passwordController.text,
-          userType: widget.userType,
+          specialization: _specializationController.text.trim(),
+          experienceYears: int.tryParse(_experienceController.text.trim()) ?? 0,
         );
 
         if (mounted) {
-          // Navigate to appropriate dashboard for other user types
-          String route;
-          switch (widget.userType) {
-            case 'owner':
-              route = '/owner-dashboard';
-              break;
-            case 'coach':
-              route = '/coach-dashboard';
-              break;
-            default:
-              route = '/';
-          }
-          context.go(route);
+          context.go('/coach-registration-pending', extra: _emailController.text.trim());
         }
       }
     } catch (e) {
@@ -112,19 +104,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
       }
-    }
-  }
-
-  String _getRoleTitle() {
-    switch (widget.userType) {
-      case 'owner':
-        return 'Owner';
-      case 'coach':
-        return 'Coach';
-      case 'student':
-        return 'Student';
-      default:
-        return 'User';
     }
   }
 
@@ -139,9 +118,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
           onPressed: () => context.pop(),
         ),
-        title: Text(
-          'Sign Up as ${_getRoleTitle()}',
-          style: const TextStyle(color: AppColors.textPrimary),
+        title: const Text(
+          'Create Account',
+          style: TextStyle(color: AppColors.textPrimary),
         ),
         centerTitle: true,
       ),
@@ -153,7 +132,43 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const SizedBox(height: AppDimensions.spacingM),
+                const Center(
+                  child: AppLogo(
+                    height: 80,
+                  ),
+                ),
+                const SizedBox(height: AppDimensions.spacingL),
+                
+                // Creative Role Selector
+                Container(
+                  padding: const EdgeInsets.all(AppDimensions.paddingXs),
+                  decoration: BoxDecoration(
+                    color: AppColors.cardBackground,
+                    borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+                    boxShadow: NeumorphicStyles.getInsetShadow(),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _RoleToggleButton(
+                          isSelected: _selectedRole == 'student',
+                          label: 'Student',
+                          icon: Icons.school_outlined,
+                          onTap: () => setState(() => _selectedRole = 'student'),
+                        ),
+                      ),
+                      Expanded(
+                        child: _RoleToggleButton(
+                          isSelected: _selectedRole == 'coach',
+                          label: 'Coach',
+                          icon: Icons.sports_tennis,
+                          onTap: () => setState(() => _selectedRole = 'coach'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppDimensions.spacingXl),
 
                 // Name Field
                 CustomTextField(
@@ -193,6 +208,35 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 ),
                 const SizedBox(height: AppDimensions.spacingL),
 
+                // Dynamic Coach Fields
+                if (_selectedRole == 'coach') ...[
+                  CustomTextField(
+                    controller: _specializationController,
+                    label: 'Specialization',
+                    hint: 'e.g., Singles, Footwork',
+                    prefixIcon: Icons.star_outline,
+                    validator: (v) => _selectedRole == 'coach' && (v == null || v.isEmpty) 
+                        ? 'Specialization is required' 
+                        : null,
+                    enabled: !_isLoading,
+                    textInputAction: TextInputAction.next,
+                  ),
+                  const SizedBox(height: AppDimensions.spacingL),
+                  CustomTextField(
+                    controller: _experienceController,
+                    label: 'Experience (Years)',
+                    hint: 'Number of years',
+                    keyboardType: TextInputType.number,
+                    prefixIcon: Icons.history_outlined,
+                    validator: (v) => _selectedRole == 'coach' && (v == null || v.isEmpty)
+                        ? 'Experience is required'
+                        : null,
+                    enabled: !_isLoading,
+                    textInputAction: TextInputAction.next,
+                  ),
+                  const SizedBox(height: AppDimensions.spacingL),
+                ],
+
                 // Password Field
                 CustomTextField(
                   controller: _passwordController,
@@ -204,7 +248,14 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   enabled: !_isLoading,
                   textInputAction: TextInputAction.next,
                 ),
-                const SizedBox(height: AppDimensions.spacingL),
+                const SizedBox(height: AppDimensions.spacingS),
+                ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: _passwordController,
+                  builder: (context, value, child) {
+                    return PasswordStrengthIndicator(password: value.text);
+                  },
+                ),
+                const SizedBox(height: AppDimensions.spacingM),
 
                 // Confirm Password Field
                 CustomTextField(
@@ -305,6 +356,54 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RoleToggleButton extends StatelessWidget {
+  final bool isSelected;
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _RoleToggleButton({
+    required this.isSelected,
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: AppDimensions.paddingM),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.accent : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppDimensions.radiusL),
+          boxShadow: isSelected ? NeumorphicStyles.getElevatedShadow() : null,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: isSelected ? AppColors.textPrimary : AppColors.textSecondary,
+            ),
+            const SizedBox(width: AppDimensions.spacingS),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: isSelected ? AppColors.textPrimary : AppColors.textSecondary,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  ),
+            ),
+          ],
         ),
       ),
     );
