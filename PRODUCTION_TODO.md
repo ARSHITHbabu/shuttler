@@ -121,13 +121,13 @@
 - [x] 🔴 Before coach records performance: verify student is in their batch — `POST /performance/` and `PUT /performance/{id}` now call `verify_coach_batch_access()` on the record's `batch_id`
 - [x] 🔴 Before coach updates a student record: verify access rights — `PUT /students/{student_id}` now calls `verify_coach_student_access()` (checks student is enrolled in any of coach's batches)
 
-### A16 · Supply Chain Security ✅ COMPLETE
+### A16 · Supply Chain Security
 - [x] 🔴 Scan Git history for leaked secrets: run `truffleHog --regex --entropy=True .` *(Operational: run before public launch; see `.git/hooks/pre-commit` to prevent future leaks)*
 - [x] 🔴 Enable GitHub Secret Scanning (Settings → Security → Secret Scanning) *(Operational: enable in GitHub repo settings)*
 - [x] 🔴 If any secrets found in history: rotate ALL affected credentials immediately *(Operational: follow after truffleHog scan)*
 - [x] 🔴 Run `pip-audit -r requirements.txt` — fixed: `fastapi` → 0.115.4, `python-multipart` → 0.0.22; `python-jose` 3.3.0 CVEs noted (no upstream fix; HS256-only config mitigates ECDSA issues); migration to joserfc/PyJWT recommended pre-launch
 - [x] 🟠 Run `flutter pub outdated` and update vulnerable packages *(Operational: run `flutter pub upgrade` before each release)*
-- [x] 🟠 Create `.github/dependabot.yml` for automatic dependency update PRs — created for pip (Backend/) and pub (Flutter_Frontend/Badminton/), weekly schedule
+- [ ] 🟠 Create `.github/dependabot.yml` for automatic dependency update PRs — **removed: was opening noisy weekly PRs; re-add when app is closer to production**
 - [x] 🟠 Add `git-secrets` pre-commit hook to prevent future secret commits — created at `.git/hooks/pre-commit`; blocks AWS keys, private key headers, db connection strings, generic secrets
 - [x] 🟠 Commit `pubspec.lock` to Git (reproducible builds) — `pubspec.lock` already exists and is committed ✅
 - [x] 🟡 Verify Dio `badCertificateCallback` does NOT return `true` in production builds — audited: only appears in error handler case, no SSL bypass present ✅
@@ -251,13 +251,13 @@
 - [x] 🟡 Archive to a separate archive table before deletion (don't hard-delete)
 - [x] 🟡 Verify the APScheduler cleanup job (inactive records >2 years) is working correctly
 
-### C6 · Cloud Deployment ✅ COMPLETE
+### C6 · Cloud Deployment
 - [x] 🔴 Select cloud provider: Railway.app or Render.com (recommended for start)
-- [x] 🔴 Deploy FastAPI backend to cloud *(Configured via render.yaml & railway.toml)*
-- [x] 🔴 Provision managed PostgreSQL on cloud (with SSL, automated backups, PITR)
-- [x] 🟠 Register a domain name (e.g., `api.shuttler.app`) *(Operational Step)*
-- [x] 🟠 Configure DNS records pointing to backend *(Operational Step)*
-- [x] 🟠 Configure SSL certificate for domain *(Operational Step)*
+- [ ] 🔴 Deploy FastAPI backend to cloud — **render.yaml & railway.toml removed; app not yet ready for production deployment**
+- [ ] 🔴 Provision managed PostgreSQL on cloud (with SSL, automated backups, PITR)
+- [ ] 🟠 Register a domain name (e.g., `api.shuttler.app`) *(Operational Step)*
+- [ ] 🟠 Configure DNS records pointing to backend *(Operational Step)*
+- [ ] 🟠 Configure SSL certificate for domain *(Operational Step)*
 
 ### C7 · File Storage Migration ✅ COMPLETE
 - [x] 🔴 Migrate file uploads from local disk to cloud object storage (AWS S3 or Cloudflare R2)
@@ -266,8 +266,8 @@
 - [x] 🟠 Update Flutter to load images from CDN URLs
 - [x] 🟠 Add `boto3==1.34.0` (or equivalent) to backend requirements
 
-### C8 · Redis Cache ✅ COMPLETE
-- [x] 🟠 Deploy Redis instance (Redis Cloud free tier or Railway Redis)
+### C8 · Redis Cache
+- [ ] 🟠 Deploy Redis instance (Redis Cloud free tier or Railway Redis) — **no cloud deployment yet; code integration in main.py is ready**
 - [x] 🟠 Add `redis==5.0.1` and `fastapi-cache2==0.2.1` to backend
 - [x] 🟠 Cache active batches list (TTL: 5 min), student list (TTL: 2 min), coach list (TTL: 5 min), calendar events (TTL: 1 hr), academy details (TTL: 1 hr) — `@cache` decorators applied to `GET /coaches/`, `GET /batches/`, `GET /students/`, `GET /api/calendar-events/`, `GET /owners/`
 - [x] 🟠 Cache invalidation: clear relevant keys on write operations — `invalidate_cache(namespace)` called in all POST/PUT/DELETE endpoints for each cached resource
@@ -281,14 +281,14 @@
 - [ ] 🟠 Move PDF generation to background task (FastAPI BackgroundTasks); return job ID; notify on completion
 - [ ] 🟡 Add `GET /reports/status/{job_id}` endpoint for async report status
 
-### C10 · Docker & CI/CD ✅ COMPLETE
+### C10 · Docker & CI/CD
 - [x] 🔴 Create `Backend/Dockerfile` (multi-stage build)
 - [x] 🟠 Create `docker-compose.yml` for local dev (FastAPI + PostgreSQL + Redis)
-- [x] 🔴 Create `.github/workflows/backend-ci.yml`: lint → test → security-scan → build → deploy-staging → deploy-prod (with approval gate)
-- [x] 🔴 Create `.github/workflows/flutter-ci.yml`: analyze → test → build-android → build-ios → deploy
-- [x] 🔴 Three environments: Development (localhost), Staging (`api-staging.shuttler.app`), Production (`api.shuttler.app`)
+- [ ] 🔴 Create `.github/workflows/backend-ci.yml`: lint → test → security-scan → build → deploy-staging → deploy-prod (with approval gate) — **currently lint-and-test only; build/deploy jobs removed until app is production-ready**
+- [ ] 🔴 Create `.github/workflows/flutter-ci.yml`: analyze → test → build-android → build-ios → deploy — **currently analyze-and-test only; build/deploy jobs removed**
+- [ ] 🔴 Three environments: Development (localhost), Staging (`api-staging.shuttler.app`), Production (`api.shuttler.app`) — **staging and production environments removed**
 - [x] 🟠 Create `.env.dev`, `.env.staging`, `.env.prod` (never commit `.env.prod`)
-- [x] 🟡 Infrastructure as Code (Terraform / Pulumi) — or use managed platform defaults
+- [ ] 🟡 Infrastructure as Code (Terraform / Pulumi) — or use managed platform defaults
 
 ### C11 · Usage Capping & Quotas ✅ COMPLETE
 - [x] 🟠 Per-academy API quota: 10,000 calls/day tracked in Redis
@@ -308,22 +308,22 @@
 - [x] 🟠 Auto-lock account after 10 consecutive failed logins; notify owner
 - [x] 🟠 Login history: owners can view login history for their coaches/students (min 90 days retention)
 
-### C13 · `[GAP]` — Data Migration Plan (Local → Cloud) ✅ COMPLETE
-- [x] 🔴 Document step-by-step plan to migrate existing local PostgreSQL data to cloud DB: See [MIGRATION_PLAN.md](file:///d:/laptop%20new/f/Personal%20Projects/badminton/abhi_colab/Cursor1/shuttler/Documents/MIGRATION_PLAN.md)
-- [x] 🔴 Migrate existing uploaded files from local disk to S3/R2: Script created at [migrate_to_s3.py](file:///d:/laptop%20new/f/Personal%20Projects/badminton/abhi_colab/Cursor1/shuttler/Backend/migrate_to_s3.py)
-- [x] 🟠 Test migration with a full dry-run on staging environment
-- [x] 🟠 Define rollback procedure if migration fails
+### C13 · `[GAP]` — Data Migration Plan (Local → Cloud)
+- [ ] 🔴 Document step-by-step plan to migrate existing local PostgreSQL data to cloud DB — **Documents/MIGRATION_PLAN.md deleted during repo cleanup; redo when cloud deployment is set up**
+- [ ] 🔴 Migrate existing uploaded files from local disk to S3/R2 — **Backend/migrate_to_s3.py deleted during cleanup; redo when S3 bucket is provisioned**
+- [ ] 🟠 Test migration with a full dry-run on staging environment
+- [ ] 🟠 Define rollback procedure if migration fails
 
-### C14 · `[GAP]` — Rollback Strategy ✅ COMPLETE
-- [x] 🟠 Document rollback procedure for bad backend deployments: See [ROLLBACK_STRATEGY.md](file:///d:/laptop%20new/f/Personal%20Projects/badminton/abhi_colab/Cursor1/shuttler/Documents/ROLLBACK_STRATEGY.md)
-- [x] 🟠 Test Alembic `downgrade` path for every migration before applying to production
-- [x] 🟡 Feature flags: ability to disable a new feature without redeployment (documented in rollback plan)
+### C14 · `[GAP]` — Rollback Strategy
+- [ ] 🟠 Document rollback procedure for bad backend deployments — **Documents/ROLLBACK_STRATEGY.md deleted during repo cleanup; redo when cloud deployment is set up**
+- [ ] 🟠 Test Alembic `downgrade` path for every migration before applying to production
+- [ ] 🟡 Feature flags: ability to disable a new feature without redeployment
 
-### C15 · `[GAP]` — Network Security ✅ COMPLETE
-- [x] 🟠 Restrict database port (5432) access to backend server IP only: See [NETWORK_SECURITY.md](file:///d:/laptop%20new/f/Personal%20Projects/badminton/abhi_colab/Cursor1/shuttler/Documents/NETWORK_SECURITY.md)
-- [x] 🟠 Restrict Redis port (6379) access to backend server only
-- [x] 🟠 Firewall: only expose ports 80 and 443 publicly
-- [x] 🟡 Consider VPN or private network access for database administration
+### C15 · `[GAP]` — Network Security
+- [ ] 🟠 Restrict database port (5432) access to backend server IP only — **Documents/NETWORK_SECURITY.md deleted; redo when cloud infrastructure is provisioned**
+- [ ] 🟠 Restrict Redis port (6379) access to backend server only
+- [ ] 🟠 Firewall: only expose ports 80 and 443 publicly
+- [ ] 🟡 Consider VPN or private network access for database administration
 
 ---
 
