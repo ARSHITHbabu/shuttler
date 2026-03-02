@@ -252,6 +252,16 @@ def _check_token_revoked(payload: dict, request: Request) -> None:
     # ==========================================================
 
 
+    # Fast path: check Redis blacklist before opening a DB connection
+    if jti and _sync_redis_client:
+        try:
+            if _sync_redis_client.get(f"revoked:{jti}"):
+                raise HTTPException(status_code=401, detail="Token has been revoked. Please log in again.")
+        except HTTPException:
+            raise
+        except Exception:
+            pass  # Redis unavailable — fall through to DB check
+
     db = SessionLocal()
     try:
         # 1. Check per-token blacklist (for explicit logout)
@@ -3328,6 +3338,7 @@ from fastapi_cache.backends.redis import RedisBackend
 from fastapi_cache.decorator import cache
 try:
     from redis import asyncio as aioredis
+    import redis as _redis_sync_module
     _REDIS_AVAILABLE = True
 except ImportError:
     _REDIS_AVAILABLE = False
@@ -3335,14 +3346,17 @@ except ImportError:
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 redis_client = None
+# Sync Redis client used for O(1) JWT token blacklist checks in the auth middleware
+_sync_redis_client = None
 
 @app.on_event("startup")
 async def startup():
-    global redis_client
+    global redis_client, _sync_redis_client
     if _REDIS_AVAILABLE:
         try:
             redis_client = aioredis.from_url(REDIS_URL, encoding="utf-8", decode_responses=True)
             FastAPICache.init(RedisBackend(redis_client), prefix="shuttler-cache")
+            _sync_redis_client = _redis_sync_module.from_url(REDIS_URL, decode_responses=True)
             print(f"Connected to Redis for caching at {REDIS_URL}")
         except Exception as e:
             print(f"Warning: Failed to connect to Redis: {e}. Caching will fail.")
@@ -3894,6 +3908,7 @@ def create_coach(coach: CoachCreate):
         except Exception as _ee:
             print(f"[Email] Coach welcome email error: {_ee}")
 
+        invalidate_cache("coaches")
         return coach_response
     except IntegrityError as e:
         db.rollback()
@@ -3908,6 +3923,7 @@ def create_coach(coach: CoachCreate):
         db.close()
 
 @app.get("/coaches/", response_model=List[Coach], dependencies=[Depends(require_student)])
+@cache(namespace="coaches", expire=300)
 def get_coaches():
     db = SessionLocal()
     try:
@@ -3942,6 +3958,7 @@ def update_coach(coach_id: int, coach_update: CoachUpdate):
         
         db.commit()
         db.refresh(coach)
+        invalidate_cache("coaches")
         return Coach.model_validate(coach)
     finally:
         db.close()
@@ -3955,6 +3972,7 @@ def delete_coach(coach_id: int):
             raise HTTPException(status_code=404, detail="Coach not found")
         db.delete(coach)
         db.commit()
+        invalidate_cache("coaches")
         return {"message": "Coach deleted"}
     finally:
         db.close()
@@ -4688,8 +4706,22 @@ def logout(body: LogoutRequest, credentials: HTTPAuthorizationCredentials = Secu
                         user_type=r_utype,
                         expires_at=datetime.fromtimestamp(r_exp, tz=_tz.utc),
                     ))
+                    if _sync_redis_client and r_jti and r_exp:
+                        try:
+                            r_ttl = max(1, int(r_exp - datetime.utcnow().timestamp()))
+                            _sync_redis_client.setex(f"revoked:{r_jti}", r_ttl, "1")
+                        except Exception:
+                            pass
             except JWTError:
                 pass  # Invalid refresh token — still succeed, just skip revoking it
+
+        # Cache access token revocation in Redis for O(1) future blacklist checks
+        if _sync_redis_client and a_jti and a_exp:
+            try:
+                a_ttl = max(1, int(a_exp - datetime.utcnow().timestamp()))
+                _sync_redis_client.setex(f"revoked:{a_jti}", a_ttl, "1")
+            except Exception:
+                pass
 
         db.commit()
     finally:
@@ -4875,6 +4907,7 @@ def create_owner(owner: OwnerCreate):
         if not verify_owner:
             raise HTTPException(status_code=500, detail="Error: Owner was not saved to owners table")
         
+        invalidate_cache("owners")
         return owner_response
     except IntegrityError as e:
         db.rollback()
@@ -4896,6 +4929,7 @@ def create_owner(owner: OwnerCreate):
         db.close()
 
 @app.get("/owners/", response_model=List[Owner], dependencies=[Depends(require_owner)])
+@cache(namespace="owners", expire=3600)
 def get_owners():
     """Get all owners"""
     db = SessionLocal()
@@ -4941,6 +4975,7 @@ def update_owner(owner_id: int, owner_update: OwnerUpdate):
         
         db.commit()
         db.refresh(owner)
+        invalidate_cache("owners")
         return Owner.model_validate(owner)
     except Exception as e:
         db.rollback()
@@ -4960,6 +4995,7 @@ def delete_owner(owner_id: int):
         
         db.delete(owner)
         db.commit()
+        invalidate_cache("owners")
         return {"message": "Owner deleted successfully"}
     except Exception as e:
         db.rollback()
@@ -5163,11 +5199,13 @@ def create_batch(batch: BatchCreate):
             inactive_at=db_batch.inactive_at
         )
         
+        invalidate_cache("batches")
         return batch_response
     finally:
         db.close()
 
 @app.get("/batches/", response_model=List[Batch], dependencies=[Depends(require_student)])
+@cache(namespace="batches", expire=300)
 def get_batches(status: Optional[str] = Query(None)):
     db = SessionLocal()
     try:
@@ -5552,6 +5590,7 @@ def update_batch(batch_id: int, batch_update: BatchUpdate):
             inactive_at=batch_data.get('inactive_at')
         )
         
+        invalidate_cache("batches")
         return batch_response
     finally:
         db.close()
@@ -5565,6 +5604,7 @@ def delete_batch(batch_id: int):
             raise HTTPException(status_code=404, detail="Batch not found")
         db.delete(batch)
         db.commit()
+        invalidate_cache("batches")
         return {"message": "Batch deleted"}
     finally:
         db.close()
@@ -5581,6 +5621,7 @@ def deactivate_batch(batch_id: int):
         batch.status = "inactive"
         batch.inactive_at = datetime.now()
         db.commit()
+        invalidate_cache("batches")
         return {"message": "Batch deactivated successfully"}
     finally:
         db.close()
@@ -5597,6 +5638,7 @@ def activate_batch(batch_id: int):
         batch.status = "active"
         batch.inactive_at = None
         db.commit()
+        invalidate_cache("batches")
         return {"message": "Batch activated successfully"}
     finally:
         db.close()
@@ -5621,6 +5663,7 @@ def remove_batch_permanently(batch_id: int):
         
         db.delete(batch)
         db.commit()
+        invalidate_cache("batches")
         return {"message": "Batch and all related records deleted permanently"}
     finally:
         db.close()
@@ -5759,11 +5802,13 @@ def create_student(student: StudentCreate):
         except Exception as _ee:
             print(f"[Email] Student welcome email error: {_ee}")
 
+        invalidate_cache("students")
         return student_response
     finally:
         db.close()
 
 @app.get("/students/", response_model=List[Student], dependencies=[Depends(require_student)])
+@cache(namespace="students", expire=120)
 def get_students(include_deleted: bool = Query(False, description="Include deleted students")):
     db = SessionLocal()
     try:
@@ -5809,6 +5854,7 @@ def update_student(student_id: int, student_update: StudentUpdate, current_user:
         
         db.commit()
         db.refresh(student)
+        invalidate_cache("students")
         return Student.model_validate(student)
     finally:
         db.close()
@@ -5823,6 +5869,7 @@ def delete_student(student_id: int):
         student.inactive_at = datetime.now()
         
         db.commit()
+        invalidate_cache("students")
         return {"message": "Student marked as inactive"}
     except Exception as e:
         db.rollback()
@@ -5865,6 +5912,7 @@ def deactivate_student(student_id: int):
         student.inactive_at = datetime.now()
         student.rejoin_request_pending = False # Reset if it was pending
         db.commit()
+        invalidate_cache("students")
         return {"message": "Student deactivated successfully"}
     finally:
         db.close()
@@ -9430,6 +9478,7 @@ def create_calendar_event(event: CalendarEventCreate):
         db.add(db_event)
         db.commit()
         db.refresh(db_event)
+        invalidate_cache("calendar_events")
         return _db_event_to_pydantic(db_event)
     except HTTPException:
         db.rollback()
@@ -9458,6 +9507,7 @@ def create_calendar_event(event: CalendarEventCreate):
         db.close()
 
 @app.get("/api/calendar-events/", response_model=List[CalendarEvent], dependencies=[Depends(require_student)])
+@cache(namespace="calendar_events", expire=3600)
 def get_calendar_events(start_date: Optional[str] = None, end_date: Optional[str] = None, event_type: Optional[str] = None):
     """Get calendar events, optionally filtered by date range and event type"""
     from sqlalchemy import or_
@@ -9559,6 +9609,7 @@ def update_calendar_event(event_id: int, event: CalendarEventUpdate):
 
         db.commit()
         db.refresh(db_event)
+        invalidate_cache("calendar_events")
         return _db_event_to_pydantic(db_event)
     except Exception as e:
         db.rollback()
@@ -9577,6 +9628,7 @@ def delete_calendar_event(event_id: int):
 
         db.delete(db_event)
         db.commit()
+        invalidate_cache("calendar_events")
         return {"message": "Calendar event deleted successfully"}
     except Exception as e:
         db.rollback()
@@ -11573,9 +11625,16 @@ async def db_health_check():
 
 @app.get("/health/redis")
 async def redis_health_check():
-    """Redis health check (Stub until Redis is fully integrated)"""
-    # TODO: Add actual redis ping once redis is added in C8
-    return {"status": "ok", "redis": "pending_integration"}
+    """Redis connectivity health check"""
+    if not _REDIS_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Redis package not installed")
+    if not redis_client:
+        raise HTTPException(status_code=503, detail="Redis not connected (check REDIS_URL env var)")
+    try:
+        await redis_client.ping()
+        return {"status": "ok", "redis": "connected"}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Redis ping failed: {str(e)}")
 
 # ==================== Server ====================
 
