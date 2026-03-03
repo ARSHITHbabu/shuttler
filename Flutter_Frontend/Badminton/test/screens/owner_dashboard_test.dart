@@ -5,7 +5,6 @@ import 'package:badminton/screens/owner/owner_dashboard.dart';
 import 'package:badminton/providers/owner_navigation_provider.dart';
 import 'package:badminton/screens/owner/home_screen.dart';
 import 'package:badminton/screens/owner/batches_screen.dart';
-import 'package:badminton/providers/auth_provider.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:badminton/core/services/auth_service.dart';
 import 'package:badminton/core/services/storage_service.dart';

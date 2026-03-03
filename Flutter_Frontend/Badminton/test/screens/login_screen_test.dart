@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:badminton/screens/auth/login_screen.dart';
-import 'package:badminton/providers/auth_provider.dart';
 import 'package:badminton/widgets/common/custom_text_field.dart';
 import 'package:badminton/widgets/common/neumorphic_button.dart';
 import 'package:mocktail/mocktail.dart';

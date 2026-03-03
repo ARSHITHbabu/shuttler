@@ -14,14 +14,10 @@ import '../../models/student.dart';
 import '../../widgets/forms/add_student_dialog.dart';
 import '../../widgets/forms/edit_student_dialog.dart';
 import '../../models/batch.dart';
-import '../../core/services/fee_service.dart';
 import '../../core/services/batch_enrollment_service.dart';
 import '../../providers/batch_provider.dart';
 import '../../providers/fee_provider.dart';
 import '../../core/utils/string_extensions.dart';
-import 'performance_tracking_screen.dart';
-import 'bmi_tracking_screen.dart';
-import 'fees_screen.dart';
 import '../../widgets/dialogs/student_details_dialog.dart';
 
 /// Students List Screen - Shows all students with add button

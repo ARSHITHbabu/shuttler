@@ -27,7 +27,7 @@ class CoachScheduleScreen extends ConsumerStatefulWidget {
 class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
   DateTime _focusedDay = DateTime.now();
   DateTime _selectedDay = DateTime.now();
-  CalendarFormat _calendarFormat = CalendarFormat.month;
+  final CalendarFormat _calendarFormat = CalendarFormat.month;
   ScheduleFilter _selectedFilter = ScheduleFilter.all;
 
   // Colors consistent with user requirements

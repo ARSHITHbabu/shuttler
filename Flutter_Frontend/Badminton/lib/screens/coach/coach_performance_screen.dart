@@ -178,7 +178,7 @@ class _CoachPerformanceScreenState
                 });
               }
               return DropdownButtonFormField<Batch>(
-                value: _selectedBatch,
+                initialValue: _selectedBatch,
                 dropdownColor: isDark
                     ? AppColors.cardBackground
                     : AppColorsLight.cardBackground,

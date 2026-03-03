@@ -8,17 +8,9 @@ import '../../widgets/common/error_widget.dart';
 import '../../widgets/common/skeleton_screen.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
-import '../../widgets/common/custom_text_field.dart';
 import '../../providers/batch_provider.dart';
-import '../../providers/service_providers.dart';
-import '../../providers/session_provider.dart';
-import '../../providers/student_provider.dart';
 import '../../widgets/dialogs/batch_details_dialog.dart';
-import '../../widgets/batch/batch_students_sheet.dart';
 import '../../models/batch.dart';
-import '../../models/coach.dart';
-import '../../models/student.dart';
-import '../../core/constants/api_endpoints.dart';
 
 /// Batches Screen - List and manage batches
 /// Matches React reference: BatchesScreen.tsx
@@ -362,7 +354,7 @@ class _BatchCard extends StatelessWidget {
               ),
               _InfoChip(
                 icon: Icons.access_time,
-                label: batch.timing!,
+                label: batch.timing,
               ),
             ],
           ),

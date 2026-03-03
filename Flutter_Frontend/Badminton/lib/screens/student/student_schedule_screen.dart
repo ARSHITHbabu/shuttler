@@ -30,7 +30,7 @@ class StudentScheduleScreen extends ConsumerStatefulWidget {
 class _StudentScheduleScreenState extends ConsumerState<StudentScheduleScreen> {
   DateTime _focusedDay = DateTime.now();
   DateTime _selectedDay = DateTime.now();
-  CalendarFormat _calendarFormat = CalendarFormat.month;
+  final CalendarFormat _calendarFormat = CalendarFormat.month;
   ScheduleFilter _selectedFilter = ScheduleFilter.all;
 
   // Colors based on user requirements

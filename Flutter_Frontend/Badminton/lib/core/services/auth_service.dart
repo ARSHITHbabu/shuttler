@@ -211,7 +211,7 @@ class AuthService {
       await _apiService.post(
         ApiEndpoints.logout,
         data: {
-          if (refreshToken != null) 'refresh_token': refreshToken,
+          'refresh_token': ?refreshToken,
         },
       );
     } catch (_) {

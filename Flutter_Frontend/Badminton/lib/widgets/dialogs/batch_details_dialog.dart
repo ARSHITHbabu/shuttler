@@ -2,20 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
-import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/custom_text_field.dart';
 import '../../providers/batch_provider.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/session_provider.dart';
-import '../../providers/student_provider.dart';
 import '../../core/constants/api_endpoints.dart';
 import '../batch/batch_students_list.dart';
 import '../batch/batch_students_sheet.dart';
 import '../../models/batch.dart';
 import '../../models/coach.dart';
-import '../../models/student.dart';
 
 /// Batch Details Dialog - Comprehensive dialog for viewing and editing batch details
 class BatchDetailsDialog extends ConsumerStatefulWidget {

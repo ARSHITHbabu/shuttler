@@ -28,7 +28,7 @@ class CalendarViewScreen extends ConsumerStatefulWidget {
 class _CalendarViewScreenState extends ConsumerState<CalendarViewScreen> {
   DateTime _focusedDay = DateTime.now();
   DateTime _selectedDay = DateTime.now();
-  CalendarFormat _calendarFormat = CalendarFormat.month;
+  final CalendarFormat _calendarFormat = CalendarFormat.month;
   bool _showAddForm = false;
   bool _isLoading = false;
   CalendarEvent? _editingEvent; // Track if we're editing
