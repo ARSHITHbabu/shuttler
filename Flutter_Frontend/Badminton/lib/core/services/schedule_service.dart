@@ -75,6 +75,25 @@ class ScheduleService {
     }
   }
 
+  /// Fetch schedules for multiple batch IDs in one request.
+  Future<List<Schedule>> getSchedulesBulk(List<int> batchIds) async {
+    if (batchIds.isEmpty) return [];
+    try {
+      final response = await _apiService.get(
+        '/schedules/bulk',
+        queryParameters: {'batch_ids': batchIds.join(',')},
+      );
+      if (response.data is List) {
+        return (response.data as List)
+            .map((json) => Schedule.fromJson(json as Map<String, dynamic>))
+            .toList();
+      }
+      return [];
+    } catch (e) {
+      throw Exception('Failed to fetch schedules: ${_apiService.getErrorMessage(e)}');
+    }
+  }
+
   /// Get schedule by ID
   Future<Schedule> getScheduleById(int id) async {
     try {

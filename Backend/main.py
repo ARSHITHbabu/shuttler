@@ -6,12 +6,12 @@ from fastapi.responses import FileResponse, StreamingResponse, JSONResponse, Red
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 import mimetypes
-from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, Text, Date, DateTime, ForeignKey, JSON, func, and_, or_, select, TypeDecorator
+from sqlalchemy import create_engine, Column, Integer, BigInteger, String, Float, Boolean, Text, Date, DateTime, ForeignKey, JSON, func, and_, or_, select, TypeDecorator
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from sqlalchemy.exc import IntegrityError
 from cryptography.fernet import Fernet, InvalidToken
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 import html as html_lib
 import re
 from typing import List, Optional, Dict, Any, Union, Annotated, Literal
@@ -23,6 +23,7 @@ import uuid
 import secrets
 import traceback
 from pathlib import Path
+from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from passlib.context import CryptContext
 import bcrypt
@@ -864,8 +865,8 @@ class OwnerDB(Base):
     # Ownership and Permissions:
     role = Column(String(20), default="owner")  # "owner" (primary), "co_owner"
     must_change_password = Column(Boolean, default=False)
-    storage_used_bytes = Column(Integer, default=0)
-    storage_limit_bytes = Column(Integer, default=5368709120)  # 5GB
+    storage_used_bytes = Column(BigInteger, default=0)
+    storage_limit_bytes = Column(BigInteger, default=5368709120)  # 5GB
 
     # JWT: all tokens issued before this timestamp are invalid (used for password-change revocation)
     jwt_invalidated_at = Column(DateTime(timezone=True), nullable=True)
@@ -1381,6 +1382,19 @@ def migrate_database_schema(engine):
             check_and_add_column(engine, 'owners', 'academy_email', 'VARCHAR(100)', nullable=True)
             check_and_add_column(engine, 'owners', 'role', 'VARCHAR(20)', nullable=True, default_value="'owner'")
             check_and_add_column(engine, 'owners', 'must_change_password', 'BOOLEAN', nullable=True, default_value="FALSE")
+            check_and_add_column(engine, 'owners', 'storage_used_bytes', 'BIGINT', nullable=True, default_value='0')
+            check_and_add_column(engine, 'owners', 'storage_limit_bytes', 'BIGINT', nullable=True, default_value='5368709120')
+            # Upgrade storage columns from INTEGER to BIGINT if already added as INTEGER
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE owners ALTER COLUMN storage_used_bytes TYPE BIGINT"))
+                    conn.execute(text("ALTER TABLE owners ALTER COLUMN storage_limit_bytes TYPE BIGINT"))
+            except Exception:
+                pass
+            check_and_add_column(engine, 'owners', 'failed_login_attempts', 'INTEGER', nullable=True, default_value='0')
+            check_and_add_column(engine, 'owners', 'locked_until', 'TIMESTAMP WITH TIME ZONE', nullable=True)
+            check_and_add_column(engine, 'owners', 'profile_photo', 'VARCHAR(500)', nullable=True)
+            check_and_add_column(engine, 'owners', 'fcm_token', 'VARCHAR(500)', nullable=True)
         
         # Migrate batches table
         if 'batches' in tables:
@@ -1399,6 +1413,8 @@ def migrate_database_schema(engine):
             check_and_add_column(engine, 'students', 'blood_group', 'VARCHAR(20)', nullable=True)
             check_and_add_column(engine, 'students', 'inactive_at', 'TIMESTAMP WITH TIME ZONE', nullable=True)
             check_and_add_column(engine, 'students', 'rejoin_request_pending', 'BOOLEAN', nullable=True, default_value="FALSE")
+            check_and_add_column(engine, 'students', 'failed_login_attempts', 'INTEGER', nullable=True, default_value='0')
+            check_and_add_column(engine, 'students', 'locked_until', 'TIMESTAMP WITH TIME ZONE', nullable=True)
             
             # Make existing columns nullable if they aren't already
             try:
@@ -1649,6 +1665,8 @@ def migrate_database_schema(engine):
             print("fee_payments table exists")
             # Migrate fee_payments table - add payee_name column
             check_and_add_column(engine, 'fee_payments', 'payee_name', 'VARCHAR(255)', nullable=True)
+            check_and_add_column(engine, 'fee_payments', 'is_cancelled', 'BOOLEAN', nullable=True, default_value='FALSE')
+            check_and_add_column(engine, 'fee_payments', 'cancel_reason', 'TEXT', nullable=True)
         
         # Migrate schedules table - add capacity column
         if 'schedules' in tables:
@@ -1928,6 +1946,29 @@ def migrate_database_schema(engine):
         else:
             print(" No orphaned `requests` table found.")
 
+        # Performance indexes (CREATE INDEX IF NOT EXISTS is idempotent)
+        try:
+            with engine.begin() as conn:
+                indexes = [
+                    "CREATE INDEX IF NOT EXISTS idx_fee_payments_fee_id ON fee_payments(fee_id)",
+                    "CREATE INDEX IF NOT EXISTS idx_fees_student_id ON fees(student_id)",
+                    "CREATE INDEX IF NOT EXISTS idx_fees_batch_id ON fees(batch_id)",
+                    "CREATE INDEX IF NOT EXISTS idx_fees_status ON fees(status)",
+                    "CREATE INDEX IF NOT EXISTS idx_students_status ON students(status)",
+                    "CREATE INDEX IF NOT EXISTS idx_students_email ON students(email)",
+                    "CREATE INDEX IF NOT EXISTS idx_attendance_batch_id ON attendance(batch_id)",
+                    "CREATE INDEX IF NOT EXISTS idx_attendance_student_id ON attendance(student_id)",
+                    "CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, user_type)",
+                    "CREATE INDEX IF NOT EXISTS idx_calendar_events_date ON calendar_events(date)",
+                ]
+                for sql in indexes:
+                    try:
+                        conn.execute(text(sql))
+                    except Exception:
+                        pass
+        except Exception as e:
+            print(f"Warning: Could not create indexes: {e}")
+
         print("Database schema migration completed!")
     except Exception as e:
         print(f"Migration error: {e}")
@@ -2051,8 +2092,7 @@ class Coach(BaseModel):
     profile_photo: Optional[str] = None
     fcm_token: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class CoachLogin(BaseModel):
     email: str
@@ -2181,8 +2221,7 @@ class Owner(BaseModel):
     academy_contact: Optional[str] = None
     academy_email: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class OwnerLogin(BaseModel):
     email: str
@@ -2293,10 +2332,7 @@ class Session(BaseModel):
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
     
-    class Config:
-        from_attributes = True
-        # Allow population by field name or alias
-        populate_by_name = True
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 class BatchCreate(BaseModel):
     batch_name: str
@@ -2316,8 +2352,7 @@ class CoachInfo(BaseModel):
     id: int
     name: str
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class Batch(BaseModel):
     id: int
@@ -2337,8 +2372,7 @@ class Batch(BaseModel):
     status: str = "active"
     inactive_at: Optional[datetime] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class BatchUpdate(BaseModel):
     batch_name: Optional[str] = None
@@ -2428,8 +2462,7 @@ class Student(BaseModel):
     inactive_at: Optional[datetime] = None
     rejoin_request_pending: bool = False
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class StudentLogin(BaseModel):
     email: str
@@ -2511,8 +2544,7 @@ class Attendance(BaseModel):
     marked_by: str
     remarks: Optional[str] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class CoachAttendanceCreate(BaseModel):
     coach_id: int
@@ -2529,8 +2561,7 @@ class CoachAttendance(BaseModel):
     marked_by: Optional[str] = None
     remarks: Optional[str] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # Coach Salary Models
 class CoachSalaryCreate(BaseModel):
@@ -2556,8 +2587,7 @@ class CoachSalary(BaseModel):
     remarks: Optional[str] = None
     created_at: Optional[datetime] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # Fee Models
 class FeeCreate(BaseModel):
@@ -2598,8 +2628,7 @@ class FeePayment(BaseModel):
     collected_by: Optional[str] = None
     created_at: Optional[str] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class Fee(BaseModel):
     id: int
@@ -2616,8 +2645,7 @@ class Fee(BaseModel):
     payee_student_name: Optional[str] = None
     payments: Optional[List[FeePayment]] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class FeeUpdate(BaseModel):
     amount: Optional[float] = None
@@ -2644,8 +2672,7 @@ class Performance(BaseModel):
     comments: Optional[str] = None
     recorded_by: str
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # Frontend-compatible Performance Model (all skills in one record)
 class PerformanceFrontend(BaseModel):
@@ -2702,8 +2729,7 @@ class BMI(BaseModel):
     recorded_by: str
     health_status: Optional[str] = None  # Added for frontend compatibility
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class BMIUpdate(BaseModel):
     student_id: Optional[int] = None
@@ -2733,8 +2759,7 @@ class Enquiry(BaseModel):
     notes: Optional[str] = None
     assigned_to: Optional[str] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # Notification Models
 class Notification(BaseModel):
@@ -2748,8 +2773,7 @@ class Notification(BaseModel):
     created_at: Optional[str] = None # Return as ISO string
     data: Optional[Dict[str, Any]] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # ==================== Helper Functions ====================
 
@@ -2861,8 +2885,7 @@ class Schedule(BaseModel):
     capacity: Optional[int] = None
     created_by: str
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # Tournament Models
 class TournamentCreate(BaseModel):
@@ -2880,8 +2903,7 @@ class Tournament(BaseModel):
     description: Optional[str] = None
     category: Optional[str] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # Video Resource Models
 class VideoResourceCreate(BaseModel):
@@ -2899,8 +2921,7 @@ class VideoResource(BaseModel):
     uploaded_by: Optional[int] = None
     created_at: Optional[datetime] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # Invitation Models
 class InvitationCreate(BaseModel):
@@ -2922,8 +2943,7 @@ class Invitation(BaseModel):
     status: str
     created_at: str
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class InvitationUpdate(BaseModel):
     status: str  # approved, rejected
@@ -2950,8 +2970,7 @@ class CoachInvitation(BaseModel):
     status: str
     created_at: str
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class CoachInvitationUpdate(BaseModel):
     status: str  # approved, rejected
@@ -2990,8 +3009,7 @@ class LeaveRequest(BaseModel):
     original_end_date: Optional[str] = None
     original_reason: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class LeaveRequestUpdate(BaseModel):
     status: str  # "approved" or "rejected"
@@ -3049,8 +3067,7 @@ class StudentRegistrationRequest(BaseModel):
     invited_by_coach_id: Optional[int] = None
     invited_by_coach_name: Optional[str] = None  # Computed field for convenience
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class StudentRegistrationRequestUpdate(BaseModel):
     status: str  # "approved" or "rejected"
@@ -3078,8 +3095,7 @@ class CoachRegistrationRequest(BaseModel):
     reviewed_at: Optional[str] = None
     review_notes: Optional[str] = None
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class CoachRegistrationRequestUpdate(BaseModel):
     status: str  # "approved" or "rejected"
@@ -3155,8 +3171,7 @@ class Announcement(BaseModel):
     scheduled_at: Optional[str] = None
     is_sent: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class AnnouncementUpdate(BaseModel):
     title: Optional[str] = None
@@ -3229,8 +3244,7 @@ class Notification(BaseModel):
     created_at: str
     data: Optional[dict] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class NotificationUpdate(BaseModel):
     is_read: Optional[bool] = None
@@ -3247,8 +3261,7 @@ class NotificationPreferences(BaseModel):
     pref_fee_payments: bool = True
     pref_fee_due: bool = True
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class NotificationPreferencesUpdate(BaseModel):
     pref_attendance: Optional[bool] = None
@@ -3280,7 +3293,7 @@ class CalendarEvent(BaseModel):
     date: str
     end_date: Optional[str] = None
     description: Optional[str] = None
-    created_by: int
+    created_by: Optional[int] = None
     creator_type: str = "coach"  # "coach" or "owner"
     related_leave_request_id: Optional[int] = None
     related_tournament_id: Optional[int] = None
@@ -3288,8 +3301,7 @@ class CalendarEvent(BaseModel):
     related_schedule_id: Optional[int] = None
     created_at: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class CalendarEventUpdate(BaseModel):
     title: Optional[str] = None
@@ -3311,7 +3323,37 @@ def get_user_id_or_ip(request: Request) -> str:
 redis_url = os.getenv("REDIS_URL", "memory://")
 limiter = Limiter(key_func=lambda request: "academy_global", default_limits=["10000/day", "200/minute"], storage_uri=redis_url, headers_enabled=False)
 
-app = FastAPI(title="Badminton Academy Management System")
+# ── C8: Redis Cache & Cache Initialization ─────────────────────────────────
+from fastapi_cache import FastAPICache
+from fastapi_cache.backends.redis import RedisBackend
+from fastapi_cache.decorator import cache
+try:
+    from redis import asyncio as aioredis
+    import redis as _redis_sync_module
+    _REDIS_AVAILABLE = True
+except ImportError:
+    _REDIS_AVAILABLE = False
+    print("Warning: redis package not installed.")
+
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+redis_client = None
+# Sync Redis client used for O(1) JWT token blacklist checks in the auth middleware
+_sync_redis_client = None
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global redis_client, _sync_redis_client
+    if _REDIS_AVAILABLE:
+        try:
+            redis_client = aioredis.from_url(REDIS_URL, encoding="utf-8", decode_responses=True)
+            FastAPICache.init(RedisBackend(redis_client), prefix="shuttler-cache")
+            _sync_redis_client = _redis_sync_module.from_url(REDIS_URL, decode_responses=True)
+            print(f"Connected to Redis for caching at {REDIS_URL}")
+        except Exception as e:
+            print(f"Warning: Failed to connect to Redis: {e}. Caching will fail.")
+    yield
+
+app = FastAPI(title="Badminton Academy Management System", lifespan=lifespan)
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
 
@@ -3331,35 +3373,6 @@ async def _rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded)
     return response
 
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
-# ── C8: Redis Cache & Cache Initialization ─────────────────────────────────
-from fastapi_cache import FastAPICache
-from fastapi_cache.backends.redis import RedisBackend
-from fastapi_cache.decorator import cache
-try:
-    from redis import asyncio as aioredis
-    import redis as _redis_sync_module
-    _REDIS_AVAILABLE = True
-except ImportError:
-    _REDIS_AVAILABLE = False
-    print("Warning: redis package not installed.")
-
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
-redis_client = None
-# Sync Redis client used for O(1) JWT token blacklist checks in the auth middleware
-_sync_redis_client = None
-
-@app.on_event("startup")
-async def startup():
-    global redis_client, _sync_redis_client
-    if _REDIS_AVAILABLE:
-        try:
-            redis_client = aioredis.from_url(REDIS_URL, encoding="utf-8", decode_responses=True)
-            FastAPICache.init(RedisBackend(redis_client), prefix="shuttler-cache")
-            _sync_redis_client = _redis_sync_module.from_url(REDIS_URL, decode_responses=True)
-            print(f"Connected to Redis for caching at {REDIS_URL}")
-        except Exception as e:
-            print(f"Warning: Failed to connect to Redis: {e}. Caching will fail.")
 
 # Helper for resolving synchronous cache clearance
 def invalidate_cache(namespace: str):
@@ -3390,6 +3403,7 @@ ALLOWED_ORIGINS = [origin.strip() for origin in ALLOWED_ORIGINS_STR.split(",") i
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
@@ -6627,6 +6641,74 @@ def enrich_fee_with_payments(fee: FeeDB, db) -> dict:
         "payments": payment_list,
     }
 
+def enrich_fees_bulk(fees: list, db) -> list:
+    """Batch-load all payments, students and batches in 4 queries instead of N×M."""
+    if not fees:
+        return []
+
+    fee_ids = [f.id for f in fees]
+    student_ids = list({f.student_id for f in fees if f.student_id})
+    batch_ids   = list({f.batch_id   for f in fees if f.batch_id})
+
+    # 1 query: all payments for these fees
+    all_payments = db.query(FeePaymentDB).filter(FeePaymentDB.fee_id.in_(fee_ids)).all()
+
+    payments_by_fee: dict = {}
+    payee_student_ids: set = set()
+    for p in all_payments:
+        payments_by_fee.setdefault(p.fee_id, []).append(p)
+        if p.payee_student_id:
+            payee_student_ids.add(p.payee_student_id)
+
+    # 1 query: all relevant students
+    all_student_ids = list(set(student_ids) | payee_student_ids)
+    students_map = {s.id: s for s in db.query(StudentDB).filter(StudentDB.id.in_(all_student_ids)).all()} if all_student_ids else {}
+
+    # 1 query: all relevant batches
+    batches_map = {b.id: b for b in db.query(BatchDB).filter(BatchDB.id.in_(batch_ids)).all()} if batch_ids else {}
+
+    status_changed = []
+    result = []
+    for fee in fees:
+        fee_payments = payments_by_fee.get(fee.id, [])
+        total_paid = sum(p.amount for p in fee_payments if not p.is_cancelled)
+        status = calculate_fee_status(fee.amount, total_paid, fee.due_date)
+        if fee.status != status:
+            fee.status = status
+            status_changed.append(fee)
+
+        student = students_map.get(fee.student_id)
+        batch   = batches_map.get(fee.batch_id)
+        payee_name = students_map[fee.payee_student_id].name if fee.payee_student_id and fee.payee_student_id in students_map else None
+
+        payment_list = []
+        for p in sorted(fee_payments, key=lambda x: x.created_at or datetime.min, reverse=True):
+            ps_name = students_map[p.payee_student_id].name if p.payee_student_id and p.payee_student_id in students_map else None
+            payment_list.append({
+                "id": p.id, "fee_id": p.fee_id, "amount": p.amount,
+                "paid_date": p.paid_date, "payee_student_id": p.payee_student_id,
+                "payee_student_name": ps_name, "payee_name": p.payee_name,
+                "payment_method": p.payment_method, "collected_by": p.collected_by,
+                "created_at": p.created_at.isoformat() if p.created_at else None,
+            })
+
+        result.append({
+            "id": fee.id, "student_id": fee.student_id,
+            "student_name": student.name if student else None,
+            "batch_id": fee.batch_id,
+            "batch_name": batch.batch_name if batch else None,
+            "amount": fee.amount, "total_paid": total_paid,
+            "pending_amount": fee.amount - total_paid,
+            "due_date": fee.due_date, "status": status,
+            "payee_student_id": fee.payee_student_id,
+            "payee_student_name": payee_name,
+            "payments": payment_list,
+        })
+
+    if status_changed:
+        db.commit()
+    return result
+
 @app.post("/fees/", response_model=Fee, dependencies=[Depends(require_owner)])
 def create_fee(fee: FeeCreate):
     db = SessionLocal()
@@ -6652,11 +6734,7 @@ def get_student_fees(student_id: int):
     db = SessionLocal()
     try:
         fees = db.query(FeeDB).filter(FeeDB.student_id == student_id).all()
-        # Enrich with payments and calculate totals
-        result = []
-        for fee in fees:
-            result.append(enrich_fee_with_payments(fee, db))
-        return result
+        return enrich_fees_bulk(fees, db)
     finally:
         db.close()
 
@@ -6665,10 +6743,7 @@ def get_batch_fees(batch_id: int):
     db = SessionLocal()
     try:
         fees = db.query(FeeDB).filter(FeeDB.batch_id == batch_id).all()
-        result = []
-        for fee in fees:
-            result.append(enrich_fee_with_payments(fee, db))
-        return result
+        return enrich_fees_bulk(fees, db)
     finally:
         db.close()
 
@@ -6701,13 +6776,7 @@ def get_all_fees(
             query = query.filter(FeeDB.due_date <= end_date)
         
         fees = query.order_by(FeeDB.due_date.desc()).all()
-
-        # Enrich with payments and calculate totals using the helper function
-        result = []
-        for fee in fees:
-            enriched_fee = enrich_fee_with_payments(fee, db)
-            result.append(enriched_fee)
-        return result
+        return enrich_fees_bulk(fees, db)
     finally:
         db.close()
 
@@ -8332,6 +8401,19 @@ def create_schedule(schedule: ScheduleCreate):
             
         # Convert to Pydantic model before closing session to avoid DetachedInstanceError
         return Schedule.model_validate(db_schedule)
+    finally:
+        db.close()
+
+@app.get("/schedules/bulk", dependencies=[Depends(require_student)])
+def get_schedules_bulk(batch_ids: str = Query(..., description="Comma-separated batch IDs")):
+    """Return schedules for multiple batches in a single query."""
+    db = SessionLocal()
+    try:
+        ids = [int(x) for x in batch_ids.split(",") if x.strip().isdigit()]
+        if not ids:
+            return []
+        schedules = db.query(ScheduleDB).filter(ScheduleDB.batch_id.in_(ids)).all()
+        return [Schedule.model_validate(s) for s in schedules]
     finally:
         db.close()
 
