@@ -329,27 +329,17 @@ Future<List<Schedule>> studentSchedules(
   final scheduleService = ref.watch(scheduleServiceProvider);
   final batches = await ref.watch(studentBatchesProvider(studentId).future);
 
-  List<Schedule> allSchedules = [];
+  final batchById = {for (var b in batches) b.id: b};
 
-  for (var batch in batches) {
-    try {
-      final batchSchedules = await scheduleService.getSchedules(
-        batchId: batch.id,
-      );
-      // Add batch name to schedules for display
-      final schedulesWithBatchName = batchSchedules.map((schedule) {
-        return schedule.copyWith(batchName: batch.name, batchId: batch.id);
-      }).toList();
-      allSchedules.addAll(schedulesWithBatchName);
-    } catch (e) {
-      // Skip if error fetching schedules for this batch
-      continue;
-    }
-  }
+  // One request for all batches instead of N serial requests
+  final allRaw = await scheduleService.getSchedulesBulk(batchById.keys.toList());
 
-  // Sort by date (newest first)
+  final allSchedules = allRaw.map((schedule) {
+    final batch = batchById[schedule.batchId];
+    return schedule.copyWith(batchName: batch?.name, batchId: batch?.id ?? schedule.batchId);
+  }).toList();
+
   allSchedules.sort((a, b) => b.date.compareTo(a.date));
-
   return allSchedules;
 }
 

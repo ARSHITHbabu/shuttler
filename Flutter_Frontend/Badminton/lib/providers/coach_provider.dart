@@ -260,29 +260,22 @@ Future<List<Schedule>> coachSchedule(CoachScheduleRef ref, int coachId) async {
   // Get coach's assigned batches
   final coachBatches = await batchService.getBatchesByCoachId(coachId);
   
-  // Get schedules for each batch
-  List<Schedule> allSessions = [];
-  for (var batch in coachBatches) {
-    try {
-      final batchSchedules = await scheduleService.getSchedules(batchId: batch.id);
-      // Add batch name and coach info to schedules
-      final sessionsWithInfo = batchSchedules.map((schedule) {
-        return schedule.copyWith(
-          batchName: batch.batchName,
-          coachId: coachId,
-          coachName: batch.assignedCoachName,
-        );
-      }).toList();
-      allSessions.addAll(sessionsWithInfo);
-    } catch (e) {
-      // Skip if error fetching schedules for this batch
-      continue;
-    }
-  }
-  
-  // Sort by date (newest first)
+  // Build a lookup map for batch metadata
+  final batchById = {for (var b in coachBatches) b.id: b};
+
+  // One request for all batches instead of N serial requests
+  final allRaw = await scheduleService.getSchedulesBulk(batchById.keys.toList());
+
+  final allSessions = allRaw.map((schedule) {
+    final batch = batchById[schedule.batchId];
+    return schedule.copyWith(
+      batchName: batch?.batchName,
+      coachId: coachId,
+      coachName: batch?.assignedCoachName,
+    );
+  }).toList();
+
   allSessions.sort((a, b) => b.date.compareTo(a.date));
-  
   return allSessions;
 }
 

@@ -3,7 +3,6 @@ import 'package:mocktail/mocktail.dart';
 import 'package:dio/dio.dart';
 import 'package:badminton/core/services/attendance_service.dart';
 import 'package:badminton/core/services/api_service.dart';
-import 'package:badminton/models/attendance.dart';
 
 class MockApiService extends Mock implements ApiService {}
 

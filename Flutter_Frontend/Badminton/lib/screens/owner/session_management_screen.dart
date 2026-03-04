@@ -47,33 +47,8 @@ class _SessionManagementScreenState extends ConsumerState<SessionManagementScree
   Future<List<Schedule>> _loadSessionsForBatches(List<Batch> batches) async {
     try {
       final scheduleService = ref.read(scheduleServiceProvider);
-      List<Schedule> allSessions = [];
-      
-      // Fetch schedules for each batch
-      for (final batch in batches) {
-        try {
-          final batchSessions = await scheduleService.getSchedules(batchId: batch.id);
-          allSessions.addAll(batchSessions);
-        } catch (e) {
-          // Silently fail for individual batch
-          continue;
-        }
-      }
-      
-      // Also try to get today's schedules as a fallback
-      try {
-        final todaySessions = await scheduleService.getSchedules(startDate: DateTime.now());
-        // Merge with existing, avoiding duplicates
-        for (var session in todaySessions) {
-          if (!allSessions.any((s) => s.id == session.id)) {
-            allSessions.add(session);
-          }
-        }
-      } catch (e) {
-        // Silently fail for date-based fetch
-      }
-      
-      return allSessions;
+      final batchIds = batches.map((b) => b.id).toList();
+      return await scheduleService.getSchedulesBulk(batchIds);
     } catch (e) {
       return [];
     }

@@ -11,7 +11,6 @@ import '../../widgets/forms/add_coach_dialog.dart';
 import '../../providers/dashboard_provider.dart';
 import 'students_screen.dart';
 import 'coaches_screen.dart';
-import 'fees_screen.dart';
 import '../../providers/owner_navigation_provider.dart';
 import '../../core/utils/canadian_holidays.dart';
 import '../../providers/owner_provider.dart';

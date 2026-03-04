@@ -315,7 +315,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                   key: ValueKey<ReportType>(_reportType),
                   padding: const EdgeInsets.symmetric(vertical: 16.0),
                   child: Text(
-                    _reportType.name.toUpperCase() + " REPORT",
+                    "${_reportType.name.toUpperCase()} REPORT",
                     textAlign: TextAlign.center,
                     style: const TextStyle(
                       color: AppColors.textPrimary,

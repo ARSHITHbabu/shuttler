@@ -12,8 +12,12 @@ import '../../providers/auth_provider.dart';
 import '../../providers/service_providers.dart';
 import '../../widgets/common/app_logo.dart';
 import 'package:local_auth/local_auth.dart';
-import 'package:local_auth/error_codes.dart' as auth_error;
 import 'package:flutter/services.dart';
+
+// local_auth v3 no longer exports error_codes.dart; define codes locally.
+const _biometricNotEnrolled = 'NotEnrolled';
+const _biometricLockedOut = 'LockedOut';
+const _biometricPermanentlyLockedOut = 'PermanentlyLockedOut';
 
 /// Login screen for user authentication
 class LoginScreen extends ConsumerStatefulWidget {
@@ -69,10 +73,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     try {
       final didAuthenticate = await auth.authenticate(
         localizedReason: 'Please authenticate to sign in to your Badminton account',
-        options: const AuthenticationOptions(
-          biometricOnly: true,
-          stickyAuth: true,
-        ),
       );
 
       if (didAuthenticate) {
@@ -91,11 +91,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         }
       }
     } on PlatformException catch (e) {
-      if (e.code == auth_error.notEnrolled) {
-        // No biometrics enrolled
+      if (e.code == _biometricNotEnrolled) {
         debugPrint('No biometrics enrolled');
-      } else if (e.code == auth_error.lockedOut || e.code == auth_error.permanentlyLockedOut) {
-        // Locked out
+      } else if (e.code == _biometricLockedOut || e.code == _biometricPermanentlyLockedOut) {
         debugPrint('Biometrics locked out');
       }
     }
@@ -129,6 +127,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           // Auto-enable biometrics and save encrypted payload natively.
           await storageService.saveBiometricCredentials(_emailController.text.trim(), _passwordController.text);
         }
+
+        if (!mounted) return;
 
         // Check for inactive account (NEW)
         if (result['account_inactive'] == true) {
