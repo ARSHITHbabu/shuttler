@@ -20,6 +20,7 @@ class FeeList extends _$FeeList {
     DateTime? startDate,
     DateTime? endDate,
   }) async {
+    ref.keepAlive();
     final feeService = ref.watch(feeServiceProvider);
     return feeService.getFees(
       studentId: studentId,
