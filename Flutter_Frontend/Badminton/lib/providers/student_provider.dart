@@ -18,6 +18,7 @@ part 'student_provider.g.dart';
 class StudentList extends _$StudentList {
   @override
   Future<List<Student>> build() async {
+    ref.keepAlive();
     final studentService = ref.watch(studentServiceProvider);
     return studentService.getStudents();
   }

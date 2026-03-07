@@ -11,6 +11,7 @@ part 'dashboard_provider.g.dart';
 class DashboardStats extends _$DashboardStats {
   @override
   Future<DashboardStatsData> build() async {
+    ref.keepAlive();
     final dashboardService = ref.watch(dashboardServiceProvider);
     final stats = await dashboardService.getDashboardStats();
     

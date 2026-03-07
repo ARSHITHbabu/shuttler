@@ -55,7 +55,10 @@ class _CoachDashboardState extends State<CoachDashboard> {
             children: [
               // Content Area
               Expanded(
-                child: _screens[_currentIndex],
+                child: IndexedStack(
+                  index: _currentIndex,
+                  children: _screens,
+                ),
               ),
 
               // Bottom Navigation

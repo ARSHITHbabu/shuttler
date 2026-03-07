@@ -35,16 +35,18 @@ Future<CoachStats> coachStats(CoachStatsRef ref, int coachId) async {
   // Get assigned batches using optimized endpoint
   final assignedBatches = await batchService.getBatchesByCoachId(coachId);
   
-  // Calculate total students across all batches
-  int totalStudents = 0;
-  for (var batch in assignedBatches) {
-    try {
-      final students = await batchService.getBatchStudents(batch.id);
-      totalStudents += students.length;
-    } catch (e) {
-      // Skip if error fetching students for this batch
-    }
-  }
+  // Calculate total students across all batches (parallel fetching)
+  final studentCounts = await Future.wait(
+    assignedBatches.map((batch) async {
+      try {
+        final students = await batchService.getBatchStudents(batch.id);
+        return students.length;
+      } catch (e) {
+        return 0;
+      }
+    }),
+  );
+  final int totalStudents = studentCounts.fold(0, (sum, count) => sum + count);
   
   // Get today's sessions count
   // Count batches that run today and are upcoming (like owner dashboard)
@@ -284,6 +286,7 @@ Future<List<Schedule>> coachSchedule(CoachScheduleRef ref, int coachId) async {
 class CoachList extends _$CoachList {
   @override
   Future<List<Coach>> build() async {
+    ref.keepAlive();
     final coachService = ref.watch(coachServiceProvider);
     return coachService.getCoaches();
   }
@@ -328,15 +331,19 @@ Future<List<Student>> coachStudents(CoachStudentsRef ref, int coachId) async {
   // Get coach's assigned batches
   final batches = await batchService.getBatchesByCoachId(coachId);
   
-  // Get all students from all batches
+  // Get all students from all batches (parallel fetching)
+  final allStudentLists = await Future.wait(
+    batches.map((batch) async {
+      try {
+        return await batchService.getBatchStudents(batch.id);
+      } catch (e) {
+        return <Student>[];
+      }
+    }),
+  );
   Set<Student> uniqueStudents = {};
-  for (var batch in batches) {
-    try {
-      final students = await batchService.getBatchStudents(batch.id);
-      uniqueStudents.addAll(students);
-    } catch (e) {
-      // Skip if error fetching students for this batch
-    }
+  for (final students in allStudentLists) {
+    uniqueStudents.addAll(students);
   }
   
   // Convert to list and sort by name

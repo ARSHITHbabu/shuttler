@@ -83,8 +83,9 @@ class _OwnerDashboardState extends ConsumerState<OwnerDashboard> {
             children: [
               // Content Area
               Expanded(
-                child: RepaintBoundary(
-                  child: _screens[currentIndex],
+                child: IndexedStack(
+                  index: currentIndex,
+                  children: _screens,
                 ),
               ),
 

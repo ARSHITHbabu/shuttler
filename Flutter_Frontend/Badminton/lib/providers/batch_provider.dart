@@ -11,6 +11,7 @@ part 'batch_provider.g.dart';
 class BatchList extends _$BatchList {
   @override
   Future<List<Batch>> build() async {
+    ref.keepAlive();
     final batchService = ref.watch(batchServiceProvider);
     final batches = await batchService.getBatches(status: 'all');
     // Sort by ID descending (latest first)
