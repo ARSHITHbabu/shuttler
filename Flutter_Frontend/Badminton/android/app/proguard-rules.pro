@@ -31,16 +31,6 @@
 -keep class com.google.android.gms.** { *; }
 -dontwarn com.google.android.gms.**
 
-# Razorpay payment SDK (B12)
--keepclassmembers class * {
-    @android.webkit.JavascriptInterface <methods>;
-}
--keepattributes JavascriptInterface
--keep public class com.razorpay.** { *; }
--dontwarn com.razorpay.**
--keep class proguard.annotation.Keep
--keep class proguard.annotation.KeepClassMembers
-
 # SSL/TLS security classes — required for certificate pinning (E4)
 -keep class javax.net.ssl.** { *; }
 -keep class java.security.** { *; }
