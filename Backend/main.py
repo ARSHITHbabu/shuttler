@@ -11736,9 +11736,9 @@ if __name__ == "__main__":
     
     print("Starting Badminton Academy Management System API...")
     print("API Documentation (Local): http://127.0.0.1:8001/docs")
-    print("API Documentation (Network): http://192.168.1.11:8001/docs")
+    print("API Documentation (Network): http://192.168.1.8:8001/docs")
     print("Alternative Docs: http://127.0.0.1:8001/redoc")
-    print("Mobile devices can connect to: http://192.168.1.11:8001")
+    print("Mobile devices can connect to: http://192.168.1.8:8001")
     # host="0.0.0.0" allows connections from any device on the network
     
     # Start background scheduler
