@@ -3756,7 +3756,7 @@ async def video_stream_options():
         }
     )
 
-@app.get("/video-stream/{filename}", dependencies=[Depends(require_owner)])
+@app.get("/video-stream/{filename}", dependencies=[Depends(get_current_user)])
 async def stream_video(filename: str, request: Request):
     file_path = resolve_safe_upload_path(filename)  # A14: path traversal protection
     if not file_path.exists():
@@ -4942,7 +4942,7 @@ def create_owner(owner: OwnerCreate):
     finally:
         db.close()
 
-@app.get("/owners/", response_model=List[Owner], dependencies=[Depends(require_owner)])
+@app.get("/owners/", response_model=List[Owner], dependencies=[Depends(require_student)])
 @cache(namespace="owners", expire=3600)
 def get_owners():
     """Get all owners"""
@@ -6166,7 +6166,7 @@ def get_batch_students(batch_id: int):
     finally:
         db.close()
 
-@app.get("/student-batches/{student_id}", response_model=List[Batch], dependencies=[Depends(require_owner)])
+@app.get("/student-batches/{student_id}", response_model=List[Batch], dependencies=[Depends(require_student)])
 def get_student_batches(student_id: int):
     db = SessionLocal()
     try:

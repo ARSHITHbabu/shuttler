@@ -7,12 +7,14 @@ class VideoPlayerPage extends StatefulWidget {
   final String videoUrl;
   final String? title;
   final String? remarks;
+  final String? token;
 
   const VideoPlayerPage({
     super.key,
     required this.videoUrl,
     this.title,
     this.remarks,
+    this.token,
   });
 
   @override
@@ -38,8 +40,12 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       debugPrint('INITIALIZING VIDEO: ${widget.videoUrl}');
       
       // Use standard network constructor as fallback/retry
+      final headers = widget.token != null
+          ? {'Authorization': 'Bearer ${widget.token}'}
+          : <String, String>{};
       _controller = VideoPlayerController.networkUrl(
         Uri.parse(widget.videoUrl),
+        httpHeaders: headers,
         videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
       );
 
