@@ -552,10 +552,12 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
       final authState = ref.read(authProvider);
       int? currentUserId;
       String currentRole = 'coach';
+      String? currentUserName;
       authState.whenData((state) {
         if (state is Authenticated) {
           currentUserId = state.userId;
           currentRole = state.userRole ?? 'coach';
+          currentUserName = state.userName;
         }
       });
 
@@ -565,6 +567,8 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
         filterType: _filterType.name,
         filterValue: filterValue,
         batchId: _selectedBatchId == 'all' ? null : _selectedBatchId,
+        generatedByName: currentUserName,
+        generatedByRole: currentRole,
       );
 
       final filterSummary = data['filter_summary'] ?? 

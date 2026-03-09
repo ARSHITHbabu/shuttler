@@ -4,6 +4,7 @@ import '../models/student_with_batch_fee.dart';
 import '../models/batch_fee_group.dart';
 import 'service_providers.dart';
 import 'dashboard_provider.dart';
+import 'auth_provider.dart';
 import '../models/student.dart';
 import '../models/batch.dart';
 
@@ -159,13 +160,19 @@ Future<Map<int, BatchFeeGroup>> studentsWithBatchFees(
 ) async {
   final batchService = ref.watch(batchServiceProvider);
   final feeService = ref.watch(feeServiceProvider);
-  
-  // Get all batches and all fees in parallel
+  final authState = ref.watch(authProvider).valueOrNull;
+
+  // Coaches only have access to their own batches
+  final batchesFuture = (authState is Authenticated && authState.userType == 'coach')
+      ? batchService.getBatchesByCoachId(authState.userId)
+      : batchService.getBatches();
+
+  // Get batches and fees in parallel
   final results = await Future.wait([
-    batchService.getBatches(),
+    batchesFuture,
     feeService.getFees(),
   ]);
-  
+
   final batches = results[0] as List<Batch>;
   final allFees = results[1] as List<Fee>;
   
