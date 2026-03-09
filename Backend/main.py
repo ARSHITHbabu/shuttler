@@ -883,7 +883,7 @@ class SessionDB(Base):
     name = Column(String, nullable=False)  # e.g., "Fall 2026", "Winter 2026"
     start_date = Column(String, nullable=False)
     end_date = Column(String, nullable=False)
-    status = Column(String, default="active")  # "active" or "archived"
+    status = Column(String, default="active", server_default="active")  # "active" or "archived"
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -2328,7 +2328,7 @@ class Session(BaseModel):
     name: str
     start_date: str
     end_date: str
-    status: str
+    status: Optional[str] = "active"
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
     
@@ -3326,6 +3326,7 @@ limiter = Limiter(key_func=lambda request: "academy_global", default_limits=["10
 # ── C8: Redis Cache & Cache Initialization ─────────────────────────────────
 from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
+from fastapi_cache.backends.inmemory import InMemoryBackend
 from fastapi_cache.decorator import cache
 try:
     from redis import asyncio as aioredis
@@ -3343,14 +3344,20 @@ _sync_redis_client = None
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global redis_client, _sync_redis_client
+    cache_initialized = False
     if _REDIS_AVAILABLE:
         try:
             redis_client = aioredis.from_url(REDIS_URL, encoding="utf-8", decode_responses=True)
+            await redis_client.ping()  # test connection eagerly
             FastAPICache.init(RedisBackend(redis_client), prefix="shuttler-cache")
             _sync_redis_client = _redis_sync_module.from_url(REDIS_URL, decode_responses=True)
             print(f"Connected to Redis for caching at {REDIS_URL}")
+            cache_initialized = True
         except Exception as e:
-            print(f"Warning: Failed to connect to Redis: {e}. Caching will fail.")
+            print(f"Warning: Failed to connect to Redis: {e}. Falling back to in-memory cache.")
+    if not cache_initialized:
+        FastAPICache.init(InMemoryBackend(), prefix="shuttler-cache")
+        print("Cache: using in-memory backend (Redis not available)")
     yield
 
 app = FastAPI(title="Badminton Academy Management System", lifespan=lifespan)
@@ -5846,15 +5853,22 @@ def get_student(student_id: int):
         db.close()
 
 @app.put("/students/{student_id}", response_model=Student)
-def update_student(student_id: int, student_update: StudentUpdate, current_user: dict = Depends(require_coach)):
+def update_student(student_id: int, student_update: StudentUpdate, current_user: dict = Depends(get_current_user)):
     db = SessionLocal()
     try:
         student = db.query(StudentDB).filter(StudentDB.id == student_id).first()
         if not student:
             raise HTTPException(status_code=404, detail="Student not found")
 
+        user_type = current_user.get("user_type")
+
+        # Students may only update their own profile
+        if user_type == "student":
+            if int(current_user["sub"]) != student_id:
+                raise HTTPException(status_code=403, detail="Students can only update their own profile.")
+
         # A15: Coaches may only update students enrolled in their assigned batches
-        if current_user.get("user_type") == "coach":
+        elif user_type == "coach":
             coach_id = int(current_user["sub"])
             if not verify_coach_student_access(coach_id, student_id, db):
                 raise HTTPException(
@@ -7261,7 +7275,7 @@ def get_sessions(status: Optional[str] = None):
                 name=s.name,
                 start_date=s.start_date,
                 end_date=s.end_date,
-                status=s.status,
+                status=s.status or "active",
                 created_at=s.created_at.isoformat() if s.created_at else None,
                 updated_at=s.updated_at.isoformat() if s.updated_at else None,
             )
@@ -11177,8 +11191,8 @@ def update_notification_preferences(
 class ReportFilter(BaseModel):
     type: str  # attendance, fee, performance
     filter_type: str  # season, year, month
-    filter_value: str  # season_id, year, or YYYY-MM
-    batch_id: str  # batch_id or 'all'
+    filter_value: Union[str, int]  # season_id, year, or YYYY-MM
+    batch_id: Optional[Union[str, int]] = None  # batch_id or 'all' or null
     generated_by_name: Optional[str] = "Admin"
     generated_by_role: Optional[str] = "Owner"
 
@@ -11230,7 +11244,7 @@ def generate_report(filter: ReportFilter):
         target_batch_ids = []
         batch_map = {} # id -> name
         
-        if str(filter.batch_id).lower() == 'all':
+        if filter.batch_id is None or str(filter.batch_id).lower() == 'all':
             query = db.query(BatchDB)
             if filter.filter_type == 'season':
                 query = query.filter(BatchDB.session_id == int(filter.filter_value))
@@ -11300,12 +11314,12 @@ def generate_report(filter: ReportFilter):
                 })
                 
             # Student Details (Only if specific batch)
-            if str(filter.batch_id).lower() != 'all':
+            if filter.batch_id is not None and str(filter.batch_id).lower() != 'all':
                 students = db.query(
                     StudentDB.name, StudentDB.phone, StudentDB.email, StudentDB.id
                 ).join(BatchStudentDB, BatchStudentDB.student_id == StudentDB.id)\
                  .filter(BatchStudentDB.batch_id == int(filter.batch_id)).all()
-                 
+
                 for s in students:
                     s_recs = [r for r in records if r.student_id == s.id]
                     s_present = sum(1 for r in s_recs if r.status.lower() == 'present')
@@ -11314,7 +11328,7 @@ def generate_report(filter: ReportFilter):
                         "name": s.name,
                         "phone": s.phone,
                         "email": s.email,
-                        "classes_assigned": s_total, 
+                        "classes_assigned": s_total,
                         "classes_attended": s_present,
                         "classes_absent": s_total - s_present,
                         "attendance_percentage": round((s_present / s_total * 100) if s_total > 0 else 0, 1)
@@ -11377,7 +11391,7 @@ def generate_report(filter: ReportFilter):
                 })
 
             # Student Details
-            if str(filter.batch_id).lower() != 'all':
+            if filter.batch_id is not None and str(filter.batch_id).lower() != 'all':
                 students = db.query(
                     StudentDB.name, StudentDB.phone, StudentDB.email, StudentDB.id
                 ).join(BatchStudentDB, BatchStudentDB.student_id == StudentDB.id)\
@@ -11508,7 +11522,7 @@ def generate_report(filter: ReportFilter):
                 })
 
             # Flat student details for Backward Compatibility
-            if str(filter.batch_id).lower() != 'all':
+            if filter.batch_id is not None and str(filter.batch_id).lower() != 'all':
                 student_details = batch_results.get(int(filter.batch_id), [])
             else:
                 for b_id in target_batch_ids:
