@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
-import 'package:url_launcher/url_launcher.dart';
 // Conditional import for File/Directory (only on non-web platforms)
 import 'dart:io' if (dart.library.html) '../../utils/dart_io_stub.dart';
 import '../../core/constants/colors.dart';
@@ -149,12 +148,14 @@ class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
     final streamPath = ApiEndpoints.videoStreamUrl(video.url);
     final fullUrl = '${ApiEndpoints.baseUrl}$streamPath';
     debugPrint('Full Video URL passed to page: $fullUrl');
+    final token = ref.read(storageServiceProvider).getAuthToken();
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => VideoPlayerPage(
           videoUrl: fullUrl,
           title: video.displayTitle,
           remarks: video.remarks,
+          token: token,
         ),
       ),
     );
@@ -211,58 +212,44 @@ class _StudentVideosScreenState extends ConsumerState<StudentVideosScreen> {
           SuccessSnackbar.show(context, 'Video download started');
         }
       } else {
-        // Mobile/Desktop download: Use url_launcher to hand off to system browser
-        // This is the most reliable way to get the file into the public Downloads folder
-        final Uri videoUri = Uri.parse(fullUrl);
-        
-        if (await canLaunchUrl(videoUri)) {
-          await launchUrl(videoUri, mode: LaunchMode.externalApplication);
+        // Mobile/Desktop: download with auth header directly into device storage
+        final token = ref.read(storageServiceProvider).getAuthToken();
+        final directoryPath = await getApplicationDocumentsPath();
+        if (directoryPath == null) {
           if (mounted) {
             setState(() {
               _isDownloading = false;
               _downloadingVideoId = null;
             });
-            SuccessSnackbar.show(context, 'Opening download in browser...');
+            SuccessSnackbar.showError(context, 'Download directory not available');
           }
-        } else {
-          // Fallback to private storage download if browser fails
-          final directoryPath = await getApplicationDocumentsPath();
-          if (directoryPath == null) {
-            if (mounted) {
-              setState(() {
-                _isDownloading = false;
-                _downloadingVideoId = null;
-              });
-              SuccessSnackbar.showError(context, 'Download directory not available');
+          return;
+        }
+
+        final sanitizedFileName = _sanitizeFileName(fileName);
+        final directory = Directory(directoryPath);
+        if (!await directory.exists()) await directory.create(recursive: true);
+        final filePath = '${directory.path}/$sanitizedFileName';
+
+        await dio.download(
+          fullUrl,
+          filePath,
+          options: Options(
+            headers: token != null ? {'Authorization': 'Bearer $token'} : {},
+          ),
+          onReceiveProgress: (received, total) {
+            if (total != -1 && mounted) {
+              setState(() => _downloadProgress = received / total);
             }
-            return;
-          }
+          },
+        );
 
-          final sanitizedFileName = _sanitizeFileName(fileName);
-          final directory = Directory(directoryPath);
-          if (!await directory.exists()) await directory.create(recursive: true);
-          final filePath = '${directory.path}/$sanitizedFileName';
-
-          await dio.download(
-            fullUrl,
-            filePath,
-            onReceiveProgress: (received, total) {
-              if (total != -1 && mounted) {
-                setState(() => _downloadProgress = received / total);
-              }
-            },
-          );
-
-          if (mounted) {
-            setState(() {
-              _isDownloading = false;
-              _downloadingVideoId = null;
-            });
-            SuccessSnackbar.show(
-              context, 
-              'Video saved to app storage. Tap PLAY to view.',
-            );
-          }
+        if (mounted) {
+          setState(() {
+            _isDownloading = false;
+            _downloadingVideoId = null;
+          });
+          SuccessSnackbar.show(context, 'Video saved to Downloads');
         }
       }
     } catch (e) {
