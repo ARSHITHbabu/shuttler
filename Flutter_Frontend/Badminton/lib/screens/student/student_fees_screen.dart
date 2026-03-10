@@ -9,7 +9,7 @@ import '../../widgets/common/error_widget.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/fee_provider.dart';
 import '../../models/fee.dart';
-import 'package:flutter_windowmanager/flutter_windowmanager.dart';
+import '../../utils/screen_security.dart';
 
 /// Student Fees Screen - READ-ONLY view of fee status and payment history
 /// Students can view their fee records but cannot make payments
@@ -32,12 +32,12 @@ class _StudentFeesScreenState extends ConsumerState<StudentFeesScreen> {
   }
 
   Future<void> _secureScreen() async {
-    await FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_SECURE);
+    await ScreenSecurity.protect();
   }
 
   @override
   void dispose() {
-    FlutterWindowManager.clearFlags(FlutterWindowManager.FLAG_SECURE);
+    ScreenSecurity.unprotect();
     super.dispose();
   }
 

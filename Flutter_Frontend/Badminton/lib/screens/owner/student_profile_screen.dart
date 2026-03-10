@@ -9,7 +9,7 @@ import '../../models/fee.dart';
 import 'performance_tracking_screen.dart';
 import 'bmi_tracking_screen.dart';
 import 'package:intl/intl.dart';
-import 'package:flutter_windowmanager/flutter_windowmanager.dart';
+import '../../utils/screen_security.dart';
 
 /// Detailed Student Profile Screen
 class StudentProfileScreen extends ConsumerStatefulWidget {
@@ -34,12 +34,12 @@ class _StudentProfileScreenState extends ConsumerState<StudentProfileScreen> {
   }
 
   Future<void> _secureScreen() async {
-    await FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_SECURE);
+    await ScreenSecurity.protect();
   }
 
   @override
   void dispose() {
-    FlutterWindowManager.clearFlags(FlutterWindowManager.FLAG_SECURE);
+    ScreenSecurity.unprotect();
     super.dispose();
   }
 

@@ -8,7 +8,7 @@ import '../../widgets/common/skeleton_screen.dart';
 import '../../models/fee.dart';
 import '../../models/student_with_batch_fee.dart';
 import '../../providers/fee_provider.dart';
-import 'package:flutter_windowmanager/flutter_windowmanager.dart';
+import '../../utils/screen_security.dart';
 
 /// Coach Fees Screen - Read-only view of fees with statistics and details
 /// Coaches can view all fee information but cannot add, edit, or delete fees
@@ -38,12 +38,12 @@ class _CoachFeesScreenState extends ConsumerState<CoachFeesScreen> {
   }
 
   Future<void> _secureScreen() async {
-    await FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_SECURE);
+    await ScreenSecurity.protect();
   }
 
   @override
   void dispose() {
-    FlutterWindowManager.clearFlags(FlutterWindowManager.FLAG_SECURE);
+    ScreenSecurity.unprotect();
     super.dispose();
   }
 
