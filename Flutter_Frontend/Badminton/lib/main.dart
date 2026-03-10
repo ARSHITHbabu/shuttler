@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
@@ -43,11 +44,12 @@ class _MyAppState extends ConsumerState<MyApp> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkJailbreak();
+      if (!kIsWeb) _checkJailbreak();
     });
   }
 
   Future<void> _checkJailbreak() async {
+    if (kIsWeb) return;
     try {
       final bool jailbroken = await FlutterJailbreakDetection.jailbroken;
       final bool developerMode = await FlutterJailbreakDetection.developerMode;

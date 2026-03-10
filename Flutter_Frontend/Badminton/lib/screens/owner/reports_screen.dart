@@ -865,8 +865,14 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
 
     content.add(pw.Text("Performance Report", style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)));
     content.add(pw.SizedBox(height: 5));
-    content.add(pw.Text("Period: ${_reportData!['period']}", style: const pw.TextStyle(fontSize: 10)));
+    content.add(pw.Text("Period: ${_reportData!['period'] ?? 'Report'}", style: const pw.TextStyle(fontSize: 10)));
     content.add(pw.SizedBox(height: 15));
+
+    // Summary Statistics
+    content.add(pw.Text("Overall Summary", style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)));
+    content.add(pw.SizedBox(height: 10));
+    content.add(_buildOverviewTable(overview));
+    content.add(pw.SizedBox(height: 20));
 
     // Summary Visual for the whole report
     final skillAverages = overview['skill_averages'] as Map<String, dynamic>? ?? {};
@@ -886,34 +892,45 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     }
 
     // Batch-wise breakdown
-    for (var batch in breakdown) {
-      content.add(pw.Container(
-        padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 10),
-        decoration: const pw.BoxDecoration(color: PdfColors.grey200),
-        child: pw.Row(
-          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-          children: [
-            pw.Text("Batch: ${batch['name']}", style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
-            pw.Text("Batch Avg: ${batch['average_rating']} / 5.0", style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
-          ],
-        ),
-      ));
-      content.add(pw.SizedBox(height: 10));
-
-      final students = batch['students'] as List? ?? [];
-      if (students.isEmpty) {
-        content.add(pw.Padding(
-          padding: const pw.EdgeInsets.only(left: 20, top: 10, bottom: 20),
-          child: pw.Text("No student performance data recorded for this batch in the selected period.",
-            style: pw.TextStyle(fontSize: 9, fontStyle: pw.FontStyle.italic, color: PdfColors.grey600)),
+    if (breakdown.isEmpty) {
+        content.add(pw.SizedBox(height: 50));
+        content.add(pw.Center(
+          child: pw.Text("No batch performance data found for the selected criteria.", 
+            style: pw.TextStyle(fontSize: 12, fontStyle: pw.FontStyle.italic, color: PdfColors.grey600))
         ));
-      } else {
-        // Build rows of student performance
-        for (var student in students) {
-          content.add(_buildStudentPerformanceRow(student));
+    } else {
+      content.add(pw.Text("Batch-wise Breakdown", style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)));
+      content.add(pw.SizedBox(height: 10));
+      
+      for (var batch in breakdown) {
+        content.add(pw.Container(
+          padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+          decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Text("Batch: ${batch['name']}", style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+              pw.Text("Avg Rating: ${batch['average_rating']} / 5.0", style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+            ],
+          ),
+        ));
+        content.add(pw.SizedBox(height: 10));
+
+        final students = batch['students'] as List? ?? [];
+        if (students.isEmpty) {
+          content.add(pw.Padding(
+            padding: const pw.EdgeInsets.only(left: 20, top: 10, bottom: 20),
+            child: pw.Text("No student performance data recorded for this batch in the selected period.",
+              style: pw.TextStyle(fontSize: 9, fontStyle: pw.FontStyle.italic, color: PdfColors.grey600)),
+          ));
+        } else {
+          // Build rows of student performance
+          for (var student in students) {
+            content.add(_buildStudentPerformanceRow(student));
+          }
         }
+        content.add(pw.SizedBox(height: 15));
       }
-      content.add(pw.SizedBox(height: 15));
     }
 
     return content;
@@ -1400,7 +1417,18 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
     if (_reportData == null) return;
     
     try {
-      final pdf = pw.Document();
+      final font = await PdfGoogleFonts.nunitoRegular();
+      final fontBold = await PdfGoogleFonts.nunitoBold();
+      final fontItalic = await PdfGoogleFonts.nunitoItalic();
+      
+      final pdf = pw.Document(
+        theme: pw.ThemeData.withFont(
+          base: font,
+          bold: fontBold,
+          italic: fontItalic,
+          fontFallback: [],
+        ),
+      );
       
       final academyName = LegalContent.appName; 
       final address = "123 Sports Ave, Tech City"; // TODO: Get from store

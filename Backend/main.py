@@ -3402,19 +3402,12 @@ def invalidate_cache(namespace: str):
         except RuntimeError:
             pass
 
-# CORS Configuration
-
+# CORS Configuration is registered AFTER the JWT middleware below so that
+# CORSMiddleware (added last) executes first and attaches Access-Control-
+# Allow-Origin headers even to 401/403 responses from the JWT middleware.
 ALLOWED_ORIGINS_STR = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:8001,https://shuttler.app,https://api.shuttler.app")
 ALLOWED_ORIGINS = [origin.strip() for origin in ALLOWED_ORIGINS_STR.split(",") if origin.strip()]
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
-)
 
 # ==================== HTTPS / HSTS Middleware ====================
 @app.middleware("http")
@@ -3665,6 +3658,18 @@ async def jwt_auth_middleware(request: Request, call_next):
     # 7. Attach user info to request state for downstream use
     request.state.current_user = payload
     return await call_next(request)
+
+# ==================== CORS Middleware (must be registered last / outermost) ====================
+# In Starlette/FastAPI, middleware added last wraps all inner middleware.
+# CORS headers must appear even on 401/403 responses, so this must be outermost.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
+)
 
 # Create uploads directory for image storage
 UPLOAD_DIR = Path("./uploads")
@@ -11248,9 +11253,12 @@ def generate_report(filter: ReportFilter):
             query = db.query(BatchDB)
             if filter.filter_type == 'season':
                 query = query.filter(BatchDB.session_id == int(filter.filter_value))
-            # For year/month, filter by seasons if found
-            if season_ids and filter.filter_type == 'year':
-                query = query.filter(BatchDB.session_id.in_(season_ids))
+            elif filter.filter_type == 'year':
+                if season_ids:
+                    query = query.filter(BatchDB.session_id.in_(season_ids))
+                else:
+                    # Fallback: filter batches that started in this year if no explicitly linked sessions
+                    query = query.filter(BatchDB.start_date.like(f"{filter.filter_value}%"))
             
             batches = query.all()
             target_batch_ids = [b.id for b in batches]

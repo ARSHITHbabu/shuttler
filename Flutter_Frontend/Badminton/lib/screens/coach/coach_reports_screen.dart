@@ -677,7 +677,18 @@ class _CoachReportsScreenState extends ConsumerState<CoachReportsScreen> {
   }
 
   Future<pw.Document> _generatePDF() async {
-    final pdf = pw.Document();
+    final font = await PdfGoogleFonts.nunitoRegular();
+    final fontBold = await PdfGoogleFonts.nunitoBold();
+    final fontItalic = await PdfGoogleFonts.nunitoItalic();
+    
+    final pdf = pw.Document(
+        theme: pw.ThemeData.withFont(
+          base: font,
+          bold: fontBold,
+          italic: fontItalic,
+          fontFallback: [],
+        ),
+    );
     
     // Get user info
     final authState = ref.read(authProvider);
