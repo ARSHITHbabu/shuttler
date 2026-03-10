@@ -219,118 +219,220 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   }
 
   Widget _buildFilters(bool isDark) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isSmallScreen = screenWidth < 600;
-    
     final accent = isDark ? AppColors.accent : AppColorsLight.accent;
-    final bg = isDark ? AppColors.background : AppColorsLight.background;
-    final textPrimary = isDark ? AppColors.textPrimary : AppColorsLight.textPrimary;
     final textSecondary = isDark ? AppColors.textSecondary : AppColorsLight.textSecondary;
+    final hasActiveFilters = _selectedFilter != 'all' || _readFilter != 'all';
 
-    return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL,
-        vertical: isSmallScreen ? AppDimensions.paddingM : AppDimensions.paddingL,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.only(bottom: AppDimensions.paddingS),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.background : AppColorsLight.background,
+        border: Border(
+          bottom: BorderSide(
+            color: isDark ? AppColors.border : AppColorsLight.border,
+            width: 0.5,
+          ),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Filter by Type',
-            style: TextStyle(
-              fontSize: isSmallScreen ? 13 : 15,
-              fontWeight: FontWeight.w600,
-              color: textSecondary,
+          // Filter Section Header & Clear Button
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppDimensions.paddingL, AppDimensions.paddingM, AppDimensions.paddingM, AppDimensions.paddingS),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.tune, size: 14, color: textSecondary),
+                    const SizedBox(width: 8),
+                    Text(
+                      'FILTER BY TYPE',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: textSecondary,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ],
+                ),
+                if (hasActiveFilters)
+                  TextButton(
+                    onPressed: () => setState(() {
+                      _selectedFilter = 'all';
+                      _readFilter = 'all';
+                    }),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: Text(
+                      'RESET',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: accent,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
-          SizedBox(height: AppDimensions.spacingM),
+
+          // Scrollable Type Chips
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
             child: Row(
               children: ['all', 'fee_due', 'attendance', 'announcement', 'general'].map((type) {
                 final isSelected = _selectedFilter == type;
                 return Padding(
-                  padding: const EdgeInsets.only(right: AppDimensions.spacingM),
-                  child: GestureDetector(
+                  padding: const EdgeInsets.only(right: AppDimensions.spacingS),
+                  child: _buildFilterChip(
+                    label: type == 'all' ? 'All' : type.replaceAll('_', ' ').split(' ').map((e) => e[0].toUpperCase() + e.substring(1)).join(' '),
+                    icon: _getFilterIcon(type),
+                    isSelected: isSelected,
                     onTap: () => setState(() => _selectedFilter = type),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: EdgeInsets.symmetric(
-                        horizontal: AppDimensions.paddingL,
-                        vertical: AppDimensions.paddingS,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isSelected ? accent : (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.05)),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: isSelected ? accent : (isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.1)),
-                          width: 1,
-                        ),
-                      ),
-                      child: Text(
-                        type == 'all' ? 'All' : type.replaceAll('_', ' ').toUpperCase(),
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 12 : 14,
-                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                          color: isSelected ? bg : textPrimary,
-                        ),
-                      ),
-                    ),
+                    accent: accent,
+                    isDark: isDark,
                   ),
                 );
               }).toList(),
             ),
           ),
-          SizedBox(height: AppDimensions.spacingL),
-          Text(
-            'Filter by Status',
-            style: TextStyle(
-              fontSize: isSmallScreen ? 13 : 15,
-              fontWeight: FontWeight.w600,
-              color: textSecondary,
+
+          const SizedBox(height: AppDimensions.spacingM),
+
+          // Status Filter Label
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL, vertical: AppDimensions.paddingS),
+            child: Row(
+              children: [
+                Icon(Icons.visibility_outlined, size: 14, color: textSecondary),
+                const SizedBox(width: 8),
+                Text(
+                  'FILTER BY STATUS',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: textSecondary,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ],
             ),
           ),
-          SizedBox(height: AppDimensions.spacingM),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
+
+          // Status Chips (More compact)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
             child: Row(
               children: ['all', 'unread', 'read'].map((status) {
                 final isSelected = _readFilter == status;
-                return Padding(
-                  padding: const EdgeInsets.only(right: AppDimensions.spacingM),
-                  child: GestureDetector(
-                    onTap: () => setState(() => _readFilter = status),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      padding: EdgeInsets.symmetric(
-                        horizontal: AppDimensions.paddingL,
-                        vertical: AppDimensions.paddingS,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isSelected ? accent : (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.05)),
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: isSelected ? accent : (isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.1)),
-                          width: 1,
-                        ),
-                      ),
-                      child: Text(
-                        status == 'all' ? 'All' : status.toUpperCase(),
-                        style: TextStyle(
-                          fontSize: isSmallScreen ? 12 : 14,
-                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                          color: isSelected ? bg : textPrimary,
-                        ),
-                      ),
+                return Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      right: status != 'read' ? AppDimensions.spacingS : 0,
+                    ),
+                    child: _buildFilterChip(
+                      label: status.toUpperCase(),
+                      icon: _getStatusIcon(status),
+                      isSelected: isSelected,
+                      onTap: () => setState(() => _readFilter = status),
+                      accent: accent,
+                      isDark: isDark,
+                      isCompact: true,
                     ),
                   ),
                 );
               }).toList(),
             ),
           ),
+          const SizedBox(height: AppDimensions.spacingM),
         ],
+      ),
+    );
+  }
+
+  IconData _getFilterIcon(String type) {
+    switch (type) {
+      case 'fee_due': return Icons.account_balance_wallet_outlined;
+      case 'attendance': return Icons.event_available_outlined;
+      case 'announcement': return Icons.campaign_outlined;
+      case 'general': return Icons.notifications_none_outlined;
+      case 'all': return Icons.grid_view_rounded;
+      default: return Icons.notifications;
+    }
+  }
+
+  IconData _getStatusIcon(String status) {
+    switch (status) {
+      case 'read': return Icons.mark_chat_read_outlined;
+      case 'unread': return Icons.mark_chat_unread_outlined;
+      case 'all': return Icons.filter_list_rounded;
+      default: return Icons.visibility;
+    }
+  }
+
+  Widget _buildFilterChip({
+    required String label,
+    required IconData icon,
+    required bool isSelected,
+    required VoidCallback onTap,
+    required Color accent,
+    required bool isDark,
+    bool isCompact = false,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        padding: EdgeInsets.symmetric(
+          horizontal: isCompact ? 8 : 12,
+          vertical: 8,
+        ),
+        decoration: BoxDecoration(
+          color: isSelected ? accent : (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.04)),
+          borderRadius: BorderRadius.circular(AppDimensions.radiusM),
+          border: Border.all(
+            color: isSelected ? accent : (isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.02)),
+            width: 1,
+          ),
+          boxShadow: isSelected ? [
+            BoxShadow(
+              color: accent.withValues(alpha: 0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            )
+          ] : [],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: isSelected ? Colors.white : (isDark ? AppColors.textSecondary : AppColorsLight.textSecondary),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? Colors.white : (isDark ? AppColors.textPrimary : AppColorsLight.textPrimary),
+                letterSpacing: 0.2,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

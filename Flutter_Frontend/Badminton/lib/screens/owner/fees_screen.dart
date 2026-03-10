@@ -6,7 +6,7 @@ import '../../core/theme/neumorphic_styles.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import 'tabs/coach_salary_tab.dart';
 import 'tabs/student_fees_view.dart';
-import 'package:flutter_windowmanager/flutter_windowmanager.dart';
+import '../../utils/screen_security.dart';
 
 class FeesScreen extends ConsumerStatefulWidget {
   final int? selectedStudentId;
@@ -38,12 +38,12 @@ class _FeesScreenState extends ConsumerState<FeesScreen> with SingleTickerProvid
   }
 
   Future<void> _secureScreen() async {
-    await FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_SECURE);
+    await ScreenSecurity.protect();
   }
 
   @override
   void dispose() {
-    FlutterWindowManager.clearFlags(FlutterWindowManager.FLAG_SECURE);
+    ScreenSecurity.unprotect();
     _tabController.dispose();
     super.dispose();
   }
