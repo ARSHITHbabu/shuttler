@@ -411,7 +411,8 @@ class _BatchDetailsDialogState extends ConsumerState<BatchDetailsDialog> {
         _DetailItem(label: 'Days', value: batch.period, icon: Icons.calendar_today),
         if (widget.isOwner)
           _DetailItem(label: 'Capacity', value: '${batch.capacity} Students', icon: Icons.people),
-        _DetailItem(label: 'Fees', value: batch.fees, icon: Icons.payments),
+        if (widget.isOwner)
+          _DetailItem(label: 'Fees', value: batch.fees, icon: Icons.payments),
         _DetailItem(label: 'Location', value: batch.location ?? 'Not specified', icon: Icons.location_on),
         _DetailItem(label: 'Start Date', value: batch.startDate, icon: Icons.event),
         

@@ -237,10 +237,6 @@ class _BatchCard extends StatelessWidget {
                 label: '${batch.capacity} capacity',
               ),
               _InfoChip(
-                icon: Icons.currency_rupee,
-                label: '${batch.fees}/month',
-              ),
-              _InfoChip(
                 icon: Icons.access_time,
                 label: batch.timing,
               ),

@@ -11,7 +11,7 @@ import 'coach_settings_screen.dart';
 import 'coach_video_management_screen.dart';
 import '../owner/bmi_tracking_screen.dart';
 import 'coach_performance_screen.dart';
-import 'coach_fees_screen.dart';
+import 'coach_salary_screen.dart';
 import 'leave_request_screen.dart';
 import 'coach_reports_screen.dart';
 import '../owner/notifications_screen.dart';
@@ -113,13 +113,13 @@ class _CoachMoreScreenState extends ConsumerState<CoachMoreScreen> {
             const SizedBox(height: AppDimensions.spacingS),
             _MenuItem(
               icon: Icons.payments_outlined,
-              title: 'Fees Management',
-              subtitle: 'Manage student fees',
+              title: 'Salary Management',
+              subtitle: 'View hourly salary calculation',
               isDark: isDark,
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (context) => const CoachFeesScreen(),
+                    builder: (context) => const CoachSalaryScreen(),
                   ),
                 );
               },
