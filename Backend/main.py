@@ -7141,6 +7141,19 @@ def get_all_fees(
     finally:
         db.close()
 
+
+@app.get("/fees/{fee_id}", response_model=Fee, dependencies=[Depends(require_student)])
+def get_fee_by_id(fee_id: int):
+    """Get a single fee by id, enriched with payments and installment breakdown."""
+    db = SessionLocal()
+    try:
+        fee = db.query(FeeDB).filter(FeeDB.id == fee_id).first()
+        if not fee:
+            raise HTTPException(status_code=404, detail="Fee not found")
+        return enrich_fee_with_payments(fee, db)
+    finally:
+        db.close()
+
 @app.put("/fees/{fee_id}", response_model=Fee, dependencies=[Depends(require_owner)])
 def update_fee(fee_id: int, fee_update: FeeUpdate):
     db = SessionLocal()

@@ -118,7 +118,9 @@ class _AddPaymentDialogState extends ConsumerState<AddPaymentDialog> {
         // Note: Success message is handled by the onSubmit callback
       }
     } catch (e) {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
       // Don't close dialog on error - let user see the error and retry
       // Error message is handled by the onSubmit callback
     }
