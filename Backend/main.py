@@ -3383,24 +3383,24 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Helper for resolving synchronous cache clearance
 def invalidate_cache(namespace: str):
-    """Invalidate redis cache namespace. Useful for sync endpoints."""
-    if not _REDIS_AVAILABLE or not redis_client:
-        return
+    """Invalidate FastAPICache namespace for whichever backend is active."""
     import asyncio
     try:
-        # FastAPI worker threads don't have an event loop running, so we can run one.
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            import nest_asyncio
-            nest_asyncio.apply()
-            loop.run_until_complete(FastAPICache.clear(namespace=namespace))
-        else:
-            loop.run_until_complete(FastAPICache.clear(namespace=namespace))
-    except Exception as e:
+        # Cache may not be initialized early in startup or during test bootstraps.
+        FastAPICache.get_backend()
+    except Exception:
+        return
+
+    try:
+        # Typical path in sync endpoints running in worker threads.
+        asyncio.run(FastAPICache.clear(namespace=namespace))
+    except RuntimeError:
+        # Fallback when an event loop is already active in current thread.
+        loop = asyncio.new_event_loop()
         try:
-            asyncio.run(FastAPICache.clear(namespace=namespace))
-        except RuntimeError:
-            pass
+            loop.run_until_complete(FastAPICache.clear(namespace=namespace))
+        finally:
+            loop.close()
 
 # CORS Configuration is registered AFTER the JWT middleware below so that
 # CORSMiddleware (added last) executes first and attaches Access-Control-
@@ -3665,7 +3665,7 @@ async def jwt_auth_middleware(request: Request, call_next):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(:\d+)?",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
@@ -5231,7 +5231,6 @@ def create_batch(batch: BatchCreate):
         db.close()
 
 @app.get("/batches/", response_model=List[Batch], dependencies=[Depends(require_student)])
-@cache(namespace="batches", expire=300)
 def get_batches(status: Optional[str] = Query(None)):
     db = SessionLocal()
     try:
