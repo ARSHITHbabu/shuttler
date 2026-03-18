@@ -84,11 +84,28 @@ class ApiService {
   void initializeOfflineSupport({
     required ConnectivityService connectivityService,
   }) {
+    if (kIsWeb) {
+      // Request queueing is primarily for mobile intermittent connectivity and can
+      // cause noisy transient XHR failures on web startup.
+      return;
+    }
+
     _connectivityService = connectivityService;
     _requestQueue = RequestQueue(
       connectivityService: connectivityService,
       dio: _dio,
     );
+  }
+
+  bool _isTransientNetworkError(DioException e) {
+    if (e.type == DioExceptionType.connectionTimeout ||
+        e.type == DioExceptionType.receiveTimeout ||
+        e.type == DioExceptionType.connectionError) {
+      return true;
+    }
+
+    // On web, XHR "onError" bubbles up as unknown with no status code.
+    return e.type == DioExceptionType.unknown && e.response?.statusCode == null;
   }
 
   /// Auth interceptor - adds token to requests
@@ -228,9 +245,19 @@ class ApiService {
         options: options,
       );
       return response;
-    } catch (e) {
+    } on DioException catch (e) {
+      if (_isTransientNetworkError(e)) {
+        // One short retry smooths over startup race/network hiccups.
+        await Future.delayed(const Duration(milliseconds: 250));
+        return _dio.get(
+          path,
+          queryParameters: queryParameters,
+          options: options,
+        );
+      }
+
       // If request fails and we have RequestQueue, try queuing it
-      if (_requestQueue != null && e is DioException) {
+      if (_requestQueue != null) {
         if (e.type == DioExceptionType.unknown || 
             e.type == DioExceptionType.connectionTimeout) {
           return await _requestQueue!.queueRequest(
@@ -242,6 +269,8 @@ class ApiService {
           );
         }
       }
+      rethrow;
+    } catch (e) {
       rethrow;
     }
   }
