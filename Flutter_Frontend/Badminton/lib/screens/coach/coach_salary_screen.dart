@@ -143,7 +143,7 @@ class _CoachSalaryScreenState extends ConsumerState<CoachSalaryScreen> {
             const SizedBox(height: AppDimensions.spacingS),
             _buildWeeklyBreakdown('Week 4 (22nd - 28th)', 15, 15 * hourlyRate),
             
-            const SizedBox(height: AppDimensions.spacingXL),
+            const SizedBox(height: AppDimensions.spacingXl),
           ],
         ),
       ),
