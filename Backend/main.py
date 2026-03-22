@@ -16,6 +16,7 @@ import html as html_lib
 import re
 from typing import List, Optional, Dict, Any, Union, Annotated, Literal
 from datetime import datetime, date, timedelta
+from calendar import monthrange
 import json
 import os
 import shutil
@@ -686,7 +687,7 @@ def send_overdue_fee_notifications():
         today_str = today.isoformat()
 
         overdue_fees = db.query(FeeDB).filter(
-            FeeDB.status.in_(["pending", "partial"]),
+            FeeDB.status.in_(["pending", "partial", "delay"]),
             FeeDB.due_date < today_str,
         ).all()
 
@@ -983,8 +984,13 @@ class FeeDB(Base):
     amount = Column(Float, nullable=False)
     due_date = Column(String, nullable=False)
     status = Column(String, nullable=False)
+    billing_year = Column(Integer, nullable=True)
+    billing_month = Column(Integer, nullable=True)
+    cycle_key = Column(String, nullable=True)
+    grace_days = Column(Integer, nullable=False, default=7)
     payee_student_id = Column(Integer, ForeignKey("students.id"), nullable=True)  # Student from batch who is payee
     payments = relationship("FeePaymentDB", back_populates="fee", cascade="all, delete-orphan")
+    installments = relationship("FeeInstallmentDB", back_populates="fee", cascade="all, delete-orphan")
 
 class FeePaymentDB(Base):
     __tablename__ = "fee_payments"
@@ -1000,6 +1006,18 @@ class FeePaymentDB(Base):
     cancel_reason = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     fee = relationship("FeeDB", back_populates="payments")
+
+class FeeInstallmentDB(Base):
+    __tablename__ = "fee_installments"
+    id = Column(Integer, primary_key=True, index=True)
+    fee_id = Column(Integer, ForeignKey("fees.id", ondelete="CASCADE"), nullable=False, index=True)
+    installment_no = Column(Integer, nullable=False)
+    due_date = Column(String, nullable=False)
+    amount = Column(Float, nullable=False)
+    paid_amount = Column(Float, nullable=False, default=0.0)
+    status = Column(String, nullable=False, default="pending")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    fee = relationship("FeeDB", back_populates="installments")
 
 class PerformanceDB(Base):
     __tablename__ = "performance"
@@ -1632,6 +1650,16 @@ def migrate_database_schema(engine):
         # Migrate fees table - add payee_student_id column
         if 'fees' in tables:
             check_and_add_column(engine, 'fees', 'payee_student_id', 'INTEGER', nullable=True)
+            check_and_add_column(engine, 'fees', 'billing_year', 'INTEGER', nullable=True)
+            check_and_add_column(engine, 'fees', 'billing_month', 'INTEGER', nullable=True)
+            check_and_add_column(engine, 'fees', 'cycle_key', 'VARCHAR(20)', nullable=True)
+            check_and_add_column(engine, 'fees', 'grace_days', 'INTEGER', nullable=True, default_value='7')
+            # Backfill grace_days and enforce NOT NULL-ish behavior for legacy rows.
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("UPDATE fees SET grace_days = 7 WHERE grace_days IS NULL"))
+            except Exception as gd_error:
+                print(f"Note: could not backfill fees.grace_days: {gd_error}")
             # Add foreign key constraint if column was just added
             try:
                 with engine.begin() as conn:
@@ -1656,6 +1684,34 @@ def migrate_database_schema(engine):
             except Exception as fk_error:
                 # Foreign key might already exist or constraint name might be different
                 print(f"Note: Foreign key constraint check: {fk_error}")
+
+            # Fee cycle/index performance helpers.
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_fees_cycle_key ON fees(cycle_key)"))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS idx_fees_billing_year_month ON fees(billing_year, billing_month)"))
+            except Exception as idx_error:
+                print(f"Note: fee cycle index migration issue: {idx_error}")
+
+        # Migrate fee_installments table
+        if 'fee_installments' not in tables:
+            print("  fee_installments table not found. Creating...")
+            try:
+                FeeInstallmentDB.__table__.create(bind=engine)
+                print(" fee_installments table created!")
+            except Exception as fi_error:
+                print(f" Error creating fee_installments table: {fi_error}")
+        else:
+            print(" fee_installments table exists")
+            check_and_add_column(engine, 'fee_installments', 'paid_amount', 'FLOAT', nullable=True, default_value='0.0')
+            check_and_add_column(engine, 'fee_installments', 'status', 'VARCHAR(20)', nullable=True, default_value="'pending'")
+
+        try:
+            with engine.begin() as conn:
+                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_fee_installments_fee_id ON fee_installments(fee_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_fee_installments_due_status ON fee_installments(due_date, status)"))
+        except Exception as fi_index_error:
+            print(f"Note: fee_installments index migration issue: {fi_index_error}")
         
         # Verify fee_payments table exists (should be created by Base.metadata.create_all)
         if 'fee_payments' not in tables:
@@ -2597,6 +2653,10 @@ class FeeCreate(BaseModel):
     due_date: str
     payee_student_id: Optional[int] = None
     status: Optional[str] = None  # Will be calculated, optional on create
+    billing_year: Optional[int] = None
+    billing_month: Optional[int] = None
+    grace_days: Optional[int] = 7
+    installment_count: Optional[int] = 1
 
 _ALLOWED_PAYMENT_METHODS = {'cash', 'card', 'online', 'razorpay'}
 
@@ -2630,6 +2690,18 @@ class FeePayment(BaseModel):
     
     model_config = ConfigDict(from_attributes=True)
 
+class FeeInstallment(BaseModel):
+    id: int
+    fee_id: int
+    installment_no: int
+    due_date: str
+    amount: float
+    paid_amount: float
+    status: str
+    created_at: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
 class Fee(BaseModel):
     id: int
     student_id: int
@@ -2641,9 +2713,14 @@ class Fee(BaseModel):
     pending_amount: float  # Calculated: amount - total_paid
     due_date: str
     status: str
+    billing_year: Optional[int] = None
+    billing_month: Optional[int] = None
+    cycle_key: Optional[str] = None
+    grace_days: Optional[int] = 7
     payee_student_id: Optional[int] = None
     payee_student_name: Optional[str] = None
     payments: Optional[List[FeePayment]] = None
+    installments: Optional[List[FeeInstallment]] = None
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -2651,6 +2728,15 @@ class FeeUpdate(BaseModel):
     amount: Optional[float] = None
     due_date: Optional[str] = None
     payee_student_id: Optional[int] = None
+    grace_days: Optional[int] = None
+
+class MonthlyFeeGenerationRequest(BaseModel):
+    billing_year: int
+    billing_month: int
+    due_day: Optional[int] = None
+    batch_id: Optional[int] = None
+    grace_days: Optional[int] = 7
+    installment_count: Optional[int] = 1
 
 # Performance Models
 class PerformanceCreate(BaseModel):
@@ -3383,24 +3469,24 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Helper for resolving synchronous cache clearance
 def invalidate_cache(namespace: str):
-    """Invalidate redis cache namespace. Useful for sync endpoints."""
-    if not _REDIS_AVAILABLE or not redis_client:
-        return
+    """Invalidate FastAPICache namespace for whichever backend is active."""
     import asyncio
     try:
-        # FastAPI worker threads don't have an event loop running, so we can run one.
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            import nest_asyncio
-            nest_asyncio.apply()
-            loop.run_until_complete(FastAPICache.clear(namespace=namespace))
-        else:
-            loop.run_until_complete(FastAPICache.clear(namespace=namespace))
-    except Exception as e:
+        # Cache may not be initialized early in startup or during test bootstraps.
+        FastAPICache.get_backend()
+    except Exception:
+        return
+
+    try:
+        # Typical path in sync endpoints running in worker threads.
+        asyncio.run(FastAPICache.clear(namespace=namespace))
+    except RuntimeError:
+        # Fallback when an event loop is already active in current thread.
+        loop = asyncio.new_event_loop()
         try:
-            asyncio.run(FastAPICache.clear(namespace=namespace))
-        except RuntimeError:
-            pass
+            loop.run_until_complete(FastAPICache.clear(namespace=namespace))
+        finally:
+            loop.close()
 
 # CORS Configuration is registered AFTER the JWT middleware below so that
 # CORSMiddleware (added last) executes first and attaches Access-Control-
@@ -3665,7 +3751,7 @@ async def jwt_auth_middleware(request: Request, call_next):
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[0-1])(?:\.\d{1,3}){2})(:\d+)?",
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
@@ -5231,7 +5317,6 @@ def create_batch(batch: BatchCreate):
         db.close()
 
 @app.get("/batches/", response_model=List[Batch], dependencies=[Depends(require_student)])
-@cache(namespace="batches", expire=300)
 def get_batches(status: Optional[str] = Query(None)):
     db = SessionLocal()
     try:
@@ -6555,24 +6640,65 @@ def get_all_coach_attendance(date: str):
 # ==================== Fee Routes ====================
 
 # Helper functions for fee calculations
+def _parse_iso_date(value: str) -> Optional[date]:
+    try:
+        return datetime.fromisoformat(value).date()
+    except Exception:
+        return None
+
+
+def _build_cycle_key(billing_year: int, billing_month: int) -> str:
+    return f"{billing_year}-{billing_month:02d}"
+
+
+def _build_installment_schedule(total_amount: float, due_date: str, installment_count: int) -> List[Dict[str, Any]]:
+    count = max(1, installment_count or 1)
+    base_due_date = _parse_iso_date(due_date) or date.today()
+
+    if count == 1:
+        return [{"installment_no": 1, "due_date": due_date, "amount": float(total_amount)}]
+
+    base_amount = round(total_amount / count, 2)
+    schedule = []
+    for idx in range(count):
+        # Add N months while preserving day where possible.
+        month_index = (base_due_date.month - 1) + idx
+        target_year = base_due_date.year + (month_index // 12)
+        target_month = (month_index % 12) + 1
+        target_day = min(base_due_date.day, monthrange(target_year, target_month)[1])
+        target_due = date(target_year, target_month, target_day)
+
+        amount = base_amount if idx < count - 1 else round(total_amount - (base_amount * (count - 1)), 2)
+        schedule.append(
+            {
+                "installment_no": idx + 1,
+                "due_date": target_due.isoformat(),
+                "amount": float(amount),
+            }
+        )
+    return schedule
+
+
 def calculate_total_paid(fee_id: int, db) -> float:
     """Calculate total amount paid for a fee"""
     payments = db.query(FeePaymentDB).filter(FeePaymentDB.fee_id == fee_id).all()
-    return sum(payment.amount for payment in payments)
+    return sum(payment.amount for payment in payments if not payment.is_cancelled)
 
-def calculate_fee_status(amount: float, total_paid: float, due_date: str) -> str:
+def calculate_fee_status(amount: float, total_paid: float, due_date: str, grace_days: int = 7) -> str:
     """Calculate fee status based on payments and due date"""
     # Fully paid
     if total_paid >= amount:
         return 'paid'
 
-    # Check if overdue (7 days after due_date) — overdue takes priority over partial
+    # Check due-date-based states. Overdue takes priority over delay/partial.
     try:
-        due_date_obj = datetime.fromisoformat(due_date)
-        days_overdue = (datetime.now() - due_date_obj).days
-        if days_overdue >= 7:
+        due_date_obj = datetime.fromisoformat(due_date).date()
+        days_overdue = (date.today() - due_date_obj).days
+        if days_overdue >= max(1, grace_days):
             return 'overdue'
-    except:
+        if days_overdue > 0:
+            return 'delay'
+    except Exception:
         pass
 
     # Partially paid (some payment made but not fully paid)
@@ -6582,19 +6708,92 @@ def calculate_fee_status(amount: float, total_paid: float, due_date: str) -> str
     # Default to pending (no payment made yet)
     return 'pending'
 
+
+def _derive_fee_status_from_installments(installments: List[Dict[str, Any]]) -> str:
+    if not installments:
+        return 'pending'
+
+    statuses = [inst["status"] for inst in installments]
+    if all(status == 'paid' for status in statuses):
+        return 'paid'
+    if 'overdue' in statuses:
+        return 'overdue'
+    if 'delay' in statuses:
+        return 'delay'
+    if any((inst.get("paid_amount") or 0.0) > 0 for inst in installments):
+        return 'partial'
+    return 'pending'
+
+
+def _sync_installments_for_fee(
+    fee: FeeDB,
+    fee_payments: List[FeePaymentDB],
+    fee_installments: List[FeeInstallmentDB],
+) -> tuple[float, str, List[Dict[str, Any]], bool]:
+    total_paid = sum(payment.amount for payment in fee_payments if not payment.is_cancelled)
+
+    if not fee_installments:
+        status = calculate_fee_status(fee.amount, total_paid, fee.due_date, fee.grace_days or 7)
+        return total_paid, status, [], False
+
+    remaining_paid = total_paid
+    installment_rows = []
+    installments_changed = False
+
+    sorted_installments = sorted(
+        fee_installments,
+        key=lambda inst: (inst.installment_no, inst.id),
+    )
+
+    for installment in sorted_installments:
+        allocated_paid = min(remaining_paid, installment.amount)
+        remaining_paid = max(0.0, remaining_paid - installment.amount)
+        installment_status = calculate_fee_status(
+            installment.amount,
+            allocated_paid,
+            installment.due_date,
+            fee.grace_days or 7,
+        )
+
+        if abs((installment.paid_amount or 0.0) - allocated_paid) > 0.0001:
+            installment.paid_amount = float(allocated_paid)
+            installments_changed = True
+        if installment.status != installment_status:
+            installment.status = installment_status
+            installments_changed = True
+
+        installment_rows.append(
+            {
+                "id": installment.id,
+                "fee_id": installment.fee_id,
+                "installment_no": installment.installment_no,
+                "due_date": installment.due_date,
+                "amount": installment.amount,
+                "paid_amount": float(allocated_paid),
+                "status": installment_status,
+                "created_at": installment.created_at.isoformat() if installment.created_at else None,
+            }
+        )
+
+    return total_paid, _derive_fee_status_from_installments(installment_rows), installment_rows, installments_changed
+
 def enrich_fee_with_payments(fee: FeeDB, db) -> dict:
     """Enrich fee with payment data and calculate totals"""
-    total_paid = calculate_total_paid(fee.id, db)
-    status = calculate_fee_status(fee.amount, total_paid, fee.due_date)
+    payments = db.query(FeePaymentDB).filter(FeePaymentDB.fee_id == fee.id).order_by(FeePaymentDB.created_at.desc()).all()
+    installments = db.query(FeeInstallmentDB).filter(FeeInstallmentDB.fee_id == fee.id).order_by(FeeInstallmentDB.installment_no.asc()).all()
+
+    total_paid, status, installment_rows, installments_changed = _sync_installments_for_fee(fee, payments, installments)
     
-    # Update status in database if changed
+    # Update status/installments in database if changed
+    changed = False
     if fee.status != status:
         fee.status = status
+        changed = True
+    if installments_changed:
+        changed = True
+    if changed:
         db.commit()
         db.refresh(fee)
-    
-    # Get payments
-    payments = db.query(FeePaymentDB).filter(FeePaymentDB.fee_id == fee.id).order_by(FeePaymentDB.created_at.desc()).all()
     
     # Enrich payments with student names
     payment_list = []
@@ -6655,13 +6854,18 @@ def enrich_fee_with_payments(fee: FeeDB, db) -> dict:
         "pending_amount": fee.amount - total_paid,
         "due_date": fee.due_date,
         "status": status,
+        "billing_year": fee.billing_year,
+        "billing_month": fee.billing_month,
+        "cycle_key": fee.cycle_key,
+        "grace_days": fee.grace_days,
         "payee_student_id": fee.payee_student_id,
         "payee_student_name": payee_name,
         "payments": payment_list,
+        "installments": installment_rows,
     }
 
 def enrich_fees_bulk(fees: list, db) -> list:
-    """Batch-load all payments, students and batches in 4 queries instead of N×M."""
+    """Batch-load all payments, installments, students and batches with minimal queries."""
     if not fees:
         return []
 
@@ -6679,6 +6883,12 @@ def enrich_fees_bulk(fees: list, db) -> list:
         if p.payee_student_id:
             payee_student_ids.add(p.payee_student_id)
 
+    # 1 query: all installments for these fees
+    all_installments = db.query(FeeInstallmentDB).filter(FeeInstallmentDB.fee_id.in_(fee_ids)).all()
+    installments_by_fee: dict = {}
+    for inst in all_installments:
+        installments_by_fee.setdefault(inst.fee_id, []).append(inst)
+
     # 1 query: all relevant students
     all_student_ids = list(set(student_ids) | payee_student_ids)
     students_map = {s.id: s for s in db.query(StudentDB).filter(StudentDB.id.in_(all_student_ids)).all()} if all_student_ids else {}
@@ -6687,11 +6897,14 @@ def enrich_fees_bulk(fees: list, db) -> list:
     batches_map = {b.id: b for b in db.query(BatchDB).filter(BatchDB.id.in_(batch_ids)).all()} if batch_ids else {}
 
     status_changed = []
+    installments_changed = False
     result = []
     for fee in fees:
         fee_payments = payments_by_fee.get(fee.id, [])
-        total_paid = sum(p.amount for p in fee_payments if not p.is_cancelled)
-        status = calculate_fee_status(fee.amount, total_paid, fee.due_date)
+        fee_installments = installments_by_fee.get(fee.id, [])
+        total_paid, status, installment_rows, inst_changed = _sync_installments_for_fee(fee, fee_payments, fee_installments)
+        if inst_changed:
+            installments_changed = True
         if fee.status != status:
             fee.status = status
             status_changed.append(fee)
@@ -6719,12 +6932,17 @@ def enrich_fees_bulk(fees: list, db) -> list:
             "amount": fee.amount, "total_paid": total_paid,
             "pending_amount": fee.amount - total_paid,
             "due_date": fee.due_date, "status": status,
+            "billing_year": fee.billing_year,
+            "billing_month": fee.billing_month,
+            "cycle_key": fee.cycle_key,
+            "grace_days": fee.grace_days,
             "payee_student_id": fee.payee_student_id,
             "payee_student_name": payee_name,
             "payments": payment_list,
+            "installments": installment_rows,
         })
 
-    if status_changed:
+    if status_changed or installments_changed:
         db.commit()
     return result
 
@@ -6732,19 +6950,143 @@ def enrich_fees_bulk(fees: list, db) -> list:
 def create_fee(fee: FeeCreate):
     db = SessionLocal()
     try:
+        parsed_due_date = _parse_iso_date(fee.due_date)
+
         # Calculate initial status (pending if no payments)
         initial_status = fee.status if fee.status else 'pending'
+        billing_year = fee.billing_year if fee.billing_year is not None else (parsed_due_date.year if parsed_due_date else None)
+        billing_month = fee.billing_month if fee.billing_month is not None else (parsed_due_date.month if parsed_due_date else None)
+        cycle_key = _build_cycle_key(billing_year, billing_month) if billing_year and billing_month else None
         
         # Create fee
-        fee_dict = fee.dict()
+        fee_dict = fee.model_dump(exclude={"installment_count"})
         fee_dict['status'] = initial_status
+        fee_dict['billing_year'] = billing_year
+        fee_dict['billing_month'] = billing_month
+        fee_dict['cycle_key'] = cycle_key
+        fee_dict['grace_days'] = fee.grace_days if fee.grace_days is not None else 7
         db_fee = FeeDB(**fee_dict)
         db.add(db_fee)
         db.commit()
         db.refresh(db_fee)
+
+        # Create installment schedule for this fee cycle.
+        schedule = _build_installment_schedule(db_fee.amount, db_fee.due_date, fee.installment_count or 1)
+        for entry in schedule:
+            db.add(
+                FeeInstallmentDB(
+                    fee_id=db_fee.id,
+                    installment_no=entry["installment_no"],
+                    due_date=entry["due_date"],
+                    amount=entry["amount"],
+                    paid_amount=0.0,
+                    status='pending',
+                )
+            )
+        db.commit()
         
         # Enrich with payments and calculate totals
         return enrich_fee_with_payments(db_fee, db)
+    finally:
+        db.close()
+
+
+def _parse_batch_fee_amount(raw_value: Optional[str]) -> float:
+    if not raw_value:
+        return 0.0
+    cleaned = re.sub(r"[^0-9.]", "", raw_value)
+    if not cleaned:
+        return 0.0
+    try:
+        return float(cleaned)
+    except Exception:
+        return 0.0
+
+
+@app.post("/fees/generate-monthly", dependencies=[Depends(require_owner)])
+def generate_monthly_fees(req: MonthlyFeeGenerationRequest):
+    db = SessionLocal()
+    try:
+        if req.billing_month < 1 or req.billing_month > 12:
+            raise HTTPException(status_code=400, detail="billing_month must be between 1 and 12")
+
+        cycle_key = _build_cycle_key(req.billing_year, req.billing_month)
+        due_day = req.due_day if req.due_day is not None else 5
+        due_day = min(max(1, due_day), monthrange(req.billing_year, req.billing_month)[1])
+        due_date = date(req.billing_year, req.billing_month, due_day).isoformat()
+
+        enrollments_query = db.query(BatchStudentDB).filter(BatchStudentDB.status == "approved")
+        if req.batch_id is not None:
+            enrollments_query = enrollments_query.filter(BatchStudentDB.batch_id == req.batch_id)
+        enrollments = enrollments_query.all()
+
+        batch_ids = list({enrollment.batch_id for enrollment in enrollments})
+        batches = db.query(BatchDB).filter(BatchDB.id.in_(batch_ids)).all() if batch_ids else []
+        batch_map = {batch.id: batch for batch in batches}
+
+        created = 0
+        skipped_existing = 0
+        skipped_invalid_amount = 0
+
+        for enrollment in enrollments:
+            batch = batch_map.get(enrollment.batch_id)
+            if not batch:
+                continue
+            if getattr(batch, "status", "active") == "inactive":
+                continue
+
+            existing = db.query(FeeDB).filter(
+                FeeDB.student_id == enrollment.student_id,
+                FeeDB.batch_id == enrollment.batch_id,
+                FeeDB.cycle_key == cycle_key,
+            ).first()
+            if existing:
+                skipped_existing += 1
+                continue
+
+            fee_amount = _parse_batch_fee_amount(getattr(batch, "fees", None))
+            if fee_amount <= 0:
+                skipped_invalid_amount += 1
+                continue
+
+            db_fee = FeeDB(
+                student_id=enrollment.student_id,
+                batch_id=enrollment.batch_id,
+                amount=fee_amount,
+                due_date=due_date,
+                status='pending',
+                billing_year=req.billing_year,
+                billing_month=req.billing_month,
+                cycle_key=cycle_key,
+                grace_days=req.grace_days if req.grace_days is not None else 7,
+            )
+            db.add(db_fee)
+            db.flush()
+
+            schedule = _build_installment_schedule(db_fee.amount, db_fee.due_date, req.installment_count or 1)
+            for entry in schedule:
+                db.add(
+                    FeeInstallmentDB(
+                        fee_id=db_fee.id,
+                        installment_no=entry["installment_no"],
+                        due_date=entry["due_date"],
+                        amount=entry["amount"],
+                        paid_amount=0.0,
+                        status='pending',
+                    )
+                )
+            created += 1
+
+        db.commit()
+        return {
+            "message": "Monthly fee generation completed",
+            "cycle_key": cycle_key,
+            "due_date": due_date,
+            "created": created,
+            "skipped_existing": skipped_existing,
+            "skipped_invalid_amount": skipped_invalid_amount,
+            "installment_count": req.installment_count or 1,
+        }
     finally:
         db.close()
 
@@ -6796,6 +7138,19 @@ def get_all_fees(
         
         fees = query.order_by(FeeDB.due_date.desc()).all()
         return enrich_fees_bulk(fees, db)
+    finally:
+        db.close()
+
+
+@app.get("/fees/{fee_id}", response_model=Fee, dependencies=[Depends(require_student)])
+def get_fee_by_id(fee_id: int):
+    """Get a single fee by id, enriched with payments and installment breakdown."""
+    db = SessionLocal()
+    try:
+        fee = db.query(FeeDB).filter(FeeDB.id == fee_id).first()
+        if not fee:
+            raise HTTPException(status_code=404, detail="Fee not found")
+        return enrich_fee_with_payments(fee, db)
     finally:
         db.close()
 
@@ -6927,9 +7282,10 @@ def verify_razorpay_payment(fee_id: int, req: RazorpayVerifyRequest):
         db.commit()
         db.refresh(db_payment)
         
-        # Auto-update the fee status
-        new_total_paid = calculate_total_paid(fee_id, db)
-        new_status = calculate_fee_status(fee.amount, new_total_paid, fee.due_date)
+        # Auto-update fee/installment statuses.
+        fee_payments = db.query(FeePaymentDB).filter(FeePaymentDB.fee_id == fee_id).all()
+        fee_installments = db.query(FeeInstallmentDB).filter(FeeInstallmentDB.fee_id == fee_id).all()
+        _, new_status, _, _ = _sync_installments_for_fee(fee, fee_payments, fee_installments)
         fee.status = new_status
         db.commit()
         
@@ -6988,9 +7344,10 @@ def create_fee_payment(fee_id: int, payment: FeePaymentCreate):
         db.commit()
         db.refresh(db_payment)
         
-        # Recalculate fee status
-        new_total_paid = calculate_total_paid(fee_id, db)
-        new_status = calculate_fee_status(fee.amount, new_total_paid, fee.due_date)
+        # Recalculate fee/installment statuses
+        fee_payments = db.query(FeePaymentDB).filter(FeePaymentDB.fee_id == fee_id).all()
+        fee_installments = db.query(FeeInstallmentDB).filter(FeeInstallmentDB.fee_id == fee_id).all()
+        _, new_status, _, _ = _sync_installments_for_fee(fee, fee_payments, fee_installments)
         fee.status = new_status
         db.commit()
         db.refresh(fee)
@@ -7085,6 +7442,28 @@ def get_fee_payments(fee_id: int):
     finally:
         db.close()
 
+
+@app.get("/fees/{fee_id}/installments", response_model=List[FeeInstallment], dependencies=[Depends(require_student)])
+def get_fee_installments(fee_id: int):
+    db = SessionLocal()
+    try:
+        installments = db.query(FeeInstallmentDB).filter(FeeInstallmentDB.fee_id == fee_id).order_by(FeeInstallmentDB.installment_no.asc()).all()
+        return [
+            {
+                "id": installment.id,
+                "fee_id": installment.fee_id,
+                "installment_no": installment.installment_no,
+                "due_date": installment.due_date,
+                "amount": installment.amount,
+                "paid_amount": installment.paid_amount,
+                "status": installment.status,
+                "created_at": installment.created_at.isoformat() if installment.created_at else None,
+            }
+            for installment in installments
+        ]
+    finally:
+        db.close()
+
 @app.delete("/fees/{fee_id}/payments/{payment_id}", dependencies=[Depends(require_owner)])
 def delete_fee_payment(fee_id: int, payment_id: int, cancel_reason: str = Body(..., embed=True), current_user: dict = Depends(require_owner)):
     """Soft cancel a payment and recalculate fee status (C12 requirement)"""
@@ -7106,12 +7485,12 @@ def delete_fee_payment(fee_id: int, payment_id: int, cancel_reason: str = Body(.
         payment.cancel_reason = cancel_reason
         db.commit()
         
-        # Recalculate fee status
+        # Recalculate fee/installment statuses
         fee = db.query(FeeDB).filter(FeeDB.id == fee_id).first()
         if fee:
-            query = db.query(func.sum(FeePaymentDB.amount)).filter(FeePaymentDB.fee_id == fee_id, FeePaymentDB.is_cancelled == False)
-            total_paid = query.scalar() or 0.0
-            new_status = calculate_fee_status(fee.amount, total_paid, fee.due_date)
+            fee_payments = db.query(FeePaymentDB).filter(FeePaymentDB.fee_id == fee_id).all()
+            fee_installments = db.query(FeeInstallmentDB).filter(FeeInstallmentDB.fee_id == fee_id).all()
+            _, new_status, _, _ = _sync_installments_for_fee(fee, fee_payments, fee_installments)
             fee.status = new_status
             db.commit()
         

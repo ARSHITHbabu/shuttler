@@ -1,4 +1,5 @@
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/batch.dart';
 import '../models/student.dart';
 import 'service_providers.dart';
@@ -67,9 +68,9 @@ class BatchList extends _$BatchList {
     try {
       final batchService = ref.read(batchServiceProvider);
       await batchService.deactivateBatch(id);
-      
+
+      await _updateBatchStatusLocally(id, 'inactive');
       ref.invalidate(dashboardStatsProvider);
-      await refresh();
     } catch (e) {
       throw Exception('Failed to deactivate batch: $e');
     }
@@ -80,12 +81,30 @@ class BatchList extends _$BatchList {
     try {
       final batchService = ref.read(batchServiceProvider);
       await batchService.activateBatch(id);
-      
+
+      await _updateBatchStatusLocally(id, 'active');
       ref.invalidate(dashboardStatsProvider);
-      await refresh();
     } catch (e) {
       throw Exception('Failed to activate batch: $e');
     }
+  }
+
+  Future<void> _updateBatchStatusLocally(int id, String status) async {
+    final current = state.valueOrNull ?? await future;
+
+    final updated = current
+        .map((batch) => batch.id == id
+            ? batch.copyWith(
+                status: status,
+                inactiveAt: status == 'inactive'
+                    ? DateTime.now().toIso8601String()
+                    : null,
+              )
+            : batch)
+        .toList()
+      ..sort((a, b) => b.id.compareTo(a.id));
+
+    state = AsyncValue.data(updated);
   }
 
   /// Remove a batch permanently (Hard delete)
@@ -157,13 +176,13 @@ class BatchList extends _$BatchList {
 
 /// Provider for batch students
 @riverpod
-Future<List<Student>> batchStudents(BatchStudentsRef ref, int batchId) async {
+Future<List<Student>> batchStudents(Ref ref, int batchId) async {
   final batchService = ref.watch(batchServiceProvider);
   return batchService.getBatchStudents(batchId);
 }
 
 @riverpod
-Future<List<Batch>> studentBatches(StudentBatchesRef ref, int studentId) async {
+Future<List<Batch>> studentBatches(Ref ref, int studentId) async {
   final batchService = ref.watch(batchServiceProvider);
   final batches = await batchService.getStudentBatches(studentId);
   // Sort by ID descending (latest first)

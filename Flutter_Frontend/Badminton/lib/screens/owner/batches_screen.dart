@@ -28,6 +28,13 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(batchListProvider.notifier).refresh();
+      setState(() {
+        _statusFilter = 'active';
+        _searchQuery = '';
+      });
+    });
   }
 
   void _openAddForm() {
@@ -88,25 +95,18 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
   void _handleDeactivateBatch(Batch batch) async {
     try {
       await ref.read(batchListProvider.notifier).deactivateBatch(batch.id);
-      
-      // Add a small delay to ensure dialog transition is complete and build context is stable
-      if (mounted) {
-        await Future.delayed(const Duration(milliseconds: 300));
-        if (mounted) {
-          SuccessSnackbar.show(context, 'Batch deactivated successfully');
-        }
-      }
+      if (!mounted) return;
+      SuccessSnackbar.show(context, 'Batch deactivated successfully');
     } catch (e) {
-      if (mounted) {
-        SuccessSnackbar.showError(context, 'Failed to deactivate batch: ${e.toString()}');
-      }
+      if (!mounted) return;
+      SuccessSnackbar.showError(context, 'Failed to deactivate batch: ${e.toString()}');
     }
   }
 
   void _handleRemoveBatchPermanently(Batch batch) async {
     showDialog(
       context: context,
-      builder: (context) => ConfirmationDialog(
+      builder: (dialogContext) => ConfirmationDialog(
         title: 'Permanent Deletion',
         message: 'This action CANNOT be undone. All data for ${batch.name} will be permanently destroyed. Are you absolutely sure?',
         confirmText: 'Delete Forever',
@@ -114,13 +114,11 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
         onConfirm: () async {
           try {
             await ref.read(batchListProvider.notifier).removeBatchPermanently(batch.id);
-            if (mounted) {
-              SuccessSnackbar.show(context, 'Batch deleted permanently');
-            }
+            if (!mounted) return;
+            SuccessSnackbar.show(context, 'Batch deleted permanently');
           } catch (e) {
-            if (mounted) {
-              SuccessSnackbar.showError(context, 'Failed to delete batch: ${e.toString()}');
-            }
+            if (!mounted) return;
+            SuccessSnackbar.showError(context, 'Failed to delete batch: ${e.toString()}');
           }
         },
       ),
@@ -230,12 +228,6 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
                 // Batches List
                 batchesAsync.when(
                   data: (batches) {
-                    // Debug logging to verify batch statuses
-                    debugPrint('DEBUG: Loaded ${batches.length} batches from backend');
-                    for (var b in batches) {
-                      debugPrint('Batch ${b.id}: ${b.name} [${b.status}]');
-                    }
-
                     final filteredBatches = batches.where((batch) {
                       // Filter by status
                       final status = batch.status.toLowerCase();
@@ -258,13 +250,11 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
 
                     return Padding(
                       padding: const EdgeInsets.symmetric(horizontal: AppDimensions.paddingL),
-                      child: Column(
-                        children: filteredBatches.map((batch) => _BatchCard(
-                          batch: batch,
-                          onEdit: () => _openEditForm(batch),
-                          onDeactivate: () => _handleDeactivateBatch(batch),
-                          onDelete: () => _handleRemoveBatchPermanently(batch),
-                        )).toList(),
+                      child: BatchListView(
+                        batches: filteredBatches,
+                        onEdit: _openEditForm,
+                        onDelete: _deleteBatch,
+                        onDeactivate: _handleDeactivateBatch,
                       ),
                     );
                   },
@@ -292,6 +282,39 @@ class _BatchesScreenState extends ConsumerState<BatchesScreen> {
 }
 }
 
+class BatchListView extends StatelessWidget {
+  final List<Batch> batches;
+  final ValueChanged<Batch> onEdit;
+  final ValueChanged<Batch> onDelete;
+  final ValueChanged<Batch> onDeactivate;
+
+  const BatchListView({
+    super.key,
+    required this.batches,
+    required this.onEdit,
+    required this.onDelete,
+    required this.onDeactivate,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: batches.length,
+      itemBuilder: (context, index) {
+        final batch = batches[index];
+        return _BatchCard(
+          batch: batch,
+          onEdit: () => onEdit(batch),
+          onDelete: () => onDelete(batch),
+          onDeactivate: () => onDeactivate(batch),
+        );
+      },
+    );
+  }
+}
+
 class _BatchCard extends StatelessWidget {
   final Batch batch;
   final VoidCallback onDelete;
@@ -307,9 +330,6 @@ class _BatchCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
     return NeumorphicContainer(
       margin: const EdgeInsets.only(bottom: AppDimensions.spacingM),
       padding: const EdgeInsets.all(AppDimensions.paddingL),
@@ -425,7 +445,7 @@ class _DeleteOption extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          border: Border.all(color: color.withOpacity(0.3)),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
@@ -468,7 +488,7 @@ class _FilterButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.accent.withOpacity(0.15) : Colors.transparent,
+          color: isSelected ? AppColors.accent.withValues(alpha: 0.15) : Colors.transparent,
           borderRadius: BorderRadius.circular(AppDimensions.radiusS),
         ),
         child: Center(

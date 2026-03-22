@@ -11,7 +11,13 @@ class ApiEndpoints {
     }
 
     if (kIsWeb) {
-      return 'http://localhost:8001';
+      // Use the current browser host so web works from localhost and LAN URLs.
+      // Example: app at http://192.168.1.9:52741 -> API at http://192.168.1.9:8001
+      final host = Uri.base.host;
+      if (host.isEmpty || host == 'localhost' || host == '127.0.0.1') {
+        return 'http://localhost:8001';
+      }
+      return 'http://$host:8001';
     }
     // Use your computer's local network IP address
     // Run get_local_ip.ps1 to find your current IP address

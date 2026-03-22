@@ -526,7 +526,6 @@ class _StudentFeesViewState extends ConsumerState<StudentFeesView> {
             ref.invalidate(studentsWithBatchFeesProvider);
             ref.invalidate(feeListProvider);
             if (mounted) {
-              Navigator.pop(ctx);
               final updated = await ref.read(feeServiceProvider).getFeeById(effectiveFee.id);
               setState(() => _selectedFee = updated);
               SuccessSnackbar.show(context, 'Payment recorded');
