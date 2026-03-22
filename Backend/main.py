@@ -1126,7 +1126,8 @@ class AnnouncementDB(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(255), nullable=False)
     message = Column(Text, nullable=False)
-    target_audience = Column(String(50), default="all")  # "all", "students", "coaches"
+    target_audience = Column(String(50), default="all")  # "all", "students", "coaches", "batch"
+    target_batch_id = Column(Integer, ForeignKey("batches.id", ondelete="CASCADE"), nullable=True) # ID of batch if target_audience is "batch"
     priority = Column(String(20), default="General")  # "General", "Important"
     created_by = Column(Integer, nullable=True)  # Can be coach or owner ID
     creator_type = Column(String(20), default="coach")  # "coach" or "owner"
@@ -1460,6 +1461,7 @@ def migrate_database_schema(engine):
         # Migrate announcements table - add creator_type and make created_by nullable
         if 'announcements' in tables:
             check_and_add_column(engine, 'announcements', 'creator_type', 'VARCHAR(20)', nullable=True, default_value="'coach'")
+            check_and_add_column(engine, 'announcements', 'target_batch_id', 'INTEGER', nullable=True)
             # Make created_by nullable and remove foreign key constraint (since it can reference either coaches or owners)
             try:
                 with engine.begin() as conn:
@@ -3199,6 +3201,7 @@ class AnnouncementCreate(BaseModel):
     title: str
     message: str
     target_audience: str = "all"
+    target_batch_id: Optional[int] = None
     priority: str = "General"
     created_by: int
     creator_type: str = "coach"  # "coach" or "owner"
@@ -3227,8 +3230,8 @@ class AnnouncementCreate(BaseModel):
     @field_validator('target_audience')
     @classmethod
     def validate_target_audience(cls, v):
-        if v not in ["all", "students", "coaches"]:
-            raise ValueError('target_audience must be "all", "students", or "coaches"')
+        if v not in ["all", "students", "coaches", "batch"]:
+            raise ValueError('target_audience must be "all", "students", "coaches", or "batch"')
         return v
 
     @field_validator('creator_type')
@@ -3250,6 +3253,7 @@ class Announcement(BaseModel):
     title: str
     message: str
     target_audience: str
+    target_batch_id: Optional[int] = None
     priority: str
     created_by: int
     creator_type: str = "coach"  # "coach" or "owner"
@@ -3263,6 +3267,7 @@ class AnnouncementUpdate(BaseModel):
     title: Optional[str] = None
     message: Optional[str] = None
     target_audience: Optional[str] = None
+    target_batch_id: Optional[int] = None
     priority: Optional[str] = None
     scheduled_at: Optional[str] = None
     is_sent: Optional[bool] = None
@@ -9693,6 +9698,7 @@ def _db_announcement_to_pydantic(db_announcement: AnnouncementDB) -> Announcemen
         title=db_announcement.title,
         message=db_announcement.message,
         target_audience=db_announcement.target_audience,
+        target_batch_id=db_announcement.target_batch_id,
         priority=db_announcement.priority,
         created_by=db_announcement.created_by,
         creator_type=db_announcement.creator_type,
@@ -9767,6 +9773,33 @@ def create_announcement(announcement: AnnouncementCreate):
                 target_users.extend([(s.id, "student") for s in db.query(StudentDB).filter(StudentDB.status == "active").all()])
             elif db_announcement.target_audience == "coaches":
                 target_users.extend([(c.id, "coach") for c in db.query(CoachDB).filter(CoachDB.status == "active").all()])
+            elif db_announcement.target_audience == "batch" and db_announcement.target_batch_id:
+                # Get all students in this batch
+                batch_students = db.query(BatchStudentDB).filter(
+                    BatchStudentDB.batch_id == db_announcement.target_batch_id,
+                    BatchStudentDB.status == "active"
+                ).all()
+                student_ids = [bs.student_id for bs in batch_students]
+                if student_ids:
+                    target_users.extend([(s_id, "student") for s_id in student_ids])
+                
+                # Get all coaches related to this batch
+                coach_ids = set()
+                batch_coaches = db.query(BatchCoachDB).filter(BatchCoachDB.batch_id == db_announcement.target_batch_id).all()
+                for bc in batch_coaches:
+                    coach_ids.add(bc.coach_id)
+                
+                batch = db.query(BatchDB).filter(BatchDB.id == db_announcement.target_batch_id).first()
+                if batch and batch.assigned_coach_id:
+                    coach_ids.add(batch.assigned_coach_id)
+                
+                if coach_ids:
+                    active_coaches = db.query(CoachDB).filter(
+                        CoachDB.id.in_(list(coach_ids)),
+                        CoachDB.status == "active"
+                    ).all()
+                    for ac in active_coaches:
+                        target_users.append((ac.id, "coach"))
             
             for uid, utype in target_users:
                 create_notification(

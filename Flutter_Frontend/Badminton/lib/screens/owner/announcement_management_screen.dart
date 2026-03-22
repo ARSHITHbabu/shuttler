@@ -11,6 +11,7 @@ import '../../widgets/common/confirmation_dialog.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/announcement_provider.dart';
 import '../../models/announcement.dart';
+import '../../providers/batch_provider.dart';
 import 'package:intl/intl.dart';
 
 /// Announcement Management Screen - Create and manage announcements
@@ -31,7 +32,8 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
   final _titleController = TextEditingController();
   final _messageController = TextEditingController();
   String _selectedPriority = 'General'; // 'General', 'Important'
-  String _selectedTargetAudience = 'all'; // 'all', 'students', 'coaches'
+  String _selectedTargetAudience = 'all'; // 'all', 'students', 'coaches', 'batch'
+  int? _selectedBatchId;
   DateTime? _scheduledAt;
 
   @override
@@ -50,6 +52,7 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
       _messageController.text = announcement.message;
       _selectedPriority = announcement.priority;
       _selectedTargetAudience = announcement.targetAudience;
+      _selectedBatchId = announcement.targetBatchId;
       _scheduledAt = announcement.scheduledAt;
     });
   }
@@ -67,6 +70,12 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
 
     setState(() => _isLoading = true);
     try {
+      if (_selectedTargetAudience == 'batch' && _selectedBatchId == null) {
+        SuccessSnackbar.showError(context, 'Please select a batch');
+        setState(() => _isLoading = false);
+        return;
+      }
+
       final authState = await ref.read(authProvider.future);
       
       int? createdBy;
@@ -96,6 +105,7 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
         'title': _titleController.text.trim(),
         'message': _messageController.text.trim(),
         'target_audience': _selectedTargetAudience,
+        'target_batch_id': _selectedTargetAudience == 'batch' ? _selectedBatchId : null,
         'priority': _selectedPriority,
         'created_by': createdBy,
         'creator_type': creatorType,
@@ -123,6 +133,7 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
           _messageController.clear();
           _selectedPriority = 'General';
           _selectedTargetAudience = 'all';
+          _selectedBatchId = null;
           _scheduledAt = null;
           _editingAnnouncement = null;
           _isLoading = false;
@@ -360,14 +371,59 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
                     DropdownMenuItem(value: 'all', child: Text('All')),
                     DropdownMenuItem(value: 'students', child: Text('Students Only')),
                     DropdownMenuItem(value: 'coaches', child: Text('Coaches Only')),
+                    DropdownMenuItem(value: 'batch', child: Text('Specific Batch')),
                   ],
                   onChanged: (value) {
                     if (value != null) {
-                      setState(() => _selectedTargetAudience = value);
+                      setState(() {
+                        _selectedTargetAudience = value;
+                        if (value != 'batch') {
+                           _selectedBatchId = null;
+                        }
+                      });
                     }
                   },
                 ),
               ),
+
+              if (_selectedTargetAudience == 'batch') ...[
+                const SizedBox(height: AppDimensions.spacingM),
+                Consumer(
+                  builder: (context, ref, child) {
+                    final batchesAsync = ref.watch(batchListProvider);
+
+                    return batchesAsync.when(
+                      loading: () => const Center(child: CircularProgressIndicator()),
+                      error: (err, stack) => Text('Error loading batches: $err', style: const TextStyle(color: AppColors.error)),
+                      data: (batches) {
+                        final activeBatches = batches.where((b) => b.status == 'active').toList();
+                        return NeumorphicContainer(
+                          padding: const EdgeInsets.all(AppDimensions.paddingM),
+                          child: DropdownButtonFormField<int>(
+                            value: _selectedBatchId,
+                            decoration: const InputDecoration(
+                              labelText: 'Select Batch',
+                              labelStyle: TextStyle(color: AppColors.textSecondary),
+                              border: InputBorder.none,
+                            ),
+                            dropdownColor: AppColors.cardBackground,
+                            style: const TextStyle(color: AppColors.textPrimary),
+                            items: activeBatches.map((batch) {
+                              return DropdownMenuItem<int>(
+                                value: batch.id,
+                                child: Text(batch.batchName),
+                              );
+                            }).toList(),
+                            onChanged: (value) {
+                              setState(() => _selectedBatchId = value);
+                            },
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ],
 
               const SizedBox(height: AppDimensions.spacingM),
 
@@ -577,6 +633,38 @@ class _AnnouncementManagementScreenState extends ConsumerState<AnnouncementManag
                   ),
                 ),
               ),
+              if (announcement.targetAudience == 'batch') ...[
+                const SizedBox(width: AppDimensions.spacingS),
+                Consumer(
+                  builder: (context, ref, child) {
+                    final batchesAsync = ref.watch(batchListProvider);
+                    return batchesAsync.when(
+                      data: (batches) {
+                        final batch = batches.where((b) => b.id == announcement.targetBatchId).firstOrNull;
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppDimensions.spacingM,
+                            vertical: AppDimensions.spacingS,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.cardBackground,
+                            borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                          ),
+                          child: Text(
+                            batch?.batchName ?? 'Unknown Batch',
+                            style: const TextStyle(
+                              color: AppColors.accent,
+                              fontSize: 12,
+                            ),
+                          ),
+                        );
+                      },
+                      loading: () => const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                      error: (_, __) => const SizedBox(),
+                    );
+                  },
+                ),
+              ],
               const Spacer(),
               Text(
                 DateFormat('dd MMM, yyyy').format(announcement.createdAt),
