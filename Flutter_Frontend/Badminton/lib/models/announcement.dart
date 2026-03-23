@@ -5,7 +5,8 @@ class Announcement {
   final int id;
   final String title;
   final String message;
-  final String targetAudience; // 'all', 'students', 'coaches'
+  final String targetAudience; // 'all', 'students', 'coaches', 'batch'
+  final int? targetBatchId;
   final String priority; // 'General', 'Important'
   final int? createdBy; // coach_id (owner)
   final String? createdByName;
@@ -18,6 +19,7 @@ class Announcement {
     required this.title,
     required this.message,
     required this.targetAudience,
+    this.targetBatchId,
     required this.priority,
     this.createdBy,
     this.createdByName,
@@ -33,6 +35,7 @@ class Announcement {
       title: json['title'] as String,
       message: json['message'] as String,
       targetAudience: json['target_audience'] as String? ?? 'all',
+      targetBatchId: json['target_batch_id'] as int?,
       priority: json['priority'] as String? ?? 'General',
       createdBy: json['created_by'] as int?,
       createdByName: json['created_by_name'] as String?,
@@ -50,6 +53,7 @@ class Announcement {
       'title': title,
       'message': message,
       'target_audience': targetAudience,
+      'target_batch_id': targetBatchId,
       'priority': priority,
       'created_by': createdBy,
       'scheduled_at': scheduledAt?.toIso8601String(),
@@ -62,6 +66,7 @@ class Announcement {
     String? title,
     String? message,
     String? targetAudience,
+    int? targetBatchId,
     String? priority,
     int? createdBy,
     String? createdByName,
@@ -74,6 +79,7 @@ class Announcement {
       title: title ?? this.title,
       message: message ?? this.message,
       targetAudience: targetAudience ?? this.targetAudience,
+      targetBatchId: targetBatchId ?? this.targetBatchId,
       priority: priority ?? this.priority,
       createdBy: createdBy ?? this.createdBy,
       createdByName: createdByName ?? this.createdByName,
