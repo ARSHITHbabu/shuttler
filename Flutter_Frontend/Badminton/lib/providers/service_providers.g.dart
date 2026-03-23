@@ -481,7 +481,7 @@ final connectivityServiceProvider =
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef ConnectivityServiceRef = AutoDisposeProviderRef<ConnectivityService>;
-String _$requestQueueHash() => r'162b38e9be3558221772227e935e1fd15405aa03';
+String _$requestQueueHash() => r'4df4328e2468d70617d3ef263c9607af59baa197';
 
 /// Provider for RequestQueue singleton
 /// Note: RequestQueue requires ConnectivityService and Dio from ApiService

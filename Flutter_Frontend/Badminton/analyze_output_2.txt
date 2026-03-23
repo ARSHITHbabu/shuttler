@@ -1,0 +1,463 @@
+﻿Analyzing Badminton...                                          
+
+   info - Don't invoke 'print' in production code - lib\core\error\error_handler.dart:249:5 - avoid_print
+   info - Don't invoke 'print' in production code - lib\core\error\error_handler.dart:251:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\core\services\api_service.dart:129:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\core\services\api_service.dart:131:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\core\services\api_service.dart:134:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\core\services\api_service.dart:139:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\core\services\api_service.dart:143:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\core\services\api_service.dart:144:9 - avoid_print
+   info - Don't invoke 'print' in production code - lib\core\services\api_service.dart:191:15 - avoid_print
+   info - Don't invoke 'print' in production code - lib\core\services\api_service.dart:195:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\core\services\api_service.dart:199:13 - avoid_print
+   info - Don't invoke 'print' in production code - lib\core\services\api_service.dart:207:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\core\services\api_service.dart:211:11 - avoid_print
+   info - Don't invoke 'print' in production code - lib\core\services\api_service.dart:679:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\core\services\auth_service.dart:376:7 - avoid_print
+   info - Don't invoke 'print' in production code - lib\core\services\report_service.dart:62:7 - avoid_print
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\core\theme\app_theme.dart:182:57 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\core\theme\app_theme.dart:460:62 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\core\utils\contact_utils.dart:57:35 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\core\utils\contact_utils.dart:166:28 - deprecated_member_use
+   info - Don't use 'BuildContext's across async gaps - lib\main.dart:60:11 - use_build_context_synchronously
+   info - 'AnnouncementListRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\announcement_provider.dart:11:3 - deprecated_member_use_from_same_package
+   info - 'AnnouncementByIdRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\announcement_provider.dart:26:39 - deprecated_member_use_from_same_package
+   info - 'AnnouncementByAudienceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\announcement_provider.dart:34:3 - deprecated_member_use_from_same_package
+   info - 'AnnouncementByPriorityRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\announcement_provider.dart:44:3 - deprecated_member_use_from_same_package
+   info - 'StudentAttendanceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\attendance_provider.dart:13:3 - deprecated_member_use_from_same_package
+   info - 'CoachAttendanceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\attendance_provider.dart:24:3 - deprecated_member_use_from_same_package
+   info - 'CoachAttendanceByCoachIdRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\attendance_provider.dart:34:3 - deprecated_member_use_from_same_package
+   info - 'BatchStudentsForAttendanceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\attendance_provider.dart:44:3 - deprecated_member_use_from_same_package
+   info - 'CoachesForAttendanceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\attendance_provider.dart:53:42 - deprecated_member_use_from_same_package
+   info - 'AttendanceByStudentRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\attendance_provider.dart:71:3 - deprecated_member_use_from_same_package
+   info - 'BmiByStudentRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\bmi_provider.dart:10:3 - deprecated_member_use_from_same_package
+   info - 'BmiByIdRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\bmi_provider.dart:25:27 - deprecated_member_use_from_same_package
+   info - 'LatestBmiRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\bmi_provider.dart:32:30 - deprecated_member_use_from_same_package
+   info - 'BmiTrendRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\bmi_provider.dart:46:3 - deprecated_member_use_from_same_package
+   info - 'CalendarEventsRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\calendar_provider.dart:10:3 - deprecated_member_use_from_same_package
+   info - 'YearlyEventsRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\calendar_provider.dart:26:3 - deprecated_member_use_from_same_package
+   info - 'CalendarEventByDateRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\calendar_provider.dart:41:3 - deprecated_member_use_from_same_package
+   info - 'CalendarEventByTypeRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\calendar_provider.dart:58:3 - deprecated_member_use_from_same_package
+   info - 'CalendarEventByIdRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\calendar_provider.dart:67:41 - deprecated_member_use_from_same_package
+   info - 'CoachByIdRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\coach_provider.dart:14:25 - deprecated_member_use_from_same_package
+   info - 'CoachBatchesRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\coach_provider.dart:21:34 - deprecated_member_use_from_same_package
+   info - 'CoachStatsRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\coach_provider.dart:31:31 - deprecated_member_use_from_same_package
+   info - 'CoachTodaySessionsRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\coach_provider.dart:97:43 - deprecated_member_use_from_same_package
+   info - 'CoachUpcomingSessionsRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\coach_provider.dart:176:58 - deprecated_member_use_from_same_package
+   info - 'CoachAnnouncementsRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\coach_provider.dart:245:47 - deprecated_member_use_from_same_package
+   info - 'CoachScheduleRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\coach_provider.dart:258:38 - deprecated_member_use_from_same_package
+   info - 'CoachStudentsRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\coach_provider.dart:328:37 - deprecated_member_use_from_same_package
+   info - 'CoachRegistrationRequestManagerRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\coach_registration_request_provider.dart:10:3 - deprecated_member_use_from_same_package
+   info - 'CoachRegistrationRequestByIdRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\coach_registration_request_provider.dart:20:3 - deprecated_member_use_from_same_package
+   info - 'CoachSalaryListRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\coach_salary_provider.dart:10:43 - deprecated_member_use_from_same_package
+   info - 'CoachMonthlySummaryRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\coach_salary_provider.dart:16:52 - deprecated_member_use_from_same_package
+   info - 'FinishedBatchesWithAttendanceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\dashboard_provider.dart:86:61 - deprecated_member_use_from_same_package
+   info - 'UpcomingBatchesRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\dashboard_provider.dart:93:37 - deprecated_member_use_from_same_package
+   info - 'OwnerUpcomingSessionsRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\dashboard_provider.dart:101:58 - deprecated_member_use_from_same_package
+   info - 'FeeByIdRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\fee_provider.dart:104:21 - deprecated_member_use_from_same_package
+   info - 'FeeByStudentRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\fee_provider.dart:111:32 - deprecated_member_use_from_same_package
+   info - 'FeeStatsRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\fee_provider.dart:118:39 - deprecated_member_use_from_same_package
+   info - 'PendingFeesRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\fee_provider.dart:142:31 - deprecated_member_use_from_same_package
+   info - 'OverdueFeesRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\fee_provider.dart:149:31 - deprecated_member_use_from_same_package
+   info - 'StudentsWithBatchFeesRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\fee_provider.dart:159:3 - deprecated_member_use_from_same_package
+   info - 'AllLeaveRequestsRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\leave_request_provider.dart:10:45 - deprecated_member_use_from_same_package
+   info - 'CoachLeaveRequestsRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\leave_request_provider.dart:18:3 - deprecated_member_use_from_same_package
+   info - 'PendingLeaveRequestsRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\leave_request_provider.dart:28:49 - deprecated_member_use_from_same_package
+   info - 'LeaveRequestByIdRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\leave_request_provider.dart:35:39 - deprecated_member_use_from_same_package
+   info - 'NotificationListRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\notification_provider.dart:10:3 - deprecated_member_use_from_same_package
+   info - 'UnreadCountRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\notification_provider.dart:28:3 - deprecated_member_use_from_same_package
+   info - 'NotificationByTypeRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\notification_provider.dart:42:3 - deprecated_member_use_from_same_package
+   info - 'NotificationByIdRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\notification_provider.dart:57:39 - deprecated_member_use_from_same_package
+   info - 'OwnerByIdRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\owner_provider.dart:9:25 - deprecated_member_use_from_same_package
+   info - 'ActiveOwnerRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\owner_provider.dart:57:28 - deprecated_member_use_from_same_package
+   info - 'PerformanceByStudentRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\performance_provider.dart:10:3 - deprecated_member_use_from_same_package
+   info - 'PerformanceByIdRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\performance_provider.dart:25:37 - deprecated_member_use_from_same_package
+   info - 'PerformanceTrendRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\performance_provider.dart:33:3 - deprecated_member_use_from_same_package
+   info - 'AveragePerformanceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\performance_provider.dart:65:3 - deprecated_member_use_from_same_package
+   info - 'LatestPerformanceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\performance_provider.dart:107:40 - deprecated_member_use_from_same_package
+   info - The import of 'package:flutter_riverpod/flutter_riverpod.dart' is unnecessary because all of the used elements are also provided by the import of 'package:riverpod_annotation/riverpod_annotation.dart' - lib\providers\performance_skill_provider.dart:2:8 - unnecessary_import
+warning - Unused import: 'dart:convert' - lib\providers\performance_skill_provider.dart:3:8 - unused_import
+   info - 'StorageServiceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\service_providers.dart:36:31 - deprecated_member_use_from_same_package
+   info - 'ApiServiceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\service_providers.dart:45:23 - deprecated_member_use_from_same_package
+   info - 'AuthServiceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\service_providers.dart:58:25 - deprecated_member_use_from_same_package
+   info - 'BatchServiceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\service_providers.dart:66:27 - deprecated_member_use_from_same_package
+   info - 'AttendanceServiceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\service_providers.dart:73:37 - deprecated_member_use_from_same_package
+   info - 'FeeServiceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\service_providers.dart:80:23 - deprecated_member_use_from_same_package
+   info - 'DashboardServiceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\service_providers.dart:87:35 - deprecated_member_use_from_same_package
+   info - 'StudentServiceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\service_providers.dart:97:31 - deprecated_member_use_from_same_package
+   info - 'CoachServiceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\service_providers.dart:104:27 - deprecated_member_use_from_same_package
+   info - 'OwnerServiceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\service_providers.dart:111:27 - deprecated_member_use_from_same_package
+   info - 'PerformanceServiceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\service_providers.dart:118:39 - deprecated_member_use_from_same_package
+   info - 'BmiServiceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\service_providers.dart:125:23 - deprecated_member_use_from_same_package
+   info - 'ScheduleServiceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\service_providers.dart:132:33 - deprecated_member_use_from_same_package
+   info - 'AnnouncementServiceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\service_providers.dart:139:41 - deprecated_member_use_from_same_package
+   info - 'CalendarServiceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\service_providers.dart:146:33 - deprecated_member_use_from_same_package
+   info - 'InvitationServiceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\service_providers.dart:153:37 - deprecated_member_use_from_same_package
+   info - 'NotificationServiceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\service_providers.dart:160:41 - deprecated_member_use_from_same_package
+   info - 'TournamentServiceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\service_providers.dart:167:37 - deprecated_member_use_from_same_package
+   info - 'SessionServiceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\service_providers.dart:174:31 - deprecated_member_use_from_same_package
+   info - 'VideoServiceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\service_providers.dart:181:27 - deprecated_member_use_from_same_package
+   info - 'LeaveRequestServiceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\service_providers.dart:188:41 - deprecated_member_use_from_same_package
+   info - 'StudentRegistrationRequestServiceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\service_providers.dart:195:69 - deprecated_member_use_from_same_package
+   info - 'CoachRegistrationRequestServiceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\service_providers.dart:202:65 - deprecated_member_use_from_same_package
+   info - 'ConnectivityServiceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\service_providers.dart:209:41 - deprecated_member_use_from_same_package
+   info - 'RequestQueueRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\service_providers.dart:216:27 - deprecated_member_use_from_same_package
+   info - 'CoachSalaryServiceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\service_providers.dart:229:39 - deprecated_member_use_from_same_package
+   info - 'ReportServiceRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\service_providers.dart:236:29 - deprecated_member_use_from_same_package
+   info - 'SessionListRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\session_provider.dart:10:3 - deprecated_member_use_from_same_package
+   info - 'ActiveSessionsRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\session_provider.dart:19:38 - deprecated_member_use_from_same_package
+   info - 'ArchivedSessionsRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\session_provider.dart:26:40 - deprecated_member_use_from_same_package
+   info - 'SessionByIdRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\session_provider.dart:33:29 - deprecated_member_use_from_same_package
+   info - 'StudentByIdRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\student_provider.dart:150:29 - deprecated_member_use_from_same_package
+   info - 'StudentSearchRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\student_provider.dart:157:37 - deprecated_member_use_from_same_package
+   info - 'StudentByBatchRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\student_provider.dart:177:38 - deprecated_member_use_from_same_package
+   info - 'StudentStatsRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\student_provider.dart:184:43 - deprecated_member_use_from_same_package
+   info - 'StudentDashboardRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\student_provider.dart:198:3 - deprecated_member_use_from_same_package
+   info - 'StudentSchedulesRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\student_provider.dart:327:3 - deprecated_member_use_from_same_package
+   info - 'StudentCoachesRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\student_provider.dart:350:36 - deprecated_member_use_from_same_package
+   info - 'StudentRegistrationRequestManagerRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\student_registration_request_provider.dart:10:3 - deprecated_member_use_from_same_package
+   info - 'StudentRegistrationRequestByIdRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\student_registration_request_provider.dart:20:3 - deprecated_member_use_from_same_package
+   info - 'TournamentListRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\tournament_provider.dart:9:41 - deprecated_member_use_from_same_package
+   info - 'UpcomingTournamentsRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\tournament_provider.dart:16:46 - deprecated_member_use_from_same_package
+   info - 'TournamentByIdRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\tournament_provider.dart:23:35 - deprecated_member_use_from_same_package
+   info - 'VideosByStudentRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\video_provider.dart:10:3 - deprecated_member_use_from_same_package
+   info - 'AllVideosRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\video_provider.dart:19:39 - deprecated_member_use_from_same_package
+   info - 'VideoByIdRef' is deprecated and shouldn't be used. Will be removed in 3.0. Use Ref instead - lib\providers\video_provider.dart:26:33 - deprecated_member_use_from_same_package
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\auth\forgot_password_screen.dart:196:45 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\auth\role_selection_screen.dart:137:41 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\coach\coach_announcements_screen.dart:175:53 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\coach\coach_announcements_screen.dart:228:57 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\coach\coach_batches_screen.dart:262:40 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\coach\coach_batches_screen.dart:262:73 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\coach\coach_batches_screen.dart:336:48 - deprecated_member_use
+   info - Unnecessary use of multiple underscores - lib\screens\coach\coach_home_screen.dart:109:36 - unnecessary_underscores
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\coach\coach_home_screen.dart:125:51 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\coach\coach_home_screen.dart:127:70 - deprecated_member_use
+warning - The declaration '_getSessionStatusColor' isn't referenced - lib\screens\coach\coach_home_screen.dart:368:9 - unused_element
+warning - The declaration '_getSessionStatus' isn't referenced - lib\screens\coach\coach_home_screen.dart:395:10 - unused_element
+   info - Unnecessary use of multiple underscores - lib\screens\coach\coach_more_screen.dart:64:30 - unnecessary_underscores
+warning - The value of the field '_selectedImage' isn't used - lib\screens\coach\coach_profile_screen.dart:38:9 - unused_field
+warning - The value of the local variable 'isDark' isn't used - lib\screens\coach\coach_salary_screen.dart:31:11 - unused_local_variable
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\coach\coach_schedule_screen.dart:230:46 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\coach\coach_schedule_screen.dart:261:61 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\coach\coach_schedule_screen.dart:282:50 - deprecated_member_use
+   info - Unnecessary use of multiple underscores - lib\screens\coach\coach_schedule_screen.dart:390:32 - unnecessary_underscores
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\coach\coach_schedule_screen.dart:447:37 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\coach\coach_schedule_screen.dart:579:33 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\coach\coach_schedule_screen.dart:622:28 - deprecated_member_use
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\coach\coach_settings_screen.dart:292:50 - use_build_context_synchronously
+   info - Unnecessary use of multiple underscores - lib\screens\coach\coach_settings_screen.dart:514:26 - unnecessary_underscores
+   info - Don't use 'BuildContext's across async gaps - lib\screens\coach\coach_students_screen.dart:296:70 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\coach\coach_students_screen.dart:420:28 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\coach\coach_students_screen.dart:421:36 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\coach\coach_students_screen.dart:425:41 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\coach\coach_students_screen.dart:440:29 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\coach\coach_students_screen.dart:446:9 - use_build_context_synchronously
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\coach\coach_students_screen.dart:474:53 - deprecated_member_use
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\coach\coach_students_screen.dart:494:63 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\coach\coach_students_screen.dart:495:50 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\coach\coach_students_screen.dart:496:58 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\coach\coach_students_screen.dart:500:61 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\coach\coach_students_screen.dart:567:33 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\coach\coach_students_screen.dart:577:34 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\coach\coach_students_screen.dart:586:34 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\coach\coach_students_screen.dart:594:9 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\coach\coach_students_screen.dart:640:44 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\coach\coach_students_screen.dart:641:52 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\coach\coach_students_screen.dart:645:55 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\coach\coach_students_screen.dart:657:33 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\coach\coach_students_screen.dart:667:34 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\coach\coach_students_screen.dart:675:9 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\coach\coach_students_screen.dart:741:44 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\coach\coach_students_screen.dart:742:52 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\coach\coach_students_screen.dart:746:55 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\coach\coach_students_screen.dart:758:33 - use_build_context_synchronously
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\coach\coach_students_screen.dart:827:45 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\coach\coach_students_screen.dart:906:35 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\coach\coach_students_screen.dart:909:37 - deprecated_member_use
+warning - The value of the field '_batches' isn't used - lib\screens\coach\coach_video_management_screen.dart:38:21 - unused_field
+warning - The value of the field '_downloadProgress' isn't used - lib\screens\coach\coach_video_management_screen.dart:48:10 - unused_field
+warning - The value of the local variable 'batchesAsync' isn't used - lib\screens\coach\coach_video_management_screen.dart:426:15 - unused_local_variable
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\coach\coach_video_management_screen.dart:738:49 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\coach\coach_video_management_screen.dart:885:40 - deprecated_member_use
+   info - Don't use 'BuildContext's across async gaps - lib\screens\coach\leave_request_screen.dart:53:33 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\coach\leave_request_screen.dart:131:37 - use_build_context_synchronously
+warning - The declaration '_getStatusColor' isn't referenced - lib\screens\coach\leave_request_screen.dart:158:10 - unused_element
+warning - The value of the local variable 'manager' isn't used - lib\screens\coach\leave_request_screen.dart:592:13 - unused_local_variable
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\common\academy_info_screen.dart:174:72 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\common\academy_info_screen.dart:209:98 - deprecated_member_use
+warning - The value of the local variable 'themeMode' isn't used - lib\screens\common\active_sessions_screen.dart:111:11 - unused_local_variable
+warning - The value of the local variable 'response' isn't used - lib\screens\owner\academy_setup_screen.dart:67:13 - unused_local_variable
+   info - 'value' is deprecated and shouldn't be used. Use initialValue instead. This will set the initial value for the form field. This feature was deprecated after v3.33.0-1.0.pre - lib\screens\owner\announcement_management_screen.dart:403:29 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\announcement_management_screen.dart:606:53 - deprecated_member_use
+   info - Unnecessary use of multiple underscores - lib\screens\owner\announcement_management_screen.dart:663:34 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\owner\attendance_screen.dart:566:18 - unnecessary_underscores
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\bmi_tracking_screen.dart:489:33 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\bmi_tracking_screen.dart:742:72 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\bmi_tracking_screen.dart:852:85 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\bmi_tracking_screen.dart:960:37 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\bmi_tracking_screen.dart:1036:54 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\bmi_tracking_screen.dart:1092:52 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\bmi_tracking_screen.dart:1121:47 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\bmi_tracking_screen.dart:1201:45 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\calendar_view_screen.dart:334:49 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\calendar_view_screen.dart:399:57 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\calendar_view_screen.dart:420:51 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\calendar_view_screen.dart:655:51 - deprecated_member_use
+   info - Don't use 'BuildContext's across async gaps - lib\screens\owner\coaches_screen.dart:161:58 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\owner\coaches_screen.dart:192:56 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\owner\coaches_screen.dart:206:55 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\owner\coaches_screen.dart:220:61 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\coaches_screen.dart:297:28 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\coaches_screen.dart:298:36 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\coaches_screen.dart:302:41 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\coaches_screen.dart:319:11 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\coaches_screen.dart:362:35 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\coaches_screen.dart:372:30 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\coaches_screen.dart:376:35 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\coaches_screen.dart:392:34 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\coaches_screen.dart:396:39 - use_build_context_synchronously
+   info - Unnecessary use of multiple underscores - lib\screens\owner\home_screen.dart:75:34 - unnecessary_underscores
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\home_screen.dart:98:49 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\home_screen.dart:100:68 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\performance_tracking_screen.dart:736:39 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\performance_tracking_screen.dart:791:42 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\performance_tracking_screen.dart:805:63 - deprecated_member_use
+  error - Undefined name '_skills' - lib\screens\owner\performance_tracking_screen.dart:808:18 - undefined_identifier
+  error - Undefined name '_skills' - lib\screens\owner\performance_tracking_screen.dart:846:20 - undefined_identifier
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\performance_tracking_screen.dart:905:46 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\performance_tracking_screen.dart:911:46 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\performance_tracking_screen.dart:969:46 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\performance_tracking_screen.dart:975:46 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\performance_tracking_screen.dart:986:63 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\performance_tracking_screen.dart:1047:47 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\performance_tracking_screen.dart:1214:62 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\performance_tracking_screen.dart:1244:54 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\performance_tracking_screen.dart:1301:52 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\performance_tracking_screen.dart:1351:22 - deprecated_member_use
+warning - The value of the local variable 'isNext' isn't used - lib\screens\owner\reports_screen.dart:299:24 - unused_local_variable
+warning - The declaration '_infoRow' isn't referenced - lib\screens\owner\reports_screen.dart:692:10 - unused_element
+warning - The declaration '_buildChart' isn't referenced - lib\screens\owner\reports_screen.dart:703:10 - unused_element
+warning - The declaration '_statRow' isn't referenced - lib\screens\owner\reports_screen.dart:762:10 - unused_element
+warning - The value of the local variable 'leaveRequestsAsync' isn't used - lib\screens\owner\requests_screen.dart:70:11 - unused_local_variable
+   info - Unnecessary use of multiple underscores - lib\screens\owner\requests_screen.dart:989:34 - unnecessary_underscores
+warning - The declaration '_buildRejoinRequestsTab' isn't referenced - lib\screens\owner\requests_screen.dart:1838:10 - unused_element
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\session_management_screen.dart:406:68 - deprecated_member_use
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\session_management_screen.dart:837:46 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\session_management_screen.dart:842:51 - use_build_context_synchronously
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\session_management_screen.dart:967:46 - deprecated_member_use
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\settings_screen.dart:318:50 - use_build_context_synchronously
+   info - Unnecessary use of multiple underscores - lib\screens\owner\settings_screen.dart:614:26 - unnecessary_underscores
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\student_profile_screen.dart:158:80 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\student_profile_screen.dart:576:41 - deprecated_member_use
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\students_screen.dart:265:28 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\students_screen.dart:266:36 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\students_screen.dart:270:41 - use_build_context_synchronously
+warning - The declaration '_showEditStudentDialog' isn't referenced - lib\screens\owner\students_screen.dart:278:8 - unused_element
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\students_screen.dart:287:28 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\students_screen.dart:288:36 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\students_screen.dart:292:41 - use_build_context_synchronously
+warning - The declaration '_showManageBatchesDialog' isn't referenced - lib\screens\owner\students_screen.dart:300:8 - unused_element
+   info - Don't use 'BuildContext's across async gaps - lib\screens\owner\students_screen.dart:308:29 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\owner\students_screen.dart:314:9 - use_build_context_synchronously
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\students_screen.dart:342:53 - deprecated_member_use
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\students_screen.dart:362:63 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\students_screen.dart:363:50 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\students_screen.dart:364:58 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\students_screen.dart:369:61 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\owner\students_screen.dart:438:33 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\owner\students_screen.dart:448:34 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\owner\students_screen.dart:457:34 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\owner\students_screen.dart:465:9 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\students_screen.dart:511:44 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\students_screen.dart:512:52 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\students_screen.dart:517:55 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\owner\students_screen.dart:529:33 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\owner\students_screen.dart:539:34 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\owner\students_screen.dart:547:9 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\students_screen.dart:613:44 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\students_screen.dart:614:52 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\students_screen.dart:619:55 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\owner\students_screen.dart:631:33 - use_build_context_synchronously
+warning - The declaration '_toggleStudentStatus' isn't referenced - lib\screens\owner\students_screen.dart:636:8 - unused_element
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\students_screen.dart:655:28 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\students_screen.dart:656:36 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\students_screen.dart:660:41 - use_build_context_synchronously
+warning - The declaration '_showApproveRejoinDialog' isn't referenced - lib\screens\owner\students_screen.dart:668:8 - unused_element
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\students_screen.dart:679:28 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\students_screen.dart:680:36 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\students_screen.dart:684:41 - use_build_context_synchronously
+warning - The declaration '_showDeleteConfirmation' isn't referenced - lib\screens\owner\students_screen.dart:692:8 - unused_element
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\students_screen.dart:763:28 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\students_screen.dart:764:36 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\students_screen.dart:768:41 - use_build_context_synchronously
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\students_screen.dart:800:43 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\students_screen.dart:848:45 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\students_screen.dart:941:55 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\students_screen.dart:944:57 - deprecated_member_use
+   info - Unnecessary use of multiple underscores - lib\screens\owner\students_screen.dart:967:22 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\owner\students_screen.dart:1040:22 - unnecessary_underscores
+warning - The declaration '_ActionButton' isn't referenced - lib\screens\owner\students_screen.dart:1062:7 - unused_element
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\tabs\coach_salary_tab.dart:78:29 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\tabs\coach_salary_tab.dart:79:36 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\tabs\coach_salary_tab.dart:83:41 - use_build_context_synchronously
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\tabs\coach_salary_tab.dart:194:35 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\tabs\coach_salary_tab.dart:308:22 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\tabs\coach_salary_tab.dart:310:41 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\tabs\student_fees_view.dart:205:22 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\tabs\student_fees_view.dart:207:41 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\tabs\student_fees_view.dart:214:24 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\tabs\student_fees_view.dart:306:49 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\tabs\student_fees_view.dart:359:53 - deprecated_member_use
+   info - Don't use 'BuildContext's across async gaps - lib\screens\owner\tabs\student_fees_view.dart:531:36 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\screens\owner\tabs\student_fees_view.dart:564:27 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\screens\owner\tabs\student_fees_view.dart:567:34 - use_build_context_synchronously
+warning - The value of the field '_downloadProgress' isn't used - lib\screens\owner\video_management_screen.dart:52:10 - unused_field
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\video_management_screen.dart:715:47 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\video_management_screen.dart:747:47 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\owner\video_management_screen.dart:886:45 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\student\student_announcements_screen.dart:181:53 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\student\student_announcements_screen.dart:234:57 - deprecated_member_use
+warning - The declaration '_getAttendanceColor' isn't referenced - lib\screens\student\student_attendance_screen.dart:841:9 - unused_element
+warning - The declaration '_StatItem' isn't referenced - lib\screens\student\student_attendance_screen.dart:852:7 - unused_element
+   info - Unnecessary use of multiple underscores - lib\screens\student\student_bmi_screen.dart:173:30 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\student\student_fees_screen.dart:239:30 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\student\student_home_screen.dart:150:28 - unnecessary_underscores
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\student\student_home_screen.dart:166:35 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\student\student_home_screen.dart:168:54 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\student\student_home_screen.dart:564:94 - deprecated_member_use
+   info - Unnecessary use of multiple underscores - lib\screens\student\student_more_screen.dart:71:30 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\student\student_performance_screen.dart:249:30 - unnecessary_underscores
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\student\student_performance_screen.dart:864:42 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\student\student_performance_screen.dart:920:40 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\student\student_performance_screen.dart:948:44 - deprecated_member_use
+   info - Unnecessary use of multiple underscores - lib\screens\student\student_profile_screen.dart:319:34 - unnecessary_underscores
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\student\student_schedule_screen.dart:165:50 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\student\student_schedule_screen.dart:219:65 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\student\student_schedule_screen.dart:240:54 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\student\student_schedule_screen.dart:375:37 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\student\student_schedule_screen.dart:520:33 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\screens\student\student_schedule_screen.dart:563:28 - deprecated_member_use
+   info - Unnecessary use of multiple underscores - lib\screens\student\student_settings_screen.dart:538:26 - unnecessary_underscores
+   info - Unnecessary use of multiple underscores - lib\screens\student\student_tournaments_screen.dart:113:30 - unnecessary_underscores
+   info - 'dart:html' is deprecated and shouldn't be used. Use package:web and dart:js_interop instead - lib\utils\file_download_helper_web.dart:1:1 - deprecated_member_use
+   info - Don't use web-only libraries outside Flutter web plugins - lib\utils\file_download_helper_web.dart:1:1 - avoid_web_libraries_in_flutter
+warning - The value of the local variable 'anchor' isn't used - lib\utils\file_download_helper_web.dart:8:9 - unused_local_variable
+   info - Dangling library doc comment - lib\utils\screen_security.dart:1:1 - dangling_library_doc_comments
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\common\confirmation_dialog.dart:103:35 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\common\validation_error.dart:65:32 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\common\validation_error.dart:67:51 - deprecated_member_use
+   info - Statements in an if should be enclosed in a block - lib\widgets\dialogs\batch_details_dialog.dart:116:52 - curly_braces_in_flow_control_structures
+   info - Empty catch block - lib\widgets\dialogs\batch_details_dialog.dart:120:17 - empty_catches
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\batch_details_dialog.dart:332:35 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\batch_details_dialog.dart:364:44 - deprecated_member_use
+   info - Unnecessary use of multiple underscores - lib\widgets\dialogs\batch_details_dialog.dart:433:26 - unnecessary_underscores
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\batch_details_dialog.dart:451:49 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\batch_details_dialog.dart:700:43 - deprecated_member_use
+   info - Unnecessary use of multiple underscores - lib\widgets\dialogs\batch_details_dialog.dart:711:18 - unnecessary_underscores
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\batch_details_dialog.dart:742:44 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\batch_details_dialog.dart:794:34 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\batch_details_dialog.dart:801:28 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\batch_details_dialog.dart:834:46 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\batch_details_dialog.dart:911:43 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\coach_details_dialog.dart:56:35 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\coach_details_dialog.dart:168:46 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\student_details_dialog.dart:62:35 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\student_details_dialog.dart:226:46 - deprecated_member_use
+   info - Don't use 'BuildContext's across async gaps - lib\widgets\dialogs\tabs\coach_batches_tab.dart:182:34 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\widgets\dialogs\tabs\coach_batches_tab.dart:187:9 - use_build_context_synchronously
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\tabs\coach_batches_tab.dart:224:55 - deprecated_member_use
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\widgets\dialogs\tabs\coach_batches_tab.dart:244:65 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\widgets\dialogs\tabs\coach_batches_tab.dart:245:52 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\widgets\dialogs\tabs\coach_batches_tab.dart:246:60 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\widgets\dialogs\tabs\coach_batches_tab.dart:250:63 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\widgets\dialogs\tabs\coach_batches_tab.dart:290:33 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\widgets\dialogs\tabs\coach_batches_tab.dart:299:34 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\widgets\dialogs\tabs\coach_batches_tab.dart:307:34 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\widgets\dialogs\tabs\coach_batches_tab.dart:314:9 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\widgets\dialogs\tabs\coach_batches_tab.dart:355:44 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\widgets\dialogs\tabs\coach_batches_tab.dart:356:52 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\widgets\dialogs\tabs\coach_batches_tab.dart:360:55 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\widgets\dialogs\tabs\coach_batches_tab.dart:372:33 - use_build_context_synchronously
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\tabs\coach_profile_tab.dart:68:39 - deprecated_member_use
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\widgets\dialogs\tabs\coach_profile_tab.dart:223:36 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\widgets\dialogs\tabs\coach_profile_tab.dart:228:41 - use_build_context_synchronously
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\tabs\coach_profile_tab.dart:305:63 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\tabs\coach_profile_tab.dart:322:70 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\tabs\student_bmi_tab.dart:228:54 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\tabs\student_bmi_tab.dart:284:52 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\tabs\student_bmi_tab.dart:313:47 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\tabs\student_bmi_tab.dart:388:85 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\tabs\student_bmi_tab.dart:585:68 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\tabs\student_fees_tab.dart:303:71 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\tabs\student_fees_tab.dart:337:71 - deprecated_member_use
+warning - The value of the local variable 'isMounted' isn't used - lib\widgets\dialogs\tabs\student_fees_tab.dart:468:11 - unused_local_variable
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\widgets\dialogs\tabs\student_fees_tab.dart:491:30 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\widgets\dialogs\tabs\student_fees_tab.dart:525:28 - use_build_context_synchronously
+warning - The value of the field '_selectedBatchName' isn't used - lib\widgets\dialogs\tabs\student_performance_tab.dart:43:11 - unused_field
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\tabs\student_performance_tab.dart:272:62 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\tabs\student_performance_tab.dart:302:54 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\tabs\student_performance_tab.dart:359:52 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\tabs\student_performance_tab.dart:407:22 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\tabs\student_performance_tab.dart:482:47 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\tabs\student_profile_tab.dart:79:39 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\tabs\student_profile_tab.dart:258:47 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\tabs\student_profile_tab.dart:261:49 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\tabs\student_profile_tab.dart:407:34 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\tabs\student_profile_tab.dart:414:28 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\tabs\student_profile_tab.dart:455:63 - deprecated_member_use
+   info - Don't use 'BuildContext's across async gaps - lib\widgets\dialogs\tabs\student_profile_tab.dart:503:9 - use_build_context_synchronously
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\dialogs\tabs\student_profile_tab.dart:531:53 - deprecated_member_use
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\widgets\dialogs\tabs\student_profile_tab.dart:551:63 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\widgets\dialogs\tabs\student_profile_tab.dart:552:50 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\widgets\dialogs\tabs\student_profile_tab.dart:553:58 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\widgets\dialogs\tabs\student_profile_tab.dart:557:61 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\widgets\dialogs\tabs\student_profile_tab.dart:597:33 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\widgets\dialogs\tabs\student_profile_tab.dart:607:34 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\widgets\dialogs\tabs\student_profile_tab.dart:615:34 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\widgets\dialogs\tabs\student_profile_tab.dart:622:9 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\widgets\dialogs\tabs\student_profile_tab.dart:663:44 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\widgets\dialogs\tabs\student_profile_tab.dart:664:52 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps, guarded by an unrelated 'mounted' check - lib\widgets\dialogs\tabs\student_profile_tab.dart:668:55 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\widgets\dialogs\tabs\student_profile_tab.dart:680:33 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\widgets\forms\add_coach_dialog.dart:229:20 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\widgets\forms\add_coach_dialog.dart:230:20 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\widgets\forms\add_coach_dialog.dart:232:28 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\widgets\forms\add_coach_dialog.dart:246:20 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\widgets\forms\add_coach_dialog.dart:247:20 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\widgets\forms\add_coach_dialog.dart:249:28 - use_build_context_synchronously
+warning - The value of the field '_selectedStudent' isn't used - lib\widgets\forms\add_fee_dialog.dart:39:12 - unused_field
+warning - The value of the field '_selectedPayee' isn't used - lib\widgets\forms\add_fee_dialog.dart:41:12 - unused_field
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\forms\add_fee_dialog.dart:357:57 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\forms\add_fee_dialog.dart:443:45 - deprecated_member_use
+warning - The value of the field '_customPayeeName' isn't used - lib\widgets\forms\add_payment_dialog.dart:30:11 - unused_field
+   info - Don't use 'BuildContext's across async gaps - lib\widgets\forms\add_student_dialog.dart:225:20 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\widgets\forms\add_student_dialog.dart:226:20 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\widgets\forms\add_student_dialog.dart:228:28 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\widgets\forms\add_student_dialog.dart:241:20 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\widgets\forms\add_student_dialog.dart:242:20 - use_build_context_synchronously
+   info - Don't use 'BuildContext's across async gaps - lib\widgets\forms\add_student_dialog.dart:244:28 - use_build_context_synchronously
+warning - The value of the local variable 'isDarkMode' isn't used - lib\widgets\forms\change_password_dialog.dart:182:11 - unused_local_variable
+warning - The value of the local variable 'backgroundColor' isn't used - lib\widgets\forms\change_password_dialog.dart:183:11 - unused_local_variable
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\forms\edit_coach_dialog.dart:294:63 - deprecated_member_use
+warning - The value of the field '_selectedPayee' isn't used - lib\widgets\forms\edit_fee_dialog.dart:32:12 - unused_field
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\forms\record_payment_dialog.dart:258:34 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\video\video_player_page.dart:177:35 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\video\video_player_page.dart:224:35 - deprecated_member_use
+   info - 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss - lib\widgets\video\video_player_page.dart:287:31 - deprecated_member_use
+  error - The named parameter 'skills' is required, but there's no corresponding argument - test\mocks\mock_services.dart:394:14 - missing_required_argument
+  error - The named parameter 'serve' isn't defined - test\mocks\mock_services.dart:399:9 - undefined_named_parameter
+  error - The named parameter 'smash' isn't defined - test\mocks\mock_services.dart:400:9 - undefined_named_parameter
+  error - The named parameter 'footwork' isn't defined - test\mocks\mock_services.dart:401:9 - undefined_named_parameter
+  error - The named parameter 'defense' isn't defined - test\mocks\mock_services.dart:402:9 - undefined_named_parameter
+  error - The named parameter 'stamina' isn't defined - test\mocks\mock_services.dart:403:9 - undefined_named_parameter
+warning - The value of the local variable 'mockStudentService' isn't used - test\providers\comprehensive_provider_test.dart:12:29 - unused_local_variable
+warning - The value of the local variable 'mockFeeService' isn't used - test\providers\comprehensive_provider_test.dart:13:25 - unused_local_variable
+warning - The value of the local variable 'mockPerformanceService' isn't used - test\providers\comprehensive_provider_test.dart:14:33 - unused_local_variable
+warning - The value of the local variable 'mockBMIService' isn't used - test\providers\comprehensive_provider_test.dart:15:25 - unused_local_variable
+warning - The value of the local variable 'mockNotificationService' isn't used - test\providers\comprehensive_provider_test.dart:16:34 - unused_local_variable
+warning - The value of the local variable 'mockAnnouncementService' isn't used - test\providers\comprehensive_provider_test.dart:17:34 - unused_local_variable
+warning - The value of the local variable 'mockCalendarService' isn't used - test\providers\comprehensive_provider_test.dart:18:30 - unused_local_variable
+warning - The value of the local variable 'mockApiService' isn't used - test\screens\login_screen_test.dart:20:23 - unused_local_variable
+

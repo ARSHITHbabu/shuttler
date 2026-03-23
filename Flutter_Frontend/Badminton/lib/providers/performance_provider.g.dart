@@ -338,7 +338,7 @@ class _PerformanceByIdProviderElement
   int get id => (origin as PerformanceByIdProvider).id;
 }
 
-String _$performanceTrendHash() => r'579cc9433e47203a516ad0237d6da6c052e78877';
+String _$performanceTrendHash() => r'efe97ef564d1290f4ecd5f5a5d5109f19f7f8ee7';
 
 /// Provider for performance trend data
 ///
@@ -507,7 +507,7 @@ class _PerformanceTrendProviderElement
 }
 
 String _$averagePerformanceHash() =>
-    r'59711a0df47b2b69328866866a21f84be6bc9bde';
+    r'a58d6135695210381faea5510beb9c1cca51df28';
 
 /// Provider for average performance rating
 ///

@@ -48,7 +48,7 @@ final upcomingBatchesProvider = AutoDisposeFutureProvider<List<Batch>>.internal(
 // ignore: unused_element
 typedef UpcomingBatchesRef = AutoDisposeFutureProviderRef<List<Batch>>;
 String _$ownerUpcomingSessionsHash() =>
-    r'a39d0545433283af44712ab4ef0be05ab684e080';
+    r'dc1f31b1c03c8df92ab931ca314b8c911b2f8147';
 
 /// Provider for upcoming sessions for all active batches (Owner view)
 /// Shows next occurrence for each active batch
@@ -70,7 +70,7 @@ final ownerUpcomingSessionsProvider =
 // ignore: unused_element
 typedef OwnerUpcomingSessionsRef =
     AutoDisposeFutureProviderRef<List<Map<String, dynamic>>>;
-String _$dashboardStatsHash() => r'd0d6277fe282787d1e6255b9c450f3d697bc2064';
+String _$dashboardStatsHash() => r'c417e1c971b9ab1e42fed39c39d72b0503b56624';
 
 /// Provider for dashboard statistics
 ///

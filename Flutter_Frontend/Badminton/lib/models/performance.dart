@@ -6,11 +6,7 @@ class Performance {
   final int batchId;
   final String? batchName;
   final DateTime date;
-  final int serve; // 1-5 rating
-  final int smash; // 1-5 rating
-  final int footwork; // 1-5 rating
-  final int defense; // 1-5 rating
-  final int stamina; // 1-5 rating
+  final Map<String, int> skills; // specific skills mapping
   final String? comments;
   final DateTime? createdAt;
 
@@ -21,11 +17,7 @@ class Performance {
     required this.batchId,
     this.batchName,
     required this.date,
-    required this.serve,
-    required this.smash,
-    required this.footwork,
-    required this.defense,
-    required this.stamina,
+    required this.skills,
     this.comments,
     this.createdAt,
   });
@@ -39,11 +31,9 @@ class Performance {
       batchId: json['batch_id'] as int? ?? 0,
       batchName: json['batch_name'] as String?,
       date: DateTime.parse(json['date'] as String),
-      serve: json['serve'] as int,
-      smash: json['smash'] as int,
-      footwork: json['footwork'] as int,
-      defense: json['defense'] as int,
-      stamina: json['stamina'] as int,
+      skills: (json['skills'] as Map<String, dynamic>?)?.map(
+            (key, value) => MapEntry(key, value as int),
+          ) ?? {},
       comments: json['comments'] as String?,
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String)
@@ -57,11 +47,7 @@ class Performance {
       'student_id': studentId,
       'batch_id': batchId,
       'date': date.toIso8601String().split('T')[0], // YYYY-MM-DD format
-      'serve': serve,
-      'smash': smash,
-      'footwork': footwork,
-      'defense': defense,
-      'stamina': stamina,
+      'skills': skills,
       'comments': comments,
     };
   }
@@ -74,11 +60,7 @@ class Performance {
     int? batchId,
     String? batchName,
     DateTime? date,
-    int? serve,
-    int? smash,
-    int? footwork,
-    int? defense,
-    int? stamina,
+    Map<String, int>? skills,
     String? comments,
     DateTime? createdAt,
   }) {
@@ -89,19 +71,25 @@ class Performance {
       batchId: batchId ?? this.batchId,
       batchName: batchName ?? this.batchName,
       date: date ?? this.date,
-      serve: serve ?? this.serve,
-      smash: smash ?? this.smash,
-      footwork: footwork ?? this.footwork,
-      defense: defense ?? this.defense,
-      stamina: stamina ?? this.stamina,
+      skills: skills ?? this.skills,
       comments: comments ?? this.comments,
       createdAt: createdAt ?? this.createdAt,
     );
   }
 
   /// Calculate average rating
+  
+  // Fallbacks for backward compatibility
+  int get serve => skills['serve'] ?? skills['Serve'] ?? 0;
+  int get smash => skills['smash'] ?? skills['Smash'] ?? 0;
+  int get footwork => skills['footwork'] ?? skills['Footwork'] ?? 0;
+  int get defense => skills['defense'] ?? skills['Defense'] ?? 0;
+  int get stamina => skills['stamina'] ?? skills['Stamina'] ?? 0;
+
   double get averageRating {
-    return (serve + smash + footwork + defense + stamina) / 5.0;
+    if (skills.isEmpty) return 0.0;
+    final total = skills.values.fold<int>(0, (sum, val) => sum + val);
+    return total / skills.length.toDouble();
   }
 
   @override
