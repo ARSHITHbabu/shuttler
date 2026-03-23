@@ -287,7 +287,7 @@ class _CoachBatchesProviderElement
   int get coachId => (origin as CoachBatchesProvider).coachId;
 }
 
-String _$coachStatsHash() => r'4496319a37032664852d75c5b25fb23b143a7ac0';
+String _$coachStatsHash() => r'6b9ea1647bb930d33737e50598e6425df10ade81';
 
 /// Provider for coach statistics
 ///
@@ -565,7 +565,7 @@ class _CoachTodaySessionsProviderElement
 }
 
 String _$coachUpcomingSessionsHash() =>
-    r'bc702b9b10e509ad90c2e4ce1b3caacdb7f2ba59';
+    r'2b8ab2ed62e85a541f710645987c1948218f01f3';
 
 /// Provider for coach's upcoming sessions (next 7 days)
 /// Similar logic to student dashboard but for all batches assigned to the coach
@@ -732,7 +732,7 @@ final coachAnnouncementsProvider =
 // ignore: unused_element
 typedef CoachAnnouncementsRef =
     AutoDisposeFutureProviderRef<List<Announcement>>;
-String _$coachScheduleHash() => r'3b1d2d47b58bf60361aa77c704bf60b91d7e6841';
+String _$coachScheduleHash() => r'ccca4a7f7fcc9f5a48c4c19bd591382409043b52';
 
 /// Provider for coach's all sessions (upcoming and past)
 /// Gets schedules through coach's batches
@@ -870,7 +870,7 @@ class _CoachScheduleProviderElement
   int get coachId => (origin as CoachScheduleProvider).coachId;
 }
 
-String _$coachStudentsHash() => r'556966ad5021ec0814c5501985122ecaa785b63a';
+String _$coachStudentsHash() => r'6a151872412e164475929f9a4d38cd8294fcdfa2';
 
 /// Provider for coach's students (students in all batches assigned to coach)
 ///
@@ -1002,7 +1002,7 @@ class _CoachStudentsProviderElement
   int get coachId => (origin as CoachStudentsProvider).coachId;
 }
 
-String _$coachListHash() => r'5451a14ed89475defccca77a2a7065a15583b4e7';
+String _$coachListHash() => r'c96e77422ef960e90d8e7f8b5d25d24a906b4030';
 
 /// Provider for coach list state
 ///

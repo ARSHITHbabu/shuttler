@@ -6,7 +6,7 @@ part of 'batch_provider.dart';
 // RiverpodGenerator
 // **************************************************************************
 
-String _$batchStudentsHash() => r'c11b4a9b97701552052d592b4488ca393f59ed38';
+String _$batchStudentsHash() => r'9a4cbc65b04f4a0bbc66e0f65dc666240aaeff6d';
 
 /// Copied from Dart SDK
 class _SystemHash {
@@ -159,7 +159,7 @@ class _BatchStudentsProviderElement
   int get batchId => (origin as BatchStudentsProvider).batchId;
 }
 
-String _$studentBatchesHash() => r'1156258326d2cf69108216bf79c5fb77a55db8b0';
+String _$studentBatchesHash() => r'7eac3484f1f0e3091e3aa4c06353c4078bd3625a';
 
 /// See also [studentBatches].
 @ProviderFor(studentBatches)
@@ -279,7 +279,7 @@ class _StudentBatchesProviderElement
   int get studentId => (origin as StudentBatchesProvider).studentId;
 }
 
-String _$batchListHash() => r'56a0adeb55731abeef0770ac38d4cece0d1e1abd';
+String _$batchListHash() => r'683862a2a580692e39e1d5c0c18b02561c039bac';
 
 /// Provider for batch list state
 ///

@@ -309,7 +309,7 @@ class _VideoByIdProviderElement
   int get id => (origin as VideoByIdProvider).id;
 }
 
-String _$videoManagerHash() => r'0dccc4fa4d89805132e712fc84cbf7948cda90fd';
+String _$videoManagerHash() => r'cc46a58f571559821fc98bbc58d3adfc7a0a6744';
 
 abstract class _$VideoManager
     extends BuildlessAutoDisposeAsyncNotifier<List<VideoResource>> {

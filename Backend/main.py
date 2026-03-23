@@ -2791,6 +2791,32 @@ class PerformanceFrontendCreate(BaseModel):
 
 class PerformanceFrontendUpdate(BaseModel):
     date: Optional[str] = None
+    serve: Optional[int] = None
+    smash: Optional[int] = None
+    footwork: Optional[int] = None
+    defense: Optional[int] = None
+    stamina: Optional[int] = None
+    comments: Optional[str] = None
+
+class PerformanceSkillCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    is_active: Optional[bool] = True
+
+class PerformanceSkillUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class PerformanceSkill(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    is_active: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+    date: Optional[str] = None
     batch_id: Optional[int] = None
     serve: Optional[int] = None
     smash: Optional[int] = None
@@ -3452,6 +3478,75 @@ async def lifespan(app: FastAPI):
     yield
 
 app = FastAPI(title="Badminton Academy Management System", lifespan=lifespan)
+
+# ==================== Performance Skills Endpoints ====================
+from fastapi import APIRouter
+performance_skills_router = APIRouter(prefix="/api/performance-skills", tags=["Performance Skills"])
+
+@performance_skills_router.get("", response_model=List[PerformanceSkill])
+@performance_skills_router.get("/", response_model=List[PerformanceSkill])
+def get_performance_skills(active_only: bool = False):
+    db = SessionLocal()
+    try:
+        query = db.query(PerformanceSkillDB)
+        if active_only:
+            query = query.filter(PerformanceSkillDB.is_active == True)
+        return query.all()
+    finally:
+        db.close()
+
+@performance_skills_router.post("", response_model=PerformanceSkill)
+@performance_skills_router.post("/", response_model=PerformanceSkill)
+def create_performance_skill(skill: PerformanceSkillCreate):
+    db = SessionLocal()
+    try:
+        if db.query(PerformanceSkillDB).filter(PerformanceSkillDB.name == skill.name).first():
+            raise HTTPException(status_code=400, detail="Skill name already exists")
+        db_skill = PerformanceSkillDB(**skill.model_dump())
+        db.add(db_skill)
+        db.commit()
+        db.refresh(db_skill)
+        return db_skill
+    finally:
+        db.close()
+
+@performance_skills_router.patch("/{skill_id}", response_model=PerformanceSkill)
+def update_performance_skill(skill_id: int, skill: PerformanceSkillUpdate):
+    db = SessionLocal()
+    try:
+        db_skill = db.query(PerformanceSkillDB).filter(PerformanceSkillDB.id == skill_id).first()
+        if not db_skill:
+            raise HTTPException(status_code=404, detail="Skill not found")
+        
+        update_data = skill.model_dump(exclude_unset=True)
+        if 'name' in update_data and update_data['name'] != db_skill.name:
+            if db.query(PerformanceSkillDB).filter(PerformanceSkillDB.name == update_data['name']).first():
+                 raise HTTPException(status_code=400, detail="Skill name already exists")
+
+        for key, value in update_data.items():
+            setattr(db_skill, key, value)
+            
+        db.commit()
+        db.refresh(db_skill)
+        return db_skill
+    finally:
+        db.close()
+
+@performance_skills_router.delete("/{skill_id}")
+def delete_performance_skill(skill_id: int):
+    db = SessionLocal()
+    try:
+        db_skill = db.query(PerformanceSkillDB).filter(PerformanceSkillDB.id == skill_id).first()
+        if not db_skill:
+            raise HTTPException(status_code=404, detail="Skill not found")
+        db_skill.is_active = False
+        db.commit()
+        return {"ok": True}
+    finally:
+        db.close()
+
+app.include_router(performance_skills_router)
+
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
 

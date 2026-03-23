@@ -344,7 +344,7 @@ final overdueFeesProvider = AutoDisposeFutureProvider<List<Fee>>.internal(
 // ignore: unused_element
 typedef OverdueFeesRef = AutoDisposeFutureProviderRef<List<Fee>>;
 String _$studentsWithBatchFeesHash() =>
-    r'89e337d2ea87970074d3ecb2ec8649408d436ca1';
+    r'06221a2ce875c74f167a71d2556e3566533d3657';
 
 /// Provider for all students with their batch enrollments and fee status
 /// Returns students grouped by batch with their fee information
@@ -366,7 +366,7 @@ final studentsWithBatchFeesProvider =
 // ignore: unused_element
 typedef StudentsWithBatchFeesRef =
     AutoDisposeFutureProviderRef<Map<int, BatchFeeGroup>>;
-String _$feeListHash() => r'9ebeb757b7e2d70076e44f64cefee8a5c8ac830c';
+String _$feeListHash() => r'536daec75d1be4684cba02884cfb9e891e2f89f4';
 
 abstract class _$FeeList extends BuildlessAutoDisposeAsyncNotifier<List<Fee>> {
   late final int? studentId;

@@ -11,6 +11,7 @@ import '../../widgets/common/success_snackbar.dart';
 import '../../widgets/common/confirmation_dialog.dart';
 import '../../providers/service_providers.dart';
 import '../../providers/performance_provider.dart';
+import '../../providers/performance_skill_provider.dart';
 import '../../providers/batch_provider.dart';
 import '../../models/performance.dart';
 import '../../models/student.dart';
@@ -41,6 +42,7 @@ class _PerformanceTrackingScreenState
   List<Performance> _performanceHistory = [];
   bool _isLoading = false;
   List<Student> _batchStudents = [];
+  List<PerformanceSkill> _currentSkills = [];
   bool _loadingStudents = false;
   bool _isInitializing = false;
 
@@ -50,16 +52,25 @@ class _PerformanceTrackingScreenState
   final Map<int, TextEditingController> _commentControllers =
       {}; // studentId -> TextEditingController
 
-  final List<Map<String, dynamic>> _skills = [
-    {'key': 'serve', 'label': 'Serve', 'icon': Icons.sports_tennis},
-    {'key': 'smash', 'label': 'Smash', 'icon': Icons.flash_on},
-    {'key': 'footwork', 'label': 'Footwork', 'icon': Icons.directions_run},
-    {'key': 'defense', 'label': 'Defense', 'icon': Icons.shield},
-    {'key': 'stamina', 'label': 'Stamina', 'icon': Icons.fitness_center},
-  ];
+
+
+
+  Future<void> _loadSkills() async {
+    try {
+      final skills = await ref.read(performanceSkillListProvider.future);
+      if (mounted) {
+        setState(() => _currentSkills = skills);
+      }
+    } catch (e) {
+      if (mounted) {
+        SuccessSnackbar.showError(context, 'Failed to load skills: $e');
+      }
+    }
+  }
 
   @override
   void initState() {
+    _loadSkills();
     super.initState();
     // Initialize with student if provided
     if (widget.initialStudent != null) {
@@ -256,14 +267,11 @@ class _PerformanceTrackingScreenState
     _commentControllers.clear();
 
     for (var student in _batchStudents) {
-      _tableData[student.id] = {
-        'serve': 0,
-        'smash': 0,
-        'footwork': 0,
-        'defense': 0,
-        'stamina': 0,
-        'comments': '',
-      };
+      final Map<String, dynamic> data = {'comments': '', 'skills': <String, int>{}};
+      for (var skill in _currentSkills) {
+        data['skills'][skill.name] = 0;
+      }
+      _tableData[student.id] = data;
       // Create controller for comments
       _commentControllers[student.id] = TextEditingController();
     }
@@ -273,11 +281,8 @@ class _PerformanceTrackingScreenState
     // Validate that at least one student has ratings
     bool hasAnyRating = false;
     for (var studentData in _tableData.values) {
-      if (studentData['serve'] > 0 ||
-          studentData['smash'] > 0 ||
-          studentData['footwork'] > 0 ||
-          studentData['defense'] > 0 ||
-          studentData['stamina'] > 0) {
+      final skills = studentData['skills'] as Map<String, int>;
+      if (skills.values.any((r) => r > 0)) {
         hasAnyRating = true;
         break;
       }
@@ -302,24 +307,15 @@ class _PerformanceTrackingScreenState
         final data = entry.value;
 
         // Skip if no ratings
-        if (data['serve'] == 0 &&
-            data['smash'] == 0 &&
-            data['footwork'] == 0 &&
-            data['defense'] == 0 &&
-            data['stamina'] == 0) {
-          continue;
-        }
+        final skills = data['skills'] as Map<String, int>;
+        if (!skills.values.any((r) => r > 0)) continue;
 
         try {
           final performanceData = {
             'student_id': studentId,
             'batch_id': _selectedBatchId,
             'date': dateString,
-            'serve': data['serve'] ?? 0,
-            'smash': data['smash'] ?? 0,
-            'footwork': data['footwork'] ?? 0,
-            'defense': data['defense'] ?? 0,
-            'stamina': data['stamina'] ?? 0,
+            'skills': data['skills'],
             'comments': (data['comments'] as String?)?.trim().isEmpty == true
                 ? null
                 : (data['comments'] as String?)?.trim(),
@@ -786,7 +782,7 @@ class _PerformanceTrackingScreenState
     const skillColWidth = 80.0;
     const commentsColWidth = 200.0; // Fixed width for comments
     final minTableWidth =
-        studentColWidth + (skillColWidth * _skills.length) + commentsColWidth;
+        studentColWidth + (skillColWidth * _currentSkills.length) + commentsColWidth;
 
     return ConstrainedBox(
       constraints: BoxConstraints(minWidth: minTableWidth),
@@ -797,9 +793,9 @@ class _PerformanceTrackingScreenState
         ),
         columnWidths: {
           0: const FixedColumnWidth(studentColWidth), // Student name
-          for (int i = 1; i <= _skills.length; i++)
+          for (int i = 1; i <= _currentSkills.length; i++)
             i: const FixedColumnWidth(skillColWidth), // Skill columns
-          _skills.length + 1: const FixedColumnWidth(
+          _currentSkills.length + 1: const FixedColumnWidth(
             commentsColWidth,
           ), // Comments column - fixed width
         },
@@ -809,9 +805,7 @@ class _PerformanceTrackingScreenState
             decoration: BoxDecoration(color: AppColors.accent.withOpacity(0.1)),
             children: [
               _buildTableHeaderCell('Student'),
-              ..._skills.map(
-                (skill) => _buildTableHeaderCell(skill['label'] as String),
-              ),
+              ..._currentSkills.map((skill) => _buildTableHeaderCell(skill.name)),
               _buildTableHeaderCell('Comments'),
             ],
           ),
@@ -820,11 +814,7 @@ class _PerformanceTrackingScreenState
             final studentData =
                 _tableData[student.id] ??
                 {
-                  'serve': 0,
-                  'smash': 0,
-                  'footwork': 0,
-                  'defense': 0,
-                  'stamina': 0,
+                  'skills': { for (var s in _currentSkills) s.name: 0 },
                   'comments': '',
                 };
 
@@ -847,9 +837,10 @@ class _PerformanceTrackingScreenState
                     ),
                   ),
                 ),
-                ..._skills.map((skill) {
-                  final key = skill['key'] as String;
-                  final rating = studentData[key] as int? ?? 0;
+                ..._currentSkills.map((skill) {
+                  final key = skill.name;
+                  final skillsMap = studentData['skills'] as Map<String, int>? ?? {};
+                  final rating = skillsMap[key] ?? 0;
                   return _buildRatingCell(student.id, key, rating);
                 }),
                 _buildCommentsCell(
@@ -1098,11 +1089,7 @@ class _PerformanceTrackingScreenState
             ],
           ),
           const SizedBox(height: AppDimensions.spacingM),
-          _buildSkillRow('Serve', performance.serve),
-          _buildSkillRow('Smash', performance.smash),
-          _buildSkillRow('Footwork', performance.footwork),
-          _buildSkillRow('Defense', performance.defense),
-          _buildSkillRow('Stamina', performance.stamina),
+          ...performance.skills.entries.map((e) => _buildSkillRow(e.key.toUpperCase(), e.value)),
           if (performance.comments != null &&
               performance.comments!.isNotEmpty) ...[
             const SizedBox(height: AppDimensions.spacingM),

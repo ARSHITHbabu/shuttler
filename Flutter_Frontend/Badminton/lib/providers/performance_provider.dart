@@ -47,15 +47,15 @@ Future<List<Map<String, dynamic>>> performanceTrend(
   
   // Convert to trend data format for charts
   return records.map((record) {
-    return {
+    final Map<String, dynamic> data = {
       'date': record.date,
-      'serve': record.serve,
-      'smash': record.smash,
-      'footwork': record.footwork,
-      'defense': record.defense,
-      'stamina': record.stamina,
       'average': record.averageRating,
     };
+    // Include individual skill ratings
+    record.skills.forEach((key, value) {
+      data[key] = value;
+    });
+    return data;
   }).toList();
 }
 
@@ -73,29 +73,31 @@ Future<Map<String, dynamic>> averagePerformance(
   if (records.isEmpty) {
     return {
       'average': 0.0,
-      'serve': 0.0,
-      'smash': 0.0,
-      'footwork': 0.0,
-      'defense': 0.0,
-      'stamina': 0.0,
+      'skills': <String, double>{},
       'totalRecords': 0,
     };
   }
   
-  final serveAvg = records.map((r) => r.serve).reduce((a, b) => a + b) / records.length;
-  final smashAvg = records.map((r) => r.smash).reduce((a, b) => a + b) / records.length;
-  final footworkAvg = records.map((r) => r.footwork).reduce((a, b) => a + b) / records.length;
-  final defenseAvg = records.map((r) => r.defense).reduce((a, b) => a + b) / records.length;
-  final staminaAvg = records.map((r) => r.stamina).reduce((a, b) => a + b) / records.length;
-  final overallAvg = (serveAvg + smashAvg + footworkAvg + defenseAvg + staminaAvg) / 5.0;
+  Map<String, double> skillSums = {};
+  Map<String, int> skillCounts = {};
+  
+  for (var record in records) {
+    record.skills.forEach((skill, rating) {
+      skillSums[skill] = (skillSums[skill] ?? 0.0) + rating;
+      skillCounts[skill] = (skillCounts[skill] ?? 0) + 1;
+    });
+  }
+  
+  Map<String, double> skillAverages = {};
+  skillSums.forEach((skill, sum) {
+    skillAverages[skill] = sum / skillCounts[skill]!;
+  });
+  
+  final overallAvg = records.map((r) => r.averageRating).reduce((a, b) => a + b) / records.length;
   
   return {
     'average': overallAvg,
-    'serve': serveAvg,
-    'smash': smashAvg,
-    'footwork': footworkAvg,
-    'defense': defenseAvg,
-    'stamina': staminaAvg,
+    'skills': skillAverages,
     'totalRecords': records.length,
   };
 }

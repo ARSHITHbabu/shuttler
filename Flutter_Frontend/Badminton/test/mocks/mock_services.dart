@@ -396,11 +396,13 @@ class MockDataFactory {
         studentId: index + 1,
         batchId: index + 1,
         date: DateTime.now().subtract(Duration(days: index * 7)),
-        serve: baseRating,
-        smash: baseRating,
-        footwork: baseRating,
-        defense: baseRating,
-        stamina: baseRating,
+        skills: {
+          'serve': baseRating,
+          'smash': baseRating,
+          'footwork': baseRating,
+          'defense': baseRating,
+          'stamina': baseRating,
+        },
         comments: 'Comment ${index + 1}',
       );
     });

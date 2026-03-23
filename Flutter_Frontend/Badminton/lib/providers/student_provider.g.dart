@@ -442,7 +442,7 @@ final studentStatsProvider =
 @Deprecated('Will be removed in 3.0. Use Ref instead')
 // ignore: unused_element
 typedef StudentStatsRef = AutoDisposeFutureProviderRef<Map<String, dynamic>>;
-String _$studentDashboardHash() => r'f9bc05e3dbb766bf71f34f93755978c195959f89';
+String _$studentDashboardHash() => r'a62ccc6209ee966043f3f40b1d86993c8e465337';
 
 /// Provider for student dashboard data (stats and upcoming sessions)
 ///
@@ -577,7 +577,7 @@ class _StudentDashboardProviderElement
   int get studentId => (origin as StudentDashboardProvider).studentId;
 }
 
-String _$studentSchedulesHash() => r'aa57e204f934d84f67776e3395065b86f78a6cbf';
+String _$studentSchedulesHash() => r'213fbf4d8d2ebb2e6e8b35467d011a8f30877943';
 
 /// Provider for student schedules (all schedules for batches student is enrolled in)
 ///
@@ -842,7 +842,7 @@ class _StudentCoachesProviderElement
   int get studentId => (origin as StudentCoachesProvider).studentId;
 }
 
-String _$studentListHash() => r'ddfb84c1761b1083a67f708c72ddd15a950a84ae';
+String _$studentListHash() => r'c00b2757dd549c729d8c609d7ec573ee2c7bdb24';
 
 /// Provider for student list state
 ///
