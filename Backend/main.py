@@ -2869,11 +2869,12 @@ class PerformanceFrontend(BaseModel):
     batch_id: int
     batch_name: Optional[str] = None
     date: str
-    serve: int  # 1-5 rating
-    smash: int  # 1-5 rating
-    footwork: int  # 1-5 rating
-    defense: int  # 1-5 rating
-    stamina: int  # 1-5 rating
+    serve: int = 0
+    smash: int = 0
+    footwork: int = 0
+    defense: int = 0
+    stamina: int = 0
+    skills: Optional[Dict[str, int]] = None  # Full dynamic skills map
     comments: Optional[str] = None
     created_at: Optional[str] = None
 
@@ -2886,6 +2887,7 @@ class PerformanceFrontendCreate(BaseModel):
     footwork: int = 0
     defense: int = 0
     stamina: int = 0
+    skills: Optional[Dict[str, int]] = None  # Preferred: dynamic skills map
     comments: Optional[str] = None
 
 class PerformanceFrontendUpdate(BaseModel):
@@ -8391,6 +8393,7 @@ def transform_performance_to_frontend(records: List[PerformanceDB], db) -> Optio
     }
     
     # Aggregate skills from all records
+    skills_map = {}
     comments_list = []
     for record in records:
         skill_lower = record.skill.lower()
@@ -8404,19 +8407,25 @@ def transform_performance_to_frontend(records: List[PerformanceDB], db) -> Optio
             result["defense"] = record.rating
         elif skill_lower == "stamina":
             result["stamina"] = record.rating
-        
+
+        # Always populate dynamic skills map (preserves original casing)
+        skills_map[record.skill] = record.rating
+
         if record.comments:
             comments_list.append(record.comments)
-    
+
+    result["skills"] = skills_map
+
     # Combine comments
     if comments_list:
         result["comments"] = " | ".join(comments_list)
-    
+
     return result
 
 @app.get("/performance/", response_model=List[PerformanceFrontend], dependencies=[Depends(require_student)])
 def get_performance_records(
     student_id: Optional[int] = None,
+    batch_id: Optional[int] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None
 ):
@@ -8424,13 +8433,16 @@ def get_performance_records(
     db = SessionLocal()
     try:
         query = db.query(PerformanceDB)
-        
+
         if student_id is not None:
             query = query.filter(PerformanceDB.student_id == student_id)
-        
+
+        if batch_id is not None:
+            query = query.filter(PerformanceDB.batch_id == batch_id)
+
         if start_date:
             query = query.filter(PerformanceDB.date >= start_date)
-        
+
         if end_date:
             query = query.filter(PerformanceDB.date <= end_date)
         
@@ -8544,15 +8556,20 @@ def create_performance_record_v2(performance_data: PerformanceFrontendCreate, cu
         
         
         # Create individual records for each skill with rating > 0
-        skill_mappings = {
-            "serve": performance_data.serve,
-            "smash": performance_data.smash,
-            "footwork": performance_data.footwork,
-            "defense": performance_data.defense,
-            "stamina": performance_data.stamina,
-        }
-        
+        # Prefer dynamic skills map if provided; fall back to flat fields
+        if performance_data.skills:
+            skill_mappings = {k: v for k, v in performance_data.skills.items() if v and v > 0}
+        else:
+            skill_mappings = {k: v for k, v in {
+                "serve": performance_data.serve,
+                "smash": performance_data.smash,
+                "footwork": performance_data.footwork,
+                "defense": performance_data.defense,
+                "stamina": performance_data.stamina,
+            }.items() if v > 0}
+
         created_records = []
+        first_skill = True
         for skill, rating in skill_mappings.items():
             if rating > 0:  # Only create record if rating is provided
                 db_performance = PerformanceDB(
@@ -8561,11 +8578,12 @@ def create_performance_record_v2(performance_data: PerformanceFrontendCreate, cu
                     date=performance_data.date,
                     skill=skill,
                     rating=rating,
-                    comments=performance_data.comments if skill == "serve" else None,  # Store comments only once
+                    comments=performance_data.comments if first_skill else None,  # Store comments on first skill only
                     recorded_by=recorded_by
                 )
                 db.add(db_performance)
                 created_records.append(db_performance)
+                first_skill = False
         
         if not created_records:
             raise HTTPException(status_code=400, detail="At least one skill rating must be provided")

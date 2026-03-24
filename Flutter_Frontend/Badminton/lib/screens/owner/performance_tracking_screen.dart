@@ -48,11 +48,16 @@ class _PerformanceTrackingScreenState
   bool _loadingStudents = false;
   bool _isInitializing = false;
 
+  // Chart skill filter — null means "show all"
+  String? _selectedChartSkill;
+
   // Table form data for bulk entry
   final Map<int, Map<String, dynamic>> _tableData =
-      {}; // studentId -> {skill ratings + comments}
+      {}; // studentId -> {skills: Map<String,int>, comments: String}
   final Map<int, TextEditingController> _commentControllers =
       {}; // studentId -> TextEditingController
+  // Rating controllers keyed by "$studentId:$skillKey" — must persist across builds
+  final Map<String, TextEditingController> _ratingControllers = {};
 
 
 
@@ -125,11 +130,14 @@ class _PerformanceTrackingScreenState
 
   @override
   void dispose() {
-    // Dispose comment controllers
     for (var controller in _commentControllers.values) {
       controller.dispose();
     }
     _commentControllers.clear();
+    for (var controller in _ratingControllers.values) {
+      controller.dispose();
+    }
+    _ratingControllers.clear();
     super.dispose();
   }
 
@@ -237,13 +245,15 @@ class _PerformanceTrackingScreenState
   }
 
   void _openAddForm() async {
-    // Clear previous form data
     _tableData.clear();
-    // Dispose old controllers
     for (var controller in _commentControllers.values) {
       controller.dispose();
     }
     _commentControllers.clear();
+    for (var controller in _ratingControllers.values) {
+      controller.dispose();
+    }
+    _ratingControllers.clear();
 
     setState(() {
       _showAddForm = true;
@@ -260,22 +270,29 @@ class _PerformanceTrackingScreenState
   void _initializeTableData() {
     if (_batchStudents.isEmpty) return;
 
-    // Initialize table data for all students
     _tableData.clear();
-    // Dispose old controllers
+
     for (var controller in _commentControllers.values) {
       controller.dispose();
     }
     _commentControllers.clear();
 
+    for (var controller in _ratingControllers.values) {
+      controller.dispose();
+    }
+    _ratingControllers.clear();
+
     for (var student in _batchStudents) {
-      final Map<String, dynamic> data = {'comments': '', 'skills': <String, int>{}};
+      final skillMap = <String, int>{};
       for (var skill in _currentSkills) {
-        data['skills'][skill.name] = 0;
+        skillMap[skill.name] = 0;
       }
-      _tableData[student.id] = data;
-      // Create controller for comments
+      _tableData[student.id] = {'comments': '', 'skills': skillMap};
       _commentControllers[student.id] = TextEditingController();
+      for (var skill in _currentSkills) {
+        _ratingControllers['${student.id}:${skill.name}'] =
+            TextEditingController();
+      }
     }
   }
 
@@ -313,14 +330,13 @@ class _PerformanceTrackingScreenState
         if (!skills.values.any((r) => r > 0)) continue;
 
         try {
+          final commentText = _commentControllers[studentId]?.text.trim() ?? '';
           final performanceData = {
             'student_id': studentId,
             'batch_id': _selectedBatchId,
             'date': dateString,
             'skills': data['skills'],
-            'comments': (data['comments'] as String?)?.trim().isEmpty == true
-                ? null
-                : (data['comments'] as String?)?.trim(),
+            'comments': commentText.isEmpty ? null : commentText,
           };
 
           await performanceService.createPerformance(performanceData);
@@ -336,11 +352,14 @@ class _PerformanceTrackingScreenState
           _isLoading = false;
           _showAddForm = false;
           _tableData.clear();
-          // Dispose controllers
           for (var controller in _commentControllers.values) {
             controller.dispose();
           }
           _commentControllers.clear();
+          for (var controller in _ratingControllers.values) {
+            controller.dispose();
+          }
+          _ratingControllers.clear();
         });
 
         if (failCount == 0) {
@@ -885,11 +904,18 @@ class _PerformanceTrackingScreenState
   }
 
   Widget _buildRatingCell(int studentId, String skillKey, int currentRating) {
+    final controllerKey = '$studentId:$skillKey';
+    // Use persistent controller; create lazily only if missing (e.g. skill added mid-session)
+    if (!_ratingControllers.containsKey(controllerKey)) {
+      _ratingControllers[controllerKey] = TextEditingController(
+        text: currentRating > 0 ? currentRating.toString() : '',
+      );
+    }
+    final controller = _ratingControllers[controllerKey]!;
+
     return _buildTableCell(
       TextField(
-        controller: TextEditingController(
-          text: currentRating > 0 ? currentRating.toString() : '',
-        ),
+        controller: controller,
         keyboardType: TextInputType.number,
         inputFormatters: [
           FilteringTextInputFormatter.allow(RegExp(r'[1-5]')),
@@ -905,42 +931,32 @@ class _PerformanceTrackingScreenState
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(4),
             borderSide: BorderSide(
-              color: AppColors.textSecondary.withOpacity(0.3),
+              color: AppColors.textSecondary.withValues(alpha: 0.3),
             ),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(4),
             borderSide: BorderSide(
-              color: AppColors.textSecondary.withOpacity(0.3),
+              color: AppColors.textSecondary.withValues(alpha: 0.3),
             ),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(4),
             borderSide: const BorderSide(color: AppColors.accent, width: 2),
           ),
-          contentPadding: const EdgeInsets.symmetric(
-            vertical: 8,
-            horizontal: 4,
-          ),
+          contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
           filled: true,
           fillColor: AppColors.cardBackground,
         ),
         onChanged: (value) {
-          setState(() {
-            if (!_tableData.containsKey(studentId)) {
-              _tableData[studentId] = {
-                'serve': 0,
-                'smash': 0,
-                'footwork': 0,
-                'defense': 0,
-                'stamina': 0,
-                'comments': '',
-              };
-            }
-            _tableData[studentId]![skillKey] = value.isEmpty
-                ? 0
-                : int.tryParse(value) ?? 0;
+          // Ensure tableData row exists with correct structure
+          _tableData.putIfAbsent(studentId, () => {
+            'comments': '',
+            'skills': <String, int>{},
           });
+          // Write into the nested skills map — NOT the top-level map
+          final skills = _tableData[studentId]!['skills'] as Map<String, int>;
+          skills[skillKey] = value.isEmpty ? 0 : int.tryParse(value) ?? 0;
         },
       ),
     );
@@ -1170,6 +1186,18 @@ class _PerformanceTrackingScreenState
     );
   }
 
+  // Fixed colour palette for skills (index-stable)
+  static const List<Color> _skillColors = [
+    Colors.blue,
+    Colors.red,
+    Colors.green,
+    Colors.orange,
+    Colors.purple,
+    Colors.teal,
+    Colors.pink,
+    Colors.amber,
+  ];
+
   Widget _buildProgressChart() {
     if (_performanceHistory.length < 2) {
       return const SizedBox.shrink();
@@ -1179,23 +1207,45 @@ class _PerformanceTrackingScreenState
     final sortedHistory = List<Performance>.from(_performanceHistory)
       ..sort((a, b) => a.date.compareTo(b.date));
 
-    // Prepare data for each skill
-    final serveSpots = <FlSpot>[];
-    final smashSpots = <FlSpot>[];
-    final footworkSpots = <FlSpot>[];
-    final defenseSpots = <FlSpot>[];
-    final staminaSpots = <FlSpot>[];
-    final avgSpots = <FlSpot>[];
+    // Derive skill names from actual data (union of all sessions)
+    final skillNames = <String>{};
+    for (final p in sortedHistory) {
+      skillNames.addAll(p.skills.keys);
+    }
+    final orderedSkills = skillNames.toList()..sort();
 
+    // Build spots per skill and for average
+    final Map<String, List<FlSpot>> skillSpots = {};
+    final avgSpots = <FlSpot>[];
     for (int i = 0; i < sortedHistory.length; i++) {
       final p = sortedHistory[i];
       final x = i.toDouble();
-      serveSpots.add(FlSpot(x, p.serve.toDouble()));
-      smashSpots.add(FlSpot(x, p.smash.toDouble()));
-      footworkSpots.add(FlSpot(x, p.footwork.toDouble()));
-      defenseSpots.add(FlSpot(x, p.defense.toDouble()));
-      staminaSpots.add(FlSpot(x, p.stamina.toDouble()));
       avgSpots.add(FlSpot(x, p.averageRating));
+      for (final skill in orderedSkills) {
+        final val = (p.skills[skill] ?? 0).toDouble();
+        skillSpots.putIfAbsent(skill, () => []).add(FlSpot(x, val));
+      }
+    }
+
+    // Determine which lines to show based on filter
+    final showAll = _selectedChartSkill == null;
+
+    // Build line bars list
+    final lineBars = <LineChartBarData>[];
+    if (showAll) {
+      // Average line
+      lineBars.add(_createLineData(avgSpots, AppColors.accent, isMain: true));
+      // One line per skill
+      for (int i = 0; i < orderedSkills.length; i++) {
+        final color = _skillColors[i % _skillColors.length];
+        lineBars.add(_createLineData(skillSpots[orderedSkills[i]]!, color));
+      }
+    } else {
+      // Only the selected skill line
+      final idx = orderedSkills.indexOf(_selectedChartSkill!);
+      final color = idx >= 0 ? _skillColors[idx % _skillColors.length] : AppColors.accent;
+      final spots = skillSpots[_selectedChartSkill] ?? [];
+      lineBars.add(_createLineData(spots, color, isMain: true));
     }
 
     return NeumorphicContainer(
@@ -1203,9 +1253,91 @@ class _PerformanceTrackingScreenState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Skill Performance Trends',
-            style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Skill Performance Trends',
+                style: TextStyle(fontSize: 14, color: AppColors.textSecondary),
+              ),
+              if (_selectedChartSkill != null)
+                GestureDetector(
+                  onTap: () => setState(() => _selectedChartSkill = null),
+                  child: const Text(
+                    'Show All',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: AppColors.accent,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: AppDimensions.spacingS),
+          // Skill filter chips
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                // "All" chip
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: FilterChip(
+                    label: const Text('All'),
+                    selected: _selectedChartSkill == null,
+                    onSelected: (_) => setState(() => _selectedChartSkill = null),
+                    selectedColor: AppColors.accent.withValues(alpha: 0.2),
+                    checkmarkColor: AppColors.accent,
+                    labelStyle: TextStyle(
+                      fontSize: 11,
+                      color: _selectedChartSkill == null
+                          ? AppColors.accent
+                          : AppColors.textSecondary,
+                      fontWeight: _selectedChartSkill == null
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                    ),
+                    backgroundColor: AppColors.cardBackground,
+                    side: BorderSide(
+                      color: _selectedChartSkill == null
+                          ? AppColors.accent
+                          : AppColors.border,
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                  ),
+                ),
+                // One chip per skill
+                ...orderedSkills.asMap().entries.map((entry) {
+                  final skill = entry.value;
+                  final color = _skillColors[entry.key % _skillColors.length];
+                  final isSelected = _selectedChartSkill == skill;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: FilterChip(
+                      label: Text(skill),
+                      selected: isSelected,
+                      onSelected: (_) => setState(() {
+                        _selectedChartSkill = isSelected ? null : skill;
+                      }),
+                      selectedColor: color.withValues(alpha: 0.2),
+                      checkmarkColor: color,
+                      labelStyle: TextStyle(
+                        fontSize: 11,
+                        color: isSelected ? color : AppColors.textSecondary,
+                        fontWeight:
+                            isSelected ? FontWeight.bold : FontWeight.normal,
+                      ),
+                      backgroundColor: AppColors.cardBackground,
+                      side: BorderSide(
+                        color: isSelected ? color : AppColors.border,
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                    ),
+                  );
+                }),
+              ],
+            ),
           ),
           const SizedBox(height: AppDimensions.spacingM),
           SizedBox(
@@ -1214,20 +1346,16 @@ class _PerformanceTrackingScreenState
               LineChartData(
                 lineTouchData: LineTouchData(
                   touchTooltipData: LineTouchTooltipData(
-                    tooltipBgColor: AppColors.cardBackground.withOpacity(0.9),
+                    tooltipBgColor: AppColors.cardBackground.withValues(alpha: 0.9),
                     getTooltipItems: (touchedSpots) {
                       return touchedSpots.map((spot) {
-                        String skill = 'Skill';
-                        switch (spot.barIndex) {
-                          case 0: skill = 'Avg'; break;
-                          case 1: skill = 'Serve'; break;
-                          case 2: skill = 'Smash'; break;
-                          case 3: skill = 'Footwork'; break;
-                          case 4: skill = 'Defense'; break;
-                          case 5: skill = 'Stamina'; break;
-                        }
+                        final label = showAll
+                            ? (spot.barIndex == 0
+                                ? 'Avg'
+                                : orderedSkills[spot.barIndex - 1])
+                            : (_selectedChartSkill ?? 'Skill');
                         return LineTooltipItem(
-                          '$skill: ${spot.y.toStringAsFixed(1)}',
+                          '$label: ${spot.y.toStringAsFixed(1)}',
                           TextStyle(
                             color: spot.bar.color ?? AppColors.textPrimary,
                             fontWeight: FontWeight.bold,
@@ -1242,12 +1370,10 @@ class _PerformanceTrackingScreenState
                   show: true,
                   drawVerticalLine: false,
                   horizontalInterval: 1,
-                  getDrawingHorizontalLine: (value) {
-                    return FlLine(
-                      color: AppColors.textSecondary.withOpacity(0.1),
-                      strokeWidth: 1,
-                    );
-                  },
+                  getDrawingHorizontalLine: (value) => FlLine(
+                    color: AppColors.textSecondary.withValues(alpha: 0.1),
+                    strokeWidth: 1,
+                  ),
                 ),
                 titlesData: FlTitlesData(
                   show: true,
@@ -1301,7 +1427,7 @@ class _PerformanceTrackingScreenState
                 borderData: FlBorderData(
                   show: true,
                   border: Border.all(
-                    color: AppColors.textSecondary.withOpacity(0.2),
+                    color: AppColors.textSecondary.withValues(alpha: 0.2),
                     width: 1,
                   ),
                 ),
@@ -1309,39 +1435,31 @@ class _PerformanceTrackingScreenState
                 maxX: (sortedHistory.length - 1).toDouble(),
                 minY: 0,
                 maxY: 5.2,
-                lineBarsData: [
-                  // Average Line (Thick)
-                  _createLineData(avgSpots, AppColors.accent, isMain: true),
-                  // Skill Lines (Thin)
-                  _createLineData(serveSpots, Colors.blue),
-                  _createLineData(smashSpots, Colors.red),
-                  _createLineData(footworkSpots, Colors.green),
-                  _createLineData(defenseSpots, Colors.orange),
-                  _createLineData(staminaSpots, Colors.purple),
-                ],
+                lineBarsData: lineBars,
               ),
             ),
           ),
           const SizedBox(height: AppDimensions.spacingM),
-          // Legend
-          Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            children: [
-              _buildLegendItem('Average', AppColors.accent, isMain: true),
-              _buildLegendItem('Serve', Colors.blue),
-              _buildLegendItem('Smash', Colors.red),
-              _buildLegendItem('Footwork', Colors.green),
-              _buildLegendItem('Defense', Colors.orange),
-              _buildLegendItem('Stamina', Colors.purple),
-            ],
-          ),
+          // Legend (only shown in "all" mode)
+          if (showAll)
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              children: [
+                _buildLegendItem('Average', AppColors.accent, isMain: true),
+                ...orderedSkills.asMap().entries.map((e) => _buildLegendItem(
+                      e.value,
+                      _skillColors[e.key % _skillColors.length],
+                    )),
+              ],
+            ),
         ],
       ),
     );
   }
 
-  LineChartBarData _createLineData(List<FlSpot> spots, Color color, {bool isMain = false}) {
+  LineChartBarData _createLineData(List<FlSpot> spots, Color color,
+      {bool isMain = false}) {
     return LineChartBarData(
       spots: spots,
       isCurved: true,
@@ -1351,7 +1469,7 @@ class _PerformanceTrackingScreenState
       dotData: FlDotData(show: isMain),
       belowBarData: BarAreaData(
         show: isMain,
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
       ),
     );
   }
