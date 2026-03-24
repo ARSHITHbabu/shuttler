@@ -27,6 +27,8 @@ class ApiEndpoints {
 
   // Authentication
   static const String login = '/auth/login';
+  static const String verifyOtp = '/auth/verify-otp';
+  static const String sendOtp = '/auth/send-otp';
   static const String logout = '/auth/logout';
   static const String register = '/auth/register';
   static const String changePassword = '/auth/change-password';

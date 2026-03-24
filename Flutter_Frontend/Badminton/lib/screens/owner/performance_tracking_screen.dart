@@ -22,10 +22,12 @@ import 'package:intl/intl.dart';
 /// New flow: Select Batch -> Select Student -> View History OR Add Performance (table format)
 class PerformanceTrackingScreen extends ConsumerStatefulWidget {
   final Student? initialStudent;
-  
+  final bool canManageSkills;
+
   const PerformanceTrackingScreen({
     super.key,
     this.initialStudent,
+    this.canManageSkills = true,
   });
 
   @override
@@ -408,6 +410,12 @@ class _PerformanceTrackingScreenState
           ),
         ),
         actions: [
+          if (widget.canManageSkills)
+            IconButton(
+              icon: const Icon(Icons.tune, color: AppColors.accent),
+              tooltip: 'Manage Skills',
+              onPressed: _showManageSkillsSheet,
+            ),
           IconButton(
             icon: const Icon(Icons.add, color: AppColors.accent),
             onPressed: _openAddForm,
@@ -1368,5 +1376,283 @@ class _PerformanceTrackingScreenState
         ),
       ],
     );
+  }
+
+  void _showManageSkillsSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: AppColors.cardBackground,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => _ManageSkillsSheet(
+        onSkillsChanged: () async {
+          await _loadSkills();
+          if (_batchStudents.isNotEmpty) {
+            setState(() => _initializeTableData());
+          }
+        },
+      ),
+    );
+  }
+}
+
+// ── Manage Skills Bottom Sheet ────────────────────────────────────────────────
+
+class _ManageSkillsSheet extends ConsumerStatefulWidget {
+  final VoidCallback onSkillsChanged;
+  const _ManageSkillsSheet({required this.onSkillsChanged});
+
+  @override
+  ConsumerState<_ManageSkillsSheet> createState() => _ManageSkillsSheetState();
+}
+
+class _ManageSkillsSheetState extends ConsumerState<_ManageSkillsSheet> {
+  final _addController = TextEditingController();
+  bool _isAdding = false;
+  int? _editingId;
+  final Map<int, TextEditingController> _editControllers = {};
+
+  @override
+  void dispose() {
+    _addController.dispose();
+    for (final c in _editControllers.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final skillsAsync = ref.watch(performanceSkillListProvider);
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.6,
+      minChildSize: 0.4,
+      maxChildSize: 0.9,
+      expand: false,
+      builder: (_, scrollController) {
+        return Column(
+          children: [
+            Container(
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppColors.textSecondary.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Manage Skills',
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+            const Divider(color: Colors.white12),
+            Expanded(
+              child: skillsAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => Center(
+                  child: Text('Error: $e',
+                      style: const TextStyle(color: AppColors.error)),
+                ),
+                data: (skills) => ListView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                  children: [
+                    ...skills.map((skill) => _buildSkillTile(skill)),
+                    const SizedBox(height: 16),
+                    _buildAddSkillRow(),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildSkillTile(PerformanceSkill skill) {
+    final isEditing = _editingId == skill.id;
+
+    if (isEditing) {
+      _editControllers.putIfAbsent(
+          skill.id, () => TextEditingController(text: skill.name));
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _editControllers[skill.id],
+                autofocus: true,
+                style: const TextStyle(color: AppColors.textPrimary),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: AppColors.background,
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.check, color: AppColors.accent),
+              onPressed: () async {
+                final newName = _editControllers[skill.id]!.text.trim();
+                if (newName.isEmpty || newName == skill.name) {
+                  setState(() => _editingId = null);
+                  return;
+                }
+                try {
+                  await ref
+                      .read(performanceSkillListProvider.notifier)
+                      .updateSkill(skill.id, newName);
+                  if (mounted) setState(() => _editingId = null);
+                  widget.onSkillsChanged();
+                } catch (e) {
+                  if (mounted) {
+                    SuccessSnackbar.showError(context, 'Failed to update: $e');
+                  }
+                }
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.close, color: AppColors.textSecondary),
+              onPressed: () => setState(() => _editingId = null),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(skill.name,
+          style: const TextStyle(color: AppColors.textPrimary)),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.edit_outlined,
+                size: 20, color: AppColors.accent),
+            onPressed: () => setState(() => _editingId = skill.id),
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline,
+                size: 20, color: AppColors.error),
+            onPressed: () => _confirmDelete(skill),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDelete(PerformanceSkill skill) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.cardBackground,
+        title: const Text('Remove Skill',
+            style: TextStyle(color: AppColors.textPrimary)),
+        content: Text(
+          'Remove "${skill.name}"? Existing performance data for this skill will be kept.',
+          style: const TextStyle(color: AppColors.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              try {
+                await ref
+                    .read(performanceSkillListProvider.notifier)
+                    .deleteSkill(skill.id);
+                widget.onSkillsChanged();
+              } catch (e) {
+                if (mounted) {
+                  SuccessSnackbar.showError(context, 'Failed to remove: $e');
+                }
+              }
+            },
+            child: const Text('Remove',
+                style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAddSkillRow() {
+    return Row(
+      children: [
+        Expanded(
+          child: TextField(
+            controller: _addController,
+            style: const TextStyle(color: AppColors.textPrimary),
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: AppColors.background,
+              hintText: 'New skill name...',
+              hintStyle: TextStyle(
+                  color: AppColors.textSecondary.withValues(alpha: 0.5)),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8)),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+            onSubmitted: (_) => _addSkill(),
+          ),
+        ),
+        const SizedBox(width: 8),
+        ElevatedButton(
+          onPressed: _isAdding ? null : _addSkill,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.accent,
+            foregroundColor: Colors.white,
+          ),
+          child: _isAdding
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white),
+                )
+              : const Text('Add'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _addSkill() async {
+    final name = _addController.text.trim();
+    if (name.isEmpty) return;
+    setState(() => _isAdding = true);
+    try {
+      await ref
+          .read(performanceSkillListProvider.notifier)
+          .addSkill(name);
+      _addController.clear();
+      widget.onSkillsChanged();
+    } catch (e) {
+      if (mounted) SuccessSnackbar.showError(context, 'Failed to add: $e');
+    } finally {
+      if (mounted) setState(() => _isAdding = false);
+    }
   }
 }

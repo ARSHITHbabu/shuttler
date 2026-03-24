@@ -98,8 +98,9 @@ class Auth extends _$Auth {
     return const Unauthenticated();
   }
 
-  /// Login with email and password
-  /// Returns the full result including profile_complete for students
+  /// Login with email and password.
+  /// For owners: sets Authenticated state and returns full result.
+  /// For coaches/students: returns {otp_required: true, pre_auth_token, masked_email} without changing state.
   Future<Map<String, dynamic>> login({
     required String email,
     required String password,
@@ -116,6 +117,12 @@ class Auth extends _$Auth {
         rememberMe: rememberMe,
       );
 
+      // OTP required — don't set auth state yet; caller handles navigation
+      if (result['otp_required'] == true) {
+        state = const AsyncValue.data(Unauthenticated());
+        return result;
+      }
+
       final userType = result['userType'] as String;
       final user = result['user'];
 
@@ -129,12 +136,49 @@ class Auth extends _$Auth {
           mustChangePassword: user['must_change_password'] == true,
         ),
       );
-      
-      // Return the full result including profile_complete
+
       return result;
     } catch (e, stackTrace) {
       state = AsyncValue.error(e, stackTrace);
-      // Rethrow to allow UI to handle the error
+      rethrow;
+    }
+  }
+
+  /// Complete login after OTP verification (coach/student).
+  /// Sets Authenticated state and returns full auth result.
+  Future<Map<String, dynamic>> verifyOtp({
+    required String email,
+    required String otp,
+    required String preAuthToken,
+  }) async {
+    state = const AsyncValue.loading();
+
+    try {
+      final authService = ref.read(authServiceProvider);
+
+      final result = await authService.verifyOtp(
+        email: email,
+        otp: otp,
+        preAuthToken: preAuthToken,
+      );
+
+      final userType = result['userType'] as String;
+      final user = result['user'];
+
+      state = AsyncValue.data(
+        Authenticated(
+          userType: userType,
+          userId: user['id'] as int,
+          userName: user['name'] as String,
+          userEmail: user['email'] as String,
+          userRole: user['role'] as String?,
+          mustChangePassword: user['must_change_password'] == true,
+        ),
+      );
+
+      return result;
+    } catch (e, stackTrace) {
+      state = AsyncValue.error(e, stackTrace);
       rethrow;
     }
   }

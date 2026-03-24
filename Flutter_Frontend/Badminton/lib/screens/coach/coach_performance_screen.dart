@@ -95,7 +95,7 @@ class _CoachPerformanceScreenState
     );
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => PerformanceTrackingScreen(initialStudent: student),
+        builder: (_) => PerformanceTrackingScreen(initialStudent: student, canManageSkills: false),
       ),
     );
   }
