@@ -1492,7 +1492,10 @@ def migrate_database_schema(engine):
             check_and_add_column(engine, 'owners', 'locked_until', 'TIMESTAMP WITH TIME ZONE', nullable=True)
             check_and_add_column(engine, 'owners', 'profile_photo', 'VARCHAR(500)', nullable=True)
             check_and_add_column(engine, 'owners', 'fcm_token', 'VARCHAR(500)', nullable=True)
-        
+            check_and_add_column(engine, 'owners', 'status', 'VARCHAR(20)', nullable=True, default_value="'active'")
+            check_and_add_column(engine, 'owners', 'specialization', 'VARCHAR(255)', nullable=True)
+            check_and_add_column(engine, 'owners', 'experience_years', 'INTEGER', nullable=True)
+
         # Migrate batches table
         if 'batches' in tables:
             check_and_add_column(engine, 'batches', 'status', 'VARCHAR(20)', nullable=True, default_value="'active'")
@@ -9755,7 +9758,7 @@ def update_coach_invitation(invitation_id: int, invitation_update: CoachInvitati
     finally:
         db.close()
 
-@app.post("/invitations/", response_model=Invitation, dependencies=[Depends(require_owner)])
+@app.post("/invitations/", response_model=Invitation, dependencies=[Depends(require_coach)])
 def create_invitation(invitation: InvitationCreate):
     # Validate that at least phone or email is provided
     phone = (invitation.student_phone or '').strip()

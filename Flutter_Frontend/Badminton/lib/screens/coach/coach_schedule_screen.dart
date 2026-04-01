@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:table_calendar/table_calendar.dart';
@@ -29,6 +30,23 @@ class _CoachScheduleScreenState extends ConsumerState<CoachScheduleScreen> {
   DateTime _selectedDay = DateTime.now();
   final CalendarFormat _calendarFormat = CalendarFormat.month;
   ScheduleFilter _selectedFilter = ScheduleFilter.all;
+  Timer? _refreshTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 60), (_) {
+      if (mounted) {
+        ref.invalidate(yearlyEventsProvider(_focusedDay.year));
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
 
   // Colors consistent with user requirements
   static const Color holidayColor = Colors.red;
