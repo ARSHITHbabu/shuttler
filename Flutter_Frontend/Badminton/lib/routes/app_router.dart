@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/signup_screen.dart';
 import '../screens/auth/forgot_password_screen.dart';
+import '../screens/auth/email_otp_screen.dart';
 import '../screens/student/profile_completion_screen.dart';
 import '../screens/student/student_dashboard.dart';
 import '../screens/student/registration_pending_screen.dart';
@@ -44,6 +45,20 @@ class AppRouter {
           path: '/forgot-password',
           name: 'forgot-password',
           builder: (context, state) => const ForgotPasswordScreen(),
+        ),
+
+        // Email OTP verification route (coaches + students)
+        GoRoute(
+          path: '/verify-otp',
+          name: 'verify-otp',
+          builder: (context, state) {
+            final extra = state.extra as Map<String, dynamic>;
+            return EmailOtpScreen(
+              email: extra['email'] as String,
+              preAuthToken: extra['pre_auth_token'] as String,
+              maskedEmail: extra['masked_email'] as String,
+            );
+          },
         ),
 
         // Owner Dashboard route

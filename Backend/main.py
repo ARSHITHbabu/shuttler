@@ -531,6 +531,63 @@ def send_email(to_email: str, subject: str, html_content: str, plain_content: Op
         return False
 
 
+# ── Email OTP helpers ─────────────────────────────────────────────────────
+import random as _random
+
+_OTP_EXPIRY_MINUTES = 10
+_OTP_MAX_ATTEMPTS = 5
+
+def _mask_email(email: str) -> str:
+    """Returns a masked version: 'te***@example.com'."""
+    parts = email.split("@")
+    if len(parts) != 2:
+        return email
+    local, domain = parts
+    visible = local[:2] if len(local) >= 2 else local[:1]
+    return f"{visible}***@{domain}"
+
+def _generate_and_store_otp(db, email: str, user_type: str) -> str:
+    """
+    Generates a 6-digit OTP, hashes it, persists it, and returns a pre_auth_token (UUID).
+    Invalidates any previous OTP for the same email.
+    """
+    # Delete any prior OTPs for this email
+    db.query(EmailOTPDB).filter(EmailOTPDB.email == email).delete()
+
+    otp_code = f"{_random.randint(0, 999999):06d}"
+    otp_hash = hash_password(otp_code)
+    pre_auth_token = str(uuid.uuid4())
+    expires_at = datetime.utcnow() + timedelta(minutes=_OTP_EXPIRY_MINUTES)
+
+    record = EmailOTPDB(
+        email=email,
+        user_type=user_type,
+        otp_hash=otp_hash,
+        pre_auth_token=pre_auth_token,
+        expires_at=expires_at,
+    )
+    db.add(record)
+    db.commit()
+    return otp_code, pre_auth_token
+
+def _send_otp_email(email: str, otp_code: str) -> None:
+    """Sends the OTP via SendGrid (non-blocking — logs on failure)."""
+    html = f"""
+<div style="font-family:Arial,sans-serif;max-width:480px;margin:auto;background:#1a1a1a;color:#e8e8e8;padding:32px;border-radius:8px;">
+  <h2 style="color:#4CAF50;margin-top:0;">Shuttler — Login Verification</h2>
+  <p>Your one-time password (OTP) to complete sign-in:</p>
+  <div style="font-size:36px;font-weight:bold;letter-spacing:12px;text-align:center;
+              background:#2a2a2a;padding:20px;border-radius:6px;color:#ffffff;margin:24px 0;">
+    {otp_code}
+  </div>
+  <p style="color:#aaa;font-size:13px;">This OTP expires in {_OTP_EXPIRY_MINUTES} minutes. Do not share it with anyone.</p>
+  <p style="color:#888;font-size:12px;">If you did not attempt to sign in, please ignore this email.</p>
+</div>"""
+    plain = f"Your Shuttler login OTP: {otp_code}. Valid for {_OTP_EXPIRY_MINUTES} minutes."
+    sent = send_email(email, "Shuttler — Login OTP", html, plain)
+    if not sent:
+        print(f"[OTP] Email delivery skipped (SendGrid not configured) for {email}. OTP: {otp_code}")
+
 # ── C7: S3 Configuration ───────────────────────────────────────────────────
 S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME")
 S3_CDN_URL = os.getenv("S3_CDN_URL")  # e.g., https://cdn.shuttler.app
@@ -932,6 +989,19 @@ class StudentDB(Base):
     failed_login_attempts = Column(Integer, default=0)
     locked_until = Column(DateTime(timezone=True), nullable=True)
 
+class EmailOTPDB(Base):
+    """Stores short-lived OTPs for email verification during login (coaches + students)."""
+    __tablename__ = "email_otps"
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, nullable=False, index=True)
+    user_type = Column(String(20), nullable=False)  # 'coach' or 'student'
+    otp_hash = Column(String, nullable=False)        # bcrypt hash of the 6-digit OTP
+    pre_auth_token = Column(String(64), nullable=False, unique=True)  # UUID; proves creds were verified
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used = Column(Boolean, default=False)
+    attempts = Column(Integer, default=0)
+
 class BatchStudentDB(Base):
     __tablename__ = "batch_students"
     id = Column(Integer, primary_key=True, index=True)
@@ -1029,6 +1099,14 @@ class PerformanceDB(Base):
     rating = Column(Integer, nullable=False)
     comments = Column(Text, nullable=True)
     recorded_by = Column(String, nullable=False)
+
+class PerformanceSkillDB(Base):
+    __tablename__ = "performance_skills"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False, unique=True)
+    description = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class BMIDB(Base):
     __tablename__ = "bmi_records"
@@ -1414,7 +1492,10 @@ def migrate_database_schema(engine):
             check_and_add_column(engine, 'owners', 'locked_until', 'TIMESTAMP WITH TIME ZONE', nullable=True)
             check_and_add_column(engine, 'owners', 'profile_photo', 'VARCHAR(500)', nullable=True)
             check_and_add_column(engine, 'owners', 'fcm_token', 'VARCHAR(500)', nullable=True)
-        
+            check_and_add_column(engine, 'owners', 'status', 'VARCHAR(20)', nullable=True, default_value="'active'")
+            check_and_add_column(engine, 'owners', 'specialization', 'VARCHAR(255)', nullable=True)
+            check_and_add_column(engine, 'owners', 'experience_years', 'INTEGER', nullable=True)
+
         # Migrate batches table
         if 'batches' in tables:
             check_and_add_column(engine, 'batches', 'status', 'VARCHAR(20)', nullable=True, default_value="'active'")
@@ -2004,6 +2085,10 @@ def migrate_database_schema(engine):
         else:
             print(" No orphaned `requests` table found.")
 
+        # Migrate performance_skills table - add created_at if missing
+        if 'performance_skills' in tables:
+            check_and_add_column(engine, 'performance_skills', 'created_at', 'TIMESTAMP WITH TIME ZONE', nullable=True, default_value='NOW()')
+
         # Performance indexes (CREATE INDEX IF NOT EXISTS is idempotent)
         try:
             with engine.begin() as conn:
@@ -2038,6 +2123,23 @@ Base.metadata.create_all(bind=engine)
 migrate_database_schema(engine)
 
 print("Database tables created/verified!")
+
+# Seed default performance skills if none exist
+def _seed_default_performance_skills():
+    db = SessionLocal()
+    try:
+        if db.query(PerformanceSkillDB).count() == 0:
+            defaults = ["Serve", "Smash", "Footwork", "Defense", "Stamina"]
+            for name in defaults:
+                db.add(PerformanceSkillDB(name=name, is_active=True))
+            db.commit()
+            print("Seeded default performance skills.")
+    except Exception as e:
+        print(f"Warning: could not seed performance skills: {e}")
+    finally:
+        db.close()
+
+_seed_default_performance_skills()
 
 # ==================== Pydantic Models ====================
 
@@ -2770,11 +2872,12 @@ class PerformanceFrontend(BaseModel):
     batch_id: int
     batch_name: Optional[str] = None
     date: str
-    serve: int  # 1-5 rating
-    smash: int  # 1-5 rating
-    footwork: int  # 1-5 rating
-    defense: int  # 1-5 rating
-    stamina: int  # 1-5 rating
+    serve: int = 0
+    smash: int = 0
+    footwork: int = 0
+    defense: int = 0
+    stamina: int = 0
+    skills: Optional[Dict[str, int]] = None  # Full dynamic skills map
     comments: Optional[str] = None
     created_at: Optional[str] = None
 
@@ -2787,6 +2890,7 @@ class PerformanceFrontendCreate(BaseModel):
     footwork: int = 0
     defense: int = 0
     stamina: int = 0
+    skills: Optional[Dict[str, int]] = None  # Preferred: dynamic skills map
     comments: Optional[str] = None
 
 class PerformanceFrontendUpdate(BaseModel):
@@ -3625,6 +3729,8 @@ _JWT_PUBLIC_PATHS: set = {
     "/auth/forgot-password",
     "/auth/reset-password",
     "/auth/refresh",
+    "/auth/send-otp",
+    "/auth/verify-otp",
     # Legacy login endpoints (to be removed after Flutter migrates to JWT in A2)
     "/owners/login",
     "/coaches/login",
@@ -4286,24 +4392,14 @@ def unified_login(request: Request, login_data: UnifiedLoginRequest, db: Session
             if password_valid:
                 if coach.status == "inactive":
                     return {"success": False, "message": "Your account has been deactivated."}
-                handle_successful_login(db, coach, "coach", request.client.host if request.client else None, request.headers.get("user-agent"))
-                access_token, refresh_token = _make_tokens(coach.id, "coach", coach.email, "coach")
+                # Email OTP step — send OTP, return pre_auth_token instead of JWT
+                otp_code, pre_auth_token = _generate_and_store_otp(db, coach.email, "coach")
+                _send_otp_email(coach.email, otp_code)
                 return {
                     "success": True,
-                    "userType": "coach",
-                    "access_token": access_token,
-                    "refresh_token": refresh_token,
-                    "token_type": "bearer",
-                    "user": {
-                        "id": coach.id,
-                        "name": coach.name,
-                        "email": coach.email,
-                        "phone": coach.phone,
-                        "specialization": coach.specialization,
-                        "experience_years": coach.experience_years,
-                        "status": coach.status,
-                        "profile_photo": coach.profile_photo,
-                    },
+                    "otp_required": True,
+                    "pre_auth_token": pre_auth_token,
+                    "masked_email": _mask_email(coach.email),
                 }
             else:
                 handle_failed_login(db, coach, "coach", request.client.host if request.client else None, request.headers.get("user-agent"))
@@ -4324,16 +4420,6 @@ def unified_login(request: Request, login_data: UnifiedLoginRequest, db: Session
                     db.commit()
 
             if password_valid:
-                # B11: Check if profile is complete (required for students)
-                required_profile_fields = {
-                    'guardian_name': student.guardian_name,
-                    'guardian_phone': student.guardian_phone,
-                    'date_of_birth': student.date_of_birth,
-                    'address': student.address,
-                    't_shirt_size': student.t_shirt_size,
-                }
-                profile_complete = all(v is not None and str(v).strip() != '' for v in required_profile_fields.values())
-
                 if student.status == "inactive":
                     return {
                         "success": False,
@@ -4343,23 +4429,14 @@ def unified_login(request: Request, login_data: UnifiedLoginRequest, db: Session
                         "student_id": student.id,
                     }
 
-                handle_successful_login(db, student, "student", request.client.host if request.client else None, request.headers.get("user-agent"))
-                access_token, refresh_token = _make_tokens(student.id, "student", student.email, "student")
+                # Email OTP step — send OTP, return pre_auth_token instead of JWT
+                otp_code, pre_auth_token = _generate_and_store_otp(db, student.email, "student")
+                _send_otp_email(student.email, otp_code)
                 return {
                     "success": True,
-                    "userType": "student",
-                    "profile_complete": profile_complete,
-                    "access_token": access_token,
-                    "refresh_token": refresh_token,
-                    "token_type": "bearer",
-                    "user": {
-                        "id": student.id,
-                        "name": student.name,
-                        "email": student.email,
-                        "phone": student.phone,
-                        "status": student.status,
-                        "profile_photo": student.profile_photo,
-                    },
+                    "otp_required": True,
+                    "pre_auth_token": pre_auth_token,
+                    "masked_email": _mask_email(student.email),
                 }
             else:
                 handle_failed_login(db, student, "student", request.client.host if request.client else None, request.headers.get("user-agent"))
@@ -4368,7 +4445,161 @@ def unified_login(request: Request, login_data: UnifiedLoginRequest, db: Session
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"[Login] Error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+# ── Pydantic models for OTP endpoints ─────────────────────────────────────
+
+class OTPVerifyRequest(BaseModel):
+    email: str
+    otp: str
+    pre_auth_token: str
+
+class OTPResendRequest(BaseModel):
+    email: str
+    pre_auth_token: str
+
+# ── POST /auth/verify-otp ──────────────────────────────────────────────────
+
+@app.post("/auth/verify-otp")
+@limiter.limit("10/15minutes")
+def verify_otp(request: Request, body: OTPVerifyRequest, db: Session = Depends(get_db)):
+    """Verify email OTP for coach/student login.  Returns JWT tokens on success."""
+    from datetime import datetime as _dt
+
+    record = db.query(EmailOTPDB).filter(
+        EmailOTPDB.email == body.email,
+        EmailOTPDB.pre_auth_token == body.pre_auth_token,
+        EmailOTPDB.used == False,
+    ).first()
+
+    if not record:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification session. Please log in again.")
+
+    now = _dt.utcnow()
+    if record.expires_at.replace(tzinfo=None) < now:
+        db.delete(record)
+        db.commit()
+        raise HTTPException(status_code=400, detail="OTP has expired. Please log in again.")
+
+    if record.attempts >= _OTP_MAX_ATTEMPTS:
+        db.delete(record)
+        db.commit()
+        raise HTTPException(status_code=400, detail="Too many incorrect attempts. Please log in again.")
+
+    if not verify_password(body.otp, record.otp_hash):
+        record.attempts += 1
+        db.commit()
+        remaining = _OTP_MAX_ATTEMPTS - record.attempts
+        raise HTTPException(status_code=400, detail=f"Incorrect OTP. {remaining} attempt(s) remaining.")
+
+    # OTP valid — mark as used
+    record.used = True
+    db.commit()
+
+    user_type = record.user_type
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent")
+
+    if user_type == "coach":
+        user = db.query(CoachDB).filter(CoachDB.email == body.email).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found.")
+        handle_successful_login(db, user, "coach", ip, ua)
+        payload = {"sub": str(user.id), "user_type": "coach", "email": user.email, "role": "coach"}
+        access_jti = str(uuid.uuid4())
+        refresh_jti = str(uuid.uuid4())
+        access_token = create_access_token(payload, jti=access_jti)
+        refresh_token = create_refresh_token(payload, jti=refresh_jti)
+        expires_at = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        db.add(ActiveSessionDB(user_id=user.id, user_type="coach", jti=access_jti, refresh_jti=refresh_jti,
+                               ip_address=ip, user_agent=ua, expires_at=expires_at))
+        db.commit()
+        return {
+            "success": True,
+            "userType": "coach",
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "user": {
+                "id": user.id,
+                "name": user.name,
+                "email": user.email,
+                "phone": user.phone,
+                "specialization": user.specialization,
+                "experience_years": user.experience_years,
+                "status": user.status,
+                "profile_photo": user.profile_photo,
+            },
+        }
+
+    elif user_type == "student":
+        user = db.query(StudentDB).filter(StudentDB.email == body.email).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found.")
+        required_profile_fields = {
+            'guardian_name': user.guardian_name,
+            'guardian_phone': user.guardian_phone,
+            'date_of_birth': user.date_of_birth,
+            'address': user.address,
+            't_shirt_size': user.t_shirt_size,
+        }
+        profile_complete = all(v is not None and str(v).strip() != '' for v in required_profile_fields.values())
+        handle_successful_login(db, user, "student", ip, ua)
+        payload = {"sub": str(user.id), "user_type": "student", "email": user.email, "role": "student"}
+        access_jti = str(uuid.uuid4())
+        refresh_jti = str(uuid.uuid4())
+        access_token = create_access_token(payload, jti=access_jti)
+        refresh_token = create_refresh_token(payload, jti=refresh_jti)
+        expires_at = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+        db.add(ActiveSessionDB(user_id=user.id, user_type="student", jti=access_jti, refresh_jti=refresh_jti,
+                               ip_address=ip, user_agent=ua, expires_at=expires_at))
+        db.commit()
+        return {
+            "success": True,
+            "userType": "student",
+            "profile_complete": profile_complete,
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "user": {
+                "id": user.id,
+                "name": user.name,
+                "email": user.email,
+                "phone": user.phone,
+                "status": user.status,
+                "profile_photo": user.profile_photo,
+            },
+        }
+
+    raise HTTPException(status_code=400, detail="Unsupported user type for OTP verification.")
+
+# ── POST /auth/send-otp (resend) ───────────────────────────────────────────
+
+@app.post("/auth/send-otp")
+@limiter.limit("5/15minutes")
+def resend_otp(request: Request, body: OTPResendRequest, db: Session = Depends(get_db)):
+    """Resend a login OTP. Requires the pre_auth_token from the original /auth/login call."""
+    record = db.query(EmailOTPDB).filter(
+        EmailOTPDB.email == body.email,
+        EmailOTPDB.pre_auth_token == body.pre_auth_token,
+        EmailOTPDB.used == False,
+    ).first()
+
+    if not record:
+        raise HTTPException(status_code=400, detail="Invalid session. Please log in again.")
+
+    from datetime import datetime as _dt
+    if record.expires_at.replace(tzinfo=None) < _dt.utcnow():
+        db.delete(record)
+        db.commit()
+        raise HTTPException(status_code=400, detail="Session expired. Please log in again.")
+
+    user_type = record.user_type
+    otp_code, new_pre_auth_token = _generate_and_store_otp(db, body.email, user_type)
+    _send_otp_email(body.email, otp_code)
+    return {"success": True, "pre_auth_token": new_pre_auth_token, "masked_email": _mask_email(body.email)}
+
 
 @app.post("/coaches/login")
 @limiter.limit("5/15minutes")
@@ -8165,6 +8396,7 @@ def transform_performance_to_frontend(records: List[PerformanceDB], db) -> Optio
     }
     
     # Aggregate skills from all records
+    skills_map = {}
     comments_list = []
     for record in records:
         skill_lower = record.skill.lower()
@@ -8178,19 +8410,25 @@ def transform_performance_to_frontend(records: List[PerformanceDB], db) -> Optio
             result["defense"] = record.rating
         elif skill_lower == "stamina":
             result["stamina"] = record.rating
-        
+
+        # Always populate dynamic skills map (preserves original casing)
+        skills_map[record.skill] = record.rating
+
         if record.comments:
             comments_list.append(record.comments)
-    
+
+    result["skills"] = skills_map
+
     # Combine comments
     if comments_list:
         result["comments"] = " | ".join(comments_list)
-    
+
     return result
 
 @app.get("/performance/", response_model=List[PerformanceFrontend], dependencies=[Depends(require_student)])
 def get_performance_records(
     student_id: Optional[int] = None,
+    batch_id: Optional[int] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None
 ):
@@ -8198,13 +8436,16 @@ def get_performance_records(
     db = SessionLocal()
     try:
         query = db.query(PerformanceDB)
-        
+
         if student_id is not None:
             query = query.filter(PerformanceDB.student_id == student_id)
-        
+
+        if batch_id is not None:
+            query = query.filter(PerformanceDB.batch_id == batch_id)
+
         if start_date:
             query = query.filter(PerformanceDB.date >= start_date)
-        
+
         if end_date:
             query = query.filter(PerformanceDB.date <= end_date)
         
@@ -8318,15 +8559,20 @@ def create_performance_record_v2(performance_data: PerformanceFrontendCreate, cu
         
         
         # Create individual records for each skill with rating > 0
-        skill_mappings = {
-            "serve": performance_data.serve,
-            "smash": performance_data.smash,
-            "footwork": performance_data.footwork,
-            "defense": performance_data.defense,
-            "stamina": performance_data.stamina,
-        }
-        
+        # Prefer dynamic skills map if provided; fall back to flat fields
+        if performance_data.skills:
+            skill_mappings = {k: v for k, v in performance_data.skills.items() if v and v > 0}
+        else:
+            skill_mappings = {k: v for k, v in {
+                "serve": performance_data.serve,
+                "smash": performance_data.smash,
+                "footwork": performance_data.footwork,
+                "defense": performance_data.defense,
+                "stamina": performance_data.stamina,
+            }.items() if v > 0}
+
         created_records = []
+        first_skill = True
         for skill, rating in skill_mappings.items():
             if rating > 0:  # Only create record if rating is provided
                 db_performance = PerformanceDB(
@@ -8335,11 +8581,12 @@ def create_performance_record_v2(performance_data: PerformanceFrontendCreate, cu
                     date=performance_data.date,
                     skill=skill,
                     rating=rating,
-                    comments=performance_data.comments if skill == "serve" else None,  # Store comments only once
+                    comments=performance_data.comments if first_skill else None,  # Store comments on first skill only
                     recorded_by=recorded_by
                 )
                 db.add(db_performance)
                 created_records.append(db_performance)
+                first_skill = False
         
         if not created_records:
             raise HTTPException(status_code=400, detail="At least one skill rating must be provided")
@@ -9511,7 +9758,7 @@ def update_coach_invitation(invitation_id: int, invitation_update: CoachInvitati
     finally:
         db.close()
 
-@app.post("/invitations/", response_model=Invitation, dependencies=[Depends(require_owner)])
+@app.post("/invitations/", response_model=Invitation, dependencies=[Depends(require_coach)])
 def create_invitation(invitation: InvitationCreate):
     # Validate that at least phone or email is provided
     phone = (invitation.student_phone or '').strip()

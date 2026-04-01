@@ -31,9 +31,21 @@ class Performance {
       batchId: json['batch_id'] as int? ?? 0,
       batchName: json['batch_name'] as String?,
       date: DateTime.parse(json['date'] as String),
-      skills: (json['skills'] as Map<String, dynamic>?)?.map(
-            (key, value) => MapEntry(key, value as int),
-          ) ?? {},
+      skills: () {
+        final raw = json['skills'] as Map<String, dynamic>?;
+        if (raw != null && raw.isNotEmpty) {
+          return raw.map((key, value) => MapEntry(key, (value as num).toInt()));
+        }
+        // Fallback: reconstruct from flat fields (legacy backend response)
+        final flat = <String, int>{};
+        void addFlat(String key) {
+          final v = json[key];
+          if (v != null && (v as num).toInt() > 0) flat[key] = v.toInt();
+        }
+        addFlat('serve'); addFlat('smash'); addFlat('footwork');
+        addFlat('defense'); addFlat('stamina');
+        return flat;
+      }(),
       comments: json['comments'] as String?,
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String)

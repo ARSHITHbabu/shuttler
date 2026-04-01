@@ -58,6 +58,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           return;
         }
 
+        // OTP verification required (coaches and students)
+        if (result['otp_required'] == true) {
+          context.push('/verify-otp', extra: {
+            'email': _emailController.text.trim(),
+            'pre_auth_token': result['pre_auth_token'] as String,
+            'masked_email': result['masked_email'] as String,
+          });
+          return;
+        }
+
         final userType = result['userType'];
 
         // Check profile completeness for students

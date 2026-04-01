@@ -73,8 +73,9 @@ class AuthService {
     return 'An unexpected error occurred. Please try again.';
   }
 
-  /// Login with email and password
-  /// Returns user data on success
+  /// Login with email and password.
+  /// For owners: returns full auth data (tokens + user).
+  /// For coaches/students: returns {otp_required: true, pre_auth_token, masked_email}.
   Future<Map<String, dynamic>> login({
     required String email,
     required String password,
@@ -90,35 +91,114 @@ class AuthService {
       );
 
       if (response.statusCode == 200) {
-        final data = response.data;
-        if (data['success'] == true) {
-          final userType = data['userType'] as String;
-          final userData = data['user'] as Map<String, dynamic>;
-
-          // Save common data
-          final accessToken = data['access_token'] ?? 'dummy_token';
-          final refreshToken = data['refresh_token'];
-          
-          await _storageService.saveAuthToken(accessToken);
-          if (refreshToken != null) {
-            await _storageService.saveRefreshToken(refreshToken);
-          }
-          
-          await _storageService.saveUserId(userData['id']);
-          await _storageService.saveUserType(userType);
-          await _storageService.saveUserEmail(userData['email']);
-          await _storageService.saveUserName(userData['name']);
-
-          // Save role-specific data for owners
-          if (userType == 'owner') {
-            await _storageService.saveUserRole(userData['role'] ?? 'owner');
-            await _storageService.saveMustChangePassword(userData['must_change_password'] ?? false);
-          }
-
-          return data;
-        } else {
+        final data = response.data as Map<String, dynamic>;
+        if (data['success'] != true) {
           throw Exception(data['message'] ?? 'Login failed');
         }
+
+        // OTP step for coaches/students — tokens not yet issued
+        if (data['otp_required'] == true) {
+          return data;
+        }
+
+        // Owner login — tokens issued directly
+        final userType = data['userType'] as String;
+        final userData = data['user'] as Map<String, dynamic>;
+
+        final accessToken = data['access_token'] ?? 'dummy_token';
+        final refreshToken = data['refresh_token'];
+
+        await _storageService.saveAuthToken(accessToken);
+        if (refreshToken != null) {
+          await _storageService.saveRefreshToken(refreshToken);
+        }
+        await _storageService.saveUserId(userData['id']);
+        await _storageService.saveUserType(userType);
+        await _storageService.saveUserEmail(userData['email']);
+        await _storageService.saveUserName(userData['name']);
+
+        if (userType == 'owner') {
+          await _storageService.saveUserRole(userData['role'] ?? 'owner');
+          await _storageService.saveMustChangePassword(userData['must_change_password'] ?? false);
+        }
+
+        return data;
+      } else {
+        throw Exception('Server error: ${response.statusCode}');
+      }
+    } catch (e) {
+      if (e is DioException) {
+        final message = e.response?.data['detail'] ?? e.message;
+        throw Exception(message);
+      }
+      rethrow;
+    }
+  }
+
+  /// Verify email OTP and complete login (coach/student only).
+  /// Saves tokens + user data on success. Returns full auth data.
+  Future<Map<String, dynamic>> verifyOtp({
+    required String email,
+    required String otp,
+    required String preAuthToken,
+  }) async {
+    try {
+      final response = await _apiService.post(
+        ApiEndpoints.verifyOtp,
+        data: {
+          'email': email,
+          'otp': otp,
+          'pre_auth_token': preAuthToken,
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = response.data as Map<String, dynamic>;
+        final userType = data['userType'] as String;
+        final userData = data['user'] as Map<String, dynamic>;
+
+        final accessToken = data['access_token'] as String;
+        final refreshToken = data['refresh_token'] as String?;
+
+        await _storageService.saveAuthToken(accessToken);
+        if (refreshToken != null) {
+          await _storageService.saveRefreshToken(refreshToken);
+        }
+        await _storageService.saveUserId(userData['id']);
+        await _storageService.saveUserType(userType);
+        await _storageService.saveUserEmail(userData['email']);
+        await _storageService.saveUserName(userData['name']);
+
+        return data;
+      } else {
+        throw Exception('Server error: ${response.statusCode}');
+      }
+    } catch (e) {
+      if (e is DioException) {
+        final message = e.response?.data['detail'] ?? e.message;
+        throw Exception(message);
+      }
+      rethrow;
+    }
+  }
+
+  /// Resend OTP using the pre_auth_token from the original login response.
+  /// Returns {pre_auth_token: new_token, masked_email}.
+  Future<Map<String, dynamic>> resendOtp({
+    required String email,
+    required String preAuthToken,
+  }) async {
+    try {
+      final response = await _apiService.post(
+        ApiEndpoints.sendOtp,
+        data: {
+          'email': email,
+          'pre_auth_token': preAuthToken,
+        },
+      );
+
+      if (response.statusCode == 200) {
+        return response.data as Map<String, dynamic>;
       } else {
         throw Exception('Server error: ${response.statusCode}');
       }
