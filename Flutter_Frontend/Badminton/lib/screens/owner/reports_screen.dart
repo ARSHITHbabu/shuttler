@@ -174,6 +174,9 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
         _reportData = data;
       });
 
+      // Automatically export PDF right after generating
+      await _exportPDF();
+
       if (currentUserId != null) {
         await reportService.saveReportHistory(
           reportType: _reportType.name,
@@ -1415,20 +1418,20 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
   // Update _exportPDF to pass ownerName
   Future<void> _exportPDF() async {
     if (_reportData == null) return;
-    
+
     try {
-      final font = await PdfGoogleFonts.nunitoRegular();
-      final fontBold = await PdfGoogleFonts.nunitoBold();
-      final fontItalic = await PdfGoogleFonts.nunitoItalic();
-      
-      final pdf = pw.Document(
-        theme: pw.ThemeData.withFont(
-          base: font,
-          bold: fontBold,
-          italic: fontItalic,
-          fontFallback: [],
-        ),
-      );
+      pw.ThemeData theme;
+      try {
+        final font = await PdfGoogleFonts.nunitoRegular();
+        final fontBold = await PdfGoogleFonts.nunitoBold();
+        final fontItalic = await PdfGoogleFonts.nunitoItalic();
+        theme = pw.ThemeData.withFont(base: font, bold: fontBold, italic: fontItalic, fontFallback: []);
+      } catch (_) {
+        // Fallback to built-in Helvetica if Google Fonts unavailable
+        theme = pw.ThemeData.base();
+      }
+
+      final pdf = pw.Document(theme: theme);
       
       final academyName = LegalContent.appName; 
       final address = "123 Sports Ave, Tech City"; // TODO: Get from store
