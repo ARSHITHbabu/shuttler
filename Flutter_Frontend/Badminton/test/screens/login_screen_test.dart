@@ -43,7 +43,7 @@ void main() {
     );
 
     // Verify presence of title and subtitle
-    expect(find.text('Welcome Back'), findsOneWidget);
+    expect(find.text('Welcome'), findsOneWidget);
     expect(find.text('Sign in to your account'), findsOneWidget);
 
     // Verify presence of email and password fields

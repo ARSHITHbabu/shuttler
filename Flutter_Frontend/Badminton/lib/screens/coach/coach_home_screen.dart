@@ -77,7 +77,7 @@ class _CoachHomeScreenState extends ConsumerState<CoachHomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Welcome back,',
+                    'Welcome,',
                     style: TextStyle(
                       fontSize: 14,
                       color: context.textSecondaryColor,

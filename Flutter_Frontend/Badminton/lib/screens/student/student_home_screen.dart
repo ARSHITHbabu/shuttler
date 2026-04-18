@@ -118,7 +118,7 @@ class _StudentHomeScreenState extends ConsumerState<StudentHomeScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Welcome back,',
+            'Welcome,',
             style: TextStyle(
               fontSize: 14,
               color: isDark ? AppColors.textSecondary : AppColorsLight.textSecondary,
