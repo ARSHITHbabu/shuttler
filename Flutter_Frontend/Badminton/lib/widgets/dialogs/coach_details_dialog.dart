@@ -4,6 +4,7 @@ import '../../core/constants/colors.dart';
 import '../../core/constants/dimensions.dart';
 import '../../widgets/common/neumorphic_container.dart';
 import '../../models/coach.dart';
+import '../../providers/coach_provider.dart';
 import 'tabs/coach_profile_tab.dart';
 import 'tabs/coach_batches_tab.dart';
 
@@ -125,20 +126,39 @@ class _CoachDetailsDialogState extends ConsumerState<CoachDetailsDialog> {
   }
 
   Widget _buildTabContent() {
-    switch (_selectedTab) {
-      case 'profile':
-        return CoachProfileTab(
-          coach: widget.coach,
-          onCoachUpdated: () {
-            // Refresh dialog state if needed, mostly handled by parent providers
-            setState(() {});
-          },
-        );
-      case 'batches':
-        return CoachBatchesTab(coach: widget.coach);
-      default:
-        return CoachProfileTab(coach: widget.coach);
-    }
+    final coachAsync = ref.watch(coachByIdProvider(widget.coach.id));
+
+    return coachAsync.when(
+      loading: () => const Center(
+        child: CircularProgressIndicator(color: AppColors.accent),
+      ),
+      error: (error, stack) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppDimensions.paddingL),
+          child: Text(
+            'Failed to load coach details: ${error.toString()}',
+            style: const TextStyle(color: AppColors.textSecondary),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ),
+      data: (coach) {
+        switch (_selectedTab) {
+          case 'profile':
+            return CoachProfileTab(
+              coach: coach,
+              onCoachUpdated: () {
+                // CoachProfileTab triggers provider invalidation; rebuild for latest data
+                setState(() {});
+              },
+            );
+          case 'batches':
+            return CoachBatchesTab(coach: coach);
+          default:
+            return CoachProfileTab(coach: coach);
+        }
+      },
+    );
   }
 }
 
