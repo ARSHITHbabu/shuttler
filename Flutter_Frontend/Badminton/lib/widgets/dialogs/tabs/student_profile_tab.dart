@@ -33,8 +33,28 @@ class StudentProfileTab extends ConsumerStatefulWidget {
 }
 
 class _StudentProfileTabState extends ConsumerState<StudentProfileTab> {
+  StudentEditableField? _editingField;
+  final TextEditingController _editController = TextEditingController();
+  bool _isSavingInline = false;
+
+  @override
+  void dispose() {
+    _editController.dispose();
+    super.dispose();
+  }
+
+  bool _isOwner() {
+    final authState = ref.watch(authProvider);
+    return authState.maybeWhen(
+      data: (state) => state is Authenticated && state.userType == 'owner',
+      orElse: () => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isOwner = _isOwner();
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppDimensions.paddingL),
       child: Column(
@@ -46,7 +66,7 @@ class _StudentProfileTabState extends ConsumerState<StudentProfileTab> {
           const SizedBox(height: AppDimensions.spacingL),
           
           // Contact Information
-          _buildContactInfo(),
+          _buildContactInfo(isOwner: isOwner),
           
           const SizedBox(height: AppDimensions.spacingL),
           
@@ -61,7 +81,7 @@ class _StudentProfileTabState extends ConsumerState<StudentProfileTab> {
           const SizedBox(height: AppDimensions.spacingL),
           
           // Action Buttons - Only for Owners
-          _buildActionButtons(ref),
+          _buildActionButtons(isOwner: isOwner),
         ],
       ),
     );
@@ -132,7 +152,72 @@ class _StudentProfileTabState extends ConsumerState<StudentProfileTab> {
     );
   }
 
-  Widget _buildContactInfo() {
+  void _startInlineEdit(StudentEditableField field) {
+    setState(() {
+      _editingField = field;
+      _isSavingInline = false;
+      switch (field) {
+        case StudentEditableField.email:
+          _editController.text = widget.student.email;
+          break;
+        case StudentEditableField.phone:
+          _editController.text = widget.student.phone;
+          break;
+        case StudentEditableField.guardianName:
+          _editController.text = widget.student.guardianName ?? '';
+          break;
+        case StudentEditableField.guardianPhone:
+          _editController.text = widget.student.guardianPhone ?? '';
+          break;
+      }
+    });
+  }
+
+  void _cancelInlineEdit() {
+    setState(() {
+      _editingField = null;
+      _isSavingInline = false;
+      _editController.clear();
+    });
+  }
+
+  Future<void> _saveInlineEdit(StudentEditableField field) async {
+    if (_isSavingInline) return;
+
+    final raw = _editController.text.trim();
+    final Map<String, dynamic> payload;
+
+    switch (field) {
+      case StudentEditableField.email:
+        payload = {'email': raw};
+        break;
+      case StudentEditableField.phone:
+        payload = {'phone': raw};
+        break;
+      case StudentEditableField.guardianName:
+        payload = {'guardian_name': raw};
+        break;
+      case StudentEditableField.guardianPhone:
+        payload = {'guardian_phone': raw};
+        break;
+    }
+
+    setState(() => _isSavingInline = true);
+    try {
+      await ref.read(studentListProvider.notifier).updateStudent(widget.student.id, payload);
+      if (!mounted) return;
+      ref.invalidate(studentByIdProvider(widget.student.id));
+      SuccessSnackbar.show(context, 'Student updated successfully');
+      widget.onStudentUpdated?.call();
+      _cancelInlineEdit();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSavingInline = false);
+      SuccessSnackbar.showError(context, 'Failed to update student: ${e.toString()}');
+    }
+  }
+
+  Widget _buildContactInfo({required bool isOwner}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -154,7 +239,11 @@ class _StudentProfileTabState extends ConsumerState<StudentProfileTab> {
                   Icons.email_outlined, 
                   'Email', 
                   widget.student.email,
-                  onTap: () => ContactUtils.launchEmail(widget.student.email),
+                  field: StudentEditableField.email,
+                  editable: isOwner,
+                  onTap: _editingField == StudentEditableField.email
+                      ? null
+                      : () => ContactUtils.launchEmail(widget.student.email),
                 ),
               if (widget.student.email.isNotEmpty && widget.student.phone.isNotEmpty)
                 const Divider(color: AppColors.textSecondary, height: 24),
@@ -163,7 +252,11 @@ class _StudentProfileTabState extends ConsumerState<StudentProfileTab> {
                   Icons.phone_outlined, 
                   'Phone', 
                   widget.student.phone,
-                  onTap: () => ContactUtils.showContactOptions(context, widget.student.phone, name: widget.student.name),
+                  field: StudentEditableField.phone,
+                  editable: isOwner,
+                  onTap: _editingField == StudentEditableField.phone
+                      ? null
+                      : () => ContactUtils.showContactOptions(context, widget.student.phone, name: widget.student.name),
                 ),
             ],
           ),
@@ -188,6 +281,8 @@ class _StudentProfileTabState extends ConsumerState<StudentProfileTab> {
                     Icons.person_outline,
                     'Guardian Name',
                     widget.student.guardianName!,
+                    field: StudentEditableField.guardianName,
+                    editable: isOwner,
                   ),
                 if (widget.student.guardianName != null && widget.student.guardianPhone != null)
                   const Divider(color: AppColors.textSecondary, height: 24),
@@ -196,6 +291,8 @@ class _StudentProfileTabState extends ConsumerState<StudentProfileTab> {
                     Icons.phone_outlined,
                     'Guardian Phone',
                     widget.student.guardianPhone!,
+                    field: StudentEditableField.guardianPhone,
+                    editable: isOwner,
                     onTap: () => ContactUtils.showContactOptions(
                       context, 
                       widget.student.guardianPhone!, 
@@ -353,14 +450,7 @@ class _StudentProfileTabState extends ConsumerState<StudentProfileTab> {
     );
   }
 
-  Widget _buildActionButtons(WidgetRef ref) {
-    // Check if user is owner
-    final authState = ref.watch(authProvider);
-    final isOwner = authState.maybeWhen(
-      data: (state) => state is Authenticated && state.userType == 'owner',
-      orElse: () => false,
-    );
-
+  Widget _buildActionButtons({required bool isOwner}) {
     if (!isOwner) {
       return const SizedBox.shrink();
     }
@@ -420,7 +510,16 @@ class _StudentProfileTabState extends ConsumerState<StudentProfileTab> {
     );
   }
 
-  Widget _buildInfoRow(IconData icon, String label, String value, {VoidCallback? onTap}) {
+  Widget _buildInfoRow(
+    IconData icon,
+    String label,
+    String value, {
+    VoidCallback? onTap,
+    required StudentEditableField field,
+    required bool editable,
+  }) {
+    final isEditing = _editingField == field;
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
       child: Row(
@@ -428,48 +527,131 @@ class _StudentProfileTabState extends ConsumerState<StudentProfileTab> {
           Icon(icon, size: 20, color: AppColors.textSecondary),
           const SizedBox(width: AppDimensions.spacingM),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                  ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
                 ),
-                const SizedBox(height: 4),
-                onTap != null 
-                  ? InkWell(
-                      onTap: onTap,
-                      borderRadius: BorderRadius.circular(4),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-                        child: Text(
-                          value,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: AppColors.accent,
-                            fontWeight: FontWeight.w500,
-                            decoration: TextDecoration.underline,
-                            decorationColor: AppColors.accent.withOpacity(0.5),
+              ),
+              const SizedBox(height: 6),
+              if (!isEditing)
+                onTap != null
+                    ? InkWell(
+                        onTap: onTap,
+                        borderRadius: BorderRadius.circular(4),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+                          child: Text(
+                            value,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: AppColors.accent,
+                              fontWeight: FontWeight.w500,
+                              decoration: TextDecoration.underline,
+                              decorationColor: AppColors.accent.withOpacity(0.5),
+                            ),
+                          ),
+                        ),
+                      )
+                    : Text(
+                        value,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      )
+              else
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _editController,
+                        enabled: !_isSavingInline,
+                        keyboardType: field == StudentEditableField.email
+                            ? TextInputType.emailAddress
+                            : field == StudentEditableField.phone ||
+                                    field == StudentEditableField.guardianPhone
+                                ? TextInputType.phone
+                                : TextInputType.text,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          filled: true,
+                          fillColor: AppColors.background,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                            borderSide: BorderSide(color: AppColors.textSecondary.withOpacity(0.2)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                            borderSide: BorderSide(color: AppColors.textSecondary.withOpacity(0.2)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppDimensions.radiusS),
+                            borderSide: const BorderSide(color: AppColors.accent),
                           ),
                         ),
                       ),
-                    )
-                  : Text(
-                      value,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w500,
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 72,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                            tooltip: 'Save $label',
+                            onPressed: _isSavingInline ? null : () => _saveInlineEdit(field),
+                            icon: Icon(
+                              Icons.check,
+                              size: 18,
+                              color: _isSavingInline ? AppColors.textTertiary : AppColors.success,
+                            ),
+                          ),
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                            tooltip: 'Cancel',
+                            onPressed: _isSavingInline ? null : _cancelInlineEdit,
+                            icon: Icon(
+                              Icons.close,
+                              size: 18,
+                              color: _isSavingInline ? AppColors.textTertiary : AppColors.error,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-              ],
-            ),
+                  ],
+                ),
+            ]),
           ),
-          if (onTap != null)
-            const Icon(Icons.open_in_new, size: 14, color: AppColors.textTertiary),
+          // Removed non-functional "share/open" icon in owner view.
+          if (!isEditing && editable)
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              tooltip: 'Edit $label',
+              onPressed: () => _startInlineEdit(field),
+              icon: Icon(
+                Icons.edit,
+                size: 16,
+                color: AppColors.textTertiary.withOpacity(0.7),
+              ),
+            ),
         ],
       ),
     );
@@ -722,4 +904,11 @@ class _StudentProfileTabState extends ConsumerState<StudentProfileTab> {
       },
     );
   }
+}
+
+enum StudentEditableField {
+  email,
+  phone,
+  guardianName,
+  guardianPhone,
 }
