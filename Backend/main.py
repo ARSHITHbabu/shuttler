@@ -880,6 +880,7 @@ class CoachDB(Base):
     email = Column(String, nullable=False, unique=True)
     phone = Column(String, nullable=False)
     password = Column(String, nullable=False)
+    email_verified = Column(Boolean, default=False)  # One-time OTP verification flag
     specialization = Column(String, nullable=True)
     experience_years = Column(Integer, nullable=True)
     status = Column(String, default="active")  # active, inactive
@@ -968,6 +969,7 @@ class StudentDB(Base):
     name = Column(String, nullable=False)
     phone = Column(String, nullable=False)
     email = Column(String, nullable=False, unique=True)
+    email_verified = Column(Boolean, default=False)  # One-time OTP verification flag
     guardian_name = Column(String, nullable=True)  # Optional for signup, required for profile completion
     guardian_phone = Column(EncryptedString, nullable=True)  # A13: encrypted at rest
     password = Column(String, nullable=False)
@@ -1466,6 +1468,7 @@ def migrate_database_schema(engine):
         if 'coaches' in tables:
             check_and_add_column(engine, 'coaches', 'profile_photo', 'VARCHAR(500)', nullable=True)
             check_and_add_column(engine, 'coaches', 'fcm_token', 'VARCHAR(500)', nullable=True)
+            check_and_add_column(engine, 'coaches', 'email_verified', 'BOOLEAN', nullable=True, default_value="FALSE")
             check_and_add_column(engine, 'coaches', 'failed_login_attempts', 'INTEGER', nullable=True, default_value='0')
             check_and_add_column(engine, 'coaches', 'locked_until', 'TIMESTAMP WITH TIME ZONE', nullable=True)
             check_and_add_column(engine, 'coaches', 'monthly_salary', 'FLOAT', nullable=True)
@@ -1509,6 +1512,7 @@ def migrate_database_schema(engine):
             # Add new columns
             check_and_add_column(engine, 'students', 'profile_photo', 'VARCHAR(500)', nullable=True)
             check_and_add_column(engine, 'students', 'fcm_token', 'VARCHAR(500)', nullable=True)
+            check_and_add_column(engine, 'students', 'email_verified', 'BOOLEAN', nullable=True, default_value="FALSE")
             check_and_add_column(engine, 'students', 't_shirt_size', 'VARCHAR', nullable=True)
             check_and_add_column(engine, 'students', 'blood_group', 'VARCHAR(20)', nullable=True)
             check_and_add_column(engine, 'students', 'inactive_at', 'TIMESTAMP WITH TIME ZONE', nullable=True)
@@ -4393,13 +4397,34 @@ def unified_login(request: Request, login_data: UnifiedLoginRequest, db: Session
                 if coach.status == "inactive":
                     return {"success": False, "message": "Your account has been deactivated."}
                 # Email OTP step — send OTP, return pre_auth_token instead of JWT
-                otp_code, pre_auth_token = _generate_and_store_otp(db, coach.email, "coach")
-                _send_otp_email(coach.email, otp_code)
+                if not getattr(coach, "email_verified", False):
+                    otp_code, pre_auth_token = _generate_and_store_otp(db, coach.email, "coach")
+                    _send_otp_email(coach.email, otp_code)
+                    return {
+                        "success": True,
+                        "otp_required": True,
+                        "pre_auth_token": pre_auth_token,
+                        "masked_email": _mask_email(coach.email),
+                    }
+
+                handle_successful_login(db, coach, "coach", request.client.host if request.client else None, request.headers.get("user-agent"))
+                access_token, refresh_token = _make_tokens(coach.id, "coach", coach.email, "coach")
                 return {
                     "success": True,
-                    "otp_required": True,
-                    "pre_auth_token": pre_auth_token,
-                    "masked_email": _mask_email(coach.email),
+                    "userType": "coach",
+                    "access_token": access_token,
+                    "refresh_token": refresh_token,
+                    "token_type": "bearer",
+                    "user": {
+                        "id": coach.id,
+                        "name": coach.name,
+                        "email": coach.email,
+                        "phone": coach.phone,
+                        "specialization": coach.specialization,
+                        "experience_years": coach.experience_years,
+                        "status": coach.status,
+                        "profile_photo": coach.profile_photo,
+                    },
                 }
             else:
                 handle_failed_login(db, coach, "coach", request.client.host if request.client else None, request.headers.get("user-agent"))
@@ -4430,13 +4455,32 @@ def unified_login(request: Request, login_data: UnifiedLoginRequest, db: Session
                     }
 
                 # Email OTP step — send OTP, return pre_auth_token instead of JWT
-                otp_code, pre_auth_token = _generate_and_store_otp(db, student.email, "student")
-                _send_otp_email(student.email, otp_code)
+                if not getattr(student, "email_verified", False):
+                    otp_code, pre_auth_token = _generate_and_store_otp(db, student.email, "student")
+                    _send_otp_email(student.email, otp_code)
+                    return {
+                        "success": True,
+                        "otp_required": True,
+                        "pre_auth_token": pre_auth_token,
+                        "masked_email": _mask_email(student.email),
+                    }
+
+                handle_successful_login(db, student, "student", request.client.host if request.client else None, request.headers.get("user-agent"))
+                access_token, refresh_token = _make_tokens(student.id, "student", student.email, "student")
                 return {
                     "success": True,
-                    "otp_required": True,
-                    "pre_auth_token": pre_auth_token,
-                    "masked_email": _mask_email(student.email),
+                    "userType": "student",
+                    "access_token": access_token,
+                    "refresh_token": refresh_token,
+                    "token_type": "bearer",
+                    "user": {
+                        "id": student.id,
+                        "name": student.name,
+                        "email": student.email,
+                        "phone": student.phone,
+                        "status": student.status,
+                        "profile_photo": student.profile_photo,
+                    },
                 }
             else:
                 handle_failed_login(db, student, "student", request.client.host if request.client else None, request.headers.get("user-agent"))
@@ -4505,6 +4549,9 @@ def verify_otp(request: Request, body: OTPVerifyRequest, db: Session = Depends(g
         user = db.query(CoachDB).filter(CoachDB.email == body.email).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found.")
+        if not getattr(user, "email_verified", False):
+            user.email_verified = True
+            db.commit()
         handle_successful_login(db, user, "coach", ip, ua)
         payload = {"sub": str(user.id), "user_type": "coach", "email": user.email, "role": "coach"}
         access_jti = str(uuid.uuid4())
@@ -4537,6 +4584,9 @@ def verify_otp(request: Request, body: OTPVerifyRequest, db: Session = Depends(g
         user = db.query(StudentDB).filter(StudentDB.email == body.email).first()
         if not user:
             raise HTTPException(status_code=404, detail="User not found.")
+        if not getattr(user, "email_verified", False):
+            user.email_verified = True
+            db.commit()
         required_profile_fields = {
             'guardian_name': user.guardian_name,
             'guardian_phone': user.guardian_phone,

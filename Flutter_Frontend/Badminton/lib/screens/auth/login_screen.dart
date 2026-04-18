@@ -133,7 +133,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                 // Title
                 Text(
-                  'Welcome Back',
+                  'Welcome',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.displaySmall?.copyWith(
                         color: AppColors.textPrimary,

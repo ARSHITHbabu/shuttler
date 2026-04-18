@@ -48,7 +48,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Welcome back,',
+                  'Welcome,',
                   style: TextStyle(
                     fontSize: 14,
                     color: context.textSecondaryColor,

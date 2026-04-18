@@ -212,6 +212,14 @@ class _EmailOtpScreenState extends ConsumerState<EmailOtpScreen> {
                       color: AppColors.textSecondary,
                     ),
               ),
+              const SizedBox(height: AppDimensions.spacingS),
+              Text(
+                'Note: If you don’t see the email, check your Spam/Junk folder.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+              ),
               const SizedBox(height: AppDimensions.spacingXxl),
 
               // OTP input boxes
