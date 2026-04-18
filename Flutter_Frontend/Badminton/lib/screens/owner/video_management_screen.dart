@@ -303,17 +303,14 @@ class _VideoManagementScreenState extends ConsumerState<VideoManagementScreen> {
 
   void _playVideo(VideoResource video) {
     debugPrint('PLAY VIDEO BUTTON PRESSED for video: ${video.id}');
-    final streamPath = ApiEndpoints.videoStreamUrl(video.url);
-    final fullUrl = '${ApiEndpoints.baseUrl}$streamPath';
+    final fullUrl = '${ApiEndpoints.baseUrl}${video.url}';
     debugPrint('Full Video URL passed to page: $fullUrl');
-    final token = ref.read(storageServiceProvider).getAuthToken();
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => VideoPlayerPage(
           videoUrl: fullUrl,
           title: video.displayTitle,
           remarks: video.remarks,
-          token: token,
         ),
       ),
     );
