@@ -19,10 +19,9 @@ class ApiEndpoints {
       }
       return 'http://$host:8001';
     }
-    // Use your computer's local network IP address
-    // Run get_local_ip.ps1 to find your current IP address
-    // Current IP: 192.168.1.9 (updated automatically)
-    return 'http://192.168.1.9:8001';
+    // ADB reverse tunnel: adb reverse tcp:8001 tcp:8001
+    // This forwards phone's localhost:8001 → PC port 8001 over USB
+    return 'http://localhost:8001';
   }
 
   // Authentication
