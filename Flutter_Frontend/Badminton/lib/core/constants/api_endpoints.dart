@@ -19,6 +19,7 @@ class ApiEndpoints {
       }
       return 'http://$host:8001';
     }
+
     // ADB reverse tunnel: adb reverse tcp:8001 tcp:8001
     // This forwards phone's localhost:8001 → PC port 8001 over USB
     return 'http://localhost:8001';
@@ -87,7 +88,8 @@ class ApiEndpoints {
   // Performance
   static const String performance = '/performance/';
   static String performanceById(int id) => '/performance/$id';
-  static const String performanceCompletionStatus = '/performance/completion-status';
+  static const String performanceCompletionStatus =
+      '/performance/completion-status';
 
   // BMI Records
   static const String bmiRecords = '/bmi-records/';
@@ -145,7 +147,7 @@ class ApiEndpoints {
     }
     // If it already starts with /uploads as returned by backend
     if (filename.startsWith('/uploads/')) {
-        return filename;
+      return filename;
     }
     return '/uploads/$filename';
   }
